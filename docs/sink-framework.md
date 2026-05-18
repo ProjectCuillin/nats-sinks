@@ -2,7 +2,7 @@
 
 This page documents the generic sink framework. Destination-specific behavior,
 including Oracle table DDL, Oracle SQL modes, and Oracle connection-pool
-settings, lives in destination pages such as [Oracle Sink](oracle-sink.md).
+settings, lives in destination pages such as [Oracle Sink](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/oracle-sink.md).
 
 The purpose of the framework is to keep delivery semantics in one place. Every
 destination should plug into the same small contract and should inherit the same

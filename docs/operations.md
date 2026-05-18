@@ -57,7 +57,7 @@ runtime should report only serious failures. Use `DEBUG` for short-lived
 diagnostic sessions in controlled environments.
 
 The full logging level reference is documented in
-[Configuration](configuration.md#logging).
+[Configuration](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/configuration.md#logging).
 
 ## Metrics
 
@@ -99,4 +99,4 @@ docker compose -f examples/docker-compose.oracle.json up
 ## systemd Services
 
 For Oracle Linux and Debian systemd examples, see
-[Service Deployment](service-deployment.md).
+[Service Deployment](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/service-deployment.md).

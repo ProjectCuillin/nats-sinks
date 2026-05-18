@@ -14,11 +14,11 @@ logs from live systems.
 | Field | Value |
 | --- | --- |
 | Overall result | Pass |
-| Report generated | 2026-05-17 21:01:04 CEST |
-| Project version | 0.1.0 |
+| Report generated | 2026-05-18 18:34:44 CEST |
+| Project version | 0.1.1 |
 | Python version | 3.12.4 |
-| Git revision checked | `d4dbebe` |
-| Worktree state | Active development workspace with uncommitted changes |
+| Git revision checked | `84f2a58` plus v0.1.1 release-candidate changes |
+| Worktree state | Active v0.1.1 release-candidate workspace with uncommitted changes |
 | Live NATS details | Redacted |
 | Live Oracle details | Redacted |
 
@@ -62,16 +62,17 @@ ordering, DLQ-before-ACK ordering, and deterministic unhappy-path handling.
 
 | Check | Command | Result | Sanitized outcome |
 | --- | --- | --- | --- |
-| Formatting | `ruff format --check .` | Pass | 56 files already formatted |
+| Formatting | `ruff format --check .` | Pass | 58 files already formatted |
 | Linting | `ruff check .` | Pass | All checks passed |
 | Type checking | `mypy src` | Pass | No type issues in 31 source files |
-| Unit and gated test suite | `python -m pytest -q` | Pass | 90 passed, 8 skipped |
+| Markdown link guard | `python scripts/check-markdown-links.py` | Pass | No relative Markdown links found |
+| Unit and gated test suite | `python -m pytest -q` | Pass | 91 passed, 8 skipped |
 | Documentation build | `mkdocs build --strict` | Pass | Documentation built successfully |
-| Package build | `python -m build` | Pass | Source distribution and wheel built |
+| Package build | `python -m build` | Pass | Source distribution and wheel built for 0.1.1 |
 | Package metadata | `twine check dist/*` | Pass | Wheel and source distribution passed |
 | Security scan | `scripts/security.sh` | Pass | Bandit completed; SQL construction warnings are covered by explicit identifier validation and `nosec` annotations |
 | Import smoke test | Python import command | Pass | Public runner, envelope, sink protocol, and Oracle sink imports succeeded |
-| CLI smoke test | `nats-sink --help` and `nats-sink validate examples/oracle-jetstream/config.json` | Pass | CLI help rendered and example config validated |
+| CLI smoke test | `nats-sink --help`, `nats-sink --version`, and `nats-sink validate examples/oracle-jetstream/config.json` | Pass | CLI help rendered, version returned 0.1.1, and example config validated |
 
 The skipped tests in the normal pytest run are external-service integration
 tests. They are intentionally guarded behind integration markers and explicit
@@ -91,7 +92,9 @@ The test suite includes deterministic checks for these non-happy paths:
 - DLQ publish failures do not ACK the original message,
 - invalid NATS and Oracle configuration is rejected with clear framework
   errors,
-- invalid SQL identifiers and invalid subject route patterns are rejected.
+- invalid SQL identifiers and invalid subject route patterns are rejected,
+- the global CLI `--version` option exits successfully without requiring a
+  subcommand.
 
 ## Oracle Sink
 
@@ -144,7 +147,7 @@ sequenceDiagram
 | Message count | Configured test parameter | Pass | 250 messages |
 | Batch count | Captured timing metric | Pass | 4 batches |
 | Final partial batch | Captured current-batch-size metric | Pass | 58 messages |
-| Backend write timing | Captured timing metric | Pass | 3.040223 seconds total, 82.23 messages/second |
+| Backend write timing | Captured timing metric | Pass | 3.626123 seconds total, 68.94 messages/second |
 | Retained e2e table | `NATS_SINKS_E2E_EVENTS_V2` | Pass | Table kept after the run |
 | Cleanup flags | Defaults | Pass | Drop before=false, drop after=false |
 
@@ -202,6 +205,7 @@ Run the following local checks for a full report refresh:
 ruff format --check .
 ruff check .
 mypy src
+python scripts/check-markdown-links.py
 python -m pytest -q
 mkdocs build --strict
 python -m build

@@ -50,7 +50,7 @@ For the current Oracle sink, create a table compatible with the default
 `stream_sequence` idempotency strategy and configure a least-privilege runtime
 user. The exact DDL, older Oracle JSON alternatives, Autonomous Database
 options, and subject-to-table routing examples are documented in
-[Oracle Sink](oracle-sink.md).
+[Oracle Sink](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/oracle-sink.md).
 
 ## Configure
 

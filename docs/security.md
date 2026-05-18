@@ -44,7 +44,7 @@ Production deployments should use:
 Do not disable TLS verification outside controlled local development.
 
 Supported NATS client authentication modes in this release are documented in
-[NATS Connections And Authentication](nats-connections.md). In short:
+[NATS Connections And Authentication](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/nats-connections.md). In short:
 
 - use `nats.token_env` for token authentication,
 - use `nats.user` and `nats.password_env` for username/password authentication,

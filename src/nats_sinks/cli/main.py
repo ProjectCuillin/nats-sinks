@@ -36,6 +36,14 @@ from nats_sinks.sinks.registry import SinkRegistry
 app = typer.Typer(help="Run NATS JetStream sink connectors.")
 
 
+def _version_callback(value: bool) -> None:
+    """Print the package version before command validation when requested."""
+
+    if value:
+        typer.echo(__version__)
+        raise typer.Exit()
+
+
 def _registry() -> SinkRegistry:
     registry = SinkRegistry()
     registry.register("oracle", OracleSink.from_mapping)
@@ -116,13 +124,18 @@ def _nats_options(config: AppConfig) -> dict[str, Any]:
 
 @app.callback()
 def main(
-    version: Annotated[bool, typer.Option("--version", help="Show version and exit.")] = False,
+    version: Annotated[
+        bool,
+        typer.Option(
+            "--version",
+            callback=_version_callback,
+            help="Show version and exit.",
+            is_eager=True,
+        ),
+    ] = False,
 ) -> None:
     """nats-sinks provides commit-then-acknowledge JetStream sinks."""
-
-    if version:
-        typer.echo(__version__)
-        raise typer.Exit()
+    _ = version
 
 
 @app.command()

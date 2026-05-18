@@ -83,7 +83,7 @@ idempotency-key headers.
 The performance shape can differ by backend, but the safety boundary must not:
 ACK is still sent only after the sink returns success. Oracle-specific write
 behavior, including `executemany`, commit behavior, Autonomous Database
-considerations, and tuning notes, is documented in [Oracle Sink](oracle-sink.md).
+considerations, and tuning notes, is documented in [Oracle Sink](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/oracle-sink.md).
 
 ```mermaid
 sequenceDiagram

@@ -27,6 +27,8 @@ jobs:
         run: ruff check .
       - name: Type check
         run: mypy src
+      - name: Markdown link check
+        run: python scripts/check-markdown-links.py
       - name: Unit tests
         run: pytest -m "not integration"
       - name: Build

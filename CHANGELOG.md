@@ -8,6 +8,24 @@ Repository: [ProjectCuillin/nats-sinks](https://github.com/ProjectCuillin/nats-s
 
 Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com).
 
+## [0.1.1] - 2026-05-18
+
+### Fixed
+
+- Replaced relative Markdown documentation links with fully qualified GitHub
+  URLs so the PyPI-rendered project description links to repository
+  documentation correctly.
+- Fixed the advertised `nats-sink --version` option so it exits successfully
+  before requiring a subcommand.
+
+### Added
+
+- Added `scripts/check-markdown-links.py` to prevent future PyPI README link
+  regressions.
+- Added the Markdown link check to local check scripts and CI.
+- Documented PyPI README link hygiene in the publishing runbook.
+- Added a deterministic unit test for the global CLI version option.
+
 ## [0.1.0] - 2026-05-18
 
 ### Added

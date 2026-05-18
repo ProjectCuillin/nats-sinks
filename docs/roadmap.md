@@ -87,5 +87,5 @@
 - JetStream Key/Value and Object Store APIs, unless a future sink or operational
   workflow requires them.
 
-See [NATS Feature Gap Analysis](nats-feature-gap-analysis.md) for the detailed
+See [NATS Feature Gap Analysis](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/nats-feature-gap-analysis.md) for the detailed
 comparison between NATS platform capabilities and current `nats-sinks` scope.

@@ -43,7 +43,7 @@ flowchart LR
 
 ## Package Status
 
-The current release is `0.1.0`. The project is in the `0.1.x` phase: it is a
+The current release is `0.1.1`. The project is in the `0.1.x` phase: it is a
 production-ready foundation with Oracle as the first production sink, while the
 public API remains intentionally small so it can stabilize before `1.0.0`.
 
@@ -51,8 +51,8 @@ Future sinks will be added only when they can satisfy the same delivery, idempot
 
 ## Where To Start
 
-- Read [Getting Started](getting-started.md) for a local run.
-- Read [Architecture](architecture.md) to understand the runtime boundary.
-- Read [Commit Then ACK](commit-then-ack.md) before implementing any sink.
-- Read [Oracle Sink](oracle-sink.md) for table design, modes, and transactions.
-- Read [Security](security.md) before deploying with real credentials or payloads.
+- Read [Getting Started](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/getting-started.md) for a local run.
+- Read [Architecture](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/architecture.md) to understand the runtime boundary.
+- Read [Commit Then ACK](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/commit-then-ack.md) before implementing any sink.
+- Read [Oracle Sink](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/oracle-sink.md) for table design, modes, and transactions.
+- Read [Security](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/security.md) before deploying with real credentials or payloads.

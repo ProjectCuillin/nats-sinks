@@ -26,7 +26,7 @@ Those modules are not shipped as production sinks yet. The extension points are 
 
 ## Status
 
-The current release is `0.1.0`.
+The current release is `0.1.1`.
 
 Included today:
 
@@ -123,7 +123,7 @@ nats pub orders.created '{"order_id":"O-1001","amount":42.50}'
 Prepare the destination:
 
 The first production destination is Oracle Database. Follow the table and
-least-privilege setup in [Oracle Sink](docs/oracle-sink.md), then run the sink
+least-privilege setup in [Oracle Sink](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/oracle-sink.md), then run the sink
 with the tracked example configuration.
 
 Run the sink:
@@ -223,8 +223,8 @@ unnecessary JSON parse attempts.
 }
 ```
 
-See [Sink Framework](docs/sink-framework.md) and
-[Oracle Sink](docs/oracle-sink.md) for the JSON envelope shape and operational
+See [Sink Framework](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/sink-framework.md) and
+[Oracle Sink](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/oracle-sink.md) for the JSON envelope shape and operational
 guidance.
 
 ## Metadata Capture
@@ -254,10 +254,10 @@ or map selected fields into destination-specific columns.
 Do not embed credentials in `nats.url`; use environment-backed fields instead.
 Advanced TLS certificate authentication policy, NKEY challenge authentication,
 and decentralized JWT authentication/authorization are roadmap items. See
-[NATS Connections And Authentication](docs/nats-connections.md).
+[NATS Connections And Authentication](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/nats-connections.md).
 
 The broader comparison between NATS capabilities and the current project scope
-is maintained in [NATS Feature Gap Analysis](docs/nats-feature-gap-analysis.md).
+is maintained in [NATS Feature Gap Analysis](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/nats-feature-gap-analysis.md).
 
 ## CLI
 
@@ -315,18 +315,18 @@ app = typer.Typer()
 app.add_typer(nats_sink_cli, name="nats-sink")
 ```
 
-See [Python Usage](docs/python-usage.md) for embedded application patterns and
+See [Python Usage](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/python-usage.md) for embedded application patterns and
 the tradeoff between using the public runtime API and importing CLI internals.
 
 ## Oracle Sink
 
-Oracle-specific details are documented in [Oracle Sink](docs/oracle-sink.md).
+Oracle-specific details are documented in [Oracle Sink](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/oracle-sink.md).
 That page covers Oracle connection types, Autonomous Database, table DDL,
 least-privilege users, idempotent write modes, subject-to-table routing,
 payload storage, metadata columns, and Oracle-specific performance guidance.
 
 The generic sink framework is documented separately in
-[Sink Framework](docs/sink-framework.md). That boundary is deliberate: future
+[Sink Framework](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/sink-framework.md). That boundary is deliberate: future
 backends can be added as new sink modules without changing the core
 commit-then-acknowledge contract or making existing Oracle users change their
 configuration.
@@ -397,24 +397,24 @@ mkdocs build --strict
 ```
 
 Manual live NATS connection testing is documented in
-[NATS Connections And Authentication](docs/nats-connections.md) and
-[Testing](docs/testing.md). The tracked helper script is
+[NATS Connections And Authentication](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/nats-connections.md) and
+[Testing](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/testing.md). The tracked helper script is
 `scripts/nats-live-probe.py`; real CA files and credentials should stay under
 ignored `.local/` paths.
 
 The latest sanitized validation summary is maintained in
-[Latest Test Report](docs/test-report.md). That report is overwritten in place
+[Latest Test Report](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/test-report.md). That report is overwritten in place
 for each new validation run and must not contain server addresses, usernames,
 passwords, tokens, certificate contents, wallet material, connection strings,
 or sensitive payloads.
 
 To run `nats-sink` as a systemd service on Oracle Linux or Debian, see
-[Service Deployment](docs/service-deployment.md). The repository includes
+[Service Deployment](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/service-deployment.md). The repository includes
 example service files and installer scripts under `examples/systemd/` and
 `scripts/`.
 
 Release and PyPI publishing instructions are documented in
-[Publishing Releases](docs/publishing.md). That guide covers version updates,
+[Publishing Releases](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/publishing.md). That guide covers version updates,
 tag pushes, GitHub release workflows, TestPyPI, PyPI trusted publishing, and
 manual fallback commands.
 
@@ -480,7 +480,7 @@ Not planned unless scope changes:
   framework support.
 - JetStream Key/Value and Object Store APIs unless a future sink needs them.
 
-See [NATS Feature Gap Analysis](docs/nats-feature-gap-analysis.md) for the
+See [NATS Feature Gap Analysis](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/nats-feature-gap-analysis.md) for the
 detailed comparison.
 
 ## License

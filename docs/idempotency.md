@@ -86,7 +86,7 @@ as success rather than creating duplicate business effects.
 ## Current Scope
 
 The current production implementation is Oracle. Oracle duplicate handling is
-documented in [Oracle Sink](oracle-sink.md), including `merge`,
+documented in [Oracle Sink](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/oracle-sink.md), including `merge`,
 `insert_ignore`, `insert`, and `append` behavior. Oracle-specific key-column
 mapping and payload-field extraction are intentionally kept on that page so
 future sinks can document their own backend-native approach without changing

@@ -3,7 +3,7 @@
 The test suite is split between deterministic unit tests and external-service integration tests.
 
 The latest sanitized validation summary is maintained in
-[Latest Test Report](test-report.md). Keep only that single report in git and
+[Latest Test Report](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/test-report.md). Keep only that single report in git and
 overwrite it after new validation runs. Do not paste raw logs, server
 addresses, usernames, passwords, tokens, certificate material, wallet files,
 full connection strings, or sensitive payloads into test reports.

@@ -70,11 +70,28 @@ Run:
 ruff format --check .
 ruff check .
 mypy src
+python scripts/check-markdown-links.py
 pytest
 bandit -q -r src
 python -m build
 twine check dist/*
 mkdocs build --strict
+```
+
+## PyPI README Link Hygiene
+
+PyPI renders `README.md` outside GitHub's repository context. Relative links
+such as `docs/oracle-sink.md` may work on GitHub but fail from the PyPI project
+page. Use full GitHub URLs for Markdown links that should work on PyPI:
+
+```text
+https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/oracle-sink.md
+```
+
+Run the repository guard before publishing:
+
+```bash
+python scripts/check-markdown-links.py
 ```
 
 ## Step 2: Smoke Test The Package

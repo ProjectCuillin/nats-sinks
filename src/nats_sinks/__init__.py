@@ -71,4 +71,4 @@ __all__ = [
     "normalize_payload_for_json_storage",
 ]
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"

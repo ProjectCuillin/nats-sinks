@@ -6,7 +6,7 @@ process checks more than "tests passed": it also verifies documentation,
 package metadata, security scanning, and command-line smoke tests.
 
 For the full push-tag and PyPI publication runbook, see
-[Publishing Releases](publishing.md).
+[Publishing Releases](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/publishing.md).
 
 ## Versioning
 
@@ -49,6 +49,7 @@ source distribution and wheel as release assets.
 - Confirm `ruff format --check .`.
 - Confirm `ruff check .`.
 - Confirm `mypy src`.
+- Confirm `python scripts/check-markdown-links.py`.
 - Confirm `pytest`.
 - Confirm `bandit -q -r src`.
 - Confirm `python -m build`.

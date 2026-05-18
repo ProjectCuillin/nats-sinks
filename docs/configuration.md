@@ -126,7 +126,7 @@ Every sink must define its own documented JSON fields, validation rules,
 secret-handling guidance, and examples. The current production sink is Oracle,
 so the tracked example files use `"type": "oracle"`. Detailed Oracle
 connection options, Autonomous Database wallet settings, table routing,
-payload modes, and column mappings live in [Oracle Sink](oracle-sink.md).
+payload modes, and column mappings live in [Oracle Sink](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/oracle-sink.md).
 
 This separation is part of the compatibility contract. Adding a future
 `postgres`, `http`, `file`, or `s3` sink should add new sink-specific fields
@@ -149,8 +149,8 @@ The shared payload modes are:
 | `bytes_envelope` | Treat every body as bytes and wrap base64 content in the JSON envelope. |
 
 Future sinks should either reuse these modes or document a deliberate,
-well-tested alternative. See [Sink Framework](sink-framework.md) for the
-destination-neutral payload envelope and [Oracle Sink](oracle-sink.md) for the
+well-tested alternative. See [Sink Framework](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/sink-framework.md) for the
+destination-neutral payload envelope and [Oracle Sink](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/oracle-sink.md) for the
 Oracle implementation.
 
 ## Metadata Storage
@@ -221,7 +221,7 @@ configuration. The client still supplies the clear-text password from
 `NATS_PASSWORD`, and TLS protects that credential in transit.
 
 For detailed connection guidance, see
-[NATS Connections And Authentication](nats-connections.md).
+[NATS Connections And Authentication](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/nats-connections.md).
 
 ## Logging
 
