@@ -1,0 +1,25 @@
+[Unit]
+Description=nats-sink JetStream sink service
+Documentation=https://github.com/ProjectCuillin/nats-sinks/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=nats-sink
+Group=nats-sink
+EnvironmentFile=-/etc/nats-sinks/nats-sink.env
+ExecStart=/opt/nats-sinks/venv/bin/nats-sink run /etc/nats-sinks/config.json
+WorkingDirectory=/var/lib/nats-sink
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=60
+KillSignal=SIGTERM
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+ReadWritePaths=/var/lib/nats-sink
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,206 @@
+# Publishing Releases
+
+This page is the maintainer runbook for pushing releases and publishing
+`nats-sinks` to TestPyPI or PyPI.
+
+PyPI is the Python Package Index, the public package registry used by `pip`.
+Publishing to PyPI makes the package available to external users, so the steps
+below are intentionally conservative: build locally, verify metadata, smoke
+test installation, publish through a trusted workflow, and document the release.
+
+The project repository is
+[ProjectCuillin/nats-sinks](https://github.com/ProjectCuillin/nats-sinks/).
+The named contributor is Johan Louwers,
+[louwersj@gmail.com](mailto:louwersj@gmail.com).
+
+## Recommended Publishing Model
+
+Use PyPI Trusted Publishing with GitHub Actions. PyPI Trusted Publishing lets a
+configured GitHub Actions workflow request a short-lived publishing token using
+OpenID Connect, avoiding long-lived PyPI API tokens in repository secrets.
+
+The release workflow in this repository is `.github/workflows/release.yml`.
+It is designed to publish on tags named `v*` and uses the `pypi` GitHub
+environment. After PyPI publication succeeds, the same workflow creates or
+updates the GitHub Release for the tag and attaches the built source
+distribution and wheel.
+
+## One-Time PyPI Setup
+
+Before the first automated PyPI release:
+
+1. Create or claim the `nats-sinks` project on PyPI.
+2. In the PyPI project settings, add a trusted publisher for GitHub Actions.
+3. Configure the publisher with:
+   - repository owner: `ProjectCuillin`
+   - repository name: `nats-sinks`
+   - workflow name: `release.yml`
+   - environment name: `pypi`
+4. In GitHub, create an environment named `pypi`.
+5. Add required reviewers to the `pypi` environment if you want human approval before publication.
+
+## Release Flow
+
+```mermaid
+flowchart TD
+    Prepare[Prepare release branch] --> Version[Update version and changelog]
+    Version --> Checks[Run local checks]
+    Checks --> PR[Merge release PR]
+    PR --> Tag[Create signed or annotated tag]
+    Tag --> Push[Push tag to GitHub]
+    Push --> Actions[release.yml builds artifacts]
+    Actions --> Verify[twine check]
+    Verify --> Env[GitHub pypi environment approval]
+    Env --> Publish[Publish to PyPI via trusted publishing]
+    Publish --> GHRelease[Create GitHub Release from tag]
+    GHRelease --> Assets[Attach sdist and wheel assets]
+```
+
+## Step 1: Prepare The Release
+
+Update:
+
+- `pyproject.toml` version,
+- `CHANGELOG.md`,
+- documentation for any public behavior changes.
+
+Run:
+
+```bash
+ruff format --check .
+ruff check .
+mypy src
+pytest
+bandit -q -r src
+python -m build
+twine check dist/*
+mkdocs build --strict
+```
+
+## Step 2: Smoke Test The Package
+
+From the working tree:
+
+```bash
+nats-sink --help
+nats-sink validate examples/oracle-jetstream/config.json
+python -c "from nats_sinks import JetStreamSinkRunner; from nats_sinks.oracle import OracleSink; print('ok')"
+```
+
+Optionally test the built wheel in a clean virtual environment:
+
+```bash
+python -m venv /tmp/nats-sinks-release-test
+source /tmp/nats-sinks-release-test/bin/activate
+python -m pip install dist/nats_sinks-*.whl
+nats-sink --help
+deactivate
+```
+
+## Step 3: Push The Release Tag
+
+Use annotated tags:
+
+```bash
+git tag -a v0.1.0 -m "Release v0.1.0"
+git push origin v0.1.0
+```
+
+The tag push starts `.github/workflows/release.yml`.
+The workflow expects the tag to exist already; it does not create tags itself.
+This is intentional because maintainers should choose when a repository state
+is ready to become an immutable release point.
+
+## Step 4: Publish To TestPyPI
+
+For a first release, publish to TestPyPI before PyPI. You can do that by adding
+a separate trusted publisher and workflow environment for TestPyPI, or by
+manually uploading with a TestPyPI token from a trusted maintainer machine.
+
+Manual TestPyPI fallback:
+
+```bash
+python -m build
+twine check dist/*
+twine upload --repository testpypi dist/*
+```
+
+Then test install:
+
+```bash
+python -m venv /tmp/nats-sinks-testpypi
+source /tmp/nats-sinks-testpypi/bin/activate
+python -m pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ nats-sinks
+nats-sink --help
+deactivate
+```
+
+## Step 5: Publish To PyPI
+
+Preferred path:
+
+1. Push the release tag.
+2. Let GitHub Actions build the distributions.
+3. Approve the `pypi` environment if required.
+4. Let `pypa/gh-action-pypi-publish` publish with trusted publishing.
+5. Let the `github-release` job create or update the GitHub Release and attach
+   the built artifacts.
+
+Manual PyPI fallback:
+
+```bash
+python -m build
+twine check dist/*
+twine upload dist/*
+```
+
+Manual publishing requires a PyPI API token. Prefer trusted publishing for
+normal releases.
+
+## Step 6: Verify The GitHub Release
+
+After PyPI publication, `.github/workflows/release.yml` automatically creates
+or updates the GitHub Release for the pushed tag. It uses GitHub's generated
+release notes and attaches the built `dist/*` files.
+
+Verify:
+
+1. The GitHub Release exists for the tag, for example `v0.1.0`.
+2. The source distribution and wheel are attached.
+3. The generated notes are accurate enough for external readers.
+4. The release links clearly to the PyPI package page or project homepage.
+
+If the automatic GitHub Release step fails after PyPI publication, create it
+manually:
+
+```bash
+gh release create v0.1.0 dist/* \
+  --repo ProjectCuillin/nats-sinks \
+  --title v0.1.0 \
+  --generate-notes \
+  --verify-tag
+```
+
+If the release already exists but assets need to be replaced:
+
+```bash
+gh release upload v0.1.0 dist/* \
+  --repo ProjectCuillin/nats-sinks \
+  --clobber
+```
+
+## Rollback Guidance
+
+PyPI artifacts are immutable. If a release is broken:
+
+- do not delete and replace the same version,
+- yank the release on PyPI if appropriate,
+- publish a new patch release,
+- document the issue in `CHANGELOG.md`.
+
+## References
+
+- [Python Packaging User Guide: Building and Publishing](https://packaging.python.org/guides/section-build-and-publish/)
+- [PyPI Docs: Trusted Publishers](https://docs.pypi.org/trusted-publishers/)
+- [PyPI Docs: Adding a Trusted Publisher](https://docs.pypi.org/trusted-publishers/adding-a-publisher/)
+- [PyPI Docs: Publishing with a Trusted Publisher](https://docs.pypi.org/trusted-publishers/using-a-publisher/)

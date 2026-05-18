@@ -1,0 +1,59 @@
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "oracle-routed-orders-sink",
+    "subject": "orders.>",
+    "durable": true
+  },
+  "delivery": {
+    "batch_size": 100,
+    "batch_timeout_ms": 1000,
+    "max_in_flight_batches": 1,
+    "ack_policy": "after_sink_commit",
+    "max_retries": 5,
+    "retry_backoff_ms": 1000,
+    "prefer_safe_duplication": true
+  },
+  "dead_letter": {
+    "enabled": true,
+    "subject": "orders.dlq",
+    "include_payload": true,
+    "include_headers": true,
+    "include_error": true
+  },
+  "logging": {
+    "level": "INFO",
+    "payload_logging": false
+  },
+  "metrics": {
+    "enabled": false,
+    "namespace": "nats_sinks"
+  },
+  "sink": {
+    "type": "oracle",
+    "dsn": "localhost:1521/FREEPDB1",
+    "user": "app_user",
+    "password_env": "ORACLE_PASSWORD",
+    "table": "NATS_SINK_EVENTS",
+    "table_routes": [
+      {
+        "subject": "orders.created",
+        "table": "ORDER_CREATED_EVENTS"
+      },
+      {
+        "subject": "orders.cancelled",
+        "table": "ORDER_CANCELLED_EVENTS"
+      }
+    ],
+    "mode": "merge",
+    "auto_create": false,
+    "payload_mode": "json_or_envelope",
+    "payload_column": "PAYLOAD_JSON",
+    "headers_column": "HEADERS_JSON",
+    "idempotency": {
+      "strategy": "stream_sequence",
+      "columns": ["STREAM_NAME", "STREAM_SEQUENCE"]
+    }
+  }
+}

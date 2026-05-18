@@ -1,0 +1,35 @@
+site_name: nats-sinks
+site_description: Production-ready outbound sink connectors for NATS JetStream.
+repo_url: https://github.com/ProjectCuillin/nats-sinks/
+theme:
+  name: material
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Architecture: architecture.md
+  - Commit Then ACK: commit-then-ack.md
+  - Configuration: configuration.md
+  - NATS Connections: nats-connections.md
+  - NATS Feature Gaps: nats-feature-gap-analysis.md
+  - Sink Framework: sink-framework.md
+  - Message Sizing: message-sizing.md
+  - Performance: performance.md
+  - CLI: cli.md
+  - Oracle Sink: oracle-sink.md
+  - Python Usage: python-usage.md
+  - Idempotency: idempotency.md
+  - Dead Letter Queues: dead-letter-queues.md
+  - Security: security.md
+  - Operations: operations.md
+  - Service Deployment: service-deployment.md
+  - Testing: testing.md
+  - Latest Test Report: test-report.md
+  - Development: development.md
+  - Release: release.md
+  - Publishing Releases: publishing.md
+  - Roadmap: roadmap.md
+  - ADRs:
+      - Core Owns Delivery Semantics: adr/0001-core-owns-delivery-semantics.md
+      - Commit Then Acknowledge: adr/0002-commit-then-acknowledge.md
+      - Oracle First Sink: adr/0003-oracle-first-sink.md
+      - Single Repository Namespace: adr/0004-single-repository-single-namespace.md

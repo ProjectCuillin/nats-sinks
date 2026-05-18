@@ -1,0 +1,13 @@
+{
+  "nats": {
+    "stream": "ORDERS",
+    "consumer": "oracle-orders-sink",
+    "subject": "orders.*"
+  },
+  "sink": {
+    "type": "oracle",
+    "dsn": "localhost:1521/FREEPDB1",
+    "user": "app_user",
+    "table": "events; drop table users"
+  }
+}

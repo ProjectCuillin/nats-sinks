@@ -1,0 +1,17 @@
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "oracle-orders-sink",
+    "subject": "orders.*"
+  },
+  "sink": {
+    "type": "oracle",
+    "dsn": "localhost:1521/FREEPDB1",
+    "user": "app_user",
+    "password_env": "ORACLE_PASSWORD",
+    "table": "NATS_SINK_EVENTS",
+    "mode": "merge",
+    "payload_mode": "json_or_envelope"
+  }
+}

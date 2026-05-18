@@ -157,6 +157,15 @@ ENV/
 env.bak/
 venv.bak/
 
+# Local nats-sinks runtime material.
+# Keep test credentials, generated JSON configs, CA files, and connection
+# scratch data out of git. Use this for one-off live NATS/Oracle validation.
+.local/
+.secrets/
+
+# macOS Finder metadata.
+.DS_Store
+
 # Spyder project settings
 .spyderproject
 .spyproject

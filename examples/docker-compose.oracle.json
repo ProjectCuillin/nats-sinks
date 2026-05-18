@@ -1,0 +1,19 @@
+{
+  "services": {
+    "oracle": {
+      "image": "gvenzl/oracle-free:23-slim",
+      "environment": {
+        "ORACLE_PASSWORD": "example",
+        "APP_USER": "app_user",
+        "APP_USER_PASSWORD": "example"
+      },
+      "ports": ["1521:1521"],
+      "healthcheck": {
+        "test": ["CMD", "healthcheck.sh"],
+        "interval": "10s",
+        "timeout": "5s",
+        "retries": 30
+      }
+    }
+  }
+}
