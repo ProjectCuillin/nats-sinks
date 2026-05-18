@@ -34,7 +34,7 @@ dependencies = [
 
 [project.optional-dependencies]
 oracle = [
-  "oracledb>=2.3,<4",
+  "oracledb>=2.3,<5",
 ]
 test = [
   "pytest>=8.2,<9",
