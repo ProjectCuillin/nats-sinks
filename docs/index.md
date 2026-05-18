@@ -43,7 +43,9 @@ flowchart LR
 
 ## Package Status
 
-The project is in the `0.1.x` phase. It is a production-ready foundation with Oracle as the first production sink. The public API is intentionally small so it can stabilize before `1.0.0`.
+The current release is `0.1.0`. The project is in the `0.1.x` phase: it is a
+production-ready foundation with Oracle as the first production sink, while the
+public API remains intentionally small so it can stabilize before `1.0.0`.
 
 Future sinks will be added only when they can satisfy the same delivery, idempotency, security, and test requirements.
 

@@ -26,7 +26,7 @@ Those modules are not shipped as production sinks yet. The extension points are 
 
 ## Status
 
-The project is currently prepared for an initial `0.1.0` release.
+The current release is `0.1.0`.
 
 Included today:
 

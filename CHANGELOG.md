@@ -8,7 +8,7 @@ Repository: [ProjectCuillin/nats-sinks](https://github.com/ProjectCuillin/nats-s
 
 Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com).
 
-## [0.1.0] - Unreleased
+## [0.1.0] - 2026-05-18
 
 ### Added
 
