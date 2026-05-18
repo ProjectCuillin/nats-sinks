@@ -72,6 +72,7 @@ ruff check .
 mypy src
 python scripts/check-markdown-links.py
 pytest
+scripts/check-sinks.sh
 bandit -q -r src
 python -m build
 twine check dist/*
@@ -82,11 +83,15 @@ mkdocs build --strict
 
 PyPI renders `README.md` outside GitHub's repository context. Relative links
 such as `docs/oracle-sink.md` may work on GitHub but fail from the PyPI project
-page. Use full GitHub URLs for Markdown links that should work on PyPI:
+page. Use fully qualified public URLs for Markdown links that should work on
+PyPI. Documentation links should normally point to Read the Docs:
 
 ```text
-https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/oracle-sink.md
+https://nats-sinks.readthedocs.io/en/latest/oracle-sink/
 ```
+
+Documentation files under `docs/` intentionally use relative links so MkDocs
+and Read the Docs keep readers inside the current documentation version.
 
 Run the repository guard before publishing:
 
@@ -94,14 +99,25 @@ Run the repository guard before publishing:
 python scripts/check-markdown-links.py
 ```
 
+## Documentation Publication
+
+The public documentation site is prepared for Read the Docs. The repository
+contains `.readthedocs.yaml` for hosted builds and `.github/workflows/docs.yml`
+for pull-request validation. After the one-time Read the Docs project import,
+pushes to `main` and release tags should build automatically.
+
+See [Read the Docs](read-the-docs.md) for the setup and operating model.
+
 ## Step 2: Smoke Test The Package
 
 From the working tree:
 
 ```bash
 nats-sink --help
+nats-sink validate examples/file-basic/config.json
+nats-sink test-sink examples/file-basic/config.json
 nats-sink validate examples/oracle-jetstream/config.json
-python -c "from nats_sinks import JetStreamSinkRunner; from nats_sinks.oracle import OracleSink; print('ok')"
+python -c "from nats_sinks import JetStreamSinkRunner; from nats_sinks.file import FileSink; from nats_sinks.oracle import OracleSink; print('ok')"
 ```
 
 Optionally test the built wheel in a clean virtual environment:

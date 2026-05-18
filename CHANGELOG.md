@@ -8,6 +8,46 @@ Repository: [ProjectCuillin/nats-sinks](https://github.com/ProjectCuillin/nats-s
 
 Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com).
 
+## [Unreleased]
+
+No changes yet.
+
+## [0.2.0] - 2026-05-18
+
+### Added
+
+- Added `nats_sinks.file.FileSink` as the second production sink.
+- Added local file sink JSON configuration with deterministic filenames,
+  atomic temporary-file placement, optional fsync, subject partitioning,
+  payload normalization, metadata persistence, and duplicate policies.
+- Added CLI registry support for `sink.type: "file"`.
+- Added the tracked `examples/file-basic/config.json` local file sink example.
+- Added unit coverage for file sink mapping, duplicate handling, path
+  sanitization, payload wrapping, health checks, and filesystem error
+  classification.
+- Added deterministic local end-to-end coverage proving the core runner writes
+  through `FileSink` before ACKing messages.
+- Added `scripts/check-sinks.sh` and CI/release workflow sink capability checks
+  so production sink behavior is validated before publication.
+- Added Read the Docs build configuration, a GitHub Actions documentation
+  workflow, and version-local documentation linking so hosted docs can build
+  automatically after the one-time Read the Docs project import.
+- Added dedicated file sink documentation covering configuration, durability,
+  idempotency, duplicate policies, payload handling, filesystem safety,
+  throughput notes, and production recommendations.
+
+### Changed
+
+- Updated the release workflow artifact upload action to a Node.js 24-compatible
+  GitHub Action version so release jobs do not emit Node.js 20 deprecation
+  warnings.
+- Clarified agent and release guidance so documentation and `CHANGELOG.md` stay
+  prepared for the next release throughout normal development.
+- Updated README, configuration, getting started, testing, release, publishing,
+  security, operations, performance, Python usage, sink framework, and roadmap
+  documentation for the Oracle-plus-file-sink project shape.
+- Updated package metadata for version `0.2.0` and Read the Docs project URLs.
+
 ## [0.1.1] - 2026-05-18
 
 ### Fixed

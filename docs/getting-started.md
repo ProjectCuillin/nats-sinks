@@ -1,13 +1,12 @@
 # Getting Started
 
-This guide gets a local NATS stream and the current first production sink
-configuration ready. It is written for readers who may be new to NATS,
-JetStream, or sink connectors.
+This guide gets a local NATS stream and a local file sink configuration ready.
+It is written for readers who may be new to NATS, JetStream, or sink
+connectors.
 
 NATS is the message broker. JetStream is the NATS feature that stores messages
-and tracks whether consumers have acknowledged them. Oracle is the first
-implemented destination sink in this project, so the first walkthrough uses the
-Oracle example while keeping the generic runtime concepts visible. The goal is
+and tracks whether consumers have acknowledged them. The file sink is the
+simplest local destination because it does not require a database. The goal is
 to publish one message to NATS, let `nats-sinks` write it to a durable
 destination, and ACK the message only after that destination reports durable
 success.
@@ -18,7 +17,7 @@ The examples assume Python `>=3.11`.
 
 ```bash
 python -m pip install --upgrade pip
-python -m pip install "nats-sinks[oracle]"
+python -m pip install nats-sinks
 ```
 
 For development:
@@ -46,11 +45,12 @@ nats pub orders.created '{"order_id":"O-1001","amount":42.50}'
 
 ## Prepare The Destination
 
-For the current Oracle sink, create a table compatible with the default
-`stream_sequence` idempotency strategy and configure a least-privilege runtime
-user. The exact DDL, older Oracle JSON alternatives, Autonomous Database
-options, and subject-to-table routing examples are documented in
-[Oracle Sink](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/oracle-sink.md).
+For the local file sink, choose an output directory. The tracked example uses
+`.local/file-sink/events`, which is ignored by git. No credentials are required.
+
+Oracle setup is documented separately in [Oracle Sink](oracle-sink.md). File
+sink durability, duplicate behavior, and filesystem safety are documented in
+[File Sink](file-sink.md).
 
 ## Configure
 
@@ -61,33 +61,30 @@ Runtime configuration is JSON-only:
   "nats": {
     "url": "nats://localhost:4222",
     "stream": "ORDERS",
-    "consumer": "oracle-orders-sink",
+    "consumer": "file-orders-sink",
     "subject": "orders.*"
   },
   "sink": {
-    "type": "oracle",
-    "dsn": "localhost:1521/FREEPDB1",
-    "user": "app_user",
-    "password_env": "ORACLE_PASSWORD",
-    "table": "NATS_SINK_EVENTS",
-    "mode": "merge",
+    "type": "file",
+    "directory": ".local/file-sink/events",
+    "filename_strategy": "stream_sequence",
+    "duplicate_policy": "skip_existing",
     "payload_mode": "json_or_envelope"
   }
 }
 ```
 
-Do not put real passwords in config files. Use an environment variable:
-
-```bash
-export ORACLE_PASSWORD=example
-```
+Do not put real credentials in config files. The file example does not require
+secrets. Database sinks should use environment-backed fields such as
+`password_env`.
 
 ## Validate And Run
 
 ```bash
-nats-sink validate examples/oracle-jetstream/config.json
-nats-sink show-effective-config examples/oracle-jetstream/config.json
-nats-sink run examples/oracle-jetstream/config.json
+nats-sink validate examples/file-basic/config.json
+nats-sink show-effective-config examples/file-basic/config.json
+nats-sink test-sink examples/file-basic/config.json
+nats-sink run examples/file-basic/config.json
 ```
 
 ## What Success Means

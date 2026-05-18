@@ -1,6 +1,8 @@
 site_name: nats-sinks
 site_description: Production-ready outbound sink connectors for NATS JetStream.
+site_url: !ENV [READTHEDOCS_CANONICAL_URL, "https://nats-sinks.readthedocs.io/en/latest/"]
 repo_url: https://github.com/ProjectCuillin/nats-sinks/
+edit_uri: edit/main/docs/
 theme:
   name: material
 nav:
@@ -16,6 +18,7 @@ nav:
   - Performance: performance.md
   - CLI: cli.md
   - Oracle Sink: oracle-sink.md
+  - File Sink: file-sink.md
   - Python Usage: python-usage.md
   - Idempotency: idempotency.md
   - Dead Letter Queues: dead-letter-queues.md
@@ -25,6 +28,7 @@ nav:
   - Testing: testing.md
   - Latest Test Report: test-report.md
   - Development: development.md
+  - Read the Docs: read-the-docs.md
   - Release: release.md
   - Publishing Releases: publishing.md
   - Roadmap: roadmap.md

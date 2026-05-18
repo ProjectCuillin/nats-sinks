@@ -8,9 +8,12 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 - Core runtime.
 - Oracle sink.
+- File sink.
 - Oracle idempotency support with `stream_sequence`, `message_id`, and
   `payload_field` strategies.
 - Oracle duplicate-safe production write modes: `merge` and `insert_ignore`.
+- File sink idempotency support with deterministic file names and
+  `skip_existing` duplicate handling.
 - Commit-then-acknowledge contract tests proving ACK happens only after sink
   success and DLQ publication succeeds before ACK.
 - CLI.
@@ -35,8 +38,8 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   behavior.
 - HTTP sink idempotency-key support, retry safety guidance, and clear warnings
   for endpoints that cannot provide idempotent semantics.
-- File and S3 sink designs with atomic writes, deterministic object/file keys,
-  and safe duplicate overwrite/skip behavior.
+- S3 sink design with atomic object keys and safe duplicate overwrite/skip
+  behavior.
 - Postgres sink.
 - HTTP sink.
 - Docker image.
@@ -76,7 +79,7 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 - Server monitoring endpoint integration such as `/jsz`.
 - `AckTerm` and `AckNext` evaluation for advanced failure and fetch workflows.
 - Optional no-echo connection setting.
-- Sink certification tests for future Postgres, HTTP, file, S3, and Kafka sinks.
+- Sink certification tests for future Postgres, HTTP, S3, and Kafka sinks.
 
 ## Not Planned Unless Scope Changes
 

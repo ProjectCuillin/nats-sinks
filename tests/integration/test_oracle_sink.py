@@ -14,7 +14,20 @@ from nats_sinks import NatsEnvelope
 from nats_sinks.oracle import OracleSink
 from nats_sinks.oracle.sql import validate_identifier
 
-DEFAULT_ORACLE_TEST_TABLE = "NATS_SINKS_ORACLE_TEST_EVENTS"
+DEFAULT_ORACLE_TEST_TABLE = "NATS_SINKS_ORACLE_TEST_EVENTS_V2"
+REQUIRED_ORACLE_TEST_COLUMNS = {
+    "STREAM_NAME",
+    "STREAM_SEQUENCE",
+    "SUBJECT",
+    "MESSAGE_ID",
+    "MESSAGE_CREATED_AT_EPOCH_NS",
+    "JETSTREAM_TIMESTAMP_EPOCH_NS",
+    "RECEIVED_AT_EPOCH_NS",
+    "STORED_AT_EPOCH_NS",
+    "PAYLOAD_JSON",
+    "HEADERS_JSON",
+    "METADATA_JSON",
+}
 
 
 def _oracle_integration_enabled() -> bool:
@@ -151,11 +164,47 @@ def _drop_table(pool: Any, *, table: str) -> None:
             connection.commit()
 
 
+def _table_columns(pool: Any, *, table: str) -> set[str]:
+    """Return the current columns for the retained integration-test table."""
+
+    table_name = validate_identifier(table)
+    parts = table_name.split(".")
+    if len(parts) == 2:
+        sql = (
+            "select column_name from all_tab_columns "
+            "where owner = :owner_name and table_name = :table_name"
+        )
+        binds = {"owner_name": parts[0], "table_name": parts[1]}
+    else:
+        sql = "select column_name from user_tab_columns where table_name = :table_name"
+        binds = {"table_name": parts[0]}
+
+    with pool.acquire() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(sql, binds)
+            return {str(row[0]).upper() for row in cursor.fetchall()}
+
+
+async def _assert_current_test_schema(pool: Any, *, table: str) -> None:
+    """Fail clearly when a retained test table has an older layout."""
+
+    columns = await asyncio.to_thread(_table_columns, pool, table=table)
+    missing = sorted(REQUIRED_ORACLE_TEST_COLUMNS - columns)
+    if missing:
+        pytest.fail(
+            f"Oracle integration table {table!r} is missing required columns {missing}. "
+            "Set NATS_SINKS_ORACLE_DROP_TABLE_BEFORE=true for this test table, "
+            "or choose a fresh NATS_SINKS_ORACLE_TABLE."
+        )
+
+
 async def _start_sink_for_test(sink: OracleSink, *, table: str) -> None:
     await sink.start()
     if sink._pool is not None and _bool_env_setting("DROP_TABLE_BEFORE"):
         await asyncio.to_thread(_drop_table, sink._pool, table=table)
         await sink.ensure_schema()
+    if sink._pool is not None:
+        await _assert_current_test_schema(sink._pool, table=table)
 
 
 async def _stop_sink_for_test(sink: OracleSink, *, table: str) -> None:

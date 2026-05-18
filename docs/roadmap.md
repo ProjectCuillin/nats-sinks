@@ -4,9 +4,12 @@
 
 - Core runtime.
 - Oracle sink.
+- File sink.
 - Oracle idempotency support with `stream_sequence`, `message_id`, and
   `payload_field` strategies.
 - Oracle duplicate-safe production write modes: `merge` and `insert_ignore`.
+- File sink idempotency support with deterministic file names and
+  `skip_existing` duplicate handling.
 - Commit-then-acknowledge contract tests proving ACK happens only after sink
   success and DLQ publication succeeds before ACK.
 - CLI.
@@ -31,8 +34,8 @@
   behavior.
 - HTTP sink idempotency-key support, retry safety guidance, and clear warnings
   for endpoints that cannot provide idempotent semantics.
-- File and S3 sink designs with atomic writes, deterministic object/file keys,
-  and safe duplicate overwrite/skip behavior.
+- S3 sink design with atomic object keys and safe duplicate overwrite/skip
+  behavior.
 - Postgres sink.
 - HTTP sink.
 - Docker image.
@@ -72,7 +75,7 @@
 - Server monitoring endpoint integration such as `/jsz`.
 - `AckTerm` and `AckNext` evaluation for advanced failure and fetch workflows.
 - Optional no-echo connection setting.
-- Sink certification tests for future Postgres, HTTP, file, S3, and Kafka sinks.
+- Sink certification tests for future Postgres, HTTP, S3, and Kafka sinks.
 
 ## Not Planned Unless Scope Changes
 
@@ -87,5 +90,5 @@
 - JetStream Key/Value and Object Store APIs, unless a future sink or operational
   workflow requires them.
 
-See [NATS Feature Gap Analysis](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/nats-feature-gap-analysis.md) for the detailed
+See [NATS Feature Gap Analysis](nats-feature-gap-analysis.md) for the detailed
 comparison between NATS platform capabilities and current `nats-sinks` scope.

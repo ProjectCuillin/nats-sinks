@@ -3,14 +3,15 @@
 The test suite is split between deterministic unit tests and external-service integration tests.
 
 The latest sanitized validation summary is maintained in
-[Latest Test Report](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/test-report.md). Keep only that single report in git and
+[Latest Test Report](test-report.md). Keep only that single report in git and
 overwrite it after new validation runs. Do not paste raw logs, server
 addresses, usernames, passwords, tokens, certificate material, wallet files,
 full connection strings, or sensitive payloads into test reports.
 
 ## Unit Tests
 
-Unit tests must not make network calls and must not require NATS or Oracle.
+Unit tests must not make network calls and must not require NATS, Oracle, or
+any other external service.
 
 ```bash
 pytest -m "not integration"
@@ -26,6 +27,9 @@ Unit tests cover:
 - retry policy,
 - sink protocol contract,
 - safe registry behavior,
+- file sink path mapping,
+- file sink duplicate handling,
+- file sink filesystem error classification,
 - Oracle SQL generation,
 - Oracle identifier validation,
 - Oracle row mapping,
@@ -33,6 +37,51 @@ Unit tests cover:
 - DLQ-before-ACK ordering,
 - no ACK on sink failure,
 - no payload logging by default.
+
+## Local File Sink End-To-End Test
+
+The file sink has a deterministic local end-to-end test because it only needs a
+temporary directory. This test exercises the core runner, `FileSink`, payload
+normalization, metadata persistence, and ACK-after-durable-file-success
+behavior without requiring a NATS server.
+
+```bash
+pytest tests/integration/test_file_sink_e2e.py
+```
+
+The test publishes fake JetStream message objects into
+`JetStreamSinkRunner.process_raw_batch(...)`, writes local JSON files, verifies
+JSON, text, empty, and non-UTF-8 payload handling, and confirms that every fake
+message is ACKed only after the sink returns success.
+
+## Sink Release Test Matrix
+
+Every production release should validate each production sink at the strongest
+available level:
+
+| Sink | Unit tests | Smoke tests | End-to-end tests |
+| --- | --- | --- | --- |
+| Oracle | SQL, mapping, routing, payload, idempotency, and contract tests. | `nats-sink validate examples/oracle-jetstream/config.json`; live `test-sink` when Oracle env is available. | Live NATS-to-Oracle e2e when `.local` integration env is available. |
+| File | Path mapping, payload, duplicate policy, healthcheck, filesystem errors, and fuzz-style path safety tests. | `nats-sink validate examples/file-basic/config.json`; `nats-sink test-sink examples/file-basic/config.json`. | Local deterministic runner-to-file e2e in `tests/integration/test_file_sink_e2e.py`. |
+
+If a live external-service test is not run, the latest test report must say so
+explicitly. Do not imply that Oracle, NATS, or any other external service was
+validated when only deterministic local tests were executed.
+
+The deterministic sink release matrix can be run with:
+
+```bash
+scripts/check-sinks.sh
+```
+
+To include live Oracle checks, source the ignored local integration environment
+files first and set:
+
+```bash
+export NATS_SINKS_RUN_LIVE_ORACLE=1
+export NATS_SINKS_RUN_LIVE_E2E=1
+scripts/check-sinks.sh
+```
 
 ## Integration Tests
 
@@ -66,7 +115,7 @@ export ORACLE_PASSWORD='replace-with-test-password'
 Optional environment:
 
 ```bash
-export NATS_SINKS_ORACLE_TABLE='NATS_SINKS_ORACLE_TEST_EVENTS'
+export NATS_SINKS_ORACLE_TABLE='NATS_SINKS_ORACLE_TEST_EVENTS_V2'
 export NATS_SINKS_ORACLE_PASSWORD_ENV='ORACLE_PASSWORD'
 export NATS_SINKS_ORACLE_CONFIG_DIR='.local/oracle-adb/wallet'
 export NATS_SINKS_ORACLE_WALLET_LOCATION='.local/oracle-adb/wallet'
@@ -99,11 +148,18 @@ pytest -m integration tests/integration/test_oracle_sink.py
 ```
 
 The Oracle integration tests use a specific retained test table. The default is
-`NATS_SINKS_ORACLE_TEST_EVENTS`; override it with `NATS_SINKS_ORACLE_TABLE`.
+`NATS_SINKS_ORACLE_TEST_EVENTS_V2`; override it with `NATS_SINKS_ORACLE_TABLE`.
 The table is not dropped before or after tests unless
 `NATS_SINKS_ORACLE_DROP_TABLE_BEFORE=true` or
 `NATS_SINKS_ORACLE_DROP_TABLE_AFTER=true` is set. Keeping the table by default
 lets operators inspect rows after a test run.
+
+Before writing, the integration test verifies that the retained table contains
+the current required columns. If it finds an older table layout, it fails with
+a clear message instead of surfacing a lower-level Oracle invalid-identifier
+error. Set `NATS_SINKS_ORACLE_DROP_TABLE_BEFORE=true` for the test table, or
+choose a fresh table name, when you intentionally want the test to recreate the
+schema.
 
 The database user must have enough privilege to create the configured test
 table when it is missing, insert or merge rows into it, optionally drop the
@@ -117,7 +173,7 @@ sequenceDiagram
     participant DB as Oracle or Autonomous Database
 
     T->>S: start(auto_create=True)
-    S->>DB: create table NATS_SINKS_ORACLE_TEST_EVENTS
+    S->>DB: create table NATS_SINKS_ORACLE_TEST_EVENTS_V2
     DB-->>S: created or ORA-00955 already exists
     T->>S: write_batch(test envelope)
     S->>DB: merge row and commit
@@ -288,7 +344,7 @@ NATS_SINKS_ORACLE_CONFIG_DIR=.local/oracle-adb/wallet
 NATS_SINKS_ORACLE_WALLET_LOCATION=.local/oracle-adb/wallet
 NATS_SINKS_ORACLE_WALLET_PASSWORD_ENV=ORACLE_WALLET_PASSWORD
 ORACLE_WALLET_PASSWORD=replace-with-wallet-password
-NATS_SINKS_ORACLE_TABLE=NATS_SINKS_ORACLE_TEST_EVENTS
+NATS_SINKS_ORACLE_TABLE=NATS_SINKS_ORACLE_TEST_EVENTS_V2
 NATS_SINKS_ORACLE_SSL_SERVER_DN_MATCH=true
 NATS_SINKS_ORACLE_RETRY_COUNT=20
 NATS_SINKS_ORACLE_RETRY_DELAY=3

@@ -1,0 +1,17 @@
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*",
+    "durable": true
+  },
+  "sink": {
+    "type": "file",
+    "directory": ".local/file-sink/test-events",
+    "filename_strategy": "stream_sequence",
+    "duplicate_policy": "skip_existing",
+    "payload_mode": "json_or_envelope",
+    "fsync": false
+  }
+}

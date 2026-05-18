@@ -44,7 +44,7 @@ Production deployments should use:
 Do not disable TLS verification outside controlled local development.
 
 Supported NATS client authentication modes in this release are documented in
-[NATS Connections And Authentication](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/nats-connections.md). In short:
+[NATS Connections And Authentication](nats-connections.md). In short:
 
 - use `nats.token_env` for token authentication,
 - use `nats.user` and `nats.password_env` for username/password authentication,
@@ -85,6 +85,23 @@ SQL security controls:
 - values use bind variables,
 - bind values are not logged by default,
 - schema creation is disabled unless explicitly enabled.
+
+## File Sink Security
+
+The file sink writes local JSON files and therefore depends on operating-system
+filesystem controls. Run it as a dedicated service user and make the output
+directory writable only by that user and trusted operators.
+
+The sink sanitizes subject names, stream names, and message IDs before they
+become path components, and it verifies that resolved output paths remain under
+the configured root directory. Operators should still treat the configured
+directory as sensitive because generated files may contain payloads, headers,
+and metadata.
+
+Do not point the file sink at a source-code directory, shared temporary
+directory, or path served directly by a web server. Keep generated output under
+an application data path such as `/var/lib/nats-sinks/events`, and apply your
+normal backup, retention, and access-control policies.
 
 ## Secure Failure Flow
 

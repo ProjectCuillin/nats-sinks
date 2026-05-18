@@ -66,3 +66,9 @@ silent loss after an early ACK is not.
 - Update Markdown documentation whenever public behavior, configuration,
   operational guidance, security posture, or release procedure changes.
 - Update `CHANGELOG.md` for user-visible changes.
+- Keep documentation and `CHANGELOG.md` ready for the next release at all
+  times. Add user-visible work to the `Unreleased` section immediately, and do
+  not rely on local notes or chat history as release documentation.
+- Keep README documentation links PyPI-safe with fully qualified public URLs,
+  and keep `docs/` page-to-page links relative so Read the Docs preserves
+  version-local navigation.

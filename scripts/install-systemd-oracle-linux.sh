@@ -18,10 +18,10 @@ install -d /opt/nats-sinks
 
 python3 -m venv /opt/nats-sinks/venv
 /opt/nats-sinks/venv/bin/python -m pip install --upgrade pip
-/opt/nats-sinks/venv/bin/python -m pip install "nats-sinks[oracle]"
+/opt/nats-sinks/venv/bin/python -m pip install nats-sinks
 
 if [ ! -f /etc/nats-sinks/config.json ]; then
-  install -m 0640 -o root -g nats-sink examples/oracle-jetstream/config.json /etc/nats-sinks/config.json
+  install -m 0640 -o root -g nats-sink examples/file-basic/config.json /etc/nats-sinks/config.json
 fi
 
 if [ ! -f /etc/nats-sinks/nats-sink.env ]; then

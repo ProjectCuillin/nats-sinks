@@ -42,6 +42,7 @@ from nats_sinks.core.payload import (
     normalize_payload_for_json_storage,
 )
 from nats_sinks.core.runner import JetStreamSinkRunner
+from nats_sinks.file import FileSink
 from nats_sinks.sinks.base import FlushableSink, HealthCheckableSink, SchemaAwareSink, Sink
 
 __all__ = [
@@ -50,6 +51,7 @@ __all__ = [
     "ConfigurationError",
     "DeadLetterError",
     "DestinationUnavailableError",
+    "FileSink",
     "FlushableSink",
     "HealthCheckableSink",
     "JetStreamSinkRunner",
@@ -71,4 +73,4 @@ __all__ = [
     "normalize_payload_for_json_storage",
 ]
 
-__version__ = "0.1.1"
+__version__ = "0.2.0"

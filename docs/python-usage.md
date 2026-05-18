@@ -13,32 +13,30 @@ runner owns ACK behavior, and destination sinks only write to their destination.
 
 ```python
 from nats_sinks import JetStreamSinkRunner, NatsEnvelope, Sink
+from nats_sinks.file import FileSink
 from nats_sinks.oracle import OracleSink
 ```
 
-The examples below use Oracle because it is the first production sink. Future
-destination modules should follow the same import and runner pattern without
-changing the core API.
+The examples below use the file sink because it has no external dependency.
+Oracle follows the same runner pattern and is imported from
+`nats_sinks.oracle`.
 
 The most common embedded setup is:
 
 ```python
 from nats_sinks import JetStreamSinkRunner
-from nats_sinks.oracle import OracleSink
+from nats_sinks.file import FileSink
 
-sink = OracleSink(
-    dsn="localhost:1521/FREEPDB1",
-    user="app_user",
-    password_env="ORACLE_PASSWORD",
-    table="NATS_SINK_EVENTS",
-    mode="merge",
-    payload_mode="json_or_envelope",
+sink = FileSink(
+    directory="/var/lib/nats-sinks/events",
+    filename_strategy="stream_sequence",
+    duplicate_policy="skip_existing",
 )
 
 runner = JetStreamSinkRunner(
     nats_url="nats://localhost:4222",
     stream="ORDERS",
-    consumer="orders-oracle-sink",
+    consumer="orders-file-sink",
     subject="orders.*",
     sink=sink,
 )

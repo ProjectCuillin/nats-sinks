@@ -8,8 +8,7 @@ support.
 
 NATS is a broad platform. Many NATS features are server-side topology,
 administration, publishing, request/reply, or storage features that are adjacent
-to, but not required for, the first production release of a JetStream sink
-runner.
+to, but not required for, the current JetStream sink runner.
 
 For new readers, this page is a roadmap aid. It helps explain why a feature may
 exist in NATS but not yet appear in `nats-sinks`. The table entries distinguish
@@ -29,7 +28,8 @@ certified support in the sink framework.
 - commit-then-acknowledge processing,
 - NAK or leave-unacked temporary failure handling,
 - DLQ publication for permanent failures,
-- Oracle as the first production sink,
+- Oracle as the first production database sink,
+- local files as the first production filesystem sink,
 - NATS token and username/password authentication,
 - TLS server verification with a local CA file,
 - pass-through fields for NATS credentials and NKEY seed files, not yet

@@ -1,0 +1,39 @@
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*",
+    "durable": true
+  },
+  "delivery": {
+    "batch_size": 64,
+    "batch_timeout_ms": 1000,
+    "ack_policy": "after_sink_commit",
+    "temporary_failure_action": "nak"
+  },
+  "dead_letter": {
+    "enabled": true,
+    "subject": "orders.file.dlq",
+    "include_payload": true,
+    "include_headers": true,
+    "include_error": true
+  },
+  "logging": {
+    "level": "INFO",
+    "payload_logging": false
+  },
+  "sink": {
+    "type": "file",
+    "directory": ".local/file-sink/events",
+    "mode": "one_file_per_message",
+    "filename_strategy": "stream_sequence",
+    "duplicate_policy": "skip_existing",
+    "payload_mode": "json_or_envelope",
+    "extension": ".json",
+    "include_metadata": true,
+    "partition_by_subject": true,
+    "create_directory": true,
+    "fsync": true
+  }
+}

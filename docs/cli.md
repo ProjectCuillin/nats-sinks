@@ -26,7 +26,7 @@ configuration. This is the safest first command to run because it does not need
 to connect to NATS or the configured destination.
 
 ```bash
-nats-sink validate examples/oracle-jetstream/config.json
+nats-sink validate examples/file-basic/config.json
 ```
 
 ### `show-effective-config`
@@ -36,7 +36,7 @@ to confirm defaults and environment-backed field names without printing
 resolved secrets.
 
 ```bash
-nats-sink show-effective-config examples/oracle-jetstream/config.json
+nats-sink show-effective-config examples/file-basic/config.json
 ```
 
 ### `test-sink`
@@ -44,7 +44,7 @@ nats-sink show-effective-config examples/oracle-jetstream/config.json
 Starts the configured sink and runs a health check when the sink supports it. This command opens destination connections, so use it only in environments where that is expected.
 
 ```bash
-nats-sink test-sink examples/oracle-jetstream/config.json
+nats-sink test-sink examples/file-basic/config.json
 ```
 
 ### `run`
@@ -53,7 +53,7 @@ Starts the JetStream runner. This command opens NATS and destination
 connections and begins processing messages.
 
 ```bash
-nats-sink run examples/oracle-jetstream/config.json --log-level INFO
+nats-sink run examples/file-basic/config.json --log-level INFO
 ```
 
 Use `--dry-run` to validate and construct runtime objects without opening NATS or sink connections.

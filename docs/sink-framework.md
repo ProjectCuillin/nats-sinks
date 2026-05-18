@@ -1,8 +1,9 @@
 # Sink Framework
 
 This page documents the generic sink framework. Destination-specific behavior,
-including Oracle table DDL, Oracle SQL modes, and Oracle connection-pool
-settings, lives in destination pages such as [Oracle Sink](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/oracle-sink.md).
+including Oracle table DDL, Oracle SQL modes, local file durability settings,
+and filesystem duplicate policies, lives in destination pages such as
+[Oracle Sink](oracle-sink.md) and [File Sink](file-sink.md).
 
 The purpose of the framework is to keep delivery semantics in one place. Every
 destination should plug into the same small contract and should inherit the same
@@ -32,6 +33,7 @@ flowchart TB
 
     subgraph Destinations[Destination modules]
         Oracle[nats_sinks.oracle]
+        File[nats_sinks.file]
         Future[future sinks]
     end
 
@@ -43,6 +45,7 @@ flowchart TB
     Runner --> DLQ
     Runner --> Metrics
     Registry --> Oracle
+    Registry --> File
 ```
 
 The core layer owns NATS connectivity, JetStream consumer behavior, batching,
@@ -119,10 +122,10 @@ diagnostic and reconciliation aid; it is not a security boundary and should not
 be treated as a secret. Sinks must still avoid logging payload contents by
 default.
 
-This contract is destination-neutral. Oracle uses it today, and future JSON
-document, relational, object-storage, file, HTTP, and Kafka sinks should either
-reuse it or explicitly document why their destination requires a different
-payload storage model.
+This contract is destination-neutral. Oracle and FileSink use it today, and
+future JSON document, relational, object-storage, HTTP, and Kafka sinks should
+either reuse it or explicitly document why their destination requires a
+different payload storage model.
 
 ## Standard Metadata Snapshot
 
@@ -212,6 +215,15 @@ as production-ready:
 - document idempotency strategy and failure behavior,
 - add CLI configuration examples using JSON,
 - add integration tests behind the `integration` marker.
+- add a local or external end-to-end test proving the core runner does not ACK
+  until the sink has crossed its durable success boundary.
+
+Current production sinks and their durable success boundaries:
+
+| Sink | Module | Durable success boundary |
+| --- | --- | --- |
+| Oracle | `nats_sinks.oracle` | Oracle transaction committed. |
+| File | `nats_sinks.file` | Output file atomically placed after temporary write, flush, and configured fsync behavior. |
 
 ## Adding Future Sinks Without Breaking Users
 
@@ -231,7 +243,7 @@ The stable extension points are:
 - the JSON `sink` object, which requires `type` and allows sink-specific fields
   to be validated by the selected destination implementation.
 
-In practice, adding a future `postgres`, `http`, `file`, or `s3` sink should
+In practice, adding a future `postgres`, `http`, or `s3` sink should
 look like this:
 
 1. Add a new module, for example `src/nats_sinks/postgres/`.
@@ -243,7 +255,7 @@ look like this:
 6. Add deterministic unit tests and integration tests behind the
    `integration` marker.
 7. Add roadmap, changelog, and example updates without changing existing
-   Oracle configuration semantics.
+   Oracle or file configuration semantics.
 
 Those steps are additive. Existing imports such as `from nats_sinks.oracle
 import OracleSink`, existing `sink.type: "oracle"` configurations, and the
@@ -262,7 +274,7 @@ publish DLQ records, parse CLI arguments, or own process signal handling. Those
 jobs belong to the core runner and CLI.
 
 Keeping those responsibilities outside destination modules makes it possible to
-add future sinks such as Postgres, HTTP, file, S3, or Kafka without copying ACK
+add future sinks such as Postgres, HTTP, S3, or Kafka without copying ACK
 logic into every backend.
 
 ## Future Destinations
@@ -271,7 +283,6 @@ Future sinks should live in destination modules such as:
 
 - `nats_sinks.postgres`
 - `nats_sinks.http`
-- `nats_sinks.file`
 - `nats_sinks.s3`
 
 No future sink should be considered production-ready until it has tests proving

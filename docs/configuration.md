@@ -4,25 +4,23 @@ Runtime configuration is JSON-only. `nats-sinks` reads UTF-8 JSON files, require
 
 ## Minimal Configuration
 
-The examples use Oracle because it is the first production sink. Future sinks
-should keep the same generic runtime sections and define their own documented
-fields inside the `sink` object.
+The minimal example uses the local file sink because it does not require a
+database or credentials. Oracle uses the same generic runtime sections and adds
+Oracle-specific fields inside the `sink` object.
 
 ```json
 {
   "nats": {
     "url": "nats://localhost:4222",
     "stream": "ORDERS",
-    "consumer": "orders-sink",
+    "consumer": "file-orders-sink",
     "subject": "orders.*"
   },
   "sink": {
-    "type": "oracle",
-    "dsn": "localhost:1521/FREEPDB1",
-    "user": "app_user",
-    "password_env": "ORACLE_PASSWORD",
-    "table": "NATS_SINK_EVENTS",
-    "mode": "merge"
+    "type": "file",
+    "directory": ".local/file-sink/events",
+    "filename_strategy": "stream_sequence",
+    "duplicate_policy": "skip_existing"
   }
 }
 ```
@@ -34,7 +32,7 @@ fields inside the `sink` object.
   "nats": {
     "url": "nats://localhost:4222",
     "stream": "ORDERS",
-    "consumer": "orders-sink",
+    "consumer": "file-orders-sink",
     "subject": "orders.*",
     "durable": true,
     "token_env": "NATS_TOKEN",
@@ -67,18 +65,16 @@ fields inside the `sink` object.
     "namespace": "nats_sinks"
   },
   "sink": {
-    "type": "oracle",
-    "dsn": "localhost:1521/FREEPDB1",
-    "user": "app_user",
-    "password_env": "ORACLE_PASSWORD",
-    "table": "NATS_SINK_EVENTS",
-    "mode": "merge",
-    "auto_create": false,
+    "type": "file",
+    "directory": ".local/file-sink/events",
+    "mode": "one_file_per_message",
+    "filename_strategy": "stream_sequence",
+    "duplicate_policy": "skip_existing",
     "payload_mode": "json_or_envelope",
-    "idempotency": {
-      "strategy": "stream_sequence",
-      "columns": ["STREAM_NAME", "STREAM_SEQUENCE"]
-    }
+    "include_metadata": true,
+    "partition_by_subject": true,
+    "create_directory": true,
+    "fsync": true
   }
 }
 ```
@@ -123,14 +119,18 @@ flowchart LR
 ```
 
 Every sink must define its own documented JSON fields, validation rules,
-secret-handling guidance, and examples. The current production sink is Oracle,
-so the tracked example files use `"type": "oracle"`. Detailed Oracle
-connection options, Autonomous Database wallet settings, table routing,
-payload modes, and column mappings live in [Oracle Sink](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/oracle-sink.md).
+secret-handling guidance, and examples. The current production sinks are:
+
+- `"type": "oracle"` for Oracle Database. Detailed Oracle connection options,
+  Autonomous Database wallet settings, table routing, payload modes, and column
+  mappings live in [Oracle Sink](oracle-sink.md).
+- `"type": "file"` for local JSON file output. File durability, duplicate
+  policies, deterministic file names, and filesystem safety live in
+  [File Sink](file-sink.md).
 
 This separation is part of the compatibility contract. Adding a future
-`postgres`, `http`, `file`, or `s3` sink should add new sink-specific fields
-under `"sink"` without requiring existing Oracle users to change the rest of
+`postgres`, `http`, or `s3` sink should add new sink-specific fields under
+`"sink"` without requiring existing Oracle or file users to change the rest of
 their configuration.
 
 ## Payload Storage Modes
@@ -149,9 +149,9 @@ The shared payload modes are:
 | `bytes_envelope` | Treat every body as bytes and wrap base64 content in the JSON envelope. |
 
 Future sinks should either reuse these modes or document a deliberate,
-well-tested alternative. See [Sink Framework](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/sink-framework.md) for the
-destination-neutral payload envelope and [Oracle Sink](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/oracle-sink.md) for the
-Oracle implementation.
+well-tested alternative. See [Sink Framework](sink-framework.md) for the
+destination-neutral payload envelope, [Oracle Sink](oracle-sink.md) for the
+Oracle implementation, and [File Sink](file-sink.md) for local file output.
 
 ## Metadata Storage
 
@@ -221,7 +221,7 @@ configuration. The client still supplies the clear-text password from
 `NATS_PASSWORD`, and TLS protects that credential in transit.
 
 For detailed connection guidance, see
-[NATS Connections And Authentication](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/nats-connections.md).
+[NATS Connections And Authentication](nats-connections.md).
 
 ## Logging
 

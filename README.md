@@ -1,5 +1,7 @@
 # nats-sinks
 
+[![Documentation Status](https://readthedocs.org/projects/nats-sinks/badge/?version=latest)](https://nats-sinks.readthedocs.io/en/latest/?badge=latest)
+
 `nats-sinks` provides at-least-once delivery from JetStream to external destinations with commit-then-acknowledge processing and idempotent sink support.
 
 The project repository is [ProjectCuillin/nats-sinks](https://github.com/ProjectCuillin/nats-sinks/). The current named contributor is Johan Louwers, reachable at [louwersj@gmail.com](mailto:louwersj@gmail.com).
@@ -11,22 +13,33 @@ JetStream is the persistence layer in NATS: it stores messages in streams and
 delivers them to consumers. A sink is a consumer whose main job is to copy those
 messages into another durable system, such as a database.
 
-`nats-sinks` is a Python package for building outbound NATS JetStream sink consumers. It provides a reusable runtime that owns JetStream delivery semantics and delegates destination writes to sink implementations. The first production sink is Oracle Database.
+`nats-sinks` is a Python package for building outbound NATS JetStream sink consumers. It provides a reusable runtime that owns JetStream delivery semantics and delegates destination writes to sink implementations. The current production sinks are Oracle Database and local files.
 
 The package is designed as a production-ready foundation rather than a demo script. It includes a typed public API, JSON configuration, a CLI, security-conscious defaults, tests, documentation, CI configuration, and packaging metadata suitable for publishing to PyPI.
+
+The public documentation is prepared for Read the Docs at
+[nats-sinks.readthedocs.io](https://nats-sinks.readthedocs.io/en/latest/). The
+repository also contains a GitHub Actions documentation workflow so pull
+requests can validate the MkDocs site before Read the Docs publishes it.
+
+Current production sink modules:
+
+- `nats_sinks.oracle`
+- `nats_sinks.file`
 
 Future sink modules are planned for:
 
 - `nats_sinks.postgres`
 - `nats_sinks.http`
-- `nats_sinks.file`
 - `nats_sinks.s3`
 
-Those modules are not shipped as production sinks yet. The extension points are present so future sinks can implement the same contract without taking ownership of ACK behavior.
+Those future modules are not shipped as production sinks yet. The extension
+points are present so future sinks can implement the same contract without
+taking ownership of ACK behavior.
 
 ## Status
 
-The current release is `0.1.1`.
+The current release is `0.2.0`.
 
 Included today:
 
@@ -35,6 +48,8 @@ Included today:
 - Immutable `NatsEnvelope` abstraction.
 - Explicit sink protocol and safe sink registry.
 - Oracle sink with idempotent production modes.
+- File sink with atomic local JSON file writes and deterministic duplicate
+  handling.
 - JSON configuration and redacted effective-config output.
 - CLI command named `nats-sink`.
 - Unit tests for ACK ordering, DLQ ordering, config loading, SQL generation, and Oracle mapping.
@@ -122,31 +137,32 @@ nats pub orders.created '{"order_id":"O-1001","amount":42.50}'
 
 Prepare the destination:
 
-The first production destination is Oracle Database. Follow the table and
-least-privilege setup in [Oracle Sink](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/oracle-sink.md), then run the sink
-with the tracked example configuration.
+For a local no-database quick start, use the file sink. It writes one JSON file
+per message under `.local/file-sink/events`, which is ignored by git. See
+[File Sink](https://nats-sinks.readthedocs.io/en/latest/file-sink/) for the full
+configuration and durability model.
 
 Run the sink:
 
 ```bash
-export ORACLE_PASSWORD=example
-nats-sink validate examples/oracle-jetstream/config.json
-nats-sink run examples/oracle-jetstream/config.json
+nats-sink validate examples/file-basic/config.json
+nats-sink test-sink examples/file-basic/config.json
+nats-sink run examples/file-basic/config.json
 ```
 
 ## JSON Configuration
 
 Runtime configuration is JSON-only. The package uses the standard-library JSON parser for application configuration.
-The example below uses Oracle because it is the first production sink; future
-sinks will use the same generic `nats`, `delivery`, `dead_letter`, `logging`,
-and `metrics` sections with their own documented `sink` fields.
+The generic `nats`, `delivery`, `dead_letter`, `logging`, and `metrics`
+sections are shared by all sinks. The `sink` object selects the destination and
+contains destination-specific fields documented on each sink page.
 
 ```json
 {
   "nats": {
     "url": "nats://localhost:4222",
     "stream": "ORDERS",
-    "consumer": "oracle-orders-sink",
+    "consumer": "file-orders-sink",
     "subject": "orders.*",
     "durable": true
   },
@@ -175,18 +191,12 @@ and `metrics` sections with their own documented `sink` fields.
     "namespace": "nats_sinks"
   },
   "sink": {
-    "type": "oracle",
-    "dsn": "localhost:1521/FREEPDB1",
-    "user": "app_user",
-    "password_env": "ORACLE_PASSWORD",
-    "table": "NATS_SINK_EVENTS",
-    "mode": "merge",
-    "auto_create": false,
+    "type": "file",
+    "directory": ".local/file-sink/events",
+    "filename_strategy": "stream_sequence",
+    "duplicate_policy": "skip_existing",
     "payload_mode": "json_or_envelope",
-    "idempotency": {
-      "strategy": "stream_sequence",
-      "columns": ["STREAM_NAME", "STREAM_SEQUENCE"]
-    }
+    "fsync": true
   }
 }
 ```
@@ -215,17 +225,17 @@ unnecessary JSON parse attempts.
 ```json
 {
   "sink": {
-    "type": "oracle",
-    "table": "NATS_SINK_EVENTS",
-    "mode": "merge",
+    "type": "file",
+    "directory": ".local/file-sink/events",
     "payload_mode": "text_envelope"
   }
 }
 ```
 
-See [Sink Framework](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/sink-framework.md) and
-[Oracle Sink](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/oracle-sink.md) for the JSON envelope shape and operational
-guidance.
+See [Sink Framework](https://nats-sinks.readthedocs.io/en/latest/sink-framework/) and
+[File Sink](https://nats-sinks.readthedocs.io/en/latest/file-sink/) for the JSON envelope shape and operational
+guidance. Oracle-specific payload storage is documented in
+[Oracle Sink](https://nats-sinks.readthedocs.io/en/latest/oracle-sink/).
 
 ## Metadata Capture
 
@@ -254,15 +264,17 @@ or map selected fields into destination-specific columns.
 Do not embed credentials in `nats.url`; use environment-backed fields instead.
 Advanced TLS certificate authentication policy, NKEY challenge authentication,
 and decentralized JWT authentication/authorization are roadmap items. See
-[NATS Connections And Authentication](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/nats-connections.md).
+[NATS Connections And Authentication](https://nats-sinks.readthedocs.io/en/latest/nats-connections/).
 
 The broader comparison between NATS capabilities and the current project scope
-is maintained in [NATS Feature Gap Analysis](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/nats-feature-gap-analysis.md).
+is maintained in [NATS Feature Gap Analysis](https://nats-sinks.readthedocs.io/en/latest/nats-feature-gap-analysis/).
 
 ## CLI
 
 ```bash
 nats-sink --help
+nats-sink validate examples/file-basic/config.json
+nats-sink test-sink examples/file-basic/config.json
 nats-sink validate examples/oracle-jetstream/config.json
 nats-sink show-effective-config examples/oracle-jetstream/config.json
 nats-sink test-sink examples/oracle-jetstream/config.json
@@ -284,20 +296,18 @@ out to the CLI. The recommended integration point is the public framework API:
 
 ```python
 from nats_sinks import JetStreamSinkRunner
-from nats_sinks.oracle import OracleSink
+from nats_sinks.file import FileSink
 
-sink = OracleSink(
-    dsn="localhost:1521/FREEPDB1",
-    user="app_user",
-    password_env="ORACLE_PASSWORD",
-    table="NATS_SINK_EVENTS",
-    mode="merge",
+sink = FileSink(
+    directory="/var/lib/nats-sinks/events",
+    filename_strategy="stream_sequence",
+    duplicate_policy="skip_existing",
 )
 
 runner = JetStreamSinkRunner(
     nats_url="nats://localhost:4222",
     stream="ORDERS",
-    consumer="orders-oracle-sink",
+    consumer="orders-file-sink",
     subject="orders.*",
     sink=sink,
 )
@@ -315,18 +325,23 @@ app = typer.Typer()
 app.add_typer(nats_sink_cli, name="nats-sink")
 ```
 
-See [Python Usage](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/python-usage.md) for embedded application patterns and
+See [Python Usage](https://nats-sinks.readthedocs.io/en/latest/python-usage/) for embedded application patterns and
 the tradeoff between using the public runtime API and importing CLI internals.
 
-## Oracle Sink
+## Production Sinks
 
-Oracle-specific details are documented in [Oracle Sink](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/oracle-sink.md).
-That page covers Oracle connection types, Autonomous Database, table DDL,
-least-privilege users, idempotent write modes, subject-to-table routing,
-payload storage, metadata columns, and Oracle-specific performance guidance.
+Destination-specific details are split into dedicated pages:
+
+- [Oracle Sink](https://nats-sinks.readthedocs.io/en/latest/oracle-sink/)
+  covers Oracle connection types, Autonomous Database, table DDL,
+  least-privilege users, idempotent write modes, subject-to-table routing,
+  payload storage, metadata columns, and Oracle-specific performance guidance.
+- [File Sink](https://nats-sinks.readthedocs.io/en/latest/file-sink/) covers
+  local file output, atomic write behavior, deterministic file names, duplicate
+  policies, filesystem safety, and file-specific performance guidance.
 
 The generic sink framework is documented separately in
-[Sink Framework](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/sink-framework.md). That boundary is deliberate: future
+[Sink Framework](https://nats-sinks.readthedocs.io/en/latest/sink-framework/). That boundary is deliberate: future
 backends can be added as new sink modules without changing the core
 commit-then-acknowledge contract or making existing Oracle users change their
 configuration.
@@ -397,24 +412,24 @@ mkdocs build --strict
 ```
 
 Manual live NATS connection testing is documented in
-[NATS Connections And Authentication](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/nats-connections.md) and
-[Testing](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/testing.md). The tracked helper script is
+[NATS Connections And Authentication](https://nats-sinks.readthedocs.io/en/latest/nats-connections/) and
+[Testing](https://nats-sinks.readthedocs.io/en/latest/testing/). The tracked helper script is
 `scripts/nats-live-probe.py`; real CA files and credentials should stay under
 ignored `.local/` paths.
 
 The latest sanitized validation summary is maintained in
-[Latest Test Report](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/test-report.md). That report is overwritten in place
+[Latest Test Report](https://nats-sinks.readthedocs.io/en/latest/test-report/). That report is overwritten in place
 for each new validation run and must not contain server addresses, usernames,
 passwords, tokens, certificate contents, wallet material, connection strings,
 or sensitive payloads.
 
 To run `nats-sink` as a systemd service on Oracle Linux or Debian, see
-[Service Deployment](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/service-deployment.md). The repository includes
+[Service Deployment](https://nats-sinks.readthedocs.io/en/latest/service-deployment/). The repository includes
 example service files and installer scripts under `examples/systemd/` and
 `scripts/`.
 
 Release and PyPI publishing instructions are documented in
-[Publishing Releases](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/publishing.md). That guide covers version updates,
+[Publishing Releases](https://nats-sinks.readthedocs.io/en/latest/publishing/). That guide covers version updates,
 tag pushes, GitHub release workflows, TestPyPI, PyPI trusted publishing, and
 manual fallback commands.
 
@@ -424,9 +439,10 @@ manual fallback commands.
 src/nats_sinks/core      Core runtime, config, envelope, runner, DLQ
 src/nats_sinks/sinks     Sink protocols and registry
 src/nats_sinks/oracle    Oracle sink implementation
+src/nats_sinks/file      Local file sink implementation
 src/nats_sinks/cli       CLI entry point
 tests/unit               Deterministic unit tests
-tests/integration        External-service test placeholders
+tests/integration        External-service and local end-to-end tests
 docs                     MkDocs documentation
 examples                 Local development examples
 ```
@@ -437,6 +453,7 @@ Phase 1:
 
 - Core runtime.
 - Oracle sink.
+- File sink.
 - CLI.
 - Documentation.
 - Tests.
@@ -448,6 +465,7 @@ Phase 2:
 - More idempotency strategies.
 - Postgres sink.
 - HTTP sink.
+- S3 sink design with deterministic object keys.
 - Docker image.
 - Kubernetes examples.
 - Multiple NATS seed URLs for clustered deployments.
@@ -480,7 +498,7 @@ Not planned unless scope changes:
   framework support.
 - JetStream Key/Value and Object Store APIs unless a future sink needs them.
 
-See [NATS Feature Gap Analysis](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/nats-feature-gap-analysis.md) for the
+See [NATS Feature Gap Analysis](https://nats-sinks.readthedocs.io/en/latest/nats-feature-gap-analysis/) for the
 detailed comparison.
 
 ## License

@@ -85,12 +85,14 @@ as success rather than creating duplicate business effects.
 
 ## Current Scope
 
-The current production implementation is Oracle. Oracle duplicate handling is
-documented in [Oracle Sink](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/oracle-sink.md), including `merge`,
-`insert_ignore`, `insert`, and `append` behavior. Oracle-specific key-column
-mapping and payload-field extraction are intentionally kept on that page so
-future sinks can document their own backend-native approach without changing
-this generic guide.
+The current production implementations are Oracle and FileSink. Oracle
+duplicate handling is documented in [Oracle Sink](oracle-sink.md), including
+`merge`, `insert_ignore`, `insert`, and `append` behavior. File duplicate
+handling is documented in [File Sink](file-sink.md), including deterministic
+file names and `skip_existing`, `overwrite`, and `fail` policies.
+Destination-specific key-column, filename, or payload-field details are kept on
+the sink pages so future sinks can document their own backend-native approach
+without changing this generic guide.
 
 The generic core also protects idempotency by owning all acknowledgement
 decisions. Sinks never receive raw NATS messages and cannot ACK early. If a sink
@@ -108,7 +110,7 @@ adding more strategy names. Planned areas include:
 - configurable Oracle `merge` update columns,
 - Postgres `ON CONFLICT`-based duplicate handling,
 - HTTP idempotency-key support and explicit warnings for unsafe endpoints,
-- file and S3 sinks with deterministic keys and atomic overwrite-or-skip
+- S3 sinks with deterministic object keys and atomic overwrite-or-skip
   behavior,
 - a reusable sink certification test suite that proves duplicate redelivery is
   safe before a sink is called production-ready.

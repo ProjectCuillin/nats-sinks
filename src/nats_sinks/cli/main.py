@@ -29,6 +29,7 @@ from nats_sinks.core.config import AppConfig, load_config, redacted_config
 from nats_sinks.core.errors import ConfigurationError, NatsSinksError
 from nats_sinks.core.logging import configure_logging
 from nats_sinks.core.runner import JetStreamSinkRunner
+from nats_sinks.file import FileSink
 from nats_sinks.oracle import OracleSink
 from nats_sinks.sinks.base import HealthCheckableSink, Sink
 from nats_sinks.sinks.registry import SinkRegistry
@@ -46,6 +47,7 @@ def _version_callback(value: bool) -> None:
 
 def _registry() -> SinkRegistry:
     registry = SinkRegistry()
+    registry.register("file", FileSink.from_mapping)
     registry.register("oracle", OracleSink.from_mapping)
     return registry
 

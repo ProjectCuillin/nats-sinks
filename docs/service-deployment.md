@@ -1,9 +1,9 @@
 # Running nats-sink As A Service
 
-This page provides systemd guidance for Oracle Linux and Debian. Both examples
-run `nats-sink` from a Python virtual environment, load JSON configuration from
-`/etc/nats-sinks/config.json`, and load secrets from
-`/etc/nats-sinks/nats-sink.env`.
+This page provides systemd guidance for Oracle Linux and Debian. The service
+model works for every sink type. The examples run `nats-sink` from a Python
+virtual environment, load JSON configuration from `/etc/nats-sinks/config.json`,
+and optionally load secrets from `/etc/nats-sinks/nats-sink.env`.
 
 ## Layout
 
@@ -22,11 +22,11 @@ sequenceDiagram
     participant systemd
     participant CLI as nats-sink CLI
     participant R as Runner
-    participant O as OracleSink
+    participant S as Selected Sink
 
     systemd->>CLI: start nats-sink run /etc/nats-sinks/config.json
     CLI->>R: build runner
-    R->>O: start sink
+    R->>S: start sink
     R->>R: consume batches
     systemd->>CLI: SIGTERM
     CLI->>R: graceful stop path
@@ -50,8 +50,8 @@ sudo install -d -o nats-sink -g nats-sink /var/lib/nats-sink
 sudo install -d /etc/nats-sinks /opt/nats-sinks
 sudo python3 -m venv /opt/nats-sinks/venv
 sudo /opt/nats-sinks/venv/bin/python -m pip install --upgrade pip
-sudo /opt/nats-sinks/venv/bin/python -m pip install "nats-sinks[oracle]"
-sudo install -m 0640 -o root -g nats-sink examples/oracle-jetstream/config.json /etc/nats-sinks/config.json
+sudo /opt/nats-sinks/venv/bin/python -m pip install nats-sinks
+sudo install -m 0640 -o root -g nats-sink examples/file-basic/config.json /etc/nats-sinks/config.json
 sudo install -m 0640 -o root -g nats-sink examples/systemd/nats-sink.env /etc/nats-sinks/nats-sink.env
 sudo install -m 0644 examples/systemd/nats-sink.service /etc/systemd/system/nats-sink.service
 sudo systemctl daemon-reload
@@ -76,8 +76,8 @@ sudo install -d -o nats-sink -g nats-sink /var/lib/nats-sink
 sudo install -d /etc/nats-sinks /opt/nats-sinks
 sudo python3 -m venv /opt/nats-sinks/venv
 sudo /opt/nats-sinks/venv/bin/python -m pip install --upgrade pip
-sudo /opt/nats-sinks/venv/bin/python -m pip install "nats-sinks[oracle]"
-sudo install -m 0640 -o root -g nats-sink examples/oracle-jetstream/config.json /etc/nats-sinks/config.json
+sudo /opt/nats-sinks/venv/bin/python -m pip install nats-sinks
+sudo install -m 0640 -o root -g nats-sink examples/file-basic/config.json /etc/nats-sinks/config.json
 sudo install -m 0640 -o root -g nats-sink examples/systemd/nats-sink.env /etc/nats-sinks/nats-sink.env
 sudo install -m 0644 examples/systemd/nats-sink.service /etc/systemd/system/nats-sink.service
 sudo systemctl daemon-reload
@@ -101,5 +101,7 @@ sudo systemctl restart nats-sink
 ```
 
 Use `systemctl stop nats-sink` for graceful shutdown. Messages in a completed
-Oracle transaction but not yet ACKed may redeliver; idempotency must handle
-duplicates.
+destination commit but not yet ACKed may redeliver; idempotency must handle
+duplicates. Oracle deployments should install `nats-sinks[oracle]` and use an
+Oracle configuration file. File sink deployments can use the base package and
+should ensure the configured output directory is owned by the service user.

@@ -32,10 +32,17 @@ twine check dist/*
 ## Documentation
 
 ```bash
+python scripts/check-markdown-links.py
 mkdocs build --strict
 ```
 
 Mermaid diagrams are written directly in Markdown code fences so GitHub and MkDocs render the same conceptual flows where supported.
+
+The repository also includes a GitHub Actions `Docs` workflow and a
+`.readthedocs.yaml` configuration file. Pull requests that change
+documentation, README links, MkDocs settings, or documentation dependencies
+should pass the same checks that Read the Docs will use after merge. See
+[Read the Docs](read-the-docs.md).
 
 ## Change Rules
 

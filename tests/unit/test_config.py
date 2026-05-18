@@ -230,3 +230,32 @@ def test_oracle_payload_mode_can_be_configured_for_encrypted_text(tmp_path: Path
     config = load_config(path, env_overrides=False)
 
     assert config.sink.payload_mode == "text_envelope"
+
+
+def test_file_sink_config_loads_without_oracle_fields(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*"
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/var/lib/nats-sinks/events",
+    "filename_strategy": "stream_sequence",
+    "duplicate_policy": "skip_existing",
+    "payload_mode": "json_or_envelope"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(path, env_overrides=False)
+
+    assert config.sink.type == "file"
+    assert config.sink.directory == "/var/lib/nats-sinks/events"

@@ -83,7 +83,9 @@ idempotency-key headers.
 The performance shape can differ by backend, but the safety boundary must not:
 ACK is still sent only after the sink returns success. Oracle-specific write
 behavior, including `executemany`, commit behavior, Autonomous Database
-considerations, and tuning notes, is documented in [Oracle Sink](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/oracle-sink.md).
+considerations, and tuning notes, is documented in [Oracle Sink](oracle-sink.md).
+File-specific throughput notes, including compact JSON, subject partitioning,
+and `fsync` tradeoffs, are documented in [File Sink](file-sink.md).
 
 ```mermaid
 sequenceDiagram
@@ -103,7 +105,9 @@ sequenceDiagram
 ## Current Oracle Timing Test
 
 The current repeatable live timing test uses the Oracle sink because Oracle is
-the first production destination. It sends 256 messages by default:
+the heavier external destination. The file sink has deterministic local unit
+and end-to-end coverage because it does not need an external service. The
+Oracle test sends 256 messages by default:
 
 ```bash
 set -a

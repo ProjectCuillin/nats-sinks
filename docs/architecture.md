@@ -14,10 +14,10 @@ This separation keeps JetStream ACK behavior consistent across destinations. A s
 
 ## Component Model
 
-The diagram below shows the framework boundary. Oracle is the first production
-destination module, but additional destinations should fit into the same shape:
-the runner manages JetStream, and sinks receive normalized envelopes instead of
-raw NATS messages.
+The diagram below shows the framework boundary. Oracle and local file output
+are production destination modules, and additional destinations should fit into
+the same shape: the runner manages JetStream, and sinks receive normalized
+envelopes instead of raw NATS messages.
 
 ```mermaid
 flowchart TB
@@ -40,16 +40,19 @@ flowchart TB
 
     subgraph Destinations[Destination modules]
         Oracle[nats_sinks.oracle]
+        File[nats_sinks.file]
         Future[future sink modules]
     end
 
     Stream --> Consumer --> Runner
     Runner --> Envelope --> Protocol
     Protocol --> Oracle
+    Protocol --> File
     Protocol --> Future
     Runner --> DLQ
     Runner --> Metrics
     Registry --> Oracle
+    Registry --> File
     Registry --> Future
 ```
 

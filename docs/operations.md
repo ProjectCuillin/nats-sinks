@@ -57,7 +57,7 @@ runtime should report only serious failures. Use `DEBUG` for short-lived
 diagnostic sessions in controlled environments.
 
 The full logging level reference is documented in
-[Configuration](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/configuration.md#logging).
+[Configuration](configuration.md#logging).
 
 ## Metrics
 
@@ -87,6 +87,19 @@ redelivery as a normal operational event rather than an exceptional condition.
 
 Do not claim exactly-once processing. Replays and duplicates are normal. Use idempotent sink modes and stable keys before replaying streams.
 
+## Local File Sink Operations
+
+The file sink is operationally simple, but it still needs capacity planning.
+Monitor disk space, inode usage, write latency, and backup or rotation jobs for
+the configured output directory. The recommended production configuration uses
+`filename_strategy: "stream_sequence"` and `duplicate_policy:
+"skip_existing"` so redelivery maps to the same final file and is treated as
+safe prior durable success.
+
+Use an absolute directory path in service deployments. Keep generated files out
+of git and out of world-writable directories. If host-crash durability matters,
+leave `fsync` enabled and size throughput expectations accordingly.
+
 ## Docker Compose Examples
 
 The examples directory includes JSON-formatted Compose files:
@@ -99,4 +112,4 @@ docker compose -f examples/docker-compose.oracle.json up
 ## systemd Services
 
 For Oracle Linux and Debian systemd examples, see
-[Service Deployment](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/service-deployment.md).
+[Service Deployment](service-deployment.md).

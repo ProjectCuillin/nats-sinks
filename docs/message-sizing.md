@@ -62,7 +62,7 @@ storage sinks may choose a backend-native representation, but they should
 document size limits, encoding, and duplicate handling.
 
 Oracle-specific subject and payload column guidance is documented in
-[Oracle Sink](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/oracle-sink.md).
+[Oracle Sink](oracle-sink.md).
 
 ## References
 

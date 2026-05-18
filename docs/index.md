@@ -24,7 +24,7 @@ The package includes:
 - JSON configuration loading and redacted output,
 - dead-letter queue handling,
 - a CLI command named `nats-sink`,
-- Oracle Database as the first production sink,
+- Oracle Database and local files as production sinks,
 - tests and documentation for the commit-then-acknowledge invariant.
 
 ## High-Level Flow
@@ -43,16 +43,18 @@ flowchart LR
 
 ## Package Status
 
-The current release is `0.1.1`. The project is in the `0.1.x` phase: it is a
-production-ready foundation with Oracle as the first production sink, while the
-public API remains intentionally small so it can stabilize before `1.0.0`.
+The current release is `0.2.0`. The project is in the `0.x` phase: it is a
+production-ready foundation with Oracle and local file sinks, while the public
+API remains intentionally small so it can stabilize before `1.0.0`.
 
 Future sinks will be added only when they can satisfy the same delivery, idempotency, security, and test requirements.
 
 ## Where To Start
 
-- Read [Getting Started](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/getting-started.md) for a local run.
-- Read [Architecture](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/architecture.md) to understand the runtime boundary.
-- Read [Commit Then ACK](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/commit-then-ack.md) before implementing any sink.
-- Read [Oracle Sink](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/oracle-sink.md) for table design, modes, and transactions.
-- Read [Security](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/security.md) before deploying with real credentials or payloads.
+- Read [Getting Started](getting-started.md) for a local run.
+- Read [Architecture](architecture.md) to understand the runtime boundary.
+- Read [Commit Then ACK](commit-then-ack.md) before implementing any sink.
+- Read [Oracle Sink](oracle-sink.md) for table design, modes, and transactions.
+- Read [File Sink](file-sink.md) for local file output, atomic writes, and
+  duplicate handling.
+- Read [Security](security.md) before deploying with real credentials or payloads.

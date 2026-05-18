@@ -3,10 +3,11 @@
 """Check Markdown links that must render correctly outside the repository.
 
 PyPI renders `README.md` as the package description. Relative links such as
-`docs/oracle-sink.md` work on GitHub, but they do not resolve correctly from
-the PyPI project page. This small repository check keeps Markdown links
-portable by requiring normal links to use fully qualified URLs, mail links, or
-same-page anchors.
+`docs/oracle-sink.md` work on GitHub and MkDocs, but they do not resolve
+correctly from the PyPI project page. This repository check therefore enforces
+fully qualified links for PyPI-facing Markdown files while allowing relative
+links inside `docs/`, where MkDocs and Read the Docs use them for
+version-local navigation.
 """
 
 from __future__ import annotations
@@ -16,26 +17,21 @@ import sys
 from pathlib import Path
 
 ALLOWED_PREFIXES = ("https://", "http://", "mailto:", "#")
-SKIPPED_DIRS = {
-    ".git",
-    ".local",
-    ".mypy_cache",
-    ".pytest_cache",
-    ".ruff_cache",
-    "dist",
-    "site",
-}
+PYPI_RENDERED_FILES = {Path("README.md")}
 
 LINK_PATTERN = re.compile(r"!?\[[^\]]*]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
 
 
 def _markdown_files(root: Path) -> list[Path]:
-    files: list[Path] = []
-    for path in root.rglob("*.md"):
-        if any(part in SKIPPED_DIRS for part in path.parts):
-            continue
-        files.append(path)
-    return sorted(files)
+    """Return Markdown files that are rendered outside the docs site.
+
+    The docs tree intentionally uses relative links so Read the Docs can keep
+    readers inside the current documentation version. The files in
+    `PYPI_RENDERED_FILES` are rendered outside that MkDocs context, so those
+    files need stricter checks.
+    """
+
+    return sorted(path for path in PYPI_RENDERED_FILES if (root / path).exists())
 
 
 def _is_allowed_target(target: str) -> bool:
@@ -61,20 +57,26 @@ def _relative_link_findings(path: Path) -> list[str]:
 
 
 def main() -> int:
-    """Return a non-zero exit code when relative Markdown links are found."""
+    """Return a non-zero exit code when PyPI-facing relative links are found."""
 
     findings: list[str] = []
     for path in _markdown_files(Path(".")):
         findings.extend(_relative_link_findings(path))
 
     if findings:
-        sys.stdout.write("Relative Markdown links are not allowed; use full GitHub URLs instead.\n")
-        sys.stdout.write("Base URL: https://github.com/ProjectCuillin/nats-sinks/blob/main/\n")
+        sys.stdout.write(
+            "Relative Markdown links are not allowed in PyPI-facing files; "
+            "use public documentation or repository URLs instead.\n"
+        )
+        sys.stdout.write("Documentation base URL: https://nats-sinks.readthedocs.io/en/latest/\n")
+        sys.stdout.write("Repository base URL: https://github.com/ProjectCuillin/nats-sinks/\n")
         for finding in findings:
             sys.stdout.write(f"{finding}\n")
         return 1
 
-    sys.stdout.write("Markdown links use fully qualified URLs, mailto links, or anchors.\n")
+    sys.stdout.write(
+        "PyPI-facing Markdown links use fully qualified URLs, mailto links, or anchors.\n"
+    )
     return 0
 
 
