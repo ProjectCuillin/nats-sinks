@@ -13,6 +13,7 @@ success.
 """
 
 from nats_sinks.file.config import (
+    FileCompression,
     FileDuplicatePolicy,
     FileFilenameStrategy,
     FileSinkConfig,
@@ -21,6 +22,7 @@ from nats_sinks.file.config import (
 from nats_sinks.file.sink import FileSink
 
 __all__ = [
+    "FileCompression",
     "FileDuplicatePolicy",
     "FileFilenameStrategy",
     "FileSink",

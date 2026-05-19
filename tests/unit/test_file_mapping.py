@@ -84,6 +84,29 @@ def test_relative_path_partitions_by_sanitized_subject() -> None:
     assert ".." not in relative.parts
 
 
+def test_gzip_compression_defaults_to_gzip_extension() -> None:
+    config = FileSinkConfig(directory=Path("test-output"), compression="gzip")
+
+    assert config.extension == ".json.gz"
+    assert relative_path_for_envelope(_envelope(), config=config).name.endswith(".json.gz")
+
+
+def test_gzip_compression_respects_explicit_extension() -> None:
+    config = FileSinkConfig(
+        directory=Path("test-output"),
+        compression="gzip",
+        extension=".event.gz",
+    )
+
+    assert config.extension == ".event.gz"
+    assert relative_path_for_envelope(_envelope(), config=config).name.endswith(".event.gz")
+
+
+def test_gzip_compression_level_is_validated() -> None:
+    with pytest.raises(ValueError, match="compression_level"):
+        FileSinkConfig(directory=Path("test-output"), compression="gzip", compression_level=0)
+
+
 def test_safe_path_component_fuzz_cases_do_not_escape() -> None:
     values = [
         "",

@@ -31,6 +31,8 @@
     "duplicate_policy": "skip_existing",
     "payload_mode": "json_or_envelope",
     "extension": ".json",
+    "compression": "none",
+    "compression_level": 6,
     "include_metadata": true,
     "partition_by_subject": true,
     "create_directory": true,

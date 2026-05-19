@@ -71,6 +71,7 @@ Oracle-specific fields inside the `sink` object.
     "filename_strategy": "stream_sequence",
     "duplicate_policy": "skip_existing",
     "payload_mode": "json_or_envelope",
+    "compression": "none",
     "include_metadata": true,
     "partition_by_subject": true,
     "create_directory": true,
@@ -78,6 +79,144 @@ Oracle-specific fields inside the `sink` object.
   }
 }
 ```
+
+## Configuration File Rules
+
+Configuration files are normal JSON documents. The root value must be an
+object, comments are not allowed, and unknown fields in the generic runtime
+sections are rejected. This strictness is intentional: production sink services
+should fail early when an operator misspells a field, places an option in the
+wrong section, or accidentally carries configuration from another deployment.
+
+The top-level sections are:
+
+| Section | Required | Purpose |
+| --- | --- | --- |
+| `nats` | yes | NATS server connection, JetStream stream, consumer, subject, authentication, and TLS settings. |
+| `delivery` | no | Batching, ACK policy, retry, and temporary failure behavior. Defaults are safe for local and early production deployments. |
+| `dead_letter` | no | Optional DLQ publication for permanently invalid messages. |
+| `logging` | no | Standard Python logging level and payload logging switch. |
+| `metrics` | no | Metrics namespace and metrics enablement flag. The current implementation exposes a metrics abstraction and no-op default recorder. |
+| `sink` | yes | Destination-specific sink configuration. `sink.type` chooses the sink implementation. |
+
+```mermaid
+flowchart TD
+    JSON[config.json] --> Load[Read UTF-8 JSON]
+    Load --> Root{Root is object?}
+    Root -->|no| Error[ConfigurationError]
+    Root -->|yes| Env[Apply allowed environment overrides]
+    Env --> Core[Validate core runtime sections]
+    Core --> Sink[Validate selected sink configuration]
+    Sink --> Run[Run service or print redacted effective config]
+```
+
+## Core Configuration Reference
+
+The tables below describe every generic configuration field understood by the
+core runtime. Sink-specific options are documented later in this page and in the
+dedicated sink pages.
+
+### `nats`
+
+The `nats` section tells the runner where to connect and which JetStream stream,
+consumer, and subject should feed the sink.
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `url` | no | `nats://localhost:4222` | A NATS URL such as `nats://host:4222` or `tls://host:4222`. | Server URL passed to `nats-py`. Use `tls://` or TLS certificate fields for encrypted production connections. |
+| `stream` | yes | none | Non-empty JetStream stream name. | Stream that owns the messages consumed by the sink. |
+| `consumer` | yes | none | Consumer/durable name accepted by NATS. | Durable consumer name when `durable` is true. It is also used in logging and metrics context. |
+| `subject` | yes | none | NATS subject or wildcard subject, for example `orders.*` or `orders.>`. | Subject used for pull subscription binding. It should be covered by the configured stream subjects. |
+| `durable` | no | `true` | `true` or `false`. | When true, binds the pull subscription as a durable consumer. Production deployments should normally keep this enabled. |
+| `name` | no | `null` | Client name string. | Optional client name passed to the NATS connection. Useful for server-side connection inspection. |
+| `user` | no | `null` | Username string. | Username for NATS username/password authentication. |
+| `password` | no | `null` | Password string. | Direct NATS password. Use only for disposable local tests; prefer `password_env` for production. |
+| `password_env` | no | `null` | Environment variable name. | Environment variable that contains the NATS password. Mutually exclusive with `password`. |
+| `token` | no | `null` | Token string. | Direct NATS token. Use only for disposable local tests; prefer `token_env` for production. |
+| `token_env` | no | `null` | Environment variable name. | Environment variable that contains the NATS token. Mutually exclusive with `token`. |
+| `creds_file` | no | `null` | Local file path. | Path to a NATS credentials file consumed by `nats-py` as `user_credentials`. |
+| `nkey_seed_file` | no | `null` | Local file path. | Path to an NKEY seed file consumed by `nats-py` as `nkeys_seed`. |
+| `tls_ca_file` | no | `null` | Local file path. | CA certificate file used to trust a private or self-signed NATS server certificate. |
+| `tls_cert_file` | no | `null` | Local file path. | Optional client certificate file for mutual TLS transport. |
+| `tls_key_file` | no | `null` | Local file path. | Optional client private key file. Requires `tls_cert_file` when set. |
+| `tls_verify` | no | `true` | `true` or `false`. | Enables certificate verification and hostname checking. Keep enabled in production. |
+
+Validation rules:
+
+- configure either `password` or `password_env`, not both,
+- configure either `token` or `token_env`, not both,
+- `tls_key_file` requires `tls_cert_file`,
+- bcrypted NATS passwords are a server-side storage detail; the client still
+  sends the clear-text password from `password` or `password_env`.
+
+### `delivery`
+
+The `delivery` section controls how the core runner fetches, writes, retries,
+and ACKs messages. It is destination-neutral: Oracle, file, and future sinks all
+receive batches according to these settings.
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `batch_size` | no | `100` | Integer `1` to `10000`. | Maximum number of messages to fetch and pass to `sink.write_batch(...)` at once. It is an upper bound, not a requirement to wait for a full batch. |
+| `batch_timeout_ms` | no | `1000` | Integer greater than or equal to `1`. | Pull fetch timeout in milliseconds. Smaller values reduce latency for partial batches; larger values can improve batching efficiency. |
+| `max_in_flight_batches` | no | `1` | Integer `1` to `64`. | Reserved for bounded concurrency. The current runner processes one active batch at a time to keep commit-then-ACK ordering simple and conservative. |
+| `ack_policy` | no | `after_sink_commit` | Only `after_sink_commit`. | Non-negotiable commit-then-acknowledge policy. ACK happens only after the sink reports durable success or after DLQ publication succeeds for permanent failures. |
+| `max_retries` | no | `5` | Integer greater than or equal to `0`. | Retry policy setting reserved for explicit retry decisions. JetStream redelivery remains governed by the consumer policy. |
+| `retry_backoff_ms` | no | `1000` | Integer greater than or equal to `0`. | Delay passed to NAK when `temporary_failure_action` is `nak` and the NATS client supports delayed NAK. |
+| `temporary_failure_action` | no | `nak` | `nak` or `leave_unacked`. | `nak` asks JetStream to redeliver after the configured backoff. `leave_unacked` relies on the consumer ACK timeout. |
+| `prefer_safe_duplication` | no | `true` | `true` or `false`. | Documents the intended reliability posture: duplicates are acceptable when idempotency handles them; silent loss is not. Keep true unless a future sink documents a reviewed alternative. |
+
+### `dead_letter`
+
+The `dead_letter` section controls what happens to permanently invalid messages,
+for example malformed payloads when a sink is configured with
+`payload_mode: "json_only"` or a message that lacks required idempotency
+metadata. DLQ publication follows the same safety rule: the original message is
+ACKed only after DLQ publication succeeds.
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `enabled` | no | `false` | `true` or `false`. | Enables DLQ publication for permanent failures. |
+| `subject` | required when enabled | `null` | NATS subject. | Subject where DLQ messages are published. Required when `enabled` is true. |
+| `include_payload` | no | `true` | `true` or `false`. | Includes the original message body in the DLQ payload. Disable when payload privacy is more important than DLQ replay convenience. |
+| `include_headers` | no | `true` | `true` or `false`. | Includes original message headers in the DLQ payload. Disable if headers may contain sensitive values. |
+| `include_error` | no | `true` | `true` or `false`. | Includes framework error type and message in the DLQ payload. |
+
+### `logging`
+
+The `logging` section configures Python standard logging. It does not enable
+payload logging by itself; payload visibility is controlled by the separate
+`payload_logging` flag.
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `level` | no | `INFO` | Standard levels such as `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. | Minimum log level configured by the CLI before the runner starts. Can be overridden by `NATS_SINKS_LOG_LEVEL` or CLI `--log-level`. |
+| `payload_logging` | no | `false` | `true` or `false`. | Reserved privacy switch for code paths that may log payload details. Keep false in production. |
+
+### `metrics`
+
+The `metrics` section prepares the service for metrics emission while keeping
+the default runtime dependency surface small.
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `enabled` | no | `false` | `true` or `false`. | Enables metrics when a concrete recorder/exporter is supplied by deployment code. The default recorder is no-op. |
+| `namespace` | no | `nats_sinks` | Metric namespace string. | Prefix used by metrics integrations and documentation. |
+
+### `sink`
+
+The `sink` section selects the destination and carries all destination-specific
+options. The core validates `sink.type`, then the safe sink registry passes the
+remaining fields to the selected sink validator.
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `type` | yes | none | `file` or `oracle` in the current release. | Selects the production sink implementation. Future sinks should add new values without changing the generic core sections. |
+
+All other fields under `sink` are sink-specific:
+
+- `file` fields are documented in [File Sink](file-sink.md),
+- `oracle` fields are documented in [Oracle Sink](oracle-sink.md).
 
 ## Delivery Settings
 
@@ -125,7 +264,7 @@ secret-handling guidance, and examples. The current production sinks are:
   Autonomous Database wallet settings, table routing, payload modes, and column
   mappings live in [Oracle Sink](oracle-sink.md).
 - `"type": "file"` for local JSON file output. File durability, duplicate
-  policies, deterministic file names, and filesystem safety live in
+  policies, deterministic file names, optional gzip compression, and filesystem safety live in
   [File Sink](file-sink.md).
 
 This separation is part of the compatibility contract. Adding a future

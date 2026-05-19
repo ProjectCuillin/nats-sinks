@@ -1,6 +1,6 @@
 site_name: nats-sinks
 site_description: Production-ready outbound sink connectors for NATS JetStream.
-site_url: !ENV [READTHEDOCS_CANONICAL_URL, "https://nats-sinks.readthedocs.io/en/latest/"]
+site_url: !ENV [NATS_SINKS_DOCS_SITE_URL, READTHEDOCS_CANONICAL_URL, "https://nats-sinks.readthedocs.io/en/latest/"]
 repo_url: https://github.com/ProjectCuillin/nats-sinks/
 edit_uri: edit/main/docs/
 theme:
@@ -29,6 +29,7 @@ nav:
   - Latest Test Report: test-report.md
   - Development: development.md
   - Read the Docs: read-the-docs.md
+  - GitHub Pages: github-pages.md
   - Release: release.md
   - Publishing Releases: publishing.md
   - Roadmap: roadmap.md

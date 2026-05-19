@@ -12,6 +12,38 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 No changes yet.
 
+## [0.2.1] - 2026-05-19
+
+### Fixed
+
+- Adjusted the file sink health-check unit test so it avoids direct
+  `pathlib.Path.rglob()` calls inside async test code, matching Ruff's
+  async-safety checks in CI.
+
+### Added
+
+- Added optional gzip compression for the file sink, including compressed
+  multi-file test coverage and documentation.
+- Added file sink e2e test controls for retaining or deleting generated local
+  files, defaulting to delete-after-test behavior.
+- Expanded the configuration documentation so core runtime settings, file sink
+  settings, and Oracle sink settings list defaults, valid values, validation
+  rules, and production guidance in one place.
+
+### Changed
+
+- Reordered the README and documentation home page so current production
+  capabilities, including Oracle and file sinks, are introduced before future
+  roadmap items.
+- Added GitHub Pages documentation publishing workflow and maintainer
+  documentation for enabling Pages as a hosted documentation mirror.
+- Added GitHub Pages links to the README, documentation home page, release
+  guide, development guide, and package project URLs.
+- Added GitHub Pages MkDocs builds to local, CI, docs, and release validation
+  paths so the Pages mirror is checked before future publication.
+- Clarified that file sink gzip compression uses Python's standard-library
+  `gzip` module and does not depend on an operating-system gzip command.
+
 ## [0.2.0] - 2026-05-18
 
 ### Added

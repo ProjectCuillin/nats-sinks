@@ -14,25 +14,27 @@ logs from live systems.
 | Field | Value |
 | --- | --- |
 | Overall result | Pass |
-| Report generated | 2026-05-18 21:42:18 CEST |
-| Project version | 0.2.0 |
+| Report generated | 2026-05-19 15:57:55 CEST |
+| Project version | `0.2.1` release candidate |
 | Python version | 3.12.4 |
-| Git revision checked | `c3e0547` plus uncommitted release-candidate changes |
-| Worktree state | Active `v0.2.0` release-candidate workspace with uncommitted changes |
+| Git revision checked | `69a1de5` plus uncommitted `0.2.1` release changes |
+| Worktree state | Active workspace with `0.2.1` version bump, documentation, CI, GitHub Pages, file sink compression, expanded configuration references, and CI-fix changes staged for release |
 | Live NATS details | Redacted |
 | Live Oracle details | Redacted |
 
-The validation run covered the core framework, local file sink, Oracle sink,
-CLI smoke tests, documentation, package build, security scanning, live Oracle
-integration, and a live NATS-to-Oracle end-to-end run.
+This validation refresh covered the core framework, file sink, Oracle unit
+coverage, expanded configuration documentation, CLI smoke checks,
+documentation builds for both Read the Docs and GitHub Pages, package build,
+metadata validation, security scanning, and live NATS-to-Oracle end-to-end
+checks. Live service details are intentionally redacted.
 
 ```mermaid
 flowchart LR
     Core[Core framework] --> Report[Latest sanitized report]
     File[File sink] --> Report
-    Oracle[Oracle sink] --> Report
-    E2E[Live NATS to Oracle] --> Report
-    Docs[Documentation build] --> Report
+    OracleUnit[Oracle unit coverage] --> Report
+    DocsRTD[Read the Docs MkDocs build] --> Report
+    DocsPages[GitHub Pages MkDocs build] --> Report
     Package[Package build and metadata] --> Report
     Security[Security scan] --> Report
 ```
@@ -53,6 +55,27 @@ When refreshing this report:
    endpoints, usernames, certificates, passwords, tokens, wallet contents, or
    sensitive message bodies.
 
+## Current Release Validation
+
+The current work is validated for the `0.2.1` patch release. It includes:
+
+- a CI fix for Ruff `ASYNC240` in the file sink health-check unit test,
+- optional gzip compression for file sink output,
+- compressed and uncompressed file sink tests, including multiple output files,
+- file sink e2e cleanup controls that delete generated test files by default,
+- GitHub Pages workflow support,
+- documentation explaining Read the Docs and GitHub Pages roles,
+- expanded field-by-field configuration references for the core runtime, file
+  sink, and Oracle sink,
+- README and documentation home-page restructuring so current Oracle and file
+  sink capabilities appear before roadmap material,
+- package project URL metadata for the GitHub Pages mirror,
+- local and CI validation of the GitHub Pages MkDocs build path.
+
+At the time this report was generated, the package version had been bumped to
+`0.2.1`, but the release commit, release tag, PyPI publication, and GitHub
+Release had not yet been pushed.
+
 ## Core Framework
 
 The core section validates package-wide behavior that must remain true for all
@@ -64,16 +87,15 @@ ordering, DLQ-before-ACK ordering, and deterministic unhappy-path handling.
 | Check | Command | Result | Sanitized outcome |
 | --- | --- | --- | --- |
 | Formatting | `ruff format --check .` | Pass | 65 files already formatted |
-| Linting | `ruff check .` | Pass | All checks passed |
+| Linting | `ruff check .` | Pass | All checks passed, including the file sink async test fix |
 | Type checking | `mypy src` | Pass | No type issues in 35 source files |
 | Markdown link guard | `python scripts/check-markdown-links.py` | Pass | PyPI-facing README links use fully qualified URLs; MkDocs docs keep version-local relative links |
-| Unit and gated test suite | `python -m pytest -q` | Pass | 117 passed, 8 skipped |
-| Sink capability suite | `scripts/check-sinks.sh` | Pass | 50 sink-focused tests passed plus file and Oracle CLI smoke checks |
-| Documentation build | `mkdocs build --strict` | Pass | Documentation built successfully |
-| Security scan | `scripts/security.sh` | Pass | Bandit/Ruff security checks passed; expected targeted Oracle SQL `nosec` annotations were reported as warnings only |
-| Import smoke test | Python import command | Pass | Public runner, envelope, `FileSink`, and `OracleSink` imports succeeded |
-| CLI smoke test | `nats-sink --version` | Pass | CLI returned version `0.2.0` |
-| Package build | `python -m build` | Pass | Source distribution and wheel built for `0.2.0` |
+| Unit and gated test suite | `pytest` through `scripts/check.sh` | Pass | 125 passed, 8 skipped |
+| Sink capability suite | `scripts/check-sinks.sh` | Pass | 58 sink-focused tests passed plus file and Oracle CLI smoke checks |
+| Read the Docs documentation build | `mkdocs build --strict` | Pass | MkDocs site built successfully with default Read the Docs canonical URL |
+| GitHub Pages documentation build | `NATS_SINKS_DOCS_SITE_URL="https://projectcuillin.github.io/nats-sinks/" mkdocs build --strict` | Pass | MkDocs site built successfully with GitHub Pages canonical URL |
+| Security scan | `scripts/security.sh` | Pass | Bandit passed; expected targeted Oracle SQL `nosec` annotations were reported as warnings only |
+| Package build | `python -m build` | Pass | Source distribution and wheel built for `0.2.1` |
 | Package metadata | `twine check dist/*` | Pass | Wheel and source distribution passed |
 | Whitespace check | `git diff --check` | Pass | No whitespace errors |
 
@@ -102,10 +124,9 @@ The test suite includes deterministic checks for these non-happy paths:
 
 ## File Sink
 
-The file sink section validates the local durable sink introduced in `0.2.0`.
-The sink writes one JSON document per message, uses atomic placement, supports
-deterministic file names, and returns success only after the file write has
-completed.
+The file sink writes one JSON document per message, supports optional gzip
+compression, uses atomic placement, supports deterministic file names, and
+returns success only after the file write has completed.
 
 ```mermaid
 sequenceDiagram
@@ -115,6 +136,7 @@ sequenceDiagram
 
     R->>F: write_batch(envelopes)
     F->>F: normalize payload and metadata
+    F->>F: optionally gzip-compress serialized JSON
     F->>FS: write temporary file in destination directory
     F->>FS: flush and optionally fsync
     F->>FS: atomically place final file
@@ -124,15 +146,19 @@ sequenceDiagram
 
 | Check | Command | Result | Sanitized outcome |
 | --- | --- | --- | --- |
-| File mapping unit tests | Included in `scripts/check-sinks.sh` | Pass | Filename strategies, JSON envelope records, metadata, and fuzzed path components passed |
-| File sink unit tests | Included in `scripts/check-sinks.sh` | Pass | Duplicate policies, overwrite behavior, missing metadata, health check, and filesystem errors passed |
-| File e2e test | `tests/integration/test_file_sink_e2e.py` | Pass | Runner processed fake JetStream messages, wrote JSON/text/empty/bytes records, and ACKed after file success |
+| File mapping unit tests | Included in `scripts/check-sinks.sh` | Pass | Filename strategies, JSON envelope records, metadata, gzip extension defaults, compression-level validation, and fuzzed path components passed |
+| File sink unit tests | Included in `scripts/check-sinks.sh` | Pass | Duplicate policies, overwrite behavior, missing metadata, health check, filesystem errors, gzip output, multiple compressed files, and Ruff async-safety fix passed |
+| File e2e test | `tests/integration/test_file_sink_e2e.py` through `scripts/check-sinks.sh` | Pass | Runner processed fake JetStream messages, wrote uncompressed and gzip-compressed JSON/text/empty/bytes records across multiple files, and ACKed after file success |
 | File CLI validation | `nats-sink validate examples/file-basic/config.json` | Pass | Configuration is valid and active sink is `file` |
 | File CLI smoke | `nats-sink test-sink examples/file-basic/config.json` | Pass | Sink health check succeeded without external services |
 
 The file sink test matrix specifically covers these production risks:
 
 - duplicate messages are skipped, overwritten, or rejected according to policy,
+- gzip compression produces decompressible `.json.gz` files while preserving the
+  same commit-then-ACK boundary as uncompressed writes,
+- compressed and uncompressed test outputs can be retained for inspection or
+  deleted after the e2e test; deletion is the default,
 - missing required stream or message-id metadata raises a clear permanent error,
 - subject names that contain unsafe path characters cannot escape the root
   directory,
@@ -148,19 +174,15 @@ credential, wallet, and service-name details out of the report.
 
 | Check | Command | Result | Sanitized outcome |
 | --- | --- | --- | --- |
-| Oracle-focused unit coverage | Included in `python -m pytest -q` | Pass | SQL generation, mapping, routing, payload, and sink contract tests passed |
-| Live Oracle integration | `python -m pytest -q -s -m integration tests/integration/test_oracle_sink.py` | Pass | 4 passed |
-| Retained Oracle integration table | `NATS_SINKS_ORACLE_TEST_EVENTS_V2` | Pass | Table recreated before the run and retained afterward for inspection |
-| Cleanup flags | Explicit test run | Pass | Drop-before was enabled for schema refresh; drop-after remained disabled |
+| Oracle-focused unit coverage | Included in `python -m pytest` and `scripts/check-sinks.sh` | Pass | SQL generation, mapping, routing, payload, and sink contract tests passed |
+| Oracle CLI validation | `nats-sink validate examples/oracle-jetstream/config.json` | Pass | Configuration is valid and active sink is `oracle` |
+| Live Oracle integration | `python -m pytest -q -s -m integration tests/integration/test_oracle_sink.py` | Not run directly in this refresh | Oracle write behavior was covered through the live NATS-to-Oracle e2e release checks below |
 
-The live Oracle integration run verified these behaviors:
-
-- table creation can be performed when enabled for the test table,
-- a normal batch can be written and committed,
-- duplicate redelivery is idempotent in `merge` mode,
-- non-JSON text payloads are stored as JSON payload envelopes,
-- empty payload bodies are stored as JSON payload envelopes,
-- the retained table has the current metadata and epoch timestamp columns.
+The most recent direct live Oracle integration run from the `0.2.0` release candidate
+verified table creation, normal batch writes, duplicate redelivery in `merge`
+mode, non-JSON text payload storage, empty payload storage, and the retained
+test table schema. For `0.2.1`, the live Oracle path was revalidated through
+the complete NATS-to-Oracle e2e tests below.
 
 ## Live NATS To Oracle End-To-End
 
@@ -189,40 +211,39 @@ sequenceDiagram
 
 | Check | Command | Result | Sanitized outcome |
 | --- | --- | --- | --- |
-| Live e2e, exact batch multiple | `scripts/run-oracle-e2e.sh --table NATS_SINKS_E2E_EVENTS_V2 --message-count 256 --batch-size 64` | Pass | 1 passed |
-| Live e2e, partial final batch | `scripts/run-oracle-e2e.sh --table NATS_SINKS_E2E_EVENTS_V2 --message-count 250 --batch-size 64` | Pass | 1 passed |
-| Message count | Configured test parameter | Pass | 256-message and 250-message runs published, received, written, committed, and ACKed all messages |
-| Batch count | Captured timing metric | Pass | Both runs wrote 4 batches |
-| Final batch behavior | Captured current-batch-size metric | Pass | 250-message run wrote a final 58-message batch instead of waiting for 64 messages |
-| Backend write timing | Captured timing metric | Pass | 256-message run observed 2.773855 seconds and 92.29 messages per second; 250-message run observed 3.042089 seconds and 82.18 messages per second in this test environment |
-| Retained e2e table | `NATS_SINKS_E2E_EVENTS_V2` | Pass | Table retained after the run |
-| Cleanup flags | Defaults | Pass | Drop-before and drop-after remained disabled for the e2e table |
+| Live e2e, exact batch multiple | `scripts/run-oracle-e2e.sh --table NATS_SINKS_E2E_EVENTS_V2 --message-count 256 --batch-size 64` | Pass | 256 messages written in 4 batches; backend write timing observed 2.772645 seconds and 92.33 messages per second in this test environment |
+| Live e2e, partial final batch | `scripts/run-oracle-e2e.sh --table NATS_SINKS_E2E_EVENTS_V2 --message-count 250 --batch-size 64` | Pass | 250 messages written in 4 batches; backend write timing observed 2.650088 seconds and 94.34 messages per second in this test environment |
 
-The live NATS-to-Oracle e2e run verified these behaviors:
+The live NATS-to-Oracle e2e runs verified commit-before-ACK behavior, wildcard
+subscription behavior, missing message ID handling, metadata persistence, empty
+payload persistence, non-JSON payload persistence, no pending ACKs after
+processing, and smaller final batch handling. The timing values are functional
+test observations, not production benchmarks.
 
-- the runner consumed messages from a durable pull consumer,
-- Oracle committed the rows before JetStream ACKs were complete,
-- there were no pending ACKs on the test consumer after processing,
-- the expected row count was present in Oracle,
-- missing `Nats-Msg-Id` headers did not crash processing,
-- present NATS-reserved headers were captured in `METADATA_JSON`,
-- wildcard subscription behavior was exercised through separate subscribe and
-  publish subjects,
-- empty message bodies were persisted without crashing,
-- non-JSON encrypted-text-style messages were persisted through the standard
-  payload envelope,
-- a non-multiple message count wrote and ACKed a smaller final batch,
-- backend write timing was captured for the sink write path.
+## Documentation Hosting
 
-The timing result is a functional test observation from the current test
-environment, not a production benchmark. Production throughput depends on NATS
-placement, Oracle service class, Oracle wallet/TLS configuration, batch size,
-payload size, table indexes, commit frequency, filesystem type for file sinks,
-and network latency.
+The documentation checks now cover both hosted documentation targets:
+
+- Read the Docs remains the preferred versioned documentation site for package
+  users.
+- GitHub Pages is prepared as a repository-hosted mirror of the current `main`
+  branch documentation.
+
+```mermaid
+flowchart TD
+    Docs[Markdown docs] --> RTD[Read the Docs build]
+    Docs --> Pages[GitHub Pages build]
+    RTD --> Versioned[Versioned documentation]
+    Pages --> MainMirror[Current main mirror]
+```
+
+The GitHub Pages workflow is ready from the repository side. A maintainer still
+needs to enable GitHub Pages once in repository settings by choosing `Settings`
+-> `Pages` -> `Source: GitHub Actions`.
 
 ## Release Gate Coverage
 
-The release workflow and local check scripts now require sink capability checks
+The release workflow and local check scripts require sink capability checks
 before publishing. The default gate validates all production sinks without
 external services where possible. Live Oracle and live NATS-to-Oracle tests are
 enabled only by explicit local or CI environment variables because they require
@@ -233,7 +254,9 @@ flowchart TD
     Release[Release candidate] --> Local[scripts/check.sh]
     Local --> Unit[Unit and gated tests]
     Local --> Sinks[scripts/check-sinks.sh]
-    Local --> Docs[mkdocs build --strict]
+    Local --> Docs[Read the Docs MkDocs build]
+    Local --> Pages[GitHub Pages MkDocs build]
+    Local --> Security[Security scan]
     Local --> Build[python -m build]
     Build --> Twine[twine check]
     Sinks --> File[File sink smoke and e2e]
@@ -246,11 +269,12 @@ flowchart TD
 ## Known Limitations Of This Report
 
 - Coverage percentages were not captured in this report.
-- The e2e timing is not a controlled benchmark.
 - Integration results depend on external services and are not reproduced by
   the default unit-test-only CI path.
 - Live service details are intentionally redacted, so this report cannot be
   used to reconstruct the private test environment.
+- Direct live Oracle-only integration tests were not rerun separately; Oracle
+  write behavior was covered by the live NATS-to-Oracle e2e release checks.
 - The active development worktree had uncommitted changes when this report was
   generated.
 
@@ -259,16 +283,7 @@ flowchart TD
 Run the following local checks for a full report refresh:
 
 ```bash
-ruff format --check .
-ruff check .
-mypy src
-python scripts/check-markdown-links.py
-python -m pytest -q
-mkdocs build --strict
-scripts/check-sinks.sh
-scripts/security.sh
-python -m build
-twine check dist/*
+scripts/check.sh
 ```
 
 Run the live Oracle checks only with ignored local environment files:

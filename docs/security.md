@@ -98,6 +98,11 @@ the configured root directory. Operators should still treat the configured
 directory as sensitive because generated files may contain payloads, headers,
 and metadata.
 
+If gzip compression is enabled, the compressed files may still contain
+sensitive payloads and metadata. Compression is not encryption. Protect
+`.json.gz` files with the same filesystem permissions, retention policy, and
+backup controls as uncompressed `.json` files.
+
 Do not point the file sink at a source-code directory, shared temporary
 directory, or path served directly by a web server. Keep generated output under
 an application data path such as `/var/lib/nats-sinks/events`, and apply your

@@ -47,6 +47,147 @@ sink = OracleSink(
 }
 ```
 
+## Complete Oracle Sink Configuration Reference
+
+This section lists every Oracle sink field accepted under the top-level
+`sink` object. Generic runtime sections such as `nats`, `delivery`,
+`dead_letter`, `logging`, and `metrics` are documented in
+[Configuration](configuration.md).
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `type` | yes | none | `oracle` | Selects the Oracle Database sink. |
+| `dsn` | yes | none | Easy Connect string, TNS alias, or full Oracle Net connect descriptor. | Database connect string passed to `python-oracledb`. Autonomous Database may use a wallet TNS alias or a TCPS descriptor. |
+| `user` | yes | none | Oracle username. | Database user used by the sink. Production deployments should use a least-privilege runtime account. |
+| `password` | required unless `password_env` is set | `null` | Password string. | Direct database password. Use only for disposable local tests; prefer `password_env` in real deployments. |
+| `password_env` | required unless `password` is set | `null` | Environment variable name. | Environment variable containing the database password. Recommended for production and CI. |
+| `config_dir` | no | `null` | Directory path. | Directory containing Oracle Net files such as `tnsnames.ora`, commonly used with Autonomous Database wallets. |
+| `wallet_location` | no | `null` | Directory path. | Directory containing Autonomous Database wallet material. Required when `wallet_password` or `wallet_password_env` is set. |
+| `wallet_password` | no | `null` | Wallet password string. | Direct wallet password. Prefer `wallet_password_env` outside disposable tests. |
+| `wallet_password_env` | no | `null` | Environment variable name. | Environment variable containing the wallet password. Requires `wallet_location`. |
+| `ssl_server_dn_match` | no | `null` | `true`, `false`, or omitted. | Controls Oracle TCPS server distinguished-name matching. Keep enabled when required by your database connection profile. |
+| `ssl_server_cert_dn` | no | `null` | Distinguished-name string. | Optional expected Oracle server certificate distinguished name. |
+| `disable_parallel_dml` | no | `true` | `true` or `false`. | Runs `alter session disable parallel dml` before writes. Keep true for normal sink workloads, especially Autonomous Database `high` service tests. |
+| `tcp_connect_timeout` | no | `null` | Number greater than `0`. | Oracle Net TCP connect timeout in seconds. |
+| `retry_count` | no | `null` | Integer greater than or equal to `0`. | Oracle Net connection retry count for transient connection establishment failures. |
+| `retry_delay` | no | `null` | Integer greater than or equal to `0`. | Oracle Net delay between connection retry attempts, in seconds. |
+| `https_proxy` | no | `null` | Proxy hostname or URL understood by Oracle Net. | HTTPS proxy used by TCPS connections in proxy-controlled networks. |
+| `https_proxy_port` | no | `null` | Integer `1` to `65535`. | Proxy port. Requires `https_proxy`. |
+| `table` | no | `NATS_SINK_EVENTS` | Valid Oracle identifier, optionally schema-qualified. | Default target table for messages that do not match a table route. |
+| `table_routes` | no | empty list | List of route objects. | Optional subject-to-table routing rules. Each object contains `subject` and `table`. |
+| `mode` | no | `merge` | `merge`, `insert_ignore`, `insert`, `append` | Oracle write mode. See [Write Mode Values](#write-mode-values). |
+| `auto_create` | no | `false` | `true` or `false`. | Creates the recommended table shape at sink startup when missing. Use for local tests; production should normally use migrations and keep this false. |
+| `payload_mode` | no | `json_or_envelope` | `json_or_envelope`, `json_only`, `text_envelope`, `bytes_envelope` | Controls how message bytes become JSON storage content. See [Payload Modes](#payload-modes). |
+| `payload_column` | no | `null` | Valid Oracle column identifier. | Legacy convenience alias for `columns.payload`. If set, it updates the payload column mapping. |
+| `headers_column` | no | `null` | Valid Oracle column identifier. | Legacy convenience alias for `columns.headers`. If set, it updates the headers column mapping. |
+| `columns` | no | default column mapping object | Object documented in [Column Mapping](#column-mapping). | Maps framework fields to Oracle column names. |
+| `idempotency` | no | stream sequence defaults | Object documented in [Idempotency Configuration](#idempotency-configuration). | Defines the key columns used by idempotent write modes. |
+| `pool_min` | no | `1` | Integer greater than or equal to `1`. | Minimum number of connections in the Oracle connection pool. |
+| `pool_max` | no | `4` | Integer greater than or equal to `1`. | Maximum number of connections in the Oracle connection pool. Must be sized for the deployment and database service limits. |
+| `pool_increment` | no | `1` | Integer greater than or equal to `1`. | Number of connections added when the pool grows. |
+
+Validation rules:
+
+- configure either `password` or `password_env`,
+- configure either `wallet_password` or `wallet_password_env`, not both,
+- wallet password fields require `wallet_location`,
+- `https_proxy_port` requires `https_proxy`,
+- Oracle table and column identifiers are allow-list validated before SQL is
+  generated,
+- values are always bound with Oracle bind variables, not concatenated into SQL.
+
+### Write Mode Values
+
+| Value | Idempotent by default | Behavior | Production guidance |
+| --- | --- | --- | --- |
+| `merge` | yes, when key columns are stable | Uses Oracle `merge` semantics to insert or update the target row by the configured idempotency columns. | Recommended for most production use. |
+| `insert_ignore` | yes, when a matching unique or primary key exists | Inserts rows and treats duplicate-key conflicts as prior success. | Recommended when rows are immutable after first write. |
+| `insert` | no | Performs a plain insert. Duplicate-key conflicts are failures. | Useful for strict diagnostics or controlled streams where duplicates should fail. |
+| `append` | no | Performs insert with Oracle append behavior. | Not idempotent by default. Use only when duplicate delivery is acceptable or external controls prevent duplicates. |
+
+`merge` and `insert_ignore` are the recommended production modes because
+nats-sinks provides at-least-once delivery. They let the sink prefer safe
+duplication over silent loss.
+
+### Idempotency Configuration
+
+```json
+{
+  "idempotency": {
+    "strategy": "stream_sequence",
+    "columns": ["STREAM_NAME", "STREAM_SEQUENCE"]
+  }
+}
+```
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `strategy` | no | `stream_sequence` | `stream_sequence`, `message_id`, `payload_field` | Selects where the idempotency key comes from. |
+| `columns` | no | `["STREAM_NAME", "STREAM_SEQUENCE"]` | List of valid Oracle column identifiers. | Columns used in generated idempotency predicates and constraints. |
+| `payload_field` | required when strategy is `payload_field` | `null` | JSON field name. | Field extracted from the normalized JSON payload when using `payload_field`. |
+
+Strategy details:
+
+| Strategy | Required message data | Default columns | Guidance |
+| --- | --- | --- | --- |
+| `stream_sequence` | JetStream stream name and stream sequence. | `STREAM_NAME`, `STREAM_SEQUENCE` | Recommended for JetStream-backed sinks because the key is stable and unique inside a stream. |
+| `message_id` | `Nats-Msg-Id` or equivalent message ID metadata. | `MESSAGE_ID` when columns are not explicitly set. | Use only when publishers reliably set unique message IDs. Missing message IDs become permanent failures. |
+| `payload_field` | A stable field in the normalized JSON payload. | `MESSAGE_ID` when columns are not explicitly set. | Use for application-defined keys only when the payload contract is strict and documented. |
+
+For encrypted text or opaque bytes, prefer `stream_sequence` or `message_id`.
+The payload may not contain a meaningful JSON field until after decryption.
+
+### Column Mapping
+
+The `columns` object lets operators map nats-sinks fields to an existing Oracle
+table shape. Every value must be a valid Oracle column identifier.
+
+| Field | Default column | Stored value |
+| --- | --- | --- |
+| `stream_name` | `STREAM_NAME` | JetStream stream name. |
+| `stream_sequence` | `STREAM_SEQUENCE` | JetStream stream sequence. |
+| `subject` | `SUBJECT` | Full NATS subject. The recommended schema uses `CLOB` so long subjects do not hit a 1024-character application limit. |
+| `message_id` | `MESSAGE_ID` | NATS message ID when present. Missing message IDs are stored as `null`. |
+| `message_created_at_epoch_ns` | `MESSAGE_CREATED_AT_EPOCH_NS` | Producer-created time from `Nats-Time-Stamp` when present, otherwise JetStream timestamp when available. |
+| `jetstream_timestamp_epoch_ns` | `JETSTREAM_TIMESTAMP_EPOCH_NS` | JetStream server timestamp from message metadata. |
+| `received_at_epoch_ns` | `RECEIVED_AT_EPOCH_NS` | Time when nats-sinks normalized the raw NATS message. |
+| `stored_at_epoch_ns` | `STORED_AT_EPOCH_NS` | Time when Oracle row mapping prepared the row for storage. |
+| `payload` | `PAYLOAD_JSON` | Normalized payload JSON value. |
+| `headers` | `HEADERS_JSON` | Message headers as JSON. |
+| `metadata` | `METADATA_JSON` | Full generic metadata snapshot. |
+
+Example:
+
+```json
+{
+  "sink": {
+    "type": "oracle",
+    "dsn": "example_low",
+    "user": "NATS_SINK_RUNTIME",
+    "password_env": "ORACLE_PASSWORD",
+    "table": "EVENT_INBOX",
+    "columns": {
+      "stream_name": "SOURCE_STREAM",
+      "stream_sequence": "SOURCE_SEQUENCE",
+      "subject": "NATS_SUBJECT",
+      "payload": "EVENT_PAYLOAD",
+      "metadata": "EVENT_METADATA"
+    }
+  }
+}
+```
+
+### Table Route Objects
+
+Each `table_routes` item has this shape:
+
+| Field | Required | Valid values | Description |
+| --- | --- | --- | --- |
+| `subject` | yes | NATS subject pattern using literal tokens, `*`, or final `>`. | Route pattern tested against the message subject. |
+| `table` | yes | Valid Oracle table identifier. | Destination table for matching messages. |
+
+Routes are evaluated in order, and the first matching route wins.
+
 ## Choosing An Oracle Connection Type
 
 `OracleSink` uses `python-oracledb` connection pooling. The same sink supports

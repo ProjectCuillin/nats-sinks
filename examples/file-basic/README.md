@@ -45,3 +45,20 @@ nats pub orders.created '{"order_id":"O-1001","amount":42.50}'
 
 The sink writes one JSON file per message using the JetStream stream sequence
 as the default idempotency key.
+
+## Optional Gzip Compression
+
+The example keeps compression disabled so generated files are easy to inspect.
+To write gzip-compressed JSON files, set:
+
+```json
+{
+  "sink": {
+    "compression": "gzip",
+    "compression_level": 6
+  }
+}
+```
+
+When gzip is enabled and no custom extension is configured, the file sink uses
+`.json.gz` filenames and still writes one durable file per message.

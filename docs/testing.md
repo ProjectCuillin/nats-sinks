@@ -54,6 +54,21 @@ The test publishes fake JetStream message objects into
 JSON, text, empty, and non-UTF-8 payload handling, and confirms that every fake
 message is ACKed only after the sink returns success.
 
+The same module also covers gzip-compressed file output and verifies that one
+message still maps to one durable compressed file. By default, any explicit
+file e2e output directory is deleted after the test. To retain generated files
+for inspection, set:
+
+```bash
+export NATS_SINKS_FILE_E2E_DIRECTORY='.local/file-sink-e2e'
+export NATS_SINKS_FILE_E2E_DELETE_AFTER=false
+pytest tests/integration/test_file_sink_e2e.py
+```
+
+The test creates a unique child directory under `NATS_SINKS_FILE_E2E_DIRECTORY`
+for each run. Keep that directory under `.local/` or another ignored location
+when retaining files.
+
 ## Sink Release Test Matrix
 
 Every production release should validate each production sink at the strongest
@@ -62,7 +77,7 @@ available level:
 | Sink | Unit tests | Smoke tests | End-to-end tests |
 | --- | --- | --- | --- |
 | Oracle | SQL, mapping, routing, payload, idempotency, and contract tests. | `nats-sink validate examples/oracle-jetstream/config.json`; live `test-sink` when Oracle env is available. | Live NATS-to-Oracle e2e when `.local` integration env is available. |
-| File | Path mapping, payload, duplicate policy, healthcheck, filesystem errors, and fuzz-style path safety tests. | `nats-sink validate examples/file-basic/config.json`; `nats-sink test-sink examples/file-basic/config.json`. | Local deterministic runner-to-file e2e in `tests/integration/test_file_sink_e2e.py`. |
+| File | Path mapping, payload, duplicate policy, compression, healthcheck, filesystem errors, and fuzz-style path safety tests. | `nats-sink validate examples/file-basic/config.json`; `nats-sink test-sink examples/file-basic/config.json`. | Local deterministic runner-to-file e2e in `tests/integration/test_file_sink_e2e.py`, with uncompressed and gzip output. |
 
 If a live external-service test is not run, the latest test report must say so
 explicitly. Do not imply that Oracle, NATS, or any other external service was

@@ -1,7 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import gzip
 import json
+import os
+import shutil
+import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -44,12 +48,40 @@ class FakeMessage:
 
 
 def _json_files(root: Path) -> list[Path]:
-    return sorted(path for path in root.rglob("*.json") if path.is_file())
+    return sorted(path for path in root.rglob("*.json*") if path.is_file())
 
 
-async def test_runner_file_sink_local_end_to_end(tmp_path: Path) -> None:
-    """Exercise runner -> FileSink -> durable files -> ACK without external services."""
+def _read_file_record(path: Path) -> dict[str, object]:
+    data = path.read_bytes()
+    if path.name.endswith(".gz"):
+        data = gzip.decompress(data)
+    loaded = json.loads(data.decode("utf-8"))
+    assert isinstance(loaded, dict)
+    return loaded
 
+
+def _delete_after_file_e2e() -> bool:
+    value = os.getenv("NATS_SINKS_FILE_E2E_DELETE_AFTER", "true")
+    return value.lower() in {"1", "true", "yes", "on"}
+
+
+def _file_e2e_directory(tmp_path: Path, *, compression: str) -> Path:
+    configured = os.getenv("NATS_SINKS_FILE_E2E_DIRECTORY")
+    if configured is None:
+        return tmp_path
+    return Path(configured).expanduser() / f"{compression}-{uuid.uuid4().hex}"
+
+
+def _cleanup_file_e2e_directory(path: Path, *, tmp_path: Path) -> None:
+    if _delete_after_file_e2e() and path != tmp_path:
+        shutil.rmtree(path, ignore_errors=True)
+
+
+async def _run_file_sink_e2e(
+    *,
+    output_dir: Path,
+    compression: str = "none",
+) -> tuple[list[Path], list[dict[str, object]], list[str]]:
     events: list[str] = []
     messages: Sequence[FakeMessage] = [
         FakeMessage(events, sequence=1, data=b'{"order_id":"O-1001"}'),
@@ -57,7 +89,7 @@ async def test_runner_file_sink_local_end_to_end(tmp_path: Path) -> None:
         FakeMessage(events, sequence=3, data=b""),
         FakeMessage(events, sequence=4, data=b"\xff\x00\xfe"),
     ]
-    sink = FileSink(directory=tmp_path, fsync=False)
+    sink = FileSink(directory=output_dir, fsync=False, compression=compression)
     runner = JetStreamSinkRunner(
         nats_url="nats://localhost:4222",
         stream="ORDERS",
@@ -70,13 +102,47 @@ async def test_runner_file_sink_local_end_to_end(tmp_path: Path) -> None:
     await runner.process_raw_batch(messages)
 
     assert [message.acked for message in messages] == [True, True, True, True]
-    assert events == ["ack-1", "ack-2", "ack-3", "ack-4"]
+    files = _json_files(output_dir)
+    records = [_read_file_record(path) for path in files]
+    return files, records, events
 
-    files = _json_files(tmp_path)
-    assert len(files) == 4
-    records = [json.loads(path.read_text(encoding="utf-8")) for path in files]
-    assert records[0]["payload"] == {"order_id": "O-1001"}
-    assert records[1]["payload"]["_nats_sinks"]["payload_format"] == "text"
-    assert records[2]["payload"]["_nats_sinks"]["size_bytes"] == 0
-    assert records[3]["payload"]["_nats_sinks"]["payload_format"] == "bytes"
-    assert all(record["metadata"]["jetstream"]["stream"] == "ORDERS" for record in records)
+
+async def test_runner_file_sink_local_end_to_end(tmp_path: Path) -> None:
+    """Exercise runner -> FileSink -> durable files -> ACK without external services."""
+
+    output_dir = _file_e2e_directory(tmp_path, compression="none")
+    try:
+        files, records, events = await _run_file_sink_e2e(output_dir=output_dir)
+
+        assert events == ["ack-1", "ack-2", "ack-3", "ack-4"]
+        assert len(files) == 4
+        assert all(path.name.endswith(".json") for path in files)
+        assert records[0]["payload"] == {"order_id": "O-1001"}
+        assert records[1]["payload"]["_nats_sinks"]["payload_format"] == "text"
+        assert records[2]["payload"]["_nats_sinks"]["size_bytes"] == 0
+        assert records[3]["payload"]["_nats_sinks"]["payload_format"] == "bytes"
+        assert all(record["metadata"]["jetstream"]["stream"] == "ORDERS" for record in records)
+    finally:
+        _cleanup_file_e2e_directory(output_dir, tmp_path=tmp_path)
+
+
+async def test_runner_file_sink_local_end_to_end_with_gzip(tmp_path: Path) -> None:
+    """Exercise compressed file writes over multiple output files."""
+
+    output_dir = _file_e2e_directory(tmp_path, compression="gzip")
+    try:
+        files, records, events = await _run_file_sink_e2e(
+            output_dir=output_dir,
+            compression="gzip",
+        )
+
+        assert events == ["ack-1", "ack-2", "ack-3", "ack-4"]
+        assert len(files) == 4
+        assert all(path.name.endswith(".json.gz") for path in files)
+        assert records[0]["payload"] == {"order_id": "O-1001"}
+        assert records[1]["payload"]["_nats_sinks"]["payload_format"] == "text"
+        assert records[2]["payload"]["_nats_sinks"]["size_bytes"] == 0
+        assert records[3]["payload"]["_nats_sinks"]["payload_format"] == "bytes"
+        assert all(record["metadata"]["jetstream"]["stream"] == "ORDERS" for record in records)
+    finally:
+        _cleanup_file_e2e_directory(output_dir, tmp_path=tmp_path)

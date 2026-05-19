@@ -31,6 +31,7 @@ sink = FileSink(
     directory="/var/lib/nats-sinks/events",
     filename_strategy="stream_sequence",
     duplicate_policy="skip_existing",
+    compression="gzip",
 )
 
 runner = JetStreamSinkRunner(

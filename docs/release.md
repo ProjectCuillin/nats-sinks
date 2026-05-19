@@ -57,6 +57,13 @@ builds the MkDocs site before changes are merged so Read the Docs publication
 should normally be a confirmation step, not the first time documentation is
 tested. See [Read the Docs](read-the-docs.md).
 
+The repository can also publish a GitHub Pages mirror of the current `main`
+documentation at
+[projectcuillin.github.io/nats-sinks](https://projectcuillin.github.io/nats-sinks/)
+through `.github/workflows/pages.yml`. GitHub Pages requires one repository
+setting before the first deployment: `Settings` -> `Pages` -> `Source: GitHub
+Actions`. See [GitHub Pages](github-pages.md).
+
 The release workflow should also be reviewed when GitHub announces changes to
 the JavaScript runtime used by GitHub Actions. First-party actions such as
 artifact upload and artifact download should stay on versions that support the
@@ -75,6 +82,7 @@ external users.
 - Confirm `mypy src`.
 - Confirm `python scripts/check-markdown-links.py`.
 - Confirm `mkdocs build --strict`.
+- Confirm `NATS_SINKS_DOCS_SITE_URL="https://projectcuillin.github.io/nats-sinks/" mkdocs build --strict`.
 - Confirm `scripts/check-sinks.sh`.
 - Confirm `pytest`.
 - Confirm `bandit -q -r src`.
@@ -91,5 +99,7 @@ external users.
 - Create and push an annotated `v*` tag.
 - Confirm the GitHub Release exists and includes the built `dist/*` assets.
 - Confirm Read the Docs built `latest` or the release tag successfully.
+- Confirm the GitHub Pages mirror deployed successfully when documentation was
+  changed on `main`.
 
 Do not hardcode PyPI tokens. Prefer trusted publishing or OIDC.

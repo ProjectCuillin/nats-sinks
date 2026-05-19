@@ -12,6 +12,7 @@
     "filename_strategy": "stream_sequence",
     "duplicate_policy": "skip_existing",
     "payload_mode": "json_or_envelope",
+    "compression": "none",
     "fsync": false
   }
 }

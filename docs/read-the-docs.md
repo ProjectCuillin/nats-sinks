@@ -22,15 +22,20 @@ flowchart TD
     RTDTag --> Versioned[versioned release documentation]
 ```
 
-The repository contains two pieces of automation:
+The repository contains three documentation automation files:
 
 - `.readthedocs.yaml` tells Read the Docs how to build the site.
 - `.github/workflows/docs.yml` builds the same MkDocs site in GitHub Actions
   for pull requests and pushes to `main`.
+- `.github/workflows/pages.yml` can publish the same MkDocs site to GitHub
+  Pages as a repository-hosted mirror of the current `main` documentation.
 
 GitHub Actions catches documentation problems before they reach Read the Docs.
 Read the Docs then publishes the external documentation site after the change
 is merged or a release tag is pushed.
+
+GitHub Pages is optional and separate. See [GitHub Pages](github-pages.md) for
+the Pages workflow and one-time repository setup.
 
 ## One-Time Project Setup
 
@@ -46,7 +51,7 @@ access the GitHub repository and create its webhook. A maintainer should:
 5. Confirm that Read the Docs detects `.readthedocs.yaml`.
 6. Trigger the first build.
 7. Enable the versions that should be public, normally `latest` and release
-   tags such as `v0.2.0`.
+   tags such as `v0.2.1`.
 
 After that setup, normal pushes and tag pushes should build automatically.
 
@@ -86,7 +91,7 @@ The project uses two link styles intentionally:
   MkDocs and Read the Docs keep users inside the current documentation version.
 
 This avoids a common versioning problem: a user reading release documentation
-for `v0.2.0` should not be sent to documentation from the current `main`
+for `v0.2.1` should not be sent to documentation from the current `main`
 branch unless the link is explicitly about source code.
 
 The link guard in `scripts/check-markdown-links.py` enforces fully qualified
@@ -96,7 +101,7 @@ MkDocs documentation tree.
 ## GitHub Actions
 
 The `Docs` workflow runs on documentation-related pull requests and pushes to
-`main`. It performs three checks:
+`main`. It performs two checks:
 
 ```bash
 python scripts/check-markdown-links.py
@@ -108,10 +113,15 @@ publication after the one-time project import. This keeps credentials and
 publication state out of GitHub Actions while still giving maintainers fast
 feedback on documentation quality.
 
+The separate `GitHub Pages` workflow publishes the built `site/` directory to
+GitHub Pages when repository maintainers enable Pages with `Source: GitHub
+Actions`. That workflow is a hosting mirror, not a replacement for Read the
+Docs versioned documentation.
+
 ## Release Documentation
 
 Release tags should be enabled as Read the Docs versions. When a tag such as
-`v0.2.0` is pushed:
+`v0.2.1` is pushed:
 
 1. The package release workflow builds and publishes the package.
 2. Read the Docs builds documentation for that tag.

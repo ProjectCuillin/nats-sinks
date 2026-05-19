@@ -89,6 +89,8 @@ Complete example:
     "duplicate_policy": "skip_existing",
     "payload_mode": "json_or_envelope",
     "extension": ".json",
+    "compression": "none",
+    "compression_level": 6,
     "include_metadata": true,
     "partition_by_subject": true,
     "create_directory": true,
@@ -100,20 +102,65 @@ Complete example:
 
 ## Configuration Reference
 
-| Field | Default | Description |
+This section lists every file sink field. The core sections such as `nats`,
+`delivery`, `dead_letter`, `logging`, and `metrics` are documented in
+[Configuration](configuration.md).
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `type` | yes | none | `file` | Selects the local filesystem sink. |
+| `directory` | yes | none | Local or mounted directory path. | Root directory where output files are written. Relative paths are resolved from the process working directory. Production services should normally use an absolute path. |
+| `mode` | no | `one_file_per_message` | `one_file_per_message` | Writes one durable file per message. This is the only production file mode today because it gives deterministic idempotency and simple replay behavior. |
+| `filename_strategy` | no | `stream_sequence` | `stream_sequence`, `message_id`, `payload_sha256` | Controls the deterministic filename and therefore the idempotency key. See [Filename Strategies](#filename-strategies). |
+| `duplicate_policy` | no | `skip_existing` | `skip_existing`, `overwrite`, `fail` | Controls what happens when a redelivered message maps to a final file that already exists. See [Duplicate Policies](#duplicate-policies). |
+| `payload_mode` | no | `json_or_envelope` | `json_or_envelope`, `json_only`, `text_envelope`, `bytes_envelope` | Controls how NATS message bytes become JSON storage content. See [Payload Mode Values](#payload-mode-values). |
+| `extension` | no | `.json`, or `.json.gz` when gzip is enabled and no extension is set | String beginning with `.` and containing no path separators. | File suffix appended to generated filenames. Use `.json` for plain JSON and `.json.gz` for gzip-compressed JSON. |
+| `compression` | no | `none` | `none`, `gzip` | Compression mode for each output file. `gzip` uses Python's standard-library `gzip` module, not an operating-system command. |
+| `compression_level` | no | `6` | Integer `1` to `9`. | Gzip compression level. Lower values generally use less CPU; higher values may reduce file size for compressible data. Ignored when `compression` is `none`. |
+| `include_metadata` | no | `true` | `true` or `false`. | Includes the standard nats-sinks metadata document in each output file. Keep enabled for audit, replay, and troubleshooting. |
+| `partition_by_subject` | no | `true` | `true` or `false`. | Places files under sanitized subject directories, for example `orders.created/ORDERS-0001.json`. Disable only when all files should share one directory. |
+| `create_directory` | no | `true` | `true` or `false`. | Creates the root output directory if it does not exist. Set false when deployment tooling must create directories explicitly. |
+| `fsync` | no | `true` | `true` or `false`. | Flushes file contents and parent directory metadata for stronger crash durability before returning success. Disabling can improve speed but weakens the durable boundary. |
+| `pretty` | no | `false` | `true` or `false`. | Pretty-prints JSON with indentation. Useful for manual inspection; compact JSON is faster and smaller. |
+
+### Payload Mode Values
+
+`payload_mode` is a shared nats-sinks concept used by JSON-capable sinks. It is
+important for file output because each file is a JSON record even when the
+original NATS message body is not JSON.
+
+| Value | Behavior | When to use it |
 | --- | --- | --- |
-| `type` | Required | Must be `file`. |
-| `directory` | Required | Root directory where output files are written. |
-| `mode` | `one_file_per_message` | Writes one JSON file per message. |
-| `filename_strategy` | `stream_sequence` | Idempotency key used for deterministic file names. |
-| `duplicate_policy` | `skip_existing` | Behavior when a redelivered message maps to an existing file. |
-| `payload_mode` | `json_or_envelope` | Shared payload normalization mode. |
-| `extension` | `.json` | File extension for output documents. |
-| `include_metadata` | `true` | Include standard NATS metadata snapshots in each file. |
-| `partition_by_subject` | `true` | Put files into sanitized subject directories. |
-| `create_directory` | `true` | Create the root directory when missing. |
-| `fsync` | `true` | Flush files and parent directories for stronger crash safety. |
-| `pretty` | `false` | Pretty-print JSON output. Compact JSON is faster and smaller. |
+| `json_or_envelope` | Attempts to parse the body as JSON. Valid JSON is stored as the original JSON value. UTF-8 text that is not JSON is wrapped in a text envelope. Non-text bytes are base64-wrapped in a bytes envelope. | Recommended default for mixed streams. |
+| `json_only` | Requires every body to be valid JSON. Invalid JSON, text, bytes, and malformed JSON become permanent serialization failures. | Strict data contracts where non-JSON messages should be sent to DLQ. |
+| `text_envelope` | Treats every body as UTF-8 text and wraps it in the standard text envelope without attempting JSON parsing. Non-UTF-8 bytes fail serialization. | Encrypted text or log streams where parsing as JSON would waste CPU or create ambiguity. |
+| `bytes_envelope` | Treats every body as opaque bytes and stores base64 text inside the standard bytes envelope. | Binary, compressed, encrypted, or otherwise opaque payloads. |
+
+For encrypted payloads, choose `text_envelope` when the ciphertext is guaranteed
+to be UTF-8 text. Choose `bytes_envelope` when the ciphertext may contain
+arbitrary bytes.
+
+### Filename Strategies
+
+`filename_strategy` decides how a message maps to a deterministic final path.
+The strategy should be stable across redelivery so duplicate processing is safe.
+
+| Value | Required message data | Filename shape | Production guidance |
+| --- | --- | --- | --- |
+| `stream_sequence` | JetStream stream name and stream sequence. | `ORDERS-00000000000000000042.json` | Recommended for normal JetStream sinks. |
+| `message_id` | `Nats-Msg-Id` or equivalent message ID metadata. | Sanitized message ID plus extension. | Use when publishers reliably set unique message IDs. |
+| `payload_sha256` | Message subject and payload bytes. | Subject plus payload digest. | Useful for controlled archival flows where identical payloads should collapse. |
+
+### Compression Values
+
+| Value | File content | Typical suffix | Notes |
+| --- | --- | --- | --- |
+| `none` | Plain UTF-8 JSON followed by a newline. | `.json` | Fastest and easiest to inspect manually. |
+| `gzip` | Gzip-compressed JSON bytes. | `.json.gz` | Saves space for compressible data and uses Python's standard-library `gzip` module. |
+
+Compression happens after payload normalization and before atomic placement.
+Both modes keep the same commit-then-ACK rule: the core ACKs only after the file
+sink returns success.
 
 ## Idempotency
 
@@ -158,7 +205,7 @@ happened, so the sink can return success and allow the core to ACK.
 
 ## Output Shape
 
-Each file contains a single JSON document:
+Each uncompressed file contains a single JSON document:
 
 ```json
 {
@@ -193,6 +240,64 @@ Each file contains a single JSON document:
 The actual `metadata` document contains the standard framework metadata
 snapshot: headers, known and future `Nats-*` reserved headers, JetStream stream
 and sequence values, and epoch nanosecond timing fields.
+
+## Compression
+
+The file sink can gzip-compress each output file by setting
+`compression: "gzip"`:
+
+```json
+{
+  "sink": {
+    "type": "file",
+    "directory": ".local/file-sink/events",
+    "compression": "gzip",
+    "compression_level": 6
+  }
+}
+```
+
+When gzip is enabled and `extension` is not explicitly configured, the sink
+uses `.json.gz` as the default extension:
+
+```text
+ORDERS-00000000000000000042.json.gz
+```
+
+Compression happens after the message has been normalized into the standard
+JSON file record and before the temporary file is flushed, optionally fsynced,
+and atomically placed. This means compressed and uncompressed files have the
+same durable boundary: `write_batch(...)` returns success only after the final
+file has been placed according to the configured durability settings.
+
+Gzip is implemented with Python's standard-library `gzip` module. The file sink
+does not call an operating-system `gzip` command, does not require a gzip binary
+to be installed on the host, and does not invoke a shell for compression. This
+keeps behavior portable across Oracle Linux, Debian, macOS, containers, and CI.
+
+Compression is useful for JSON, text, logs, and repeated structured messages.
+It may provide little benefit for encrypted or already-compressed payloads and
+can add CPU cost. For encrypted text streams, test both `compression: "none"`
+and `compression: "gzip"` with realistic payloads before enabling gzip in
+production.
+
+Compressed output uses a deterministic gzip timestamp so two otherwise
+identical records do not differ only because they were compressed at different
+times. The JSON record itself may still contain processing timestamps when
+metadata is enabled.
+
+If you need a custom extension, configure it explicitly:
+
+```json
+{
+  "sink": {
+    "type": "file",
+    "directory": ".local/file-sink/events",
+    "compression": "gzip",
+    "extension": ".event.json.gz"
+  }
+}
+```
 
 ## Payload Handling
 
@@ -235,6 +340,15 @@ The default output layout partitions by subject:
     ORDERS-00000000000000000002.json
 ```
 
+With gzip compression enabled, the same layout uses compressed file suffixes:
+
+```text
+.local/file-sink/events/
+  orders.created/
+    ORDERS-00000000000000000001.json.gz
+    ORDERS-00000000000000000002.json.gz
+```
+
 Characters that are unsafe for path components are replaced with `_`. Very long
 components are truncated with a digest suffix so they remain deterministic
 without creating oversized filenames.
@@ -269,6 +383,7 @@ Failure examples:
 | Subject contains path traversal text | Sanitizes path component. | File remains under configured root. |
 | Payload is not JSON | Wraps text or bytes in JSON envelope. | ACK after durable write succeeds. |
 | Empty payload | Wraps empty text in JSON envelope. | ACK after durable write succeeds. |
+| Gzip compression is enabled | Writes gzip-compressed JSON records. | ACK after compressed file placement succeeds. |
 | Parent directory is a symlink outside root | Rejects escaped resolved path. | No ACK; message can redeliver after operator fixes path. |
 | Fsync fails | Raises `DestinationUnavailableError`. | No ACK; message can redeliver. |
 
@@ -281,6 +396,10 @@ does not block on local disk I/O.
 For higher throughput:
 
 - keep `pretty` set to `false`,
+- keep `compression` set to `none` when CPU is the bottleneck or payloads are
+  already encrypted/compressed,
+- use `compression: "gzip"` when disk capacity or file transfer size is the
+  bottleneck and payloads compress well,
 - use a fast local disk or low-latency mounted volume,
 - tune `delivery.batch_size`,
 - keep `partition_by_subject` enabled for large subject sets,

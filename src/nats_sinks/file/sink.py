@@ -8,10 +8,12 @@ pipelines where a durable filesystem path is the destination.
 The sink treats file placement as the durable boundary:
 
 1. Build a JSON document from the normalized `NatsEnvelope`.
-2. Write the document to a temporary file in the destination directory.
-3. Flush and optionally fsync the file.
-4. Atomically place the file at its deterministic final path.
-5. Optionally fsync the parent directory.
+2. Optionally gzip-compress the serialized JSON document using Python's
+   standard-library `gzip` module.
+3. Write the document to a temporary file in the destination directory.
+4. Flush and optionally fsync the file.
+5. Atomically place the file at its deterministic final path.
+6. Optionally fsync the parent directory.
 
 Only after all files in a batch complete those steps does `write_batch` return
 success.  The core runner can then ACK the JetStream messages.
@@ -21,6 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import errno
+import gzip
 import json
 import os
 import tempfile
@@ -38,6 +41,7 @@ from nats_sinks.core.errors import (
 )
 from nats_sinks.core.payload import PayloadStorageMode
 from nats_sinks.file.config import (
+    FileCompression,
     FileDuplicatePolicy,
     FileFilenameStrategy,
     FileSinkConfig,
@@ -62,26 +66,32 @@ class FileSink:
         filename_strategy: FileFilenameStrategy = "stream_sequence",
         duplicate_policy: FileDuplicatePolicy = "skip_existing",
         payload_mode: PayloadStorageMode = "json_or_envelope",
-        extension: str = ".json",
+        extension: str | None = None,
+        compression: FileCompression = "none",
+        compression_level: int = 6,
         include_metadata: bool = True,
         partition_by_subject: bool = True,
         create_directory: bool = True,
         fsync: bool = True,
         pretty: bool = False,
     ) -> None:
-        self.config = FileSinkConfig(
-            directory=Path(directory),
-            mode=mode,
-            filename_strategy=filename_strategy,
-            duplicate_policy=duplicate_policy,
-            payload_mode=payload_mode,
-            extension=extension,
-            include_metadata=include_metadata,
-            partition_by_subject=partition_by_subject,
-            create_directory=create_directory,
-            fsync=fsync,
-            pretty=pretty,
-        )
+        config_values: dict[str, Any] = {
+            "directory": Path(directory),
+            "mode": mode,
+            "filename_strategy": filename_strategy,
+            "duplicate_policy": duplicate_policy,
+            "payload_mode": payload_mode,
+            "compression": compression,
+            "compression_level": compression_level,
+            "include_metadata": include_metadata,
+            "partition_by_subject": partition_by_subject,
+            "create_directory": create_directory,
+            "fsync": fsync,
+            "pretty": pretty,
+        }
+        if extension is not None:
+            config_values["extension"] = extension
+        self.config = FileSinkConfig(**config_values)
         self._root: Path | None = None
 
     @classmethod
@@ -99,6 +109,8 @@ class FileSink:
             duplicate_policy=config.duplicate_policy,
             payload_mode=config.payload_mode,
             extension=config.extension,
+            compression=config.compression,
+            compression_level=config.compression_level,
             include_metadata=config.include_metadata,
             partition_by_subject=config.partition_by_subject,
             create_directory=config.create_directory,
@@ -194,6 +206,22 @@ class FileSink:
             )
         return f"{rendered}\n".encode()
 
+    def _record_bytes(self, record: dict[str, Any]) -> bytes:
+        """Serialize and optionally compress one file record.
+
+        Compression is applied after JSON serialization and before the temporary
+        file is flushed and atomically placed.  This keeps the durable boundary
+        identical for compressed and uncompressed files.
+        """
+
+        payload = self._json_bytes(record)
+        if self.config.compression == "none":
+            return payload
+        # Use the Python standard library rather than an operating-system gzip
+        # executable.  That keeps the sink portable, avoids shell invocation,
+        # and gives tests deterministic behavior across Linux, macOS, and CI.
+        return gzip.compress(payload, compresslevel=self.config.compression_level, mtime=0)
+
     def _write_record(self, destination: Path, record: dict[str, Any]) -> None:
         if destination.exists() and self.config.duplicate_policy == "skip_existing":
             return
@@ -209,7 +237,7 @@ class FileSink:
             )
             temp_path = Path(temp_name)
             with os.fdopen(fd, "wb") as handle:
-                handle.write(self._json_bytes(record))
+                handle.write(self._record_bytes(record))
                 handle.flush()
                 if self.config.fsync:
                     os.fsync(handle.fileno())

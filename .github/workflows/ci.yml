@@ -35,6 +35,10 @@ jobs:
         run: scripts/check-sinks.sh
       - name: Documentation build
         run: mkdocs build --strict
+      - name: GitHub Pages documentation build
+        env:
+          NATS_SINKS_DOCS_SITE_URL: https://projectcuillin.github.io/nats-sinks/
+        run: mkdocs build --strict
       - name: Build
         run: python -m build
       - name: Twine check

@@ -1,6 +1,7 @@
 # nats-sinks
 
 [![Documentation Status](https://readthedocs.org/projects/nats-sinks/badge/?version=latest)](https://nats-sinks.readthedocs.io/en/latest/?badge=latest)
+[![GitHub Pages](https://github.com/ProjectCuillin/nats-sinks/actions/workflows/pages.yml/badge.svg)](https://projectcuillin.github.io/nats-sinks/)
 
 `nats-sinks` provides at-least-once delivery from JetStream to external destinations with commit-then-acknowledge processing and idempotent sink support.
 
@@ -18,28 +19,43 @@ messages into another durable system, such as a database.
 The package is designed as a production-ready foundation rather than a demo script. It includes a typed public API, JSON configuration, a CLI, security-conscious defaults, tests, documentation, CI configuration, and packaging metadata suitable for publishing to PyPI.
 
 The public documentation is prepared for Read the Docs at
-[nats-sinks.readthedocs.io](https://nats-sinks.readthedocs.io/en/latest/). The
-repository also contains a GitHub Actions documentation workflow so pull
-requests can validate the MkDocs site before Read the Docs publishes it.
+[nats-sinks.readthedocs.io](https://nats-sinks.readthedocs.io/en/latest/) and a
+GitHub Pages mirror at
+[projectcuillin.github.io/nats-sinks](https://projectcuillin.github.io/nats-sinks/).
+Read the Docs is the preferred versioned documentation site for package users.
+GitHub Pages publishes the current `main` branch documentation after the
+repository Pages source is set to `GitHub Actions`.
 
-Current production sink modules:
+## Available Today
+
+The current release is focused on a small production-ready surface that can be
+used immediately:
+
+- `JetStreamSinkRunner` for pull-based JetStream consumption with bounded
+  batches, commit-then-acknowledge processing, DLQ handling, graceful shutdown,
+  logging hooks, metrics hooks, and safe redelivery behavior.
+- `NatsEnvelope`, the immutable internal representation passed to sinks instead
+  of raw NATS client messages.
+- `nats-sink`, the CLI for validating JSON configuration, showing redacted
+  effective config, testing sinks, and running sink processes.
+- `nats_sinks.oracle.OracleSink`, the production Oracle Database sink with
+  connection pooling, Oracle Autonomous Database connection options, `merge`
+  and `insert_ignore` idempotent modes, subject-to-table routing, metadata
+  persistence, payload normalization, and explicit transaction commit before
+  ACK.
+- `nats_sinks.file.FileSink`, the production local file sink with deterministic
+  filenames, atomic temporary-file placement, optional `fsync`, duplicate
+  handling, optional Python standard-library gzip compression, metadata
+  persistence, and the same payload normalization contract used by Oracle.
+
+Production sink modules shipped today:
 
 - `nats_sinks.oracle`
 - `nats_sinks.file`
 
-Future sink modules are planned for:
-
-- `nats_sinks.postgres`
-- `nats_sinks.http`
-- `nats_sinks.s3`
-
-Those future modules are not shipped as production sinks yet. The extension
-points are present so future sinks can implement the same contract without
-taking ownership of ACK behavior.
-
 ## Status
 
-The current release is `0.2.0`.
+The current release is `0.2.1`.
 
 Included today:
 
@@ -262,12 +278,8 @@ or map selected fields into destination-specific columns.
   NATS server CAs.
 
 Do not embed credentials in `nats.url`; use environment-backed fields instead.
-Advanced TLS certificate authentication policy, NKEY challenge authentication,
-and decentralized JWT authentication/authorization are roadmap items. See
-[NATS Connections And Authentication](https://nats-sinks.readthedocs.io/en/latest/nats-connections/).
-
-The broader comparison between NATS capabilities and the current project scope
-is maintained in [NATS Feature Gap Analysis](https://nats-sinks.readthedocs.io/en/latest/nats-feature-gap-analysis/).
+See [NATS Connections And Authentication](https://nats-sinks.readthedocs.io/en/latest/nats-connections/) for
+configuration examples and secure deployment notes.
 
 ## CLI
 
@@ -338,13 +350,13 @@ Destination-specific details are split into dedicated pages:
   payload storage, metadata columns, and Oracle-specific performance guidance.
 - [File Sink](https://nats-sinks.readthedocs.io/en/latest/file-sink/) covers
   local file output, atomic write behavior, deterministic file names, duplicate
-  policies, filesystem safety, and file-specific performance guidance.
+  policies, gzip compression, filesystem safety, and file-specific performance
+  guidance.
 
 The generic sink framework is documented separately in
-[Sink Framework](https://nats-sinks.readthedocs.io/en/latest/sink-framework/). That boundary is deliberate: future
-backends can be added as new sink modules without changing the core
-commit-then-acknowledge contract or making existing Oracle users change their
-configuration.
+[Sink Framework](https://nats-sinks.readthedocs.io/en/latest/sink-framework/). That boundary is deliberate:
+Oracle and file sinks use the same core delivery semantics, the same envelope
+contract, and the same commit-then-acknowledge rule.
 
 ## Failure Behavior
 
@@ -449,6 +461,10 @@ examples                 Local development examples
 
 ## Roadmap
 
+Future work is intentionally listed near the end of the README so new readers
+first see what the package can do today. Planned items are not production
+features until they are implemented, tested, documented, and released.
+
 Phase 1:
 
 - Core runtime.
@@ -466,6 +482,7 @@ Phase 2:
 - Postgres sink.
 - HTTP sink.
 - S3 sink design with deterministic object keys.
+- Kafka and other backend evaluation through the sink framework.
 - Docker image.
 - Kubernetes examples.
 - Multiple NATS seed URLs for clustered deployments.

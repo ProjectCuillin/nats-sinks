@@ -77,6 +77,7 @@ bandit -q -r src
 python -m build
 twine check dist/*
 mkdocs build --strict
+NATS_SINKS_DOCS_SITE_URL="https://projectcuillin.github.io/nats-sinks/" mkdocs build --strict
 ```
 
 ## PyPI README Link Hygiene
@@ -107,6 +108,11 @@ for pull-request validation. After the one-time Read the Docs project import,
 pushes to `main` and release tags should build automatically.
 
 See [Read the Docs](read-the-docs.md) for the setup and operating model.
+
+The repository also contains `.github/workflows/pages.yml` for publishing the
+same MkDocs site to GitHub Pages as a repository-hosted mirror. GitHub Pages
+requires one maintainer setup step: repository `Settings` -> `Pages` -> set
+`Source` to `GitHub Actions`. See [GitHub Pages](github-pages.md) for details.
 
 ## Step 2: Smoke Test The Package
 

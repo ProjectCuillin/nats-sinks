@@ -100,6 +100,11 @@ Use an absolute directory path in service deployments. Keep generated files out
 of git and out of world-writable directories. If host-crash durability matters,
 leave `fsync` enabled and size throughput expectations accordingly.
 
+Optional gzip compression can reduce disk usage for JSON and text-heavy
+streams, but it is not a retention or privacy control. Compressed files still
+need the same access controls, backup policy, and rotation policy as
+uncompressed files.
+
 ## Docker Compose Examples
 
 The examples directory includes JSON-formatted Compose files:

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "nats-sinks"
-version = "0.2.0"
+version = "0.2.1"
 description = "Production-ready outbound sink connectors for NATS JetStream."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -62,6 +62,7 @@ all = [
 [project.urls]
 Homepage = "https://github.com/ProjectCuillin/nats-sinks/"
 Documentation = "https://nats-sinks.readthedocs.io/en/latest/"
+"GitHub Pages" = "https://projectcuillin.github.io/nats-sinks/"
 Changelog = "https://github.com/ProjectCuillin/nats-sinks/blob/main/CHANGELOG.md"
 Issues = "https://github.com/ProjectCuillin/nats-sinks/issues"
 Source = "https://github.com/ProjectCuillin/nats-sinks/"

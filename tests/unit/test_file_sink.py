@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import asyncio
+import gzip
 import json
 from datetime import UTC, datetime
 from pathlib import Path
@@ -36,7 +38,20 @@ def _envelope(
 
 
 def _json_files(root: Path) -> list[Path]:
-    return sorted(path for path in root.rglob("*.json") if path.is_file())
+    return sorted(path for path in root.rglob("*.json*") if path.is_file())
+
+
+def _healthcheck_probe_files(root: Path) -> list[Path]:
+    return list(root.rglob(".nats-sinks-healthcheck.*"))
+
+
+def _read_file_record(path: Path) -> dict[str, object]:
+    data = path.read_bytes()
+    if path.name.endswith(".gz"):
+        data = gzip.decompress(data)
+    loaded = json.loads(data.decode("utf-8"))
+    assert isinstance(loaded, dict)
+    return loaded
 
 
 async def test_file_sink_writes_one_json_file_per_message(tmp_path: Path) -> None:
@@ -50,7 +65,7 @@ async def test_file_sink_writes_one_json_file_per_message(tmp_path: Path) -> Non
         "ORDERS-00000000000000000001.json",
         "ORDERS-00000000000000000002.json",
     ]
-    first = json.loads(files[0].read_text(encoding="utf-8"))
+    first = _read_file_record(files[0])
     assert first["payload"] == {"order_id": "O-1001"}
     assert first["metadata"]["subject"] == "orders.created"
 
@@ -76,8 +91,71 @@ async def test_file_sink_can_overwrite_existing_file_when_configured(tmp_path: P
     await sink.write_batch([_envelope(stream_sequence=1, data=b'{"version":1}')])
     await sink.write_batch([_envelope(stream_sequence=1, data=b'{"version":2}')])
 
-    payload = json.loads(_json_files(tmp_path)[0].read_text(encoding="utf-8"))["payload"]
+    payload = _read_file_record(_json_files(tmp_path)[0])["payload"]
     assert payload == {"version": 2}
+
+
+async def test_file_sink_without_compression_writes_plain_json(tmp_path: Path) -> None:
+    sink = FileSink(directory=tmp_path, fsync=False, compression="none")
+
+    await sink.start()
+    await sink.write_batch([_envelope(stream_sequence=1)])
+
+    path = _json_files(tmp_path)[0]
+    assert path.name.endswith(".json")
+    assert not path.name.endswith(".gz")
+    assert path.read_bytes().startswith(b"{")
+
+
+async def test_file_sink_gzip_compression_writes_decompressible_json(tmp_path: Path) -> None:
+    sink = FileSink(directory=tmp_path, fsync=False, compression="gzip", compression_level=1)
+
+    await sink.start()
+    await sink.write_batch([_envelope(stream_sequence=1)])
+
+    path = _json_files(tmp_path)[0]
+    assert path.name.endswith(".json.gz")
+    assert not path.read_bytes().startswith(b"{")
+    assert _read_file_record(path)["payload"] == {"order_id": "O-1001"}
+
+
+async def test_file_sink_gzip_compression_writes_multiple_files(tmp_path: Path) -> None:
+    sink = FileSink(directory=tmp_path, fsync=False, compression="gzip")
+
+    await sink.start()
+    await sink.write_batch(
+        [
+            _envelope(stream_sequence=1, data=b'{"order_id":"O-1001"}'),
+            _envelope(stream_sequence=2, data=b'{"order_id":"O-1002"}'),
+            _envelope(stream_sequence=3, data=b'{"order_id":"O-1003"}'),
+        ]
+    )
+
+    files = _json_files(tmp_path)
+    assert [path.name for path in files] == [
+        "ORDERS-00000000000000000001.json.gz",
+        "ORDERS-00000000000000000002.json.gz",
+        "ORDERS-00000000000000000003.json.gz",
+    ]
+    assert [_read_file_record(path)["payload"] for path in files] == [
+        {"order_id": "O-1001"},
+        {"order_id": "O-1002"},
+        {"order_id": "O-1003"},
+    ]
+
+
+async def test_file_sink_gzip_duplicates_skip_existing_file(tmp_path: Path) -> None:
+    sink = FileSink(directory=tmp_path, fsync=False, compression="gzip")
+    message = _envelope(stream_sequence=1, data=b'{"version":1}')
+
+    await sink.start()
+    await sink.write_batch([message])
+    path = _json_files(tmp_path)[0]
+    before = path.read_bytes()
+    await sink.write_batch([message])
+
+    assert path.read_bytes() == before
+    assert len(_json_files(tmp_path)) == 1
 
 
 async def test_file_sink_can_fail_on_existing_duplicate(tmp_path: Path) -> None:
@@ -128,7 +206,7 @@ async def test_file_sink_non_utf8_payload_is_base64_wrapped(tmp_path: Path) -> N
     await sink.start()
     await sink.write_batch([_envelope(data=b"\xff\x00\xfe")])
 
-    record = json.loads(_json_files(tmp_path)[0].read_text(encoding="utf-8"))
+    record = _read_file_record(_json_files(tmp_path)[0])
     assert record["payload"]["_nats_sinks"]["payload_format"] == "bytes"
     assert record["payload_info"]["original_format"] == "bytes"
 
@@ -139,7 +217,7 @@ async def test_file_sink_healthcheck_leaves_no_probe_files(tmp_path: Path) -> No
     await sink.start()
     await sink.healthcheck()
 
-    assert list(tmp_path.rglob(".nats-sinks-healthcheck.*")) == []
+    assert await asyncio.to_thread(_healthcheck_probe_files, tmp_path) == []
 
 
 async def test_file_sink_rejects_file_as_directory(tmp_path: Path) -> None:

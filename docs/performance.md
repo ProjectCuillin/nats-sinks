@@ -85,7 +85,8 @@ ACK is still sent only after the sink returns success. Oracle-specific write
 behavior, including `executemany`, commit behavior, Autonomous Database
 considerations, and tuning notes, is documented in [Oracle Sink](oracle-sink.md).
 File-specific throughput notes, including compact JSON, subject partitioning,
-and `fsync` tradeoffs, are documented in [File Sink](file-sink.md).
+gzip compression, and `fsync` tradeoffs, are documented in
+[File Sink](file-sink.md).
 
 ```mermaid
 sequenceDiagram

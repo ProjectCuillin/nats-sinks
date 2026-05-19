@@ -34,6 +34,7 @@ twine check dist/*
 ```bash
 python scripts/check-markdown-links.py
 mkdocs build --strict
+NATS_SINKS_DOCS_SITE_URL="https://projectcuillin.github.io/nats-sinks/" mkdocs build --strict
 ```
 
 Mermaid diagrams are written directly in Markdown code fences so GitHub and MkDocs render the same conceptual flows where supported.
@@ -43,6 +44,13 @@ The repository also includes a GitHub Actions `Docs` workflow and a
 documentation, README links, MkDocs settings, or documentation dependencies
 should pass the same checks that Read the Docs will use after merge. See
 [Read the Docs](read-the-docs.md).
+
+The repository also includes a GitHub Pages workflow at
+`.github/workflows/pages.yml`. After a maintainer enables Pages with
+`Settings` -> `Pages` -> `Source: GitHub Actions`, pushes to `main` can publish
+a current-branch documentation mirror at
+[projectcuillin.github.io/nats-sinks](https://projectcuillin.github.io/nats-sinks/).
+See [GitHub Pages](github-pages.md).
 
 ## Change Rules
 
