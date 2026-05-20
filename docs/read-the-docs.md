@@ -51,7 +51,7 @@ access the GitHub repository and create its webhook. A maintainer should:
 5. Confirm that Read the Docs detects `.readthedocs.yaml`.
 6. Trigger the first build.
 7. Enable the versions that should be public, normally `latest` and release
-   tags such as `v0.2.1`.
+   tags such as `v0.3.0`.
 
 After that setup, normal pushes and tag pushes should build automatically.
 
@@ -81,6 +81,23 @@ The `.readthedocs.yaml` file is build-service configuration. It does not change
 the runtime configuration format for `nats-sinks`; application configuration
 remains JSON.
 
+## Mermaid Diagrams
+
+The documentation uses Mermaid diagrams directly in Markdown fenced code blocks:
+
+````markdown
+```mermaid
+flowchart LR
+    A[Source] --> B[Destination]
+```
+````
+
+Those diagrams are part of the single Markdown source of truth. They are not
+checked in as generated images. `mkdocs.yml` enables `pymdownx.superfences`
+with a Mermaid custom fence, and the documentation extra includes
+`pymdown-extensions`, so Read the Docs and GitHub Pages render the same Mermaid
+blocks from the same Markdown files.
+
 ## Link Strategy
 
 The project uses two link styles intentionally:
@@ -91,12 +108,24 @@ The project uses two link styles intentionally:
   MkDocs and Read the Docs keep users inside the current documentation version.
 
 This avoids a common versioning problem: a user reading release documentation
-for `v0.2.1` should not be sent to documentation from the current `main`
+for `v0.3.0` should not be sent to documentation from the current `main`
 branch unless the link is explicitly about source code.
 
 The link guard in `scripts/check-markdown-links.py` enforces fully qualified
 links for PyPI-facing Markdown files while allowing version-local links in the
 MkDocs documentation tree.
+
+## Badges
+
+The documentation home page includes the same public project badges as the
+README: PyPI package version, supported Python versions, Read the Docs build
+status, and GitHub Pages build status. These badges help package users quickly
+confirm where the project is published and which documentation channels are
+active.
+
+Badge images should use public endpoints such as PyPI, Shields.io, Read the
+Docs, or GitHub Actions. Do not add badges that depend on private credentials
+or reveal private infrastructure details.
 
 ## GitHub Actions
 
@@ -121,7 +150,7 @@ Docs versioned documentation.
 ## Release Documentation
 
 Release tags should be enabled as Read the Docs versions. When a tag such as
-`v0.2.1` is pushed:
+`v0.3.0` is pushed:
 
 1. The package release workflow builds and publishes the package.
 2. Read the Docs builds documentation for that tag.

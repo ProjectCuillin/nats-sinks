@@ -5,6 +5,12 @@ last, and design for redelivery. Throughput tuning should therefore improve
 batch efficiency and database efficiency without weakening durable commit or
 idempotency behavior.
 
+For mission and defence-oriented systems, throughput is only useful when the
+event trail remains trustworthy. A sink that appears fast because it ACKs early
+or drops hard-to-write messages is not fast; it is unsafe. Tune batch size,
+backend write paths, and connection reuse before considering any change that
+would weaken the durable success boundary.
+
 ## Throughput Model
 
 ```mermaid
@@ -137,6 +143,11 @@ optimization paths after benchmarks and integration tests prove the behavior.
 For relational sinks, this may mean staging tables and set-based merges. For
 HTTP, this may mean controlled concurrent requests. For object stores, this may
 mean multipart upload or deterministic object batching.
+
+In operational deployments, benchmark with realistic payload sizes, subject
+mixes, priority/classification distributions, encryption settings, and
+destination service limits. A lab run with synthetic tiny messages is useful,
+but it does not prove readiness for a high-volume mission feed.
 
 Other future improvements:
 

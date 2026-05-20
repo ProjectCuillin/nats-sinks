@@ -4,6 +4,11 @@ This example writes JetStream messages to local JSON files. It is useful for
 development, demos, and local durability tests because it does not require a
 database.
 
+It is also a useful first step for controlled operational prototypes: teams can
+inspect the exact payload and metadata record that would later be written to a
+database or object store, including priority, classification, labels, timing,
+and JetStream sequence information.
+
 The example writes under `.local/file-sink/events`, which is ignored by git.
 That keeps generated message files out of the repository.
 

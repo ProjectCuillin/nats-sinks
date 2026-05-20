@@ -9,6 +9,11 @@ duplicate messages. That is part of at-least-once delivery. The unsafe outcome
 is not duplication; the unsafe outcome is ACKing a message before the
 destination write has committed.
 
+For mission-oriented and defence workloads, think of `nats-sinks` as a small
+ingestion component in a larger operational picture. Its job is not to decide
+mission policy; its job is to preserve the event trail, make failures visible,
+and avoid converting a temporary downstream problem into silent data loss.
+
 ## Deployment Shape
 
 `nats-sinks` can run as:
@@ -56,6 +61,11 @@ recoverable problems and risky conditions, and `ERROR` or `CRITICAL` when the
 runtime should report only serious failures. Use `DEBUG` for short-lived
 diagnostic sessions in controlled environments.
 
+In watch-floor, operations-center, or mission-support deployments, keep logs
+boring and actionable. Prefer stable event counts, DLQ alerts, and last-success
+timestamps over verbose payload logs. Payloads and headers may carry sensitive
+operational context even when they look harmless during a test.
+
 The full logging level reference is documented in
 [Configuration](configuration.md#logging).
 
@@ -86,6 +96,10 @@ redelivery as a normal operational event rather than an exceptional condition.
 ## Reprocessing
 
 Do not claim exactly-once processing. Replays and duplicates are normal. Use idempotent sink modes and stable keys before replaying streams.
+
+Before replaying operational streams, confirm the destination idempotency mode,
+retention expectations, and any audit implications. A replay should be a
+controlled recovery action, not an accidental duplicate-production event.
 
 ## Local File Sink Operations
 

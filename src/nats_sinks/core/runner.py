@@ -23,9 +23,15 @@ import time
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from nats_sinks.core.config import DeadLetterConfig, DeliveryConfig
+from nats_sinks.core.config import (
+    DeadLetterConfig,
+    DeliveryConfig,
+    EncryptionConfig,
+    MessageMetadataConfig,
+)
 from nats_sinks.core.consumer import envelope_from_nats_message
 from nats_sinks.core.dlq import build_dead_letter_payload
+from nats_sinks.core.encryption import PayloadEncryptor, PayloadTransformer
 from nats_sinks.core.envelope import NatsEnvelope
 from nats_sinks.core.errors import (
     AckError,
@@ -60,10 +66,13 @@ class JetStreamSinkRunner:
         durable: bool = True,
         delivery: DeliveryConfig | None = None,
         dead_letter: DeadLetterConfig | None = None,
+        message_metadata: MessageMetadataConfig | None = None,
+        encryption: EncryptionConfig | None = None,
         metrics: MetricsRecorder | None = None,
         nats_options: Mapping[str, Any] | None = None,
         jetstream: Any | None = None,
         nats_connection: Any | None = None,
+        payload_encryptor: PayloadTransformer | None = None,
     ) -> None:
         self.nats_url = nats_url
         self.stream = stream
@@ -73,8 +82,15 @@ class JetStreamSinkRunner:
         self.durable = durable
         self.delivery = delivery or DeliveryConfig()
         self.dead_letter = dead_letter or DeadLetterConfig()
+        self.message_metadata = message_metadata or MessageMetadataConfig()
+        self.encryption = encryption or EncryptionConfig()
         self.metrics = metrics or NoopMetrics()
         self.nats_options = dict(nats_options or {})
+        self._payload_encryptor = (
+            payload_encryptor
+            if payload_encryptor is not None
+            else PayloadEncryptor.from_config(self.encryption)
+        )
         self._js = jetstream
         self._nc = nats_connection
         self._subscription: Any | None = None
@@ -146,7 +162,7 @@ class JetStreamSinkRunner:
         finally:
             await self.stop()
 
-    async def process_raw_batch(self, raw_messages: Sequence[Any]) -> None:
+    async def process_raw_batch(self, raw_messages: Sequence[Any]) -> None:  # noqa: PLR0911
         """Process a batch of raw NATS messages.
 
         ACK is sent only after sink.write_batch returns success. On permanent failures,
@@ -157,12 +173,33 @@ class JetStreamSinkRunner:
             return
 
         try:
-            envelopes = [envelope_from_nats_message(raw_message) for raw_message in raw_messages]
+            envelopes = [
+                envelope_from_nats_message(
+                    raw_message,
+                    message_metadata=self.message_metadata,
+                )
+                for raw_message in raw_messages
+            ]
         except Exception as exc:
             await self._handle_temporary_failure(
                 raw_messages,
                 exc,
                 context="message normalization failure",
+                log_exception=True,
+            )
+            return
+        try:
+            if self._payload_encryptor is not None:
+                # Payload encryption happens in the core immediately before
+                # sink delivery.  Metadata remains unchanged, while `data`
+                # becomes a JSON encryption envelope that every sink can store
+                # without learning destination-specific crypto behavior.
+                envelopes = self._payload_encryptor.encrypt_batch(envelopes)
+        except Exception as exc:
+            await self._handle_temporary_failure(
+                raw_messages,
+                exc,
+                context="payload encryption failure",
                 log_exception=True,
             )
             return

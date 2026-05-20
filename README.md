@@ -1,5 +1,7 @@
 # nats-sinks
 
+[![PyPI](https://img.shields.io/pypi/v/nats-sinks.svg)](https://pypi.org/project/nats-sinks/)
+[![Python Versions](https://img.shields.io/pypi/pyversions/nats-sinks.svg)](https://pypi.org/project/nats-sinks/)
 [![Documentation Status](https://readthedocs.org/projects/nats-sinks/badge/?version=latest)](https://nats-sinks.readthedocs.io/en/latest/?badge=latest)
 [![GitHub Pages](https://github.com/ProjectCuillin/nats-sinks/actions/workflows/pages.yml/badge.svg)](https://projectcuillin.github.io/nats-sinks/)
 
@@ -15,6 +17,14 @@ delivers them to consumers. A sink is a consumer whose main job is to copy those
 messages into another durable system, such as a database.
 
 `nats-sinks` is a Python package for building outbound NATS JetStream sink consumers. It provides a reusable runtime that owns JetStream delivery semantics and delegates destination writes to sink implementations. The current production sinks are Oracle Database and local files.
+
+The project is intentionally suitable for mission-oriented environments such as
+defence logistics, operational reporting, secure platform telemetry, and other
+domains where event loss, premature acknowledgement, and unclear audit trails
+are unacceptable. The language throughout the documentation uses examples such
+as priority, classification, labels, DLQs, and encrypted payloads because those
+concepts map naturally to environments that must handle sensitive operational
+information with discipline.
 
 The package is designed as a production-ready foundation rather than a demo script. It includes a typed public API, JSON configuration, a CLI, security-conscious defaults, tests, documentation, CI configuration, and packaging metadata suitable for publishing to PyPI.
 
@@ -36,8 +46,15 @@ used immediately:
   logging hooks, metrics hooks, and safe redelivery behavior.
 - `NatsEnvelope`, the immutable internal representation passed to sinks instead
   of raw NATS client messages.
+- Core-normalized message metadata fields for `priority`, `classification`,
+  and `labels`, with configurable NATS header extraction, defaults, and
+  subject-specific rules shared by every sink. These fields are useful for
+  separating routine traffic from urgent, restricted, coalition, exercise, or
+  audit-relevant event streams without changing sink code.
 - `nats-sink`, the CLI for validating JSON configuration, showing redacted
   effective config, testing sinks, and running sink processes.
+- Optional core payload encryption for AES-256-GCM and AES-256-CCM before
+  envelopes are delivered to Oracle, file, or future sinks.
 - `nats_sinks.oracle.OracleSink`, the production Oracle Database sink with
   connection pooling, Oracle Autonomous Database connection options, `merge`
   and `insert_ignore` idempotent modes, subject-to-table routing, metadata
@@ -55,7 +72,7 @@ Production sink modules shipped today:
 
 ## Status
 
-The current release is `0.2.1`.
+The current release is `0.3.0`.
 
 Included today:
 
@@ -66,6 +83,7 @@ Included today:
 - Oracle sink with idempotent production modes.
 - File sink with atomic local JSON file writes and deterministic duplicate
   handling.
+- Optional AES-256-GCM and AES-256-CCM payload encryption in the core runner.
 - JSON configuration and redacted effective-config output.
 - CLI command named `nats-sink`.
 - Unit tests for ACK ordering, DLQ ordering, config loading, SQL generation, and Oracle mapping.
@@ -85,7 +103,11 @@ flowchart LR
     Stream --> Consumer[Durable pull consumer]
     Consumer --> Runner[nats-sinks core runner]
     Runner --> Envelope[NatsEnvelope batch]
-    Envelope --> Sink[sink.write_batch]
+    Envelope --> Crypto{payload encryption enabled?}
+    Crypto -->|yes| Encrypted[Encrypted payload envelope]
+    Crypto -->|no| Plain[Original payload bytes]
+    Encrypted --> Sink[sink.write_batch]
+    Plain --> Sink
     Sink --> Commit[Durable destination commit]
     Commit --> Ack[JetStream ACK]
 
@@ -134,6 +156,7 @@ If the sink fails before durable commit, the core does not ACK. If commit succee
 ```bash
 pip install nats-sinks
 pip install "nats-sinks[oracle]"
+pip install "nats-sinks[crypto]"
 pip install "nats-sinks[dev]"
 pip install "nats-sinks[docs]"
 pip install "nats-sinks[all]"
@@ -165,6 +188,12 @@ nats-sink validate examples/file-basic/config.json
 nats-sink test-sink examples/file-basic/config.json
 nats-sink run examples/file-basic/config.json
 ```
+
+For a mission-system prototype, the file sink is often the fastest way to prove
+the delivery contract before connecting a database. It preserves payloads and
+metadata in ordinary JSON files so operators and maintainers can inspect the
+flow, confirm classification and label handling, and validate redelivery
+behavior without needing database access.
 
 ## JSON Configuration
 
@@ -205,6 +234,22 @@ contains destination-specific fields documented on each sink page.
   "metrics": {
     "enabled": false,
     "namespace": "nats_sinks"
+  },
+  "message_metadata": {
+    "priority": {
+      "header": "Nats-Sinks-Priority",
+      "default": "normal"
+    },
+    "classification": {
+      "header": "Nats-Sinks-Classification",
+      "default": null
+    }
+  },
+  "encryption": {
+    "enabled": false,
+    "algorithm": "aes-256-gcm",
+    "key_id": "orders-runtime-key",
+    "key_b64_env": "NATS_SINKS_PAYLOAD_KEY_B64"
   },
   "sink": {
     "type": "file",
@@ -253,6 +298,57 @@ See [Sink Framework](https://nats-sinks.readthedocs.io/en/latest/sink-framework/
 guidance. Oracle-specific payload storage is documented in
 [Oracle Sink](https://nats-sinks.readthedocs.io/en/latest/oracle-sink/).
 
+## Payload Encryption
+
+The core runner can encrypt the message body before sending an envelope to any
+sink. This protects the actual payload stored by Oracle, file, and future
+sinks, while leaving operational metadata such as subject, headers, stream
+sequence, message IDs, and timestamps readable for routing and idempotency.
+
+Supported algorithms are AES-256-GCM and AES-256-CCM through the optional
+`nats-sinks[crypto]` extra. Encryption can apply to every subject consumed by
+the runner or to selected subjects through ordered NATS wildcard rules:
+
+```json
+{
+  "encryption": {
+    "enabled": true,
+    "algorithm": "aes-256-gcm",
+    "key_id": "orders-prod-2026-05",
+    "key_b64_env": "NATS_SINKS_PAYLOAD_KEY_B64"
+  }
+}
+```
+
+For subject-specific encryption, leave the global policy disabled and add
+rules. The first matching rule wins; subjects with no matching rule remain
+unchanged in this example:
+
+```json
+{
+  "encryption": {
+    "enabled": false,
+    "rules": [
+      {
+        "subject": "secure.>",
+        "enabled": true,
+        "algorithm": "aes-256-gcm",
+        "key_id": "secure-prod-2026-05",
+        "key_b64_env": "NATS_SINKS_SECURE_PAYLOAD_KEY_B64"
+      }
+    ]
+  }
+}
+```
+
+Use stable metadata-based idempotency such as stream sequence or message ID
+when encryption is enabled. Ciphertext is intentionally non-deterministic
+because each encryption uses a fresh nonce.
+
+See [Payload Encryption](https://nats-sinks.readthedocs.io/en/latest/payload-encryption/)
+for the full configuration reference, encrypted JSON envelope shape, testing
+script, and decryption helper.
+
 ## Metadata Capture
 
 `nats-sinks` captures a generic metadata JSON document for every message. This
@@ -264,6 +360,55 @@ sequence metadata, optional reply subject, and timing fields. Optional headers
 such as `Nats-Msg-Id` or `Nats-Expected-Stream` may be absent; that is normal
 and does not cause a crash. Destination sinks can store this document directly
 or map selected fields into destination-specific columns.
+
+The core also normalizes three application-level metadata fields on every
+message: `priority`, `classification`, and `labels`. They can be supplied by
+NATS headers such as `Nats-Sinks-Priority`, `Nats-Sinks-Classification`, and
+`Nats-Sinks-Labels`, configured with deployment defaults, configured with
+ordered subject-specific defaults, or left unset. Headers always win when
+present; subject defaults are used only when the corresponding header is
+absent. Missing priority and classification values are stored as JSON `null` or
+SQL `NULL`, not as the literal string `"null"`. Labels are normalized as a list
+and are stored in scalar sink fields as semicolon-separated text.
+
+Classification and priority values are operator-defined strings. The
+documentation uses NATO-style examples such as `NATO UNCLASSIFIED`,
+`NATO RESTRICTED`, `NATO CONFIDENTIAL`, `NATO SECRET`, and
+`COSMIC TOP SECRET`; use the exact vocabulary required by your environment.
+
+```json
+{
+  "message_metadata": {
+    "priority": {
+      "header": "Nats-Sinks-Priority",
+      "default": "routine"
+    },
+    "classification": {
+      "header": "Nats-Sinks-Classification",
+      "default": "NATO UNCLASSIFIED"
+    },
+    "labels": {
+      "header": "Nats-Sinks-Labels",
+      "default": "logistics;default"
+    },
+    "rules": [
+      {
+        "subject": "mission.reports.>",
+        "priority": "immediate",
+        "classification": "NATO SECRET",
+        "labels": "mission-report;coalition;watch-floor"
+      }
+    ]
+  }
+}
+```
+
+With the file sink, these values appear as top-level JSON fields such as
+`"priority": "immediate"`, `"classification": "NATO SECRET"`, `"labels":
+"mission-report;coalition;watch-floor"`, and `"labels_list":
+["mission-report", "coalition", "watch-floor"]`. With Oracle, the same values
+are stored in `PRIORITY`, `CLASSIFICATION`, and `LABELS` columns and repeated
+inside `METADATA_JSON.message_metadata`.
 
 ## NATS Connections
 
@@ -396,13 +541,15 @@ Important failure cases:
 - Unit tests must not make network calls.
 - Integration tests are isolated behind markers.
 - Use TLS and authenticated NATS connections in production.
+- Use core payload encryption when destination storage should retain encrypted
+  message bodies while keeping routing metadata available.
 - Use least-privilege destination credentials with access only to the required
   destination resources.
 
 ## Development
 
 ```bash
-python -m pip install -e ".[dev,oracle,docs]"
+python -m pip install -e ".[dev,oracle,crypto,docs]"
 ruff format --check .
 ruff check .
 mypy src

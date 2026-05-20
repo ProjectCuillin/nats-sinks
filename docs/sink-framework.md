@@ -9,6 +9,12 @@ The purpose of the framework is to keep delivery semantics in one place. Every
 destination should plug into the same small contract and should inherit the same
 commit-then-acknowledge behavior from the core runner.
 
+That shared contract is useful for domains with mission accountability
+requirements. Whether an event is written to Oracle, a local handoff file, or a
+future backend, maintainers should be able to answer the same questions: when
+is the event durable, what metadata was preserved, what happens on duplicate
+redelivery, and when is the JetStream ACK sent?
+
 ## Package Layers
 
 ```mermaid
@@ -50,7 +56,9 @@ flowchart TB
 
 The core layer owns NATS connectivity, JetStream consumer behavior, batching,
 dead-letter publication, acknowledgement decisions, graceful shutdown, and
-metrics hooks. Destination modules own destination writes and destination commit
+metrics hooks. It also owns destination-neutral per-message transformations,
+including priority/classification/labels metadata resolution and optional payload
+encryption. Destination modules own destination writes and destination commit
 behavior only.
 
 ## Generic Contract
@@ -127,6 +135,39 @@ future JSON document, relational, object-storage, HTTP, and Kafka sinks should
 either reuse it or explicitly document why their destination requires a
 different payload storage model.
 
+For operational and defence-oriented streams, this neutrality is important
+because payloads may be JSON, plain text, opaque encrypted text, compressed
+bytes, or binary records from platform systems. The framework should preserve
+the body safely without assuming that every producer uses the same payload
+contract.
+
+## Core Payload Encryption
+
+Payload encryption is also destination-neutral. When the top-level
+`encryption.enabled` setting is true, the core runner encrypts
+`NatsEnvelope.data` before calling any sink. The sink receives an envelope copy
+where the payload bytes are a JSON object containing
+`_nats_sinks_encryption`. Metadata is not encrypted.
+
+```mermaid
+sequenceDiagram
+    participant R as JetStreamSinkRunner
+    participant E as PayloadEncryptor
+    participant S as Sink
+
+    R->>R: Normalize raw message to NatsEnvelope
+    R->>E: Encrypt envelope.data
+    E-->>R: Envelope copy with encrypted payload
+    R->>S: write_batch(encrypted envelopes)
+    S-->>R: Durable success after destination commit
+```
+
+This means new sinks do not need their own first-layer payload encryption
+logic. They should store the encrypted payload envelope exactly like any other
+JSON payload unless the sink is explicitly designed and documented as a trusted
+decryption destination. See [Payload Encryption](payload-encryption.md) for the
+configuration, envelope shape, tests, and operational security guidance.
+
 ## Standard Metadata Snapshot
 
 Every sink can use `NatsEnvelope.metadata_for_json_storage()` to persist the
@@ -139,7 +180,14 @@ The snapshot captures:
 - JetStream stream, consumer, domain, stream sequence, consumer sequence,
   redelivery flag, pending count, and client timestamp,
 - optional reply subject,
+- normalized application metadata fields `priority`, `classification`, and `labels`,
 - message creation, receipt, and storage times as Unix epoch nanoseconds.
+
+The metadata snapshot is intentionally useful for audit and after-action
+analysis. It preserves the operational context needed to answer when a message
+was created, when it was received by the sink runner, when it was stored, which
+subject and stream carried it, and which priority, classification, and labels
+were visible at ingestion time.
 
 ```mermaid
 flowchart TD
@@ -147,10 +195,12 @@ flowchart TD
     Env --> Headers[All headers]
     Env --> Reserved[Known and future Nats-* headers]
     Env --> JS[JetStream metadata]
+    Env --> AppMeta[priority / classification / labels]
     Env --> Time[message_created / received / stored epoch ns]
     Headers --> Doc[metadata_json document]
     Reserved --> Doc
     JS --> Doc
+    AppMeta --> Doc
     Time --> Doc
 ```
 

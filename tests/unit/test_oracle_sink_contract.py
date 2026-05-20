@@ -1,11 +1,17 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import base64
+import json
+import os
+import secrets
 from typing import Any
 
 import pytest
 
 from nats_sinks import ConfigurationError, DestinationUnavailableError, NatsEnvelope
+from nats_sinks.core.config import EncryptionConfig
+from nats_sinks.core.encryption import ENCRYPTED_PAYLOAD_KEY, PayloadEncryptor
 from nats_sinks.oracle import OracleSink
 
 
@@ -22,6 +28,9 @@ def envelope() -> NatsEnvelope:
         message_id=None,
         redelivered=False,
         pending=0,
+        priority="urgent",
+        classification="restricted",
+        labels=("billing", "urgent"),
     )
 
 
@@ -38,6 +47,17 @@ def envelope_with_subject(subject: str, sequence: int) -> NatsEnvelope:
         message_id=None,
         redelivered=False,
         pending=0,
+    )
+
+
+def encryption_config() -> EncryptionConfig:
+    configured = os.getenv("NATS_SINKS_TEST_ENCRYPTION_KEY_B64")
+    key_b64 = configured or base64.b64encode(secrets.token_bytes(32)).decode("ascii")
+    return EncryptionConfig(
+        enabled=True,
+        algorithm="aes-256-gcm",
+        key_id="oracle-sink-test-key",
+        key_b64=key_b64,
     )
 
 
@@ -231,6 +251,32 @@ async def test_oracle_sink_python_api_accepts_payload_mode() -> None:
 
     rows = pool.connection.cursor_instance.executions[0][1]
     assert rows[0]["payload_json"].startswith('{"_nats_sinks":')
+    assert rows[0]["priority"] == "urgent"
+    assert rows[0]["classification"] == "restricted"
+    assert rows[0]["labels"] == "billing;urgent"
+
+
+@pytest.mark.asyncio
+async def test_oracle_sink_stores_core_encrypted_payload_as_decryptable_json() -> None:
+    config = encryption_config()
+    encryptor = PayloadEncryptor(config)
+    sink = OracleSink(
+        dsn="localhost:1521/FREEPDB1",
+        user="app_user",
+        password="example",  # noqa: S106 - local test placeholder
+        table="NATS_SINK_EVENTS",
+        mode="merge",
+    )
+    pool = RecordingPool()
+    sink._pool = pool
+
+    await sink.write_batch([encryptor.encrypt_envelope(envelope())])
+
+    rows = pool.connection.cursor_instance.executions[0][1]
+    payload = json.loads(rows[0]["payload_json"])
+    assert ENCRYPTED_PAYLOAD_KEY in payload
+    assert encryptor.decrypt_payload(payload) == b'{"order_id":"O-1001"}'
+    assert json.loads(rows[0]["headers_json"])["Nats-Msg-Id"] == "m-1"
 
 
 def test_oracle_rejects_invalid_table_route_at_construction() -> None:

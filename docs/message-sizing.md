@@ -26,6 +26,12 @@ Practical guidance:
 - put small routing metadata in headers when needed,
 - avoid encoding large JSON or business objects in the subject.
 
+For mission-oriented subject designs, avoid putting sensitive unit names,
+platform identifiers, operation names, or other protected context directly into
+subjects unless that subject taxonomy is approved for the environment. Subjects
+are routing metadata and may be visible in logs, monitoring tools, file paths,
+and database metadata columns.
+
 ## NATS Payloads
 
 Payload size is governed by NATS server `max_payload`. NATS documentation lists
@@ -39,6 +45,12 @@ Large payload guidance:
 - test memory and latency under realistic batch sizes,
 - avoid logging payloads,
 - consider chunking or object storage for very large business documents.
+
+When payloads contain operational reports, imagery references, sensor-derived
+records, or encrypted mission text, treat size limits as part of the interface
+contract. Producers and sink operators should agree on whether large content
+belongs directly in NATS, in an object store referenced by NATS, or in a
+separate domain-specific transfer path.
 
 ## nats-sinks Behavior
 

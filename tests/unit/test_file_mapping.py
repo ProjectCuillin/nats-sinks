@@ -24,6 +24,9 @@ def _envelope(
     stream: str | None = "ORDERS",
     stream_sequence: int | None = 7,
     message_id: str | None = "msg-1",
+    priority: str | None = None,
+    classification: str | None = None,
+    labels: object | None = None,
 ) -> NatsEnvelope:
     return NatsEnvelope(
         subject=subject,
@@ -37,6 +40,9 @@ def _envelope(
         message_id=message_id,
         redelivered=False,
         pending=0,
+        priority=priority,
+        classification=classification,
+        labels=labels or (),
     )
 
 
@@ -132,14 +138,39 @@ def test_safe_path_component_fuzz_cases_do_not_escape() -> None:
 
 def test_file_record_preserves_json_payload_and_metadata() -> None:
     config = FileSinkConfig(directory=Path("test-output"))
-    record = file_record_for_envelope(_envelope(), config=config)
+    record = file_record_for_envelope(
+        _envelope(priority="urgent", classification="restricted", labels=("billing", "urgent")),
+        config=config,
+    )
 
     json.dumps(record)
 
     assert record["schema"] == "nats_sinks.file.message.v1"
+    assert record["priority"] == "urgent"
+    assert record["classification"] == "restricted"
+    assert record["labels"] == "billing;urgent"
+    assert record["labels_list"] == ["billing", "urgent"]
     assert record["payload"] == {"order_id": "O-1001"}
     assert record["payload_info"]["original_format"] == "json"
     assert record["metadata"]["jetstream"]["stream_sequence"] == 7
+    assert record["metadata"]["message_metadata"]["priority"] == "urgent"
+    assert record["metadata"]["message_metadata"]["classification"] == "restricted"
+    assert record["metadata"]["message_metadata"]["labels"] == ["billing", "urgent"]
+
+
+def test_file_record_stores_missing_message_metadata_as_null() -> None:
+    config = FileSinkConfig(directory=Path("test-output"))
+    record = file_record_for_envelope(_envelope(), config=config)
+
+    assert record["priority"] is None
+    assert record["classification"] is None
+    assert record["labels"] is None
+    assert record["labels_list"] == []
+    assert record["metadata"]["message_metadata"] == {
+        "priority": None,
+        "classification": None,
+        "labels": [],
+    }
 
 
 def test_file_record_wraps_text_payload() -> None:

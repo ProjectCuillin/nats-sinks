@@ -96,6 +96,25 @@ documentation because PyPI users normally need versioned documentation. GitHub
 Pages is best treated as an additional hosted build of the current `main`
 documentation.
 
+## Mermaid Diagrams
+
+GitHub Pages uses the same MkDocs build as Read the Docs. Mermaid diagrams stay
+in the Markdown files as fenced code blocks:
+
+````markdown
+```mermaid
+sequenceDiagram
+    participant A
+    participant B
+    A->>B: event
+```
+````
+
+`mkdocs.yml` configures `pymdownx.superfences` so those blocks render as
+diagrams in the generated static HTML. This keeps one documentation source for
+GitHub, Read the Docs, and GitHub Pages instead of maintaining separate image
+exports.
+
 ## Local Verification
 
 Before relying on the workflow, build the documentation locally:

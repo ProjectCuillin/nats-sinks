@@ -35,7 +35,8 @@ flowchart TD
     Change[Merge release changes] --> Checks[Run CI checks]
     Checks --> Build[Build sdist and wheel]
     Build --> Verify[twine check]
-    Verify --> TestPyPI[TestPyPI publish]
+    Verify --> GHAuth[Check local gh authentication]
+    GHAuth --> TestPyPI[TestPyPI publish]
     TestPyPI --> Smoke[Install smoke test]
     Smoke --> Tag[Create annotated git tag]
     Tag --> Push[Push tag to GitHub]
@@ -71,12 +72,55 @@ current GitHub-hosted runner runtime. This avoids release annotations caused by
 deprecated Node.js versions and keeps the publication path predictable for
 external users.
 
+## Local GitHub CLI Authentication
+
+Maintainers commonly use the GitHub CLI to inspect release workflows after a
+tag is pushed:
+
+```bash
+gh run list --limit 10
+gh run view --log
+gh release view v0.3.0
+```
+
+Those commands depend on local `gh` authentication. They are separate from PyPI
+Trusted Publishing: the release workflow itself uses GitHub Actions
+permissions and PyPI OIDC, not the maintainer's local token. A stale local
+`GH_TOKEN`, `GITHUB_TOKEN`, or stored `gh` credential can still make local
+workflow inspection fail after a successful push.
+
+Before pushing a release tag, run:
+
+```bash
+scripts/check-gh-auth.sh
+```
+
+The helper checks `gh auth status` for `github.com`. If authentication is not
+valid and an interactive terminal is available, it asks whether it should start
+browser-based login with:
+
+```bash
+gh auth login --hostname github.com --web
+```
+
+For CI or non-interactive checks, use:
+
+```bash
+scripts/check-gh-auth.sh --check-only
+```
+
+The helper never prints token values. If it reports that `GH_TOKEN` or
+`GITHUB_TOKEN` is set, verify that the token is still valid or unset it before
+relying on the stored GitHub CLI login.
+
 ## Checklist
 
 - Confirm all user-visible changes are represented in Markdown documentation.
 - Confirm `CHANGELOG.md` has a complete version section for this release and a
   clean `Unreleased` section for future work.
 - Update `CHANGELOG.md`.
+- Confirm `scripts/check-gh-auth.sh` before pushing release tags so local
+  workflow-status inspection works after the push.
 - Confirm `ruff format --check .`.
 - Confirm `ruff check .`.
 - Confirm `mypy src`.

@@ -24,6 +24,9 @@ def envelope(**overrides: object) -> NatsEnvelope:
         "message_id": None,
         "redelivered": False,
         "pending": 0,
+        "priority": None,
+        "classification": None,
+        "labels": (),
         "received_at": datetime(2026, 5, 16, 10, 17, tzinfo=UTC),
     }
     values.update(overrides)
@@ -36,12 +39,37 @@ def test_envelope_to_row_maps_payload_and_headers() -> None:
     assert row["stream_name"] == "ORDERS"
     assert row["stream_sequence"] == 42
     assert row["message_id"] == "m-1"
+    assert row["priority"] is None
+    assert row["classification"] is None
+    assert row["labels"] is None
     assert row["received_at_epoch_ns"] == 1778926620000000000
     assert row["stored_at_epoch_ns"] is not None
     assert json.loads(row["payload_json"])["order_id"] == "O-1001"
     assert json.loads(row["headers_json"])["Nats-Msg-Id"] == "m-1"
     metadata = json.loads(row["metadata_json"])
     assert metadata["nats"]["reserved_headers"]["Nats-Msg-Id"] == "m-1"
+    assert metadata["message_metadata"] == {
+        "priority": None,
+        "classification": None,
+        "labels": [],
+    }
+
+
+def test_envelope_to_row_maps_priority_classification_and_labels() -> None:
+    row = envelope_to_row(
+        envelope(priority="urgent", classification="restricted", labels=("billing", "urgent")),
+        idempotency=OracleIdempotencyConfig(),
+    )
+
+    assert row["priority"] == "urgent"
+    assert row["classification"] == "restricted"
+    assert row["labels"] == "billing;urgent"
+    metadata = json.loads(row["metadata_json"])
+    assert metadata["message_metadata"] == {
+        "priority": "urgent",
+        "classification": "restricted",
+        "labels": ["billing", "urgent"],
+    }
 
 
 def test_payload_field_idempotency_uses_payload_value() -> None:

@@ -12,6 +12,12 @@ The main architectural rule is:
 
 This separation keeps JetStream ACK behavior consistent across destinations. A sink implementation should be able to focus on writing to its destination and committing durable state. It should not need to know how to ACK, NAK, publish to DLQ, or manage a JetStream consumer.
 
+This boundary matters especially in mission and defence-style deployments,
+where multiple systems may depend on the same operational event stream. A
+database outage, file-system delay, or schema issue should result in visible
+redelivery or DLQ handling, not a quiet ACK that removes the event from the
+processing path before it has crossed a durable boundary.
+
 ## Component Model
 
 The diagram below shows the framework boundary. Oracle and local file output
@@ -29,6 +35,7 @@ flowchart TB
     subgraph Core[nats_sinks.core]
         Runner[JetStreamSinkRunner]
         Envelope[NatsEnvelope]
+        Encrypt[Optional payload encryption]
         DLQ[DLQ publisher]
         Metrics[Metrics hooks]
     end
@@ -45,7 +52,7 @@ flowchart TB
     end
 
     Stream --> Consumer --> Runner
-    Runner --> Envelope --> Protocol
+    Runner --> Envelope --> Encrypt --> Protocol
     Protocol --> Oracle
     Protocol --> File
     Protocol --> Future
@@ -65,6 +72,7 @@ destination write, then to a durable commit, and only then to a JetStream ACK.
 JetStream stream
   -> durable consumer
   -> nats-sinks core runner
+  -> optional payload encryption
   -> sink.write_batch(...)
   -> durable destination commit
   -> JetStream ACK
@@ -78,6 +86,7 @@ The core runtime handles:
 - Pull-based consumption.
 - Bounded batch fetching.
 - Conversion from raw NATS messages to `NatsEnvelope`.
+- Optional payload encryption before sink delivery.
 - Sink lifecycle.
 - Temporary versus permanent failure handling.
 - DLQ publication.
@@ -92,6 +101,10 @@ Destination sinks handle:
 - durable commit,
 - destination-specific error translation,
 - destination-specific idempotency behavior.
+
+Mission-oriented deployments should treat this split as an accountability
+boundary. The core provides a consistent delivery contract, while each sink
+documents exactly what counts as durable success for its destination.
 
 ## Why Raw NATS Messages Are Not Passed To Sinks
 
@@ -121,3 +134,8 @@ Adding a new sink should be an additive release: a new module, optional
 dependency extra, registry entry, tests, and destination-specific documentation.
 The core `NatsEnvelope`, `Sink` protocol, commit-then-acknowledge ordering, and
 existing Oracle configuration should remain compatible.
+
+Payload encryption is also part of the core, not a sink-specific responsibility.
+When enabled, the runner encrypts `NatsEnvelope.data` and passes a copied
+envelope to the sink. Metadata remains clear. This lets all sinks store the
+same encrypted payload envelope without duplicating cryptographic code.

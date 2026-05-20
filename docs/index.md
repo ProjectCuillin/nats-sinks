@@ -1,5 +1,10 @@
 # nats-sinks
 
+[![PyPI](https://img.shields.io/pypi/v/nats-sinks.svg)](https://pypi.org/project/nats-sinks/)
+[![Python Versions](https://img.shields.io/pypi/pyversions/nats-sinks.svg)](https://pypi.org/project/nats-sinks/)
+[![Documentation Status](https://readthedocs.org/projects/nats-sinks/badge/?version=latest)](https://nats-sinks.readthedocs.io/en/latest/?badge=latest)
+[![GitHub Pages](https://github.com/ProjectCuillin/nats-sinks/actions/workflows/pages.yml/badge.svg)](https://projectcuillin.github.io/nats-sinks/)
+
 `nats-sinks` provides at-least-once delivery from JetStream to external destinations with commit-then-acknowledge processing and idempotent sink support.
 
 The project repository is [ProjectCuillin/nats-sinks](https://github.com/ProjectCuillin/nats-sinks/). The current named contributor is Johan Louwers, reachable at [louwersj@gmail.com](mailto:louwersj@gmail.com).
@@ -11,6 +16,12 @@ redelivers them when a consumer has not acknowledged successful processing.
 `nats-sinks` is the bridge between JetStream and external destinations: it
 receives JetStream messages, asks a sink to write them durably, and only then
 acknowledges the messages back to NATS.
+
+The project is written for operators and developers who care about reliable
+event movement in operational environments. That includes commercial platforms,
+public-sector systems, defence logistics, mission telemetry, audit pipelines,
+and other settings where a message can represent an operational fact that must
+not be silently lost.
 
 ## Documentation Sites
 
@@ -36,10 +47,12 @@ The current release provides the following production-ready foundation:
   backpressure controls, graceful shutdown, DLQ support, safe ACK behavior, and
   clear error handling.
 - `NatsEnvelope`, an immutable message representation that gives sinks payload,
-  headers, JetStream metadata, timestamps, and idempotency keys without giving
-  them ACK methods.
+  headers, JetStream metadata, normalized priority/classification/labels fields,
+  timestamps, and idempotency keys without giving them ACK methods.
 - JSON configuration loading with environment-variable overrides and redacted
   output for secrets.
+- Optional core payload encryption with AES-256-GCM and AES-256-CCM before
+  messages are written by any sink.
 - A CLI command named `nats-sink` for validation, redacted effective config,
   sink health checks, and running sink processes.
 - `nats_sinks.oracle.OracleSink`, a production Oracle Database sink with
@@ -52,6 +65,11 @@ The current release provides the following production-ready foundation:
   used by Oracle.
 - Tests and documentation for the commit-then-acknowledge invariant across the
   core runtime and both production sinks.
+
+The same features are intentionally useful in mission-oriented deployments:
+priority can signal handling urgency, classification can capture the handling
+domain, labels can carry operational tags, and payload encryption can protect
+stored message bodies while leaving enough metadata for routing and audit.
 
 ## Production Sinks
 
@@ -79,7 +97,7 @@ flowchart LR
 
 ## Package Status
 
-The current release is `0.2.1`. The project is in the `0.x` phase: it is a
+The current release is `0.3.0`. The project is in the `0.x` phase: it is a
 production-ready foundation with Oracle and local file sinks, while the public
 API remains intentionally small so it can stabilize before `1.0.0`.
 
@@ -91,6 +109,8 @@ API remains intentionally small so it can stabilize before `1.0.0`.
 - Read [Oracle Sink](oracle-sink.md) for table design, modes, and transactions.
 - Read [File Sink](file-sink.md) for local file output, atomic writes, and
   duplicate handling.
+- Read [Payload Encryption](payload-encryption.md) when stored message bodies
+  should be encrypted while metadata remains available for operations.
 - Read [Security](security.md) before deploying with real credentials or payloads.
 
 ## What Is Next

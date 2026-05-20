@@ -9,10 +9,16 @@ async application, share logging and metrics with your application, or construct
 sinks programmatically. The same safety rule applies as with the CLI: the core
 runner owns ACK behavior, and destination sinks only write to their destination.
 
+In platform, mission-support, or defence-adjacent Python services, prefer
+embedding the runner directly when you need supervised lifecycle management,
+shared observability, or policy-controlled construction of sinks and encryption
+settings. The embedded form should still preserve the same commit-then-ACK
+contract as the CLI.
+
 ## Recommended Imports
 
 ```python
-from nats_sinks import JetStreamSinkRunner, NatsEnvelope, Sink
+from nats_sinks import EncryptionConfig, JetStreamSinkRunner, NatsEnvelope, Sink
 from nats_sinks.file import FileSink
 from nats_sinks.oracle import OracleSink
 ```
@@ -44,6 +50,39 @@ runner = JetStreamSinkRunner(
 
 await runner.run()
 ```
+
+## Enabling Payload Encryption
+
+Applications can enable the same core payload encryption that the JSON CLI
+configuration supports. The sink construction remains unchanged; encryption is
+passed to `JetStreamSinkRunner` because the core owns the transformation before
+sink delivery.
+
+```python
+from nats_sinks import EncryptionConfig, JetStreamSinkRunner
+from nats_sinks.file import FileSink
+
+sink = FileSink(directory="/var/lib/nats-sinks/events")
+
+runner = JetStreamSinkRunner(
+    nats_url="nats://localhost:4222",
+    stream="ORDERS",
+    consumer="orders-file-sink",
+    subject="orders.*",
+    sink=sink,
+    encryption=EncryptionConfig(
+        enabled=True,
+        algorithm="aes-256-gcm",
+        key_id="orders-prod-2026-05",
+        key_b64_env="NATS_SINKS_PAYLOAD_KEY_B64",
+    ),
+)
+```
+
+The sink receives encrypted payload bytes in a standard
+`_nats_sinks_encryption` JSON envelope. Metadata such as subject, stream
+sequence, and headers remains clear. See [Payload Encryption](payload-encryption.md)
+for decryption helpers and operational guidance.
 
 ## Embedding In An Async Service
 

@@ -21,6 +21,7 @@ from typing import Any
 
 from nats_sinks.core.envelope import NatsEnvelope
 from nats_sinks.core.errors import PermanentSinkError
+from nats_sinks.core.message_metadata import labels_to_storage_string
 from nats_sinks.file.config import FileSinkConfig
 
 SAFE_COMPONENT_RE = re.compile(r"[^A-Za-z0-9._-]+")
@@ -113,6 +114,10 @@ def file_record_for_envelope(
         "consumer": envelope.consumer,
         "consumer_sequence": envelope.consumer_sequence,
         "message_id": envelope.message_id,
+        "priority": envelope.priority,
+        "classification": envelope.classification,
+        "labels": labels_to_storage_string(envelope.labels),
+        "labels_list": list(envelope.labels),
         "payload": normalized_payload.value,
         "payload_info": {
             "original_format": normalized_payload.original_format,

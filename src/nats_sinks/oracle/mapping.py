@@ -22,6 +22,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from nats_sinks.core.envelope import NatsEnvelope
+from nats_sinks.core.message_metadata import labels_to_storage_string
 from nats_sinks.core.metadata import datetime_to_epoch_ns
 from nats_sinks.core.payload import PayloadStorageMode
 from nats_sinks.oracle.config import OracleIdempotencyConfig
@@ -52,6 +53,9 @@ def envelope_to_row(
         "stream_sequence": envelope.stream_sequence,
         "subject": envelope.subject,
         "message_id": message_id,
+        "priority": envelope.priority,
+        "classification": envelope.classification,
+        "labels": labels_to_storage_string(envelope.labels),
         "message_created_at_epoch_ns": timestamps["message_created_at_epoch_ns"],
         "jetstream_timestamp_epoch_ns": timestamps["jetstream_timestamp_epoch_ns"],
         "received_at_epoch_ns": datetime_to_epoch_ns(envelope.received_at),

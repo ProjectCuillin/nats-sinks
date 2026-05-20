@@ -80,6 +80,18 @@ mkdocs build --strict
 NATS_SINKS_DOCS_SITE_URL="https://projectcuillin.github.io/nats-sinks/" mkdocs build --strict
 ```
 
+Also confirm that local GitHub CLI authentication is valid before pushing tags:
+
+```bash
+scripts/check-gh-auth.sh
+```
+
+This is not required by PyPI Trusted Publishing itself. It is a maintainer
+quality-of-life check so commands such as `gh run list`, `gh run view`, and
+`gh release view` work immediately after the tag push. If authentication is
+invalid and a terminal is available, the helper asks whether it should start
+browser-based `gh auth login`. It never prints token values.
+
 ## PyPI README Link Hygiene
 
 PyPI renders `README.md` outside GitHub's repository context. Relative links
@@ -99,6 +111,28 @@ Run the repository guard before publishing:
 ```bash
 python scripts/check-markdown-links.py
 ```
+
+## Project Badges
+
+The README and documentation home page include public badges for PyPI, Python
+version support, Read the Docs, and GitHub Pages. Badge links in `README.md`
+must use fully qualified URLs because the README is rendered on PyPI as the
+project description.
+
+The PyPI badge points to:
+
+```text
+https://pypi.org/project/nats-sinks/
+```
+
+The badge image uses:
+
+```text
+https://img.shields.io/pypi/v/nats-sinks.svg
+```
+
+When adding more badges, prefer stable public endpoints and avoid badges that
+require private tokens or expose internal infrastructure details.
 
 ## Documentation Publication
 
@@ -149,6 +183,16 @@ The tag push starts `.github/workflows/release.yml`.
 The workflow expects the tag to exist already; it does not create tags itself.
 This is intentional because maintainers should choose when a repository state
 is ready to become an immutable release point.
+
+After pushing the tag, inspect the workflow:
+
+```bash
+gh run list --limit 10
+gh run view --log
+```
+
+If those commands fail locally with bad credentials, rerun
+`scripts/check-gh-auth.sh` in an interactive terminal and authenticate again.
 
 ## Step 4: Publish To TestPyPI
 

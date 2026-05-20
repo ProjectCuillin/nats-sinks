@@ -8,6 +8,11 @@ loads JSON, redacts secrets for display, resolves secret environment variables
 only when opening a connection, then passes the resulting options to
 `nats.connect`.
 
+In controlled mission and defence networks, connection policy is often as
+important as application code. Keep NATS authentication, TLS trust, account
+layout, and subject permissions aligned with the classification and operational
+domains carried by the stream.
+
 ## Supported In This Release
 
 The current release supports these production-use connection patterns:
@@ -195,6 +200,11 @@ flowchart LR
 Keep `tls_verify` set to `true` in production. Setting `tls_verify` to `false`
 disables hostname and certificate verification and should be limited to
 short-lived local development experiments.
+
+For private mission networks, prefer importing the relevant CA certificate into
+the service configuration over weakening TLS verification. A local CA is a
+normal pattern for internal infrastructure; disabling verification should not
+become the workaround for certificate lifecycle issues.
 
 ## Optional Client Certificate Files
 

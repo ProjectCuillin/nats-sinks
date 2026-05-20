@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import pytest
 
+from nats_sinks.core.config import MessageMetadataConfig
 from nats_sinks.core.consumer import envelope_from_nats_message
 from nats_sinks.core.envelope import NatsEnvelope
 from nats_sinks.core.errors import ConfigurationError
@@ -29,6 +30,15 @@ class StrangeRawMessage:
     @property
     def metadata(self) -> object:
         raise RuntimeError("metadata unavailable")
+
+
+class HeaderRawMessage:
+    data = b"{}"
+    metadata = None
+
+    def __init__(self, headers: dict[str, str], *, subject: str = "orders.created") -> None:
+        self.subject = subject
+        self.headers = headers
 
 
 def test_envelope_normalization_tolerates_strange_message_objects() -> None:
@@ -61,6 +71,208 @@ def test_envelope_header_normalization_drops_unrenderable_keys_and_values() -> N
     )
 
     assert dict(envelope.headers) == {"partial-list": "safe"}
+
+
+def test_consumer_resolves_priority_and_classification_from_headers_and_defaults() -> None:
+    config = MessageMetadataConfig.model_validate(
+        {
+            "priority": {
+                "header": "X-Priority",
+                "default": "normal",
+            },
+            "classification": {
+                "header": "X-Classification",
+                "default": "internal",
+            },
+            "labels": {
+                "header": "X-Labels",
+                "default": "default;orders",
+            },
+        }
+    )
+
+    from_headers = envelope_from_nats_message(
+        HeaderRawMessage({"X-Priority": "critical"}),
+        message_metadata=config,
+    )
+    from_defaults = envelope_from_nats_message(HeaderRawMessage({}), message_metadata=config)
+    explicit_null = envelope_from_nats_message(
+        HeaderRawMessage({"X-Classification": "  ", "X-Labels": " ; "}),
+        message_metadata=config,
+    )
+
+    assert from_headers.priority == "critical"
+    assert from_headers.classification == "internal"
+    assert from_headers.labels == ("default", "orders")
+    assert from_defaults.priority == "normal"
+    assert from_defaults.classification == "internal"
+    assert from_defaults.labels == ("default", "orders")
+    assert explicit_null.priority == "normal"
+    assert explicit_null.classification is None
+    assert explicit_null.labels == ()
+
+
+def test_consumer_resolves_subject_specific_message_metadata_defaults() -> None:
+    config = MessageMetadataConfig.model_validate(
+        {
+            "priority": {
+                "header": "X-Priority",
+                "default": "normal",
+            },
+            "classification": {
+                "header": "X-Classification",
+                "default": "internal",
+            },
+            "labels": {
+                "header": "X-Labels",
+                "default": "default",
+            },
+            "rules": [
+                {
+                    "subject": "orders.urgent.>",
+                    "priority": "urgent",
+                    "classification": "restricted",
+                    "labels": "urgent;customer-facing",
+                },
+                {
+                    "subject": "public.>",
+                    "priority": "low",
+                    "classification": None,
+                    "labels": None,
+                },
+            ],
+        }
+    )
+
+    urgent = envelope_from_nats_message(
+        HeaderRawMessage({}, subject="orders.urgent.created"),
+        message_metadata=config,
+    )
+    public = envelope_from_nats_message(
+        HeaderRawMessage({}, subject="public.status"),
+        message_metadata=config,
+    )
+    fallback = envelope_from_nats_message(
+        HeaderRawMessage({}, subject="orders.created"),
+        message_metadata=config,
+    )
+
+    assert urgent.priority == "urgent"
+    assert urgent.classification == "restricted"
+    assert urgent.labels == ("urgent", "customer-facing")
+    assert public.priority == "low"
+    assert public.classification is None
+    assert public.labels == ()
+    assert fallback.priority == "normal"
+    assert fallback.classification == "internal"
+    assert fallback.labels == ("default",)
+
+
+def test_consumer_headers_override_subject_specific_metadata_defaults() -> None:
+    config = MessageMetadataConfig.model_validate(
+        {
+            "priority": {
+                "header": "X-Priority",
+                "default": "normal",
+            },
+            "classification": {
+                "header": "X-Classification",
+                "default": "internal",
+            },
+            "labels": {
+                "header": "X-Labels",
+                "default": "default",
+            },
+            "rules": [
+                {
+                    "subject": "orders.urgent.>",
+                    "priority": "urgent",
+                    "classification": "restricted",
+                    "labels": "urgent;customer-facing",
+                },
+            ],
+        }
+    )
+
+    from_headers = envelope_from_nats_message(
+        HeaderRawMessage(
+            {
+                "X-Priority": "critical",
+                "X-Classification": "top-secret",
+                "X-Labels": "published;override",
+            },
+            subject="orders.urgent.created",
+        ),
+        message_metadata=config,
+    )
+    explicit_null = envelope_from_nats_message(
+        HeaderRawMessage(
+            {
+                "X-Priority": " ",
+                "X-Labels": " ",
+            },
+            subject="orders.urgent.created",
+        ),
+        message_metadata=config,
+    )
+
+    assert from_headers.priority == "critical"
+    assert from_headers.classification == "top-secret"
+    assert from_headers.labels == ("published", "override")
+    assert explicit_null.priority is None
+    assert explicit_null.classification == "restricted"
+    assert explicit_null.labels == ()
+
+
+def test_consumer_uses_first_matching_metadata_rule() -> None:
+    config = MessageMetadataConfig.model_validate(
+        {
+            "priority": {
+                "header": "X-Priority",
+                "default": "normal",
+            },
+            "labels": {
+                "header": "X-Labels",
+                "default": "default",
+            },
+            "rules": [
+                {
+                    "subject": "orders.>",
+                    "priority": "broad",
+                    "labels": "broad",
+                },
+                {
+                    "subject": "orders.urgent.>",
+                    "priority": "urgent",
+                    "labels": "urgent",
+                },
+            ],
+        }
+    )
+
+    item = envelope_from_nats_message(
+        HeaderRawMessage({}, subject="orders.urgent.created"),
+        message_metadata=config,
+    )
+
+    assert item.priority == "broad"
+    assert item.labels == ("broad",)
+
+
+def test_consumer_uses_standard_priority_and_classification_headers_by_default() -> None:
+    item = envelope_from_nats_message(
+        HeaderRawMessage(
+            {
+                "Nats-Sinks-Priority": "urgent",
+                "Nats-Sinks-Classification": "restricted",
+                "Nats-Sinks-Labels": "billing;customer-facing",
+            }
+        )
+    )
+
+    assert item.priority == "urgent"
+    assert item.classification == "restricted"
+    assert item.labels == ("billing", "customer-facing")
 
 
 @pytest.mark.parametrize(

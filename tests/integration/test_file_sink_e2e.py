@@ -1,15 +1,19 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import base64
 import gzip
 import json
 import os
+import secrets
 import shutil
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from nats_sinks.core.config import EncryptionConfig, EncryptionRuleConfig, MessageMetadataConfig
+from nats_sinks.core.encryption import ENCRYPTED_PAYLOAD_KEY, PayloadEncryptor
 from nats_sinks.core.runner import JetStreamSinkRunner
 from nats_sinks.file import FileSink
 
@@ -30,10 +34,49 @@ class FakeMetadata:
 
 
 class FakeMessage:
-    def __init__(self, events: list[str], *, sequence: int, data: bytes) -> None:
-        self.subject = "orders.created"
+    def __init__(
+        self,
+        events: list[str],
+        *,
+        sequence: int,
+        data: bytes,
+        subject: str = "orders.created",
+    ) -> None:
+        self.subject = subject
         self.data = data
         self.headers = {"Nats-Msg-Id": f"file-e2e-{sequence}"}
+        if sequence == 1:
+            self.headers["Nats-Sinks-Priority"] = "urgent"
+            self.headers["Nats-Sinks-Classification"] = "restricted"
+            self.headers["Nats-Sinks-Labels"] = "billing;customer-facing"
+        elif sequence == 2:
+            self.headers["Nats-Sinks-Priority"] = "normal"
+            self.headers["Nats-Sinks-Labels"] = "standard"
+        elif sequence == 3:
+            self.headers["Nats-Sinks-Classification"] = "internal"
+        else:
+            self.headers["Nats-Sinks-Priority"] = ""
+            self.headers["Nats-Sinks-Labels"] = ""
+        self.metadata = FakeMetadata(sequence=FakeSequence(stream=sequence, consumer=sequence))
+        self.events = events
+        self.acked = False
+
+    async def ack(self) -> None:
+        self.events.append(f"ack-{self.metadata.sequence.stream}")
+        self.acked = True
+
+    async def nak(self, delay: float | None = None) -> None:
+        del delay
+        self.events.append(f"nak-{self.metadata.sequence.stream}")
+
+
+class MetadataDefaultMessage:
+    """Raw-message double without metadata headers, used to test defaults."""
+
+    def __init__(self, events: list[str], *, sequence: int, subject: str) -> None:
+        self.subject = subject
+        self.data = b"{}"
+        self.headers = {"Nats-Msg-Id": f"metadata-default-{sequence}"}
         self.metadata = FakeMetadata(sequence=FakeSequence(stream=sequence, consumer=sequence))
         self.events = events
         self.acked = False
@@ -77,10 +120,22 @@ def _cleanup_file_e2e_directory(path: Path, *, tmp_path: Path) -> None:
         shutil.rmtree(path, ignore_errors=True)
 
 
+def _encryption_config() -> EncryptionConfig:
+    configured = os.getenv("NATS_SINKS_TEST_ENCRYPTION_KEY_B64")
+    key_b64 = configured or base64.b64encode(secrets.token_bytes(32)).decode("ascii")
+    return EncryptionConfig(
+        enabled=True,
+        algorithm="aes-256-gcm",
+        key_id="file-e2e-test-key",
+        key_b64=key_b64,
+    )
+
+
 async def _run_file_sink_e2e(
     *,
     output_dir: Path,
     compression: str = "none",
+    encryption: EncryptionConfig | None = None,
 ) -> tuple[list[Path], list[dict[str, object]], list[str]]:
     events: list[str] = []
     messages: Sequence[FakeMessage] = [
@@ -96,6 +151,7 @@ async def _run_file_sink_e2e(
         consumer="file-orders-sink",
         subject="orders.*",
         sink=sink,
+        encryption=encryption,
     )
 
     await sink.start()
@@ -121,6 +177,19 @@ async def test_runner_file_sink_local_end_to_end(tmp_path: Path) -> None:
         assert records[1]["payload"]["_nats_sinks"]["payload_format"] == "text"
         assert records[2]["payload"]["_nats_sinks"]["size_bytes"] == 0
         assert records[3]["payload"]["_nats_sinks"]["payload_format"] == "bytes"
+        assert records[0]["priority"] == "urgent"
+        assert records[0]["classification"] == "restricted"
+        assert records[0]["labels"] == "billing;customer-facing"
+        assert records[0]["labels_list"] == ["billing", "customer-facing"]
+        assert records[1]["priority"] == "normal"
+        assert records[1]["classification"] is None
+        assert records[1]["labels"] == "standard"
+        assert records[2]["priority"] is None
+        assert records[2]["classification"] == "internal"
+        assert records[2]["labels"] is None
+        assert records[3]["priority"] is None
+        assert records[3]["classification"] is None
+        assert records[3]["labels"] is None
         assert all(record["metadata"]["jetstream"]["stream"] == "ORDERS" for record in records)
     finally:
         _cleanup_file_e2e_directory(output_dir, tmp_path=tmp_path)
@@ -143,6 +212,179 @@ async def test_runner_file_sink_local_end_to_end_with_gzip(tmp_path: Path) -> No
         assert records[1]["payload"]["_nats_sinks"]["payload_format"] == "text"
         assert records[2]["payload"]["_nats_sinks"]["size_bytes"] == 0
         assert records[3]["payload"]["_nats_sinks"]["payload_format"] == "bytes"
+        assert records[0]["metadata"]["message_metadata"] == {
+            "priority": "urgent",
+            "classification": "restricted",
+            "labels": ["billing", "customer-facing"],
+        }
+        assert records[1]["metadata"]["message_metadata"] == {
+            "priority": "normal",
+            "classification": None,
+            "labels": ["standard"],
+        }
         assert all(record["metadata"]["jetstream"]["stream"] == "ORDERS" for record in records)
     finally:
         _cleanup_file_e2e_directory(output_dir, tmp_path=tmp_path)
+
+
+async def test_runner_file_sink_local_end_to_end_with_payload_encryption(tmp_path: Path) -> None:
+    """Prove encrypted core payloads stay decryptable after file sink durability."""
+
+    output_dir = _file_e2e_directory(tmp_path, compression="encrypted")
+    encryption = _encryption_config()
+    encryptor = PayloadEncryptor(encryption)
+    try:
+        files, records, events = await _run_file_sink_e2e(
+            output_dir=output_dir,
+            encryption=encryption,
+        )
+
+        assert events == ["ack-1", "ack-2", "ack-3", "ack-4"]
+        assert len(files) == 4
+        for record in records:
+            assert ENCRYPTED_PAYLOAD_KEY in record["payload"]
+        assert encryptor.decrypt_payload(records[0]["payload"]) == b'{"order_id":"O-1001"}'
+        assert encryptor.decrypt_payload(records[1]["payload"]) == b"encrypted-text"
+        assert encryptor.decrypt_payload(records[2]["payload"]) == b""
+        assert encryptor.decrypt_payload(records[3]["payload"]) == b"\xff\x00\xfe"
+        assert records[0]["priority"] == "urgent"
+        assert records[1]["classification"] is None
+        assert all(record["metadata"]["jetstream"]["stream"] == "ORDERS" for record in records)
+    finally:
+        _cleanup_file_e2e_directory(output_dir, tmp_path=tmp_path)
+
+
+async def test_runner_file_sink_local_end_to_end_with_subject_payload_encryption(
+    tmp_path: Path,
+) -> None:
+    """Prove subject rules can encrypt one subject family while leaving another clear."""
+
+    output_dir = _file_e2e_directory(tmp_path, compression="subject-encryption")
+    key_b64 = _encryption_config().key_b64
+    assert key_b64 is not None
+    encryption = EncryptionConfig(
+        enabled=False,
+        rules=[
+            EncryptionRuleConfig(
+                subject="secure.>",
+                enabled=True,
+                key_id="file-subject-e2e-key",
+                key_b64=key_b64,
+            )
+        ],
+    )
+    encryptor = PayloadEncryptor(encryption.effective_rule_config(encryption.rules[0]))
+    events: list[str] = []
+    messages: Sequence[FakeMessage] = [
+        FakeMessage(events, sequence=1, subject="secure.orders", data=b"secret-orders"),
+        FakeMessage(events, sequence=2, subject="public.orders", data=b"public-orders"),
+    ]
+    sink = FileSink(directory=output_dir, fsync=False)
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="file-orders-sink",
+        subject=">",
+        sink=sink,
+        encryption=encryption,
+    )
+
+    try:
+        await sink.start()
+        await runner.process_raw_batch(messages)
+
+        records = _sort_records_by_subject(
+            [_read_file_record(path) for path in _json_files(output_dir)]
+        )
+        public_record, secure_record = records
+        assert public_record["subject"] == "public.orders"
+        assert secure_record["subject"] == "secure.orders"
+        assert public_record["payload"]["_nats_sinks"]["payload_format"] == "text"
+        assert ENCRYPTED_PAYLOAD_KEY in secure_record["payload"]
+        assert encryptor.decrypt_payload(secure_record["payload"]) == b"secret-orders"
+        assert events == ["ack-1", "ack-2"]
+    finally:
+        _cleanup_file_e2e_directory(output_dir, tmp_path=tmp_path)
+
+
+async def test_runner_file_sink_local_end_to_end_with_subject_metadata_defaults(
+    tmp_path: Path,
+) -> None:
+    """Prove subject-specific metadata defaults are persisted by a production sink."""
+
+    output_dir = _file_e2e_directory(tmp_path, compression="subject-metadata")
+    events: list[str] = []
+    messages: Sequence[MetadataDefaultMessage] = [
+        MetadataDefaultMessage(events, sequence=1, subject="orders.urgent.created"),
+        MetadataDefaultMessage(events, sequence=2, subject="public.status"),
+        MetadataDefaultMessage(events, sequence=3, subject="orders.created"),
+    ]
+    metadata = MessageMetadataConfig.model_validate(
+        {
+            "priority": {
+                "header": "X-Priority",
+                "default": "normal",
+            },
+            "classification": {
+                "header": "X-Classification",
+                "default": "internal",
+            },
+            "labels": {
+                "header": "X-Labels",
+                "default": "default;orders",
+            },
+            "rules": [
+                {
+                    "subject": "orders.urgent.>",
+                    "priority": "urgent",
+                    "classification": "restricted",
+                    "labels": "urgent;customer-facing",
+                },
+                {
+                    "subject": "public.>",
+                    "priority": "low",
+                    "classification": None,
+                    "labels": None,
+                },
+            ],
+        }
+    )
+    sink = FileSink(directory=output_dir, fsync=False)
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="file-orders-sink",
+        subject=">",
+        sink=sink,
+        message_metadata=metadata,
+    )
+
+    try:
+        await sink.start()
+        await runner.process_raw_batch(messages)
+
+        records = _sort_records_by_subject(
+            [_read_file_record(path) for path in _json_files(output_dir)]
+        )
+        orders_record, urgent_record, public_record = records
+        assert orders_record["subject"] == "orders.created"
+        assert orders_record["priority"] == "normal"
+        assert orders_record["classification"] == "internal"
+        assert orders_record["labels"] == "default;orders"
+        assert public_record["subject"] == "public.status"
+        assert public_record["priority"] == "low"
+        assert public_record["classification"] is None
+        assert public_record["labels"] is None
+        assert urgent_record["subject"] == "orders.urgent.created"
+        assert urgent_record["priority"] == "urgent"
+        assert urgent_record["classification"] == "restricted"
+        assert urgent_record["labels"] == "urgent;customer-facing"
+        assert events == ["ack-1", "ack-2", "ack-3"]
+    finally:
+        _cleanup_file_e2e_directory(output_dir, tmp_path=tmp_path)
+
+
+def _sort_records_by_subject(records: list[dict[str, object]]) -> list[dict[str, object]]:
+    """Sort file records by subject so assertions do not depend on filename order."""
+
+    return sorted(records, key=lambda record: str(record["subject"]))

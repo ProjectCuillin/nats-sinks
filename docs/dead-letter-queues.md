@@ -8,6 +8,11 @@ messages for inspection, repair, or replay.
 In `nats-sinks`, DLQs are used for permanent failures that should not be
 retried without changing the message or destination configuration.
 
+In mission-oriented operations, a DLQ is part of the evidence trail. It should
+give operators enough context to triage a malformed, unauthorized, or
+schema-incompatible event without losing sight of the original processing
+failure.
+
 Examples:
 
 - invalid JSON payload,
@@ -59,3 +64,6 @@ can include:
 - optional base64 payload.
 
 Payload inclusion is configurable because source payloads may be sensitive.
+For restricted, classified, or otherwise sensitive streams, consider disabling
+payload inclusion in the DLQ and relying on message metadata, idempotency keys,
+and the original stream retention policy for investigation.

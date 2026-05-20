@@ -9,6 +9,12 @@ audit trail, a development destination without a database, or an integration
 point for another process that watches files. It follows the same core rule as
 every sink in this project:
 
+It can also be useful in controlled mission environments where a system needs a
+simple local handoff, disconnected transfer, or inspection point before a more
+specialized backend is introduced. The file sink is not a replacement for a
+records-management system, but it gives a clear durable boundary and preserves
+the same metadata contract as the database sink.
+
 > Commit first. ACK last. Design for redelivery.
 
 For `FileSink`, a batch is successful only after every required output file has
@@ -39,6 +45,10 @@ sequenceDiagram
 
 The sink does not call ACK, NAK, TERM, or any other JetStream acknowledgement
 method. Delivery behavior remains owned by the core runtime.
+
+For operational evidence handling, this matters: the final file path is the
+durable artifact, and the JetStream ACK is sent only after that artifact has
+been placed according to the configured durability settings.
 
 ## Installation
 
@@ -136,9 +146,12 @@ original NATS message body is not JSON.
 | `text_envelope` | Treats every body as UTF-8 text and wraps it in the standard text envelope without attempting JSON parsing. Non-UTF-8 bytes fail serialization. | Encrypted text or log streams where parsing as JSON would waste CPU or create ambiguity. |
 | `bytes_envelope` | Treats every body as opaque bytes and stores base64 text inside the standard bytes envelope. | Binary, compressed, encrypted, or otherwise opaque payloads. |
 
-For encrypted payloads, choose `text_envelope` when the ciphertext is guaranteed
-to be UTF-8 text. Choose `bytes_envelope` when the ciphertext may contain
-arbitrary bytes.
+For payloads that arrive from NATS already encrypted by another system, choose
+`text_envelope` when the ciphertext is guaranteed to be UTF-8 text and
+`bytes_envelope` when the ciphertext may contain arbitrary bytes. For
+framework-level payload encryption configured with the top-level `encryption`
+section, keep the default `json_or_envelope`; the core stores ciphertext inside
+a valid nats-sinks encrypted JSON payload envelope.
 
 ### Filename Strategies
 
@@ -161,6 +174,11 @@ The strategy should be stable across redelivery so duplicate processing is safe.
 Compression happens after payload normalization and before atomic placement.
 Both modes keep the same commit-then-ACK rule: the core ACKs only after the file
 sink returns success.
+
+Compression can reduce storage volume for log-like or report-like operational
+streams, but it does not change handling classification. A compressed file that
+contains restricted data should be protected exactly like the uncompressed JSON
+record.
 
 ## Idempotency
 
@@ -211,25 +229,29 @@ Each uncompressed file contains a single JSON document:
 {
   "schema": "nats_sinks.file.message.v1",
   "schema_version": 1,
-  "subject": "orders.created",
-  "stream": "ORDERS",
+  "subject": "mission.reports.created",
+  "stream": "MISSION",
   "stream_sequence": 42,
-  "consumer": "file-orders-sink",
+  "consumer": "file-mission-sink",
   "consumer_sequence": 12,
-  "message_id": "O-1001",
+  "message_id": "R-1001",
+  "priority": "immediate",
+  "classification": "NATO SECRET",
+  "labels": "mission-report;coalition;watch-floor",
+  "labels_list": ["mission-report", "coalition", "watch-floor"],
   "payload": {
-    "order_id": "O-1001",
-    "amount": 42.5
+    "report_id": "R-1001",
+    "status": "received"
   },
   "payload_info": {
     "original_format": "json",
     "wrapped": false,
-    "sha256": "redacted-example",
-    "size_bytes": 37
+    "sha256": "sha256-of-stored-encrypted-envelope",
+    "size_bytes": 512
   },
   "metadata": {
     "metadata_version": 1,
-    "subject": "orders.created",
+    "subject": "mission.reports.created",
     "headers": {},
     "jetstream": {},
     "timestamps": {}
@@ -239,7 +261,67 @@ Each uncompressed file contains a single JSON document:
 
 The actual `metadata` document contains the standard framework metadata
 snapshot: headers, known and future `Nats-*` reserved headers, JetStream stream
-and sequence values, and epoch nanosecond timing fields.
+and sequence values, epoch nanosecond timing fields, and the normalized
+`priority`, `classification`, and `labels` values. When priority or
+classification is missing, the file sink writes JSON `null` rather than the
+literal string `"null"`. When labels are missing, the scalar `labels` field is
+JSON `null` and `labels_list` is an empty JSON array.
+
+### Output Shape With Payload Encryption
+
+When top-level payload encryption is enabled, the top-level operational fields
+remain readable and the body moves into the encrypted payload envelope. This is
+the visible effect of enabling encryption for the same message:
+
+```json
+{
+  "schema": "nats_sinks.file.message.v1",
+  "schema_version": 1,
+  "subject": "mission.reports.created",
+  "stream": "MISSION",
+  "stream_sequence": 42,
+  "consumer": "file-mission-sink",
+  "consumer_sequence": 12,
+  "message_id": "R-1001",
+  "priority": "immediate",
+  "classification": "NATO SECRET",
+  "labels": "mission-report;coalition;watch-floor",
+  "labels_list": ["mission-report", "coalition", "watch-floor"],
+  "payload": {
+    "_nats_sinks_encryption": {
+      "schema": "nats_sinks.encrypted_payload.v1",
+      "version": 1,
+      "algorithm": "aes-256-gcm",
+      "key_id": "mission-prod-2026-05",
+      "nonce": "base64-nonce",
+      "nonce_size_bytes": 12,
+      "ciphertext": "base64-ciphertext-and-tag",
+      "ciphertext_encoding": "base64",
+      "tag_length": 16,
+      "plaintext_sha256": "hex-encoded-sha256",
+      "plaintext_size_bytes": 43
+    }
+  },
+  "payload_info": {
+    "original_format": "json",
+    "wrapped": false,
+    "sha256": "redacted-example",
+    "size_bytes": 43
+  },
+  "metadata": {
+    "message_metadata": {
+      "priority": "immediate",
+      "classification": "NATO SECRET",
+      "labels": ["mission-report", "coalition", "watch-floor"]
+    }
+  }
+}
+```
+
+The file name and idempotency behavior should still use stable metadata such as
+stream sequence or message ID. Do not use `payload_sha256` with core payload
+encryption unless you explicitly accept that fresh nonces can produce different
+ciphertext for the same redelivered message.
 
 ## Compression
 
@@ -323,6 +405,76 @@ later, use:
 
 That mode avoids repeated JSON parse attempts and stores every body in the
 standard text envelope.
+
+## Core Payload Encryption
+
+When top-level payload encryption is enabled, the core runner encrypts the
+message body before `FileSink.write_batch(...)` is called. The file sink stores
+the encrypted JSON payload envelope in the `payload` field and still writes
+normal subject, stream, header, and timing metadata in the rest of the file
+record.
+
+```mermaid
+sequenceDiagram
+    participant R as JetStreamSinkRunner
+    participant E as PayloadEncryptor
+    participant F as FileSink
+    participant FS as Filesystem
+
+    R->>E: Encrypt NatsEnvelope.data
+    E-->>R: Encrypted JSON payload envelope
+    R->>F: write_batch(encrypted envelope)
+    F->>FS: Write JSON file record
+    FS-->>F: Durable file placement
+    F-->>R: Return success
+```
+
+Example:
+
+```json
+{
+  "encryption": {
+    "enabled": true,
+    "algorithm": "aes-256-gcm",
+    "key_id": "file-prod-2026-05",
+    "key_b64_env": "NATS_SINKS_PAYLOAD_KEY_B64"
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/var/lib/nats-sinks/events",
+    "filename_strategy": "stream_sequence",
+    "duplicate_policy": "skip_existing",
+    "payload_mode": "json_or_envelope"
+  }
+}
+```
+
+The file output remains a JSON document. The encrypted body appears under
+`payload._nats_sinks_encryption`, and metadata remains clear:
+
+```json
+{
+  "schema": "nats_sinks.file.message.v1",
+  "subject": "mission.reports.created",
+  "priority": "immediate",
+  "classification": "NATO SECRET",
+  "labels": "mission-report;coalition;watch-floor",
+  "labels_list": ["mission-report", "coalition", "watch-floor"],
+  "payload": {
+    "_nats_sinks_encryption": {
+      "schema": "nats_sinks.encrypted_payload.v1",
+      "algorithm": "aes-256-gcm",
+      "key_id": "mission-prod-2026-05"
+    }
+  }
+}
+```
+
+Use `filename_strategy: "stream_sequence"` or `message_id` when encryption is
+enabled. The `payload_sha256` filename strategy hashes the encrypted payload
+bytes it receives; because the core uses a fresh nonce per encryption, the same
+redelivered message can produce different ciphertext. Stable JetStream metadata
+is safer for duplicate handling.
 
 ## Filesystem Safety
 

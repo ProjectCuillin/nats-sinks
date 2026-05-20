@@ -184,18 +184,20 @@ def run(
         typer.echo("Dry run complete; no NATS or sink connections opened.")
         return
 
-    runner = JetStreamSinkRunner(
-        nats_url=loaded.nats.url,
-        stream=loaded.nats.stream,
-        consumer=loaded.nats.consumer,
-        subject=loaded.nats.subject,
-        durable=loaded.nats.durable,
-        sink=sink,
-        delivery=loaded.delivery,
-        dead_letter=loaded.dead_letter,
-        nats_options=_nats_options(loaded),
-    )
     try:
+        runner = JetStreamSinkRunner(
+            nats_url=loaded.nats.url,
+            stream=loaded.nats.stream,
+            consumer=loaded.nats.consumer,
+            subject=loaded.nats.subject,
+            durable=loaded.nats.durable,
+            sink=sink,
+            delivery=loaded.delivery,
+            dead_letter=loaded.dead_letter,
+            message_metadata=loaded.message_metadata,
+            encryption=loaded.encryption,
+            nats_options=_nats_options(loaded),
+        )
         asyncio.run(runner.run())
     except KeyboardInterrupt:
         typer.echo("Shutdown requested.")

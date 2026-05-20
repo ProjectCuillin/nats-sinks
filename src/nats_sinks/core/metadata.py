@@ -124,6 +124,11 @@ def build_nats_metadata_snapshot(
         "subject": envelope.subject,
         "reply": envelope.reply,
         "message_id": envelope.message_id,
+        "message_metadata": {
+            "priority": envelope.priority,
+            "classification": envelope.classification,
+            "labels": list(envelope.labels),
+        },
         "headers": headers,
         "nats": {
             "reserved_headers": reserved_headers,

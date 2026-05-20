@@ -31,6 +31,9 @@ def test_build_merge_sql_uses_bind_variables() -> None:
     assert "when matched then update" in statement.sql
     assert statement.table_name == "NATS_SINK_EVENTS"
     assert statement.key_columns == ("STREAM_NAME", "STREAM_SEQUENCE")
+    assert ":priority" in statement.sql
+    assert ":classification" in statement.sql
+    assert ":labels" in statement.sql
     assert ":metadata_json" in statement.sql
     assert ":stored_at_epoch_ns" in statement.sql
 
@@ -62,6 +65,9 @@ def test_recommended_ddl_contains_metadata_and_epoch_columns() -> None:
     ddl = create_events_table_ddl("nats_sink_events")
 
     assert "metadata_json     json" in ddl
+    assert "priority          clob" in ddl
+    assert "classification    clob" in ddl
+    assert "labels            clob" in ddl
     assert "message_created_at_epoch_ns number(19)" in ddl
     assert "received_at_epoch_ns number(19) not null" in ddl
     assert "stored_at_epoch_ns number(19) not null" in ddl

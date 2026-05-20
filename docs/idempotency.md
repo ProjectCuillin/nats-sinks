@@ -5,6 +5,12 @@ create incorrect duplicate effects. For example, writing the same event twice
 should not create two business records when the event represents one real
 business action.
 
+In operational or defence logistics systems, the same principle might mean that
+one movement report, status update, sensor-derived alert, or audit event should
+not create duplicate downstream facts simply because JetStream redelivered it.
+Redelivery is a reliability mechanism, not a signal that the business event
+happened twice.
+
 JetStream redelivery is normal in an at-least-once system. Redelivery may
 happen after a process crash, NATS reconnect, ACK failure, destination timeout,
 or successful destination commit followed by process failure before ACK.
@@ -76,6 +82,10 @@ require the target service to honor it.
 The important rule is destination-neutral: a sink must either make duplicate
 redelivery safe or clearly document that a mode is not suitable for normal
 production use.
+
+For mission-support systems, prefer modes where duplicates are detectable and
+boring. A visible duplicate that is safely ignored is usually far easier to
+explain during recovery or audit than a missing event that was ACKed too early.
 
 ## Production Recommendation
 

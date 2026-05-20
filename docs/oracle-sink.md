@@ -2,6 +2,12 @@
 
 `OracleSink` is the first production sink implementation. It writes batches of `NatsEnvelope` objects to Oracle Database and returns success only after the Oracle transaction has committed.
 
+Oracle is a common system of record in enterprise, public-sector, and defence
+environments. This sink is therefore written around explicit transactions,
+least-privilege runtime accounts, idempotent writes, and metadata columns that
+help operators retain operational context such as priority, classification,
+labels, timestamps, subjects, and JetStream sequence numbers.
+
 ## Installation
 
 ```bash
@@ -109,6 +115,11 @@ Validation rules:
 nats-sinks provides at-least-once delivery. They let the sink prefer safe
 duplication over silent loss.
 
+For mission or audit workloads, `merge` is usually the clearest default because
+it lets redelivery land on the same operational event row instead of producing
+an extra record. Use `append` only when duplicate rows are acceptable under the
+destination's audit and reconciliation rules.
+
 ### Idempotency Configuration
 
 ```json
@@ -142,12 +153,21 @@ The payload may not contain a meaningful JSON field until after decryption.
 The `columns` object lets operators map nats-sinks fields to an existing Oracle
 table shape. Every value must be a valid Oracle column identifier.
 
+In environments with formal data models or classification handling rules, use
+column mapping to align nats-sinks metadata with approved table standards
+rather than dropping operational context. The recommended default keeps the
+payload, headers, metadata, timing, priority, classification, and labels
+separate so downstream controls can reason about each class of data.
+
 | Field | Default column | Stored value |
 | --- | --- | --- |
 | `stream_name` | `STREAM_NAME` | JetStream stream name. |
 | `stream_sequence` | `STREAM_SEQUENCE` | JetStream stream sequence. |
 | `subject` | `SUBJECT` | Full NATS subject. The recommended schema uses `CLOB` so long subjects do not hit a 1024-character application limit. |
 | `message_id` | `MESSAGE_ID` | NATS message ID when present. Missing message IDs are stored as `null`. |
+| `priority` | `PRIORITY` | Core-normalized message priority. Header/default resolution is configured by the top-level `message_metadata.priority` section. Missing values are stored as SQL `NULL`. |
+| `classification` | `CLASSIFICATION` | Core-normalized message classification. Header/default resolution is configured by the top-level `message_metadata.classification` section. Missing values are stored as SQL `NULL`. |
+| `labels` | `LABELS` | Core-normalized labels rendered as semicolon-separated text, for example `billing;urgent`. Header/default resolution is configured by the top-level `message_metadata.labels` section. Missing labels are stored as SQL `NULL`. |
 | `message_created_at_epoch_ns` | `MESSAGE_CREATED_AT_EPOCH_NS` | Producer-created time from `Nats-Time-Stamp` when present, otherwise JetStream timestamp when available. |
 | `jetstream_timestamp_epoch_ns` | `JETSTREAM_TIMESTAMP_EPOCH_NS` | JetStream server timestamp from message metadata. |
 | `received_at_epoch_ns` | `RECEIVED_AT_EPOCH_NS` | Time when nats-sinks normalized the raw NATS message. |
@@ -363,6 +383,9 @@ create table nats_sink_events (
     stream_sequence   number not null,
     subject           clob not null,
     message_id        varchar2(512),
+    priority          clob,
+    classification    clob,
+    labels            clob,
     received_at       timestamp default systimestamp not null,
     message_created_at_epoch_ns number(19),
     jetstream_timestamp_epoch_ns number(19),
@@ -383,6 +406,14 @@ application limit. If your organization enforces shorter subjects, a
 `varchar2(256)`, `varchar2(1024)`, or `varchar2(4000)` column is also valid, but
 oversized subjects will fail the Oracle write and therefore will not be ACKed.
 
+The recommended `priority`, `classification`, and `labels` columns are CLOBs so
+the default table does not reject unusually long metadata values. Many
+production systems prefer bounded `varchar2` columns, indexed virtual columns,
+or lookup tables for these values. That is also valid as long as the configured
+`columns.priority`, `columns.classification`, and `columns.labels` mappings
+point to the chosen columns and the deployment understands what happens when a
+publisher sends a value outside the database constraint.
+
 The epoch columns use Unix epoch nanoseconds:
 
 - `message_created_at_epoch_ns` is derived from `Nats-Time-Stamp` when that
@@ -397,7 +428,8 @@ The epoch columns use Unix epoch nanoseconds:
 
 `metadata_json` stores the generic nats-sinks metadata snapshot. It includes
 all message headers, known `Nats-` reserved headers that are present, JetStream
-stream/consumer/sequence values, optional reply subject, and the timing fields.
+stream/consumer/sequence values, optional reply subject, the normalized
+`priority`, `classification`, and `labels` fields, and the timing fields.
 Missing optional headers such as `Nats-Msg-Id` or `Nats-Expected-Stream` remain
 absent/null and do not cause processing failures.
 
@@ -415,17 +447,22 @@ Example metadata document:
 ```json
 {
   "metadata_version": 1,
-  "subject": "orders.created",
+  "subject": "mission.reports.created",
   "reply": null,
-  "message_id": "m-1",
+  "message_id": "R-1001",
+  "message_metadata": {
+    "priority": "immediate",
+    "classification": "NATO SECRET",
+    "labels": ["mission-report", "coalition", "watch-floor"]
+  },
   "headers": {
-    "Nats-Msg-Id": "m-1",
-    "Nats-Expected-Stream": "ORDERS"
+    "Nats-Msg-Id": "R-1001",
+    "Nats-Expected-Stream": "MISSION"
   },
   "nats": {
     "reserved_headers": {
-      "Nats-Msg-Id": "m-1",
-      "Nats-Expected-Stream": "ORDERS"
+      "Nats-Msg-Id": "R-1001",
+      "Nats-Expected-Stream": "MISSION"
     },
     "reserved_headers_present": [
       "Nats-Expected-Stream",
@@ -433,8 +470,8 @@ Example metadata document:
     ]
   },
   "jetstream": {
-    "stream": "ORDERS",
-    "consumer": "oracle-orders-sink",
+    "stream": "MISSION",
+    "consumer": "oracle-mission-sink",
     "domain": null,
     "stream_sequence": 42,
     "consumer_sequence": 7,
@@ -455,6 +492,55 @@ Example metadata document:
 }
 ```
 
+### Example Oracle Row With Encryption And Metadata
+
+The table below shows how the same message appears in the recommended Oracle
+table when payload encryption and NATO-style metadata values are enabled. The
+classification strings are examples; use the exact labels approved by your
+organization.
+
+| Column | Stored value |
+| --- | --- |
+| `STREAM_NAME` | `MISSION` |
+| `STREAM_SEQUENCE` | `42` |
+| `SUBJECT` | `mission.reports.created` |
+| `MESSAGE_ID` | `R-1001` |
+| `PRIORITY` | `immediate` |
+| `CLASSIFICATION` | `NATO SECRET` |
+| `LABELS` | `mission-report;coalition;watch-floor` |
+| `MESSAGE_CREATED_AT_EPOCH_NS` | `1778926560000000000` |
+| `JETSTREAM_TIMESTAMP_EPOCH_NS` | `1778926560000000000` |
+| `RECEIVED_AT_EPOCH_NS` | `1778926620000000000` |
+| `STORED_AT_EPOCH_NS` | `1778926680000000000` |
+| `PAYLOAD_JSON` | JSON object containing `_nats_sinks_encryption` with `algorithm`, `key_id`, `nonce`, `ciphertext`, `tag_length`, `plaintext_sha256`, and `plaintext_size_bytes`. |
+| `HEADERS_JSON` | Headers such as `Nats-Msg-Id`, `Nats-Sinks-Priority`, `Nats-Sinks-Classification`, and `Nats-Sinks-Labels` when present. |
+| `METADATA_JSON` | Full metadata document including `message_metadata.priority`, `message_metadata.classification`, and `message_metadata.labels`. |
+
+The encrypted payload column would contain a JSON value shaped like this:
+
+```json
+{
+  "_nats_sinks_encryption": {
+    "schema": "nats_sinks.encrypted_payload.v1",
+    "version": 1,
+    "algorithm": "aes-256-gcm",
+    "key_id": "mission-prod-2026-05",
+    "nonce": "base64-nonce",
+    "nonce_size_bytes": 12,
+    "ciphertext": "base64-ciphertext-and-tag",
+    "ciphertext_encoding": "base64",
+    "tag_length": 16,
+    "plaintext_sha256": "hex-encoded-sha256",
+    "plaintext_size_bytes": 43
+  }
+}
+```
+
+The operational metadata columns remain clear so routing, idempotency, audit,
+and replay can work without decrypting the body. If those metadata values are
+sensitive in your environment, protect the table, logs, backups, and query
+access accordingly.
+
 ## Payload Body Handling
 
 `OracleSink` stores the NATS message body in the configured payload column. The
@@ -468,7 +554,8 @@ Default behavior:
 - non-JSON UTF-8 text bodies are wrapped in a JSON envelope,
 - non-text byte bodies are wrapped as base64 in a JSON envelope.
 
-This matters for encrypted text. A producer may publish ciphertext such as:
+This matters for payloads that arrive from NATS already encrypted by another
+system. A producer may publish ciphertext such as:
 
 ```text
 encrypted-text:v1:zqM7lEGsZ6Tc...
@@ -533,9 +620,9 @@ Use `payload_mode` to choose the storage behavior:
 | `text_envelope` | Wrap every payload as UTF-8 text without attempting JSON parsing. | High-volume encrypted text streams. |
 | `bytes_envelope` | Wrap every payload as base64 bytes. | Opaque binary or compressed payloads. |
 
-For high-throughput encrypted text streams, prefer `text_envelope`. It avoids a
-failed JSON parse attempt for every ciphertext message and still stores the data
-in a consistent JSON shape.
+For high-throughput streams where producers already send encrypted text, prefer
+`text_envelope`. It avoids a failed JSON parse attempt for every ciphertext
+message and still stores the data in a consistent JSON shape.
 
 ```json
 {
@@ -554,6 +641,61 @@ in a consistent JSON shape.
 Payload contents may contain sensitive business data or ciphertext. The sink
 stores the payload because that is its job, but it does not log the payload by
 default. Keep `logging.payload_logging` disabled in production.
+
+### Core Payload Encryption
+
+When the top-level `encryption` section is enabled, the core runner encrypts
+`NatsEnvelope.data` before `OracleSink.write_batch(...)` is called. OracleSink
+does not need destination-specific crypto code; it stores the encrypted JSON
+payload envelope in the configured payload column and keeps metadata columns
+clear for routing, idempotency, and operations.
+
+```json
+{
+  "encryption": {
+    "enabled": true,
+    "algorithm": "aes-256-gcm",
+    "key_id": "oracle-prod-2026-05",
+    "key_b64_env": "NATS_SINKS_PAYLOAD_KEY_B64"
+  },
+  "sink": {
+    "type": "oracle",
+    "dsn": "example_low",
+    "user": "NATS_SINK_RUNTIME",
+    "password_env": "ORACLE_PASSWORD",
+    "table": "NATS_SINK_EVENTS",
+    "mode": "merge",
+    "payload_mode": "json_or_envelope",
+    "idempotency": {
+      "strategy": "stream_sequence"
+    }
+  }
+}
+```
+
+Stored payload example:
+
+```json
+{
+  "_nats_sinks_encryption": {
+    "schema": "nats_sinks.encrypted_payload.v1",
+    "version": 1,
+    "algorithm": "aes-256-gcm",
+    "key_id": "oracle-prod-2026-05",
+    "nonce": "base64-nonce",
+    "ciphertext": "base64-ciphertext-and-tag",
+    "plaintext_size_bytes": 128
+  }
+}
+```
+
+Use `stream_sequence` or `message_id` idempotency when framework encryption is
+enabled. The `payload_field` strategy cannot read the original business JSON
+fields after the core has encrypted the body, and ciphertext changes across
+redelivery because every encryption uses a fresh nonce.
+
+See [Payload Encryption](payload-encryption.md) for the full configuration,
+envelope shape, key handling, and decryption helper.
 
 ## Transaction Sequence
 
@@ -631,9 +773,11 @@ Other supported strategies:
 
 - `message_id`: requires a stable NATS message ID header.
 - `payload_field`: extracts a stable key from the normalized JSON payload value.
-  For encrypted text or bytes wrapped in the nats-sinks payload envelope,
-  prefer `stream_sequence` or `message_id` unless the envelope itself contains
-  the exact field you want to use as the key.
+  For producer-encrypted text or bytes wrapped in the nats-sinks payload
+  envelope, prefer `stream_sequence` or `message_id` unless the envelope itself
+  contains the exact field you want to use as the key. For framework-level
+  payload encryption, use `stream_sequence` or `message_id` because the
+  original payload fields are intentionally hidden from the sink.
 
 ## Subject-To-Table Routing
 
@@ -750,6 +894,9 @@ create table nats_sink_events (
     stream_sequence   number not null,
     subject           clob not null,
     message_id        varchar2(512),
+    priority          clob,
+    classification    clob,
+    labels            clob,
     received_at       timestamp default systimestamp not null,
     message_created_at_epoch_ns number(19),
     jetstream_timestamp_epoch_ns number(19),

@@ -8,6 +8,11 @@ overwrite it after new validation runs. Do not paste raw logs, server
 addresses, usernames, passwords, tokens, certificate material, wallet files,
 full connection strings, or sensitive payloads into test reports.
 
+This rule matters in public repositories and it matters even more for
+mission-oriented or defence-adjacent deployments. Test evidence should prove
+behavior without disclosing network topology, credentials, classified labels,
+operational subjects, or real payload content.
+
 ## Unit Tests
 
 Unit tests must not make network calls and must not require NATS, Oracle, or
@@ -33,7 +38,10 @@ Unit tests cover:
 - Oracle SQL generation,
 - Oracle identifier validation,
 - Oracle row mapping,
+- AES-256-GCM and AES-256-CCM payload encryption,
+- payload decryption verification,
 - commit-then-ack ordering,
+- no ACK when payload encryption fails before sink delivery,
 - DLQ-before-ACK ordering,
 - no ACK on sink failure,
 - no payload logging by default.
@@ -55,9 +63,11 @@ JSON, text, empty, and non-UTF-8 payload handling, and confirms that every fake
 message is ACKed only after the sink returns success.
 
 The same module also covers gzip-compressed file output and verifies that one
-message still maps to one durable compressed file. By default, any explicit
-file e2e output directory is deleted after the test. To retain generated files
-for inspection, set:
+message still maps to one durable compressed file. It also covers core payload
+encryption and verifies that encrypted payloads written by the file sink can be
+decrypted back to the original JSON, text, empty, and binary message bodies.
+By default, any explicit file e2e output directory is deleted after the test.
+To retain generated files for inspection, set:
 
 ```bash
 export NATS_SINKS_FILE_E2E_DIRECTORY='.local/file-sink-e2e'
@@ -69,6 +79,44 @@ The test creates a unique child directory under `NATS_SINKS_FILE_E2E_DIRECTORY`
 for each run. Keep that directory under `.local/` or another ignored location
 when retaining files.
 
+## Payload Encryption Test Matrix
+
+Payload encryption is tested as a generic core feature and through each
+production sink. Use the tracked helper script:
+
+```bash
+scripts/check-encryption.sh
+```
+
+The script generates temporary AES-256 key material, exports it to the test
+process as `NATS_SINKS_TEST_ENCRYPTION_KEY_B64`, and runs encryption-focused
+unit and local end-to-end tests. By default, the generated key file is deleted
+when the script exits.
+
+To preserve the generated key file for local debugging:
+
+```bash
+scripts/check-encryption.sh --preserve-key-material
+```
+
+Do not commit preserved key files. Keep them under the temporary path reported
+by the script or move them only to ignored local directories.
+
+The encryption matrix covers:
+
+- AES-256-GCM encrypt/decrypt,
+- AES-256-CCM encrypt/decrypt,
+- empty payload encryption,
+- wrong key identifier rejection,
+- redacted direct key configuration,
+- subject-specific encryption rules, including matching subjects, unmatched
+  subjects, disabled-rule exemptions, and first-match-wins behavior,
+- runner encryption before sink writes,
+- no ACK when encryption fails,
+- file sink storage with and without gzip,
+- file sink end-to-end decrypt verification,
+- Oracle sink encrypted payload storage through mocked Oracle objects.
+
 ## Sink Release Test Matrix
 
 Every production release should validate each production sink at the strongest
@@ -76,12 +124,17 @@ available level:
 
 | Sink | Unit tests | Smoke tests | End-to-end tests |
 | --- | --- | --- | --- |
-| Oracle | SQL, mapping, routing, payload, idempotency, and contract tests. | `nats-sink validate examples/oracle-jetstream/config.json`; live `test-sink` when Oracle env is available. | Live NATS-to-Oracle e2e when `.local` integration env is available. |
-| File | Path mapping, payload, duplicate policy, compression, healthcheck, filesystem errors, and fuzz-style path safety tests. | `nats-sink validate examples/file-basic/config.json`; `nats-sink test-sink examples/file-basic/config.json`. | Local deterministic runner-to-file e2e in `tests/integration/test_file_sink_e2e.py`, with uncompressed and gzip output. |
+| Oracle | SQL, mapping, routing, payload, idempotency, encrypted payload storage, and contract tests. | `nats-sink validate examples/oracle-jetstream/config.json`; live `test-sink` when Oracle env is available. | Live NATS-to-Oracle e2e when `.local` integration env is available. |
+| File | Path mapping, payload, duplicate policy, compression, encryption, healthcheck, filesystem errors, and fuzz-style path safety tests. | `nats-sink validate examples/file-basic/config.json`; `nats-sink test-sink examples/file-basic/config.json`. | Local deterministic runner-to-file e2e in `tests/integration/test_file_sink_e2e.py`, with uncompressed, gzip, and encrypted output. |
 
 If a live external-service test is not run, the latest test report must say so
 explicitly. Do not imply that Oracle, NATS, or any other external service was
 validated when only deterministic local tests were executed.
+
+For mission systems, keep that distinction visible. A deterministic local test,
+a mocked integration test, a lab e2e test, and a production-like acceptance run
+are different levels of evidence and should not be described as if they prove
+the same operational readiness.
 
 The deterministic sink release matrix can be run with:
 
@@ -397,6 +450,11 @@ NATS_SINKS_E2E_EXPECTED_STREAM_HEADER_INTERVAL=29
 NATS_SINKS_E2E_DROP_TABLE_BEFORE=false
 NATS_SINKS_E2E_DROP_TABLE_AFTER=false
 NATS_SINKS_E2E_PRINT_TIMINGS=true
+# Optional encrypted Oracle e2e mode:
+NATS_SINKS_E2E_ENCRYPTION_ENABLED=false
+NATS_SINKS_E2E_ENCRYPTION_ALGORITHM=aes-256-gcm
+NATS_SINKS_E2E_ENCRYPTION_KEY_ID=nats-sinks-e2e-key
+NATS_SINKS_E2E_ENCRYPTION_KEY_B64_ENV=NATS_SINKS_E2E_ENCRYPTION_KEY_B64
 EOF
 chmod 600 .local/nats-oracle-e2e/integration.env
 ```
@@ -417,6 +475,12 @@ in the nats-sinks JSON payload envelope, verifies that the expected number of
 text payloads were stored, confirms backend write timing metrics were captured,
 confirms there are no pending ACKs on the test consumer, and deletes the test
 consumer.
+
+When `NATS_SINKS_E2E_ENCRYPTION_ENABLED=true`, the same e2e test encrypts
+payloads before Oracle writes, verifies that every stored payload contains the
+standard `_nats_sinks_encryption` envelope, decrypts the stored values with the
+configured key, and compares them with the original JSON, text, empty, and
+binary test payloads.
 
 The e2e test uses a specific retained Oracle table. The default is
 `NATS_SINKS_E2E_EVENTS_V2`; override it with `NATS_SINKS_E2E_ORACLE_TABLE`. The
@@ -456,13 +520,21 @@ scripts/run-oracle-e2e.sh --drop-table-before
 scripts/run-oracle-e2e.sh --drop-table-after
 scripts/run-oracle-e2e.sh --table NATS_SINKS_E2E_EVENTS_V2 --message-count 256
 scripts/run-oracle-e2e.sh --table NATS_SINKS_E2E_EVENTS_V2 --message-count 250 --batch-size 64
+scripts/run-oracle-e2e.sh --with-encryption --message-count 64 --batch-size 16
+scripts/run-oracle-e2e.sh --with-encryption --encryption-algorithm aes-256-ccm --preserve-key-material
 ```
+
+`--with-encryption` generates temporary AES-256 key material when
+`NATS_SINKS_E2E_ENCRYPTION_KEY_B64` is not already set. The generated key file
+is deleted after the run by default. Use `--preserve-key-material` only for
+local debugging, and keep preserved files out of git.
 
 ```mermaid
 sequenceDiagram
     participant T as Pytest
     participant N as NATS JetStream
     participant R as JetStreamSinkRunner
+    participant E as PayloadEncryptor
     participant O as OracleSink
     participant DB as Oracle ADB
 
@@ -470,6 +542,10 @@ sequenceDiagram
     T->>N: publish N mixed JSON/text/empty/header-variation test messages
     loop bounded batches
         R->>N: pull batch
+        opt encrypted e2e mode
+            R->>E: encrypt payload bytes
+            E-->>R: encrypted payload envelopes
+        end
         R->>O: write_batch(envelopes)
         O->>DB: merge rows and commit
         O-->>R: durable success

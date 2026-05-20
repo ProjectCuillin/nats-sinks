@@ -8,6 +8,7 @@ import ssl
 import uuid
 from contextlib import suppress
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Any
 
 import nats
@@ -15,7 +16,8 @@ import pytest
 from nats.js.api import AckPolicy, ConsumerConfig, DeliverPolicy, StreamConfig
 from nats.js.errors import NotFoundError
 
-from nats_sinks.core.config import DeliveryConfig
+from nats_sinks.core.config import DeliveryConfig, EncryptionConfig
+from nats_sinks.core.encryption import ENCRYPTED_PAYLOAD_KEY, PayloadEncryptor
 from nats_sinks.core.metrics import InMemoryMetrics
 from nats_sinks.core.runner import JetStreamSinkRunner
 from nats_sinks.oracle import OracleSink
@@ -29,11 +31,15 @@ DEFAULT_EMPTY_PAYLOAD_INTERVAL = 31
 DEFAULT_MISSING_MESSAGE_ID_INTERVAL = 23
 DEFAULT_EXPECTED_STREAM_HEADER_INTERVAL = 29
 DEFAULT_E2E_TEST_TABLE = "NATS_SINKS_E2E_EVENTS_V2"
+MESSAGE_METADATA_PATTERN_SIZE = 4
 REQUIRED_E2E_COLUMNS = {
     "STREAM_NAME",
     "STREAM_SEQUENCE",
     "SUBJECT",
     "MESSAGE_ID",
+    "PRIORITY",
+    "CLASSIFICATION",
+    "LABELS",
     "MESSAGE_CREATED_AT_EPOCH_NS",
     "JETSTREAM_TIMESTAMP_EPOCH_NS",
     "RECEIVED_AT_EPOCH_NS",
@@ -63,10 +69,15 @@ class E2ECase:
     expected_empty_payloads: int
     expected_message_ids: int
     expected_stream_headers: int
+    expected_priorities: int
+    expected_classifications: int
+    expected_labels: int
+    expected_both_message_metadata: int
     expected_batch_count: int
     expected_final_batch_size: int
     drop_table_before: bool
     drop_table_after: bool
+    encryption: EncryptionConfig | None
 
 
 def _e2e_enabled() -> bool:
@@ -128,6 +139,19 @@ def _e2e_bool(name: str, *, default: bool = False) -> bool:
     if value is None:
         return default
     return value.lower() in {"1", "true", "yes", "on"}
+
+
+def _e2e_encryption_config() -> EncryptionConfig | None:
+    if not _e2e_bool("ENCRYPTION_ENABLED"):
+        return None
+    key_env = _e2e_setting("ENCRYPTION_KEY_B64_ENV", "NATS_SINKS_E2E_ENCRYPTION_KEY_B64")
+    _required(os.getenv(key_env or ""), key_env or "NATS_SINKS_E2E_ENCRYPTION_KEY_B64")
+    return EncryptionConfig(
+        enabled=True,
+        algorithm=_e2e_setting("ENCRYPTION_ALGORITHM", "aes-256-gcm") or "aes-256-gcm",
+        key_id=_e2e_setting("ENCRYPTION_KEY_ID", "nats-sinks-e2e-key") or "nats-sinks-e2e-key",
+        key_b64_env=key_env,
+    )
 
 
 def _nats_options() -> dict[str, Any]:
@@ -303,6 +327,77 @@ def _expected_stream_header_count_by_run_id(
     return int(row[0])
 
 
+def _encrypted_payload_count_by_run_id(pool: Any, *, table: str, run_id: str) -> int:
+    table_name = validate_identifier(table)
+    with pool.acquire() as connection:
+        with connection.cursor() as cursor:
+            sql = f"select count(*) {_run_filter_sql(table_name)} and json_value(payload_json, '$._nats_sinks_encryption.schema') = :schema"  # noqa: E501
+            cursor.execute(
+                sql,
+                {
+                    "run_id": run_id,
+                    "schema": "nats_sinks.encrypted_payload.v1",
+                },
+            )
+            row = cursor.fetchone()
+    if row is None:
+        return 0
+    return int(row[0])
+
+
+def _message_metadata_counts_by_run_id(
+    pool: Any, *, table: str, run_id: str
+) -> tuple[int, int, int, int]:
+    table_name = validate_identifier(table)
+    with pool.acquire() as connection:
+        with connection.cursor() as cursor:
+            sql = (
+                "select "
+                "sum(case when priority is not null then 1 else 0 end), "
+                "sum(case when classification is not null then 1 else 0 end), "
+                "sum(case when labels is not null then 1 else 0 end), "
+                "sum(case when priority is not null and classification is not null then 1 else 0 end) "  # noqa: E501
+                f"{_run_filter_sql(table_name)}"
+            )
+            cursor.execute(sql, {"run_id": run_id})
+            row = cursor.fetchone()
+    if row is None:
+        return (0, 0, 0, 0)
+    return (int(row[0] or 0), int(row[1] or 0), int(row[2] or 0), int(row[3] or 0))
+
+
+def _payload_rows_by_run_id(pool: Any, *, table: str, run_id: str) -> list[tuple[int, str]]:
+    def json_safe(value: object) -> object:
+        if isinstance(value, Decimal):
+            if value == value.to_integral_value():
+                return int(value)
+            return float(value)
+        if isinstance(value, dict):
+            return {str(key): json_safe(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [json_safe(item) for item in value]
+        return value
+
+    def as_text(value: object) -> str:
+        if isinstance(value, (dict, list)):
+            return json.dumps(json_safe(value), sort_keys=True, separators=(",", ":"))
+        reader = getattr(value, "read", None)
+        if callable(reader):
+            return str(reader())
+        return str(value)
+
+    table_name = validate_identifier(table)
+    with pool.acquire() as connection:
+        with connection.cursor() as cursor:
+            sql = (
+                "select json_value(metadata_json, "
+                """'$."headers"."Nats-Sinks-E2E-Index"' returning number), payload_json """
+                f"{_run_filter_sql(table_name)} order by 1"
+            )
+            cursor.execute(sql, {"run_id": run_id})
+            return [(int(row[0]), as_text(row[1])) for row in cursor.fetchall()]
+
+
 def _drop_table(pool: Any, *, table: str) -> None:
     table_name = validate_identifier(table)
     with suppress(Exception):
@@ -392,6 +487,17 @@ async def _publish_e2e_messages(
             empty_interval=empty_interval,
         )
         headers: dict[str, str] = {"Nats-Sinks-E2E-Run-Id": run_id}
+        headers["Nats-Sinks-E2E-Index"] = str(index)
+        remainder = index % MESSAGE_METADATA_PATTERN_SIZE
+        if remainder == 0:
+            headers["Nats-Sinks-Priority"] = "urgent"
+            headers["Nats-Sinks-Classification"] = "restricted"
+            headers["Nats-Sinks-Labels"] = "billing;urgent"
+        elif remainder == 1:
+            headers["Nats-Sinks-Priority"] = "normal"
+            headers["Nats-Sinks-Labels"] = "standard"
+        elif remainder == 2:
+            headers["Nats-Sinks-Classification"] = "internal"
         if index % missing_message_id_interval != 0:
             headers["Nats-Msg-Id"] = message_id
         if index % expected_stream_header_interval == 0:
@@ -431,6 +537,18 @@ def _build_e2e_case() -> E2ECase:
     expected_empty_payloads = len(empty_payload_indexes)
     expected_message_ids = message_count - len(range(0, message_count, missing_message_id_interval))
     expected_stream_headers = len(range(0, message_count, expected_stream_header_interval))
+    expected_priorities = len(
+        [index for index in range(message_count) if index % MESSAGE_METADATA_PATTERN_SIZE in {0, 1}]
+    )
+    expected_classifications = len(
+        [index for index in range(message_count) if index % MESSAGE_METADATA_PATTERN_SIZE in {0, 2}]
+    )
+    expected_labels = len(
+        [index for index in range(message_count) if index % MESSAGE_METADATA_PATTERN_SIZE in {0, 1}]
+    )
+    expected_both_message_metadata = len(
+        [index for index in range(message_count) if index % MESSAGE_METADATA_PATTERN_SIZE == 0]
+    )
     expected_batch_count = (message_count + batch_size - 1) // batch_size
     expected_final_batch_size = message_count % batch_size or batch_size
     return E2ECase(
@@ -451,10 +569,15 @@ def _build_e2e_case() -> E2ECase:
         expected_empty_payloads=expected_empty_payloads,
         expected_message_ids=expected_message_ids,
         expected_stream_headers=expected_stream_headers,
+        expected_priorities=expected_priorities,
+        expected_classifications=expected_classifications,
+        expected_labels=expected_labels,
+        expected_both_message_metadata=expected_both_message_metadata,
         expected_batch_count=expected_batch_count,
         expected_final_batch_size=expected_final_batch_size,
         drop_table_before=_e2e_bool("DROP_TABLE_BEFORE"),
         drop_table_after=_e2e_bool("DROP_TABLE_AFTER"),
+        encryption=_e2e_encryption_config(),
     )
 
 
@@ -489,24 +612,54 @@ async def _assert_e2e_rows(
     )
     assert row_count == case.message_count
     assert distinct_message_ids == case.expected_message_ids
-    assert (
-        await asyncio.to_thread(
-            _text_payload_count_by_run_id,
+    if case.encryption is None:
+        assert (
+            await asyncio.to_thread(
+                _text_payload_count_by_run_id,
+                sink._pool,
+                table=case.table,
+                run_id=case.run_id,
+            )
+            == case.expected_text_payloads
+        )
+        assert (
+            await asyncio.to_thread(
+                _empty_payload_count_by_run_id,
+                sink._pool,
+                table=case.table,
+                run_id=case.run_id,
+            )
+            == case.expected_empty_payloads
+        )
+    else:
+        assert (
+            await asyncio.to_thread(
+                _encrypted_payload_count_by_run_id,
+                sink._pool,
+                table=case.table,
+                run_id=case.run_id,
+            )
+            == case.message_count
+        )
+        rows = await asyncio.to_thread(
+            _payload_rows_by_run_id,
             sink._pool,
             table=case.table,
             run_id=case.run_id,
         )
-        == case.expected_text_payloads
-    )
-    assert (
-        await asyncio.to_thread(
-            _empty_payload_count_by_run_id,
-            sink._pool,
-            table=case.table,
-            run_id=case.run_id,
-        )
-        == case.expected_empty_payloads
-    )
+        encryptor = PayloadEncryptor(case.encryption)
+        assert len(rows) == case.message_count
+        for index, payload_json in rows:
+            payload = json.loads(payload_json)
+            assert ENCRYPTED_PAYLOAD_KEY in payload
+            message_id = f"{case.run_id}-{index:06d}"
+            assert encryptor.decrypt_payload(payload) == _e2e_payload(
+                run_id=case.run_id,
+                message_id=message_id,
+                index=index,
+                text_interval=case.text_payload_interval,
+                empty_interval=case.empty_payload_interval,
+            )
     assert (
         await asyncio.to_thread(
             _expected_stream_header_count_by_run_id,
@@ -517,6 +670,16 @@ async def _assert_e2e_rows(
         )
         == case.expected_stream_headers
     )
+    priority_count, classification_count, labels_count, both_count = await asyncio.to_thread(
+        _message_metadata_counts_by_run_id,
+        sink._pool,
+        table=case.table,
+        run_id=case.run_id,
+    )
+    assert priority_count == case.expected_priorities
+    assert classification_count == case.expected_classifications
+    assert labels_count == case.expected_labels
+    assert both_count == case.expected_both_message_metadata
     observations = metrics.observations.get("batch_write_seconds", [])
     assert observations
     assert len(observations) == case.expected_batch_count
@@ -580,6 +743,7 @@ async def test_nats_publish_runner_receive_and_oracle_store() -> None:
                 subject=case.subject,
                 sink=sink,
                 delivery=DeliveryConfig(batch_size=case.batch_size, batch_timeout_ms=5000),
+                encryption=case.encryption,
                 metrics=metrics,
                 nats_options=_nats_options(),
             )

@@ -2,6 +2,13 @@
 
 Runtime configuration is JSON-only. `nats-sinks` reads UTF-8 JSON files, requires a JSON object at the root, applies a small explicit allow-list of environment overrides, and validates the final structure with Pydantic.
 
+The configuration model is deliberately explicit. In operational, defence, or
+public-sector deployments, configuration is often reviewed by more than one
+team. JSON files, strict validation, redacted effective output, and named
+environment-variable secrets make it easier to review what a sink service will
+connect to, what it will consume, which metadata defaults it will apply, and
+where it will write.
+
 ## Minimal Configuration
 
 The minimal example uses the local file sink because it does not require a
@@ -64,6 +71,44 @@ Oracle-specific fields inside the `sink` object.
     "enabled": false,
     "namespace": "nats_sinks"
   },
+  "message_metadata": {
+    "priority": {
+      "header": "Nats-Sinks-Priority",
+      "default": "normal"
+    },
+    "classification": {
+      "header": "Nats-Sinks-Classification",
+      "default": null
+    },
+    "labels": {
+      "header": "Nats-Sinks-Labels",
+      "default": []
+    },
+    "rules": [
+      {
+        "subject": "orders.urgent.>",
+        "priority": "urgent",
+        "classification": "restricted",
+        "labels": "urgent;customer-facing"
+      }
+    ]
+  },
+  "encryption": {
+    "enabled": false,
+    "algorithm": "aes-256-gcm",
+    "key_id": "orders-runtime-key",
+    "key_b64_env": "NATS_SINKS_PAYLOAD_KEY_B64",
+    "nonce_size_bytes": 12,
+    "tag_length": 16,
+    "rules": [
+      {
+        "subject": "secure.>",
+        "enabled": true,
+        "key_id": "secure-runtime-key",
+        "key_b64_env": "NATS_SINKS_SECURE_PAYLOAD_KEY_B64"
+      }
+    ]
+  },
   "sink": {
     "type": "file",
     "directory": ".local/file-sink/events",
@@ -97,6 +142,8 @@ The top-level sections are:
 | `dead_letter` | no | Optional DLQ publication for permanently invalid messages. |
 | `logging` | no | Standard Python logging level and payload logging switch. |
 | `metrics` | no | Metrics namespace and metrics enablement flag. The current implementation exposes a metrics abstraction and no-op default recorder. |
+| `message_metadata` | no | Optional priority, classification, and labels extraction defaults applied to every message before sink delivery. |
+| `encryption` | no | Optional core payload encryption before messages are passed to any sink. |
 | `sink` | yes | Destination-specific sink configuration. `sink.type` chooses the sink implementation. |
 
 ```mermaid
@@ -120,6 +167,12 @@ dedicated sink pages.
 
 The `nats` section tells the runner where to connect and which JetStream stream,
 consumer, and subject should feed the sink.
+
+For mission-style subject designs, choose names that express stable operational
+domains rather than transient implementation details. For example, broad
+subjects can represent mission reports, logistics events, platform telemetry,
+or audit events, while `message_metadata.rules` can add priority,
+classification, and labels without changing producer payloads.
 
 | Field | Required | Default | Valid values | Description |
 | --- | --- | --- | --- | --- |
@@ -202,6 +255,251 @@ the default runtime dependency surface small.
 | --- | --- | --- | --- | --- |
 | `enabled` | no | `false` | `true` or `false`. | Enables metrics when a concrete recorder/exporter is supplied by deployment code. The default recorder is no-op. |
 | `namespace` | no | `nats_sinks` | Metric namespace string. | Prefix used by metrics integrations and documentation. |
+
+### `message_metadata`
+
+The `message_metadata` section defines three destination-neutral metadata
+fields that the core runtime places on every `NatsEnvelope`: `priority`,
+`classification`, and `labels`. These fields are useful when operators want to
+preserve business urgency, information classification, and searchable tags
+alongside the payload without making every sink implement its own header
+parsing rules.
+
+`nats-sinks` treats these values as operator-defined strings. It does not
+enforce a classification scheme or priority vocabulary. Defence and
+mission-oriented examples in this documentation use NATO-style classification
+strings such as `NATO UNCLASSIFIED`, `NATO RESTRICTED`, `NATO CONFIDENTIAL`,
+`NATO SECRET`, and `COSMIC TOP SECRET`. Use the exact values required by your
+organization's policy, markings, and release process.
+
+All three fields are optional. When priority or classification is missing after
+resolution, nats-sinks stores it as null: JSON sinks write JSON `null`, and
+Oracle writes SQL `NULL`. Labels are normalized as an immutable list in the
+core; scalar sink fields store labels as semicolon-separated text such as
+`billing;urgent`, while metadata documents store the label list. The literal
+string `"null"` is not written by the framework.
+
+Resolution order for each field is:
+
+1. If the configured NATS header is present and non-empty, use that header
+   value.
+2. If the configured NATS header is present but empty or whitespace-only, store
+   null for that message.
+3. If the configured NATS header is absent, evaluate `message_metadata.rules`
+   in order and use the first matching subject-specific default for that field.
+4. If no subject rule supplies a default for that field, use the global
+   configured default.
+5. If the selected default is absent or empty, store null.
+
+```mermaid
+flowchart TD
+    Start[Message arrives] --> Header{Configured header present?}
+    Header -->|yes, non-empty| UseHeader[Use header value]
+    Header -->|yes, empty| Null[Store null]
+    Header -->|no| Rules{Subject rule default?}
+    Rules -->|yes| UseRule[Use subject default]
+    Rules -->|no| Default{Global default configured?}
+    Default -->|yes, non-empty| UseDefault[Use global default]
+    Default -->|no or empty| Null
+```
+
+Default header names:
+
+- `Nats-Sinks-Priority`
+- `Nats-Sinks-Classification`
+- `Nats-Sinks-Labels`
+
+Configuration shape:
+
+```json
+{
+  "message_metadata": {
+    "priority": {
+      "header": "Nats-Sinks-Priority",
+      "default": "routine"
+    },
+    "classification": {
+      "header": "Nats-Sinks-Classification",
+      "default": "NATO UNCLASSIFIED"
+    },
+    "labels": {
+      "header": "Nats-Sinks-Labels",
+      "default": "logistics;default"
+    },
+    "rules": [
+      {
+        "subject": "mission.reports.>",
+        "priority": "immediate",
+        "classification": "NATO SECRET",
+        "labels": "mission-report;coalition;watch-floor"
+      },
+      {
+        "subject": "public.>",
+        "priority": "routine",
+        "classification": "NATO UNCLASSIFIED",
+        "labels": "public;training"
+      }
+    ]
+  }
+}
+```
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `priority.header` | no | `Nats-Sinks-Priority` | Non-empty header name without newlines. | Header read from each NATS message to populate `NatsEnvelope.priority`. |
+| `priority.default` | no | `null` | String or `null`. | Value used when the priority header is absent. Blank strings become null. |
+| `classification.header` | no | `Nats-Sinks-Classification` | Non-empty header name without newlines. | Header read from each NATS message to populate `NatsEnvelope.classification`. |
+| `classification.default` | no | `null` | String or `null`. | Value used when the classification header is absent. Blank strings become null. |
+| `labels.header` | no | `Nats-Sinks-Labels` | Non-empty header name without newlines. | Header read from each NATS message to populate `NatsEnvelope.labels`. |
+| `labels.default` | no | `[]` | Semicolon-separated string, JSON string list, `[]`, or `null`. | Labels used when the labels header is absent. Empty items are removed and duplicate labels are ignored after their first occurrence. |
+| `rules` | no | `[]` | List of subject-rule objects. | Ordered subject-specific defaults. First matching rule that sets the requested field wins; unmatched subjects use the global default. |
+
+Subject rules use NATS wildcard syntax. `*` matches exactly one token and `>`
+matches one or more remaining tokens only when it is the final token.
+
+| Rule field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `subject` | yes | none | NATS subject pattern, for example `orders.*` or `orders.>`. | Pattern matched against `NatsEnvelope.subject`. |
+| `priority` | no | unset | String or `null`. | Subject-specific priority default used only when the priority header is absent. Explicit `null` overrides the global default for matching subjects. |
+| `classification` | no | unset | String or `null`. | Subject-specific classification default used only when the classification header is absent. Explicit `null` overrides the global default for matching subjects. |
+| `labels` | no | unset | Semicolon-separated string, JSON string list, `[]`, or `null`. | Subject-specific label default used only when the labels header is absent. Explicit `null` or `[]` overrides the global label default with no labels for matching subjects. |
+
+At least one of `priority`, `classification`, or `labels` must be present in a
+rule. Rule order is significant. Put more specific subject defaults before
+broader patterns when both could match the same message.
+
+Example publish command:
+
+```bash
+nats pub mission.reports.created '{"report_id":"R-1001","status":"received"}' \
+  -H 'Nats-Sinks-Priority: immediate' \
+  -H 'Nats-Sinks-Classification: NATO SECRET' \
+  -H 'Nats-Sinks-Labels: mission-report;coalition;watch-floor'
+```
+
+The resulting `NatsEnvelope` has:
+
+```json
+{
+  "priority": "immediate",
+  "classification": "NATO SECRET",
+  "labels": ["mission-report", "coalition", "watch-floor"]
+}
+```
+
+File sinks store `labels` both as semicolon-separated text and as
+`labels_list`; Oracle stores the scalar value in the `LABELS` column and the
+list in the generic `METADATA_JSON` document.
+
+### `encryption`
+
+The `encryption` section is a generic core runtime feature. When enabled, the
+runner encrypts `NatsEnvelope.data` before calling `sink.write_batch(...)`.
+Metadata remains unencrypted so routing, idempotency, timestamps, headers,
+subject names, and stream sequence values continue to work in every sink.
+
+Payload encryption is optional and disabled by default. Install the crypto
+extra before enabling it:
+
+```bash
+pip install "nats-sinks[crypto]"
+```
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `enabled` | no | `false` | `true` or `false`. | Enables core payload encryption before sink delivery. |
+| `algorithm` | no | `aes-256-gcm` | `aes-256-gcm` or `aes-256-ccm`. Uppercase spellings such as `AES-256-GCM` are accepted and normalized. | Authenticated encryption algorithm used for payload bytes. |
+| `key_id` | no | `default` | Non-empty string up to 128 characters. | Non-secret identifier stored in the encrypted payload envelope so operators can identify which key was used. |
+| `key_b64` | no | `null` | Base64 text that decodes to exactly 32 bytes. | Direct AES-256 key material. Use only for disposable local tests; prefer `key_b64_env` for production. Redacted by CLI output. |
+| `key_b64_env` | no | `null` | Environment variable name. | Environment variable containing base64-encoded 32-byte AES key material. Recommended production shape. Mutually exclusive with `key_b64`. |
+| `nonce_size_bytes` | no | `12` | Integer `7` to `13`. | Random nonce size for each message. The default works for both AES-GCM and AES-CCM. |
+| `tag_length` | no | `16` | `4`, `6`, `8`, `10`, `12`, `14`, or `16`. | Authentication tag length used by AES-CCM. AES-GCM records `16`; the setting is accepted but does not change GCM tag length. |
+| `rules` | no | `[]` | List of subject-rule objects. | Optional ordered per-subject encryption policy. First matching rule wins. Subjects with no matching rule use the top-level `enabled` setting. |
+
+Example:
+
+```json
+{
+  "encryption": {
+    "enabled": true,
+    "algorithm": "aes-256-gcm",
+    "key_id": "orders-prod-2026-05",
+    "key_b64_env": "NATS_SINKS_PAYLOAD_KEY_B64",
+    "nonce_size_bytes": 12,
+    "tag_length": 16
+  }
+}
+```
+
+Subject-specific rules let one runner encrypt only selected subjects or use
+different keys for different subject families. The following configuration
+encrypts `secure.>` but stores `public.>` and all other subjects without core
+payload encryption:
+
+```json
+{
+  "encryption": {
+    "enabled": false,
+    "rules": [
+      {
+        "subject": "secure.>",
+        "enabled": true,
+        "algorithm": "aes-256-gcm",
+        "key_id": "secure-prod-2026-05",
+        "key_b64_env": "NATS_SINKS_SECURE_PAYLOAD_KEY_B64"
+      }
+    ]
+  }
+}
+```
+
+The next configuration encrypts all subjects by default and uses a disabled
+rule to exempt `public.>`:
+
+```json
+{
+  "encryption": {
+    "enabled": true,
+    "algorithm": "aes-256-gcm",
+    "key_id": "global-prod-2026-05",
+    "key_b64_env": "NATS_SINKS_GLOBAL_PAYLOAD_KEY_B64",
+    "rules": [
+      {
+        "subject": "public.>",
+        "enabled": false
+      }
+    ]
+  }
+}
+```
+
+Subject rules use NATS wildcard syntax. `*` matches exactly one token and `>`
+matches one or more remaining tokens only when it is the final token. Rule order
+is significant and the first matching rule wins.
+
+| Rule field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `subject` | yes | none | NATS subject pattern, for example `orders.*` or `secure.>`. | Pattern matched against the normalized envelope subject. |
+| `enabled` | no | `true` | `true` or `false`. | Enables encryption for matching subjects, or disables encryption when used as an exemption. |
+| `algorithm` | no | Top-level `algorithm`. | `aes-256-gcm` or `aes-256-ccm`. | Optional algorithm override for the matching subject. |
+| `key_id` | no | Top-level `key_id`. | Non-empty string up to 128 characters. | Optional non-secret key identifier override. |
+| `key_b64` | no | Top-level `key_b64`. | Base64 text that decodes to exactly 32 bytes. | Optional direct key material for this subject rule. Redacted by CLI output. |
+| `key_b64_env` | no | Top-level `key_b64_env`. | Environment variable name. | Optional environment-backed key source for this subject rule. |
+| `nonce_size_bytes` | no | Top-level `nonce_size_bytes`. | Integer `7` to `13`. | Optional nonce size override for this subject rule. |
+| `tag_length` | no | Top-level `tag_length`. | `4`, `6`, `8`, `10`, `12`, `14`, or `16`. | Optional AES-CCM tag length override for this subject rule. |
+
+The environment variable value must be a base64-encoded 32-byte key:
+
+```bash
+python -c 'import base64, secrets; print(base64.b64encode(secrets.token_bytes(32)).decode())'
+```
+
+The encrypted body stored by sinks is a JSON object under
+`_nats_sinks_encryption`. It contains the algorithm, key identifier, nonce,
+ciphertext, tag length, plaintext size, and plaintext SHA-256 digest. It does
+not contain the plaintext message body. See [Payload Encryption](payload-encryption.md)
+for the full envelope shape, examples, testing guidance, and operational
+security notes.
 
 ### `sink`
 
@@ -298,6 +596,17 @@ Oracle implementation, and [File Sink](file-sink.md) for local file output.
 that every sink can persist. The document includes all headers,
 NATS-reserved headers when present, unknown future `Nats-` headers, JetStream
 sequence metadata, optional reply subject, and timestamp fields.
+It also includes the normalized application-level message metadata fields:
+
+```json
+{
+  "message_metadata": {
+    "priority": "urgent",
+    "classification": "restricted",
+    "labels": ["billing", "urgent"]
+  }
+}
+```
 
 Missing optional NATS headers are allowed and do not make the message invalid.
 Destination-specific docs should explain whether the metadata is stored as one
@@ -312,6 +621,16 @@ Supported environment overrides:
 - `NATS_SINKS_NATS_CONSUMER`
 - `NATS_SINKS_NATS_SUBJECT`
 - `NATS_SINKS_LOG_LEVEL`
+- `NATS_SINKS_ENCRYPTION_ENABLED`
+- `NATS_SINKS_ENCRYPTION_ALGORITHM`
+- `NATS_SINKS_ENCRYPTION_KEY_ID`
+- `NATS_SINKS_ENCRYPTION_KEY_B64_ENV`
+- `NATS_SINKS_PRIORITY_HEADER`
+- `NATS_SINKS_PRIORITY_DEFAULT`
+- `NATS_SINKS_CLASSIFICATION_HEADER`
+- `NATS_SINKS_CLASSIFICATION_DEFAULT`
+- `NATS_SINKS_LABELS_HEADER`
+- `NATS_SINKS_LABELS_DEFAULT`
 - `NATS_SINKS_SINK_TYPE`
 
 Destination passwords should normally be supplied through environment variables

@@ -5,6 +5,8 @@ This repository is safety-sensitive infrastructure code. Follow these rules:
 - Never ACK a JetStream message before durable sink success.
 - Never introduce a sink that can silently lose messages.
 - Never log secrets, credentials, tokens, full connection strings, private keys, or sensitive payloads by default.
+- Never log encryption keys, generated key material, plaintext payloads, or
+  decrypted payloads by default.
 - Never weaken idempotency behavior without updating tests and documentation.
 - Never add dependencies without a clear reason.
 - Never make network calls in unit tests.
@@ -35,6 +37,18 @@ Architecture rule:
 > Core owns delivery semantics. Sinks own destination writes.
 
 Destination sinks must not receive raw NATS messages and must never call ACK, NAK, TERM, or any other JetStream acknowledgement method.
+
+Core-owned transformations, including payload encryption and message metadata
+resolution, must happen before `sink.write_batch(...)`. Sinks should store the
+normalized metadata and normalized or encrypted payload they receive and should
+not implement parallel first-layer encryption, decryption, priority parsing,
+classification parsing, or ACK logic unless the sink is explicitly designed and
+documented as a trusted transformation sink.
+
+Subject-specific core policies, such as payload encryption rules, must use the
+shared NATS subject matcher and must be evaluated deterministically in
+configuration order. First matching rule wins, unmatched subjects use the
+documented global fallback, and disabled rules are explicit exemptions.
 
 Required processing order:
 
@@ -92,6 +106,25 @@ code:
   `ConfigurationError` messages.
 - Prefer environment-variable references for secrets, such as password
   environment variable names, instead of storing secret values in config files.
+- Prefer `encryption.key_b64_env` for payload encryption key material. Direct
+  `encryption.key_b64` values are for disposable local tests only and must be
+  redacted from output.
+- When adding or changing `encryption.rules`, document whether rules inherit
+  global key material, override key material, or disable encryption for matching
+  subjects. Rule order is security-sensitive and must be clear in examples.
+- Missing encryption key material must fail gracefully with a framework
+  `ConfigurationError` or clean CLI runtime error before any message is ACKed.
+  Do not let missing key variables become uncaught tracebacks in normal CLI
+  operation.
+- Message metadata defaults such as `message_metadata.priority.default` and
+  `message_metadata.classification.default` are configuration, not secrets.
+  Still document them clearly because they can affect routing, storage,
+  incident triage, and downstream policy decisions.
+- Subject-specific defaults under `message_metadata.rules` are also
+  configuration. Header values remain authoritative; subject defaults apply
+  only when the corresponding header is absent. Test first-match-wins behavior,
+  unmatched fallback, explicit null defaults, and empty headers whenever rules
+  change.
 - Redact secrets in CLI output, logs, exceptions, reports, and test snapshots.
 - Do not dump complete process environments, complete connection strings, or
   raw headers that may contain credentials.
@@ -106,6 +139,26 @@ Assume `nats-sinks` will be used in critical production systems:
 
 - Treat message payloads, NATS headers, Oracle rows, and DLQ messages as
   potentially sensitive.
+- Treat encryption key material as highly sensitive. Tests that generate keys
+  must clean them up by default and preserve them only behind explicit local
+  debug flags.
+- Payload encryption protects the message body only. Metadata such as NATS
+  subject, headers, stream names, sequence numbers, message IDs, timestamps,
+  priority, classification, labels, route names, file paths, and table names
+  remains clear unless a future feature explicitly documents otherwise. Do not
+  claim metadata confidentiality from payload encryption.
+- Subject-specific encryption does not hide the subject used for matching.
+  Do not put secrets in NATS subject names. If subject families have different
+  data-classification requirements, test matching, non-matching, and exemption
+  rules for every production sink affected by the change.
+- Treat `classification` values as potentially sensitive operational metadata.
+  They may reveal information-handling policy even when payloads are encrypted,
+  so do not print them in broad debug dumps or high-cardinality metrics labels
+  without a deliberate product decision and documentation.
+- Encrypted payload envelopes may include non-secret operational fields such as
+  algorithm, key ID, nonce, ciphertext, plaintext size, and plaintext digest.
+  Treat those envelopes as sensitive destination data even though they do not
+  contain plaintext.
 - Use allow-list validation for SQL identifiers, sink names, route names, and
   file paths supplied by configuration.
 - Use bind variables for database values. Never concatenate user-provided
@@ -184,6 +237,51 @@ At-least-once delivery means duplicate processing is normal:
 - Store metadata defensively. Missing optional NATS headers must not crash the
   sink, and future NATS headers should be preserved in metadata snapshots where
   the sink supports metadata persistence.
+- Preserve the core `priority`, `classification`, and `labels` metadata
+  contract for all production sinks. Values come from configured NATS headers,
+  configured global defaults, configured subject-specific defaults, or remain
+  null/empty. Do not store the literal string `"null"` for missing values.
+- Apply metadata defaults only when the configured header is absent. If a
+  configured priority, classification, or labels header is present but empty or
+  whitespace-only, preserve that as explicit null or no labels for the message.
+- Do not use `priority`, `classification`, or `labels` as idempotency keys
+  unless a future sink explicitly documents a safe, unique, and tested use
+  case. They are labels for operations and policy, not durable uniqueness
+  guarantees.
+- When payload encryption is enabled, use stable metadata-based idempotency
+  keys. Do not rely on ciphertext hashes as duplicate keys because fresh
+  nonces make ciphertext intentionally non-deterministic.
+- Do not use payload-field idempotency for core-encrypted payloads unless a
+  future feature explicitly supports trusted pre-encryption key extraction. Once
+  the core encrypts the body, sinks cannot inspect original business JSON
+  fields by design.
+- If a destination stores encrypted payloads, tests should prove the stored
+  encrypted envelope decrypts back to the exact original bytes for JSON, text,
+  empty, and binary payload cases.
+
+## Oracle And Live E2E Lessons
+
+Live Oracle tests are useful precisely because they reveal driver and database
+behavior that mocks can miss:
+
+- Oracle JSON columns may be returned by `python-oracledb` as JSON text, LOB
+  objects, dictionaries/lists, or mappings containing `Decimal` numeric values.
+  Tests and diagnostics that read JSON columns must normalize those shapes
+  deliberately instead of assuming a plain string.
+- Retained test tables can outlive schema changes. Integration tests should
+  verify required columns and fail fast with a clear message when a table has
+  an older layout. Do not silently drop or recreate retained tables unless the
+  operator set an explicit drop/recreate flag or selected a fresh test table.
+- Oracle tables using the default mapping now require nullable `PRIORITY` and
+  `CLASSIFICATION` columns. When changing the recommended schema again, update
+  the DDL helper, Oracle docs, least-privilege setup docs, retained-table
+  schema checks, live e2e tests, and release notes together.
+- Live encrypted and unencrypted e2e checks should use explicit test table
+  names when validating new storage behavior, so old local environment defaults
+  cannot hide schema drift.
+- Timing printed by live e2e tests is functional evidence, not a benchmark.
+  Document it as an observation and avoid drawing production throughput claims
+  from small test runs.
 
 ## Testing Discipline
 
@@ -215,6 +313,17 @@ Additional testing expectations:
   accept external input.
 - Keep live NATS, Oracle, and end-to-end tests behind explicit integration
   markers and environment variables.
+- Encryption test helpers should generate temporary AES key material, delete it
+  by default, and preserve it only through an explicit local flag. Never write
+  generated keys into tracked examples, reports, screenshots, or docs.
+- When a feature supports both encrypted and unencrypted operation, tests
+  should cover both paths for every production sink where practical. At minimum,
+  unit tests should cover each sink and live e2e tests should be opt-in and
+  documented.
+- For message metadata, test all meaningful combinations for each production
+  sink where practical: priority, classification, and labels present; only one
+  field present; none present; defaults applied; subject defaults applied; and
+  explicitly empty headers becoming null or no labels.
 - Sanitize test reports before committing. Do not include hostnames, usernames,
   passwords, wallet contents, certificates, tokens, or private payloads.
 - Do not mark live integration tests as passed unless they were actually run in
@@ -239,6 +348,11 @@ JetStream, Oracle, Python packaging, or sink connectors:
 - Keep generic framework documentation separate from sink-specific
   documentation so future sinks can be added without confusing Oracle-specific
   guidance with core behavior.
+- Use mission, defence, public-sector, and operational wording carefully when
+  it helps the intended audience understand the software. Keep the language
+  subtle and precise; do not imply official status, accreditation, tactical
+  suitability, exactly-once delivery, or security guarantees the project does
+  not provide.
 - Update README, docs pages, examples, and CLI help together when public
   behavior changes.
 - Keep the documentation set in a release-ready state. Do not leave new

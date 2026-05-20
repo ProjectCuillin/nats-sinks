@@ -19,7 +19,9 @@ from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime
 from typing import Any, SupportsBytes, cast
 
+from nats_sinks.core.config import MessageMetadataConfig
 from nats_sinks.core.envelope import NatsEnvelope
+from nats_sinks.core.message_metadata import resolve_metadata_field, resolve_metadata_labels
 
 
 def _get_nested(value: object, *names: str) -> object | None:
@@ -126,11 +128,17 @@ def _headers(raw_message: Any) -> Mapping[str, str]:
     return normalised
 
 
-def envelope_from_nats_message(raw_message: Any) -> NatsEnvelope:
+def envelope_from_nats_message(
+    raw_message: Any,
+    *,
+    message_metadata: MessageMetadataConfig | None = None,
+) -> NatsEnvelope:
     """Convert a nats-py message-like object into a stable envelope."""
 
     metadata = None
     metadata = _safe_getattr(raw_message, "metadata")
+    headers = _headers(raw_message)
+    metadata_config = message_metadata or MessageMetadataConfig()
 
     stream_sequence = _as_int(
         _get_nested(metadata, "sequence", "stream") or _safe_getattr(metadata, "stream_sequence")
@@ -144,10 +152,12 @@ def envelope_from_nats_message(raw_message: Any) -> NatsEnvelope:
     if timestamp is not None and not isinstance(timestamp, datetime):
         timestamp = None
 
+    subject = _safe_text(_safe_getattr(raw_message, "subject", ""))
+
     return NatsEnvelope(
-        subject=_safe_text(_safe_getattr(raw_message, "subject", "")),
+        subject=subject,
         data=_safe_bytes(_safe_getattr(raw_message, "data", b"")),
-        headers=_headers(raw_message),
+        headers=headers,
         stream=_safe_optional_text(_safe_getattr(metadata, "stream")),
         consumer=_safe_optional_text(_safe_getattr(metadata, "consumer")),
         stream_sequence=stream_sequence,
@@ -156,6 +166,21 @@ def envelope_from_nats_message(raw_message: Any) -> NatsEnvelope:
         message_id=None,
         redelivered=None if delivered is None else delivered > 1,
         pending=_as_int(_safe_getattr(metadata, "num_pending")),
+        priority=resolve_metadata_field(
+            headers,
+            header_name=metadata_config.priority.header,
+            default=metadata_config.priority_default_for_subject(subject),
+        ),
+        classification=resolve_metadata_field(
+            headers,
+            header_name=metadata_config.classification.header,
+            default=metadata_config.classification_default_for_subject(subject),
+        ),
+        labels=resolve_metadata_labels(
+            headers,
+            header_name=metadata_config.labels.header,
+            default=metadata_config.labels_default_for_subject(subject),
+        ),
         reply=_safe_optional_text(_safe_getattr(raw_message, "reply")),
         domain=_safe_optional_text(_safe_getattr(metadata, "domain")),
         received_at=datetime.now(UTC),

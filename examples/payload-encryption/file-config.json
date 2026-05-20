@@ -2,22 +2,16 @@
   "nats": {
     "url": "nats://localhost:4222",
     "stream": "ORDERS",
-    "consumer": "file-orders-sink",
+    "consumer": "encrypted-file-orders-sink",
     "subject": "orders.*",
     "durable": true
   },
   "delivery": {
-    "batch_size": 64,
+    "batch_size": 100,
     "batch_timeout_ms": 1000,
     "ack_policy": "after_sink_commit",
-    "temporary_failure_action": "nak"
-  },
-  "dead_letter": {
-    "enabled": true,
-    "subject": "orders.file.dlq",
-    "include_payload": true,
-    "include_headers": true,
-    "include_error": true
+    "temporary_failure_action": "nak",
+    "prefer_safe_duplication": true
   },
   "logging": {
     "level": "INFO",
@@ -34,30 +28,24 @@
     },
     "labels": {
       "header": "Nats-Sinks-Labels",
-      "default": []
-    },
-    "rules": [
-      {
-        "subject": "orders.urgent",
-        "priority": "immediate",
-        "classification": "NATO SECRET",
-        "labels": "mission-report;coalition;watch-floor"
-      }
-    ]
+      "default": "encrypted;local-test"
+    }
+  },
+  "encryption": {
+    "enabled": true,
+    "algorithm": "aes-256-gcm",
+    "key_id": "local-example-key",
+    "key_b64_env": "NATS_SINKS_PAYLOAD_KEY_B64",
+    "nonce_size_bytes": 12,
+    "tag_length": 16
   },
   "sink": {
     "type": "file",
-    "directory": ".local/file-sink/events",
-    "mode": "one_file_per_message",
+    "directory": ".local/file-sink/encrypted-events",
     "filename_strategy": "stream_sequence",
     "duplicate_policy": "skip_existing",
     "payload_mode": "json_or_envelope",
-    "extension": ".json",
     "compression": "none",
-    "compression_level": 6,
-    "include_metadata": true,
-    "partition_by_subject": true,
-    "create_directory": true,
     "fsync": true
   }
 }

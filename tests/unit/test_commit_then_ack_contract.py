@@ -12,7 +12,7 @@ from nats_sinks import (
     PermanentSinkError,
     TemporarySinkError,
 )
-from nats_sinks.core.config import DeadLetterConfig, DeliveryConfig
+from nats_sinks.core.config import DeadLetterConfig, DeliveryConfig, MessageMetadataConfig
 from nats_sinks.core.errors import DeadLetterError
 from nats_sinks.core.runner import JetStreamSinkRunner
 
@@ -69,6 +69,33 @@ class RecordingSink:
 
     async def stop(self) -> None:
         return None
+
+
+class MetadataRecordingSink:
+    def __init__(self, events: list[str]) -> None:
+        self.events = events
+        self.messages: list[NatsEnvelope] = []
+
+    async def start(self) -> None:
+        return None
+
+    async def write_batch(self, messages: Sequence[NatsEnvelope]) -> None:
+        self.messages.extend(messages)
+        self.events.append("write")
+        self.events.append("commit")
+
+    async def stop(self) -> None:
+        return None
+
+
+class FailingPayloadEncryptor:
+    def __init__(self, events: list[str]) -> None:
+        self.events = events
+
+    def encrypt_batch(self, envelopes: Sequence[NatsEnvelope]) -> list[NatsEnvelope]:
+        del envelopes
+        self.events.append("encrypt")
+        raise RuntimeError("crypto provider unavailable")
 
 
 class BatchRecordingSink:
@@ -191,6 +218,46 @@ async def test_sink_success_triggers_ack_after_commit() -> None:
 
 
 @pytest.mark.asyncio
+async def test_runner_applies_priority_and_classification_before_sink_write() -> None:
+    events: list[str] = []
+    message = FakeMessage(events)
+    message.headers = {"X-Priority": "high"}
+    sink = MetadataRecordingSink(events)
+    metadata_config = MessageMetadataConfig.model_validate(
+        {
+            "priority": {
+                "header": "X-Priority",
+                "default": "normal",
+            },
+            "classification": {
+                "header": "X-Classification",
+                "default": "internal",
+            },
+            "labels": {
+                "header": "X-Labels",
+                "default": "default;orders",
+            },
+        }
+    )
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=sink,
+        message_metadata=metadata_config,
+    )
+
+    await runner.process_raw_batch([message])
+
+    assert events == ["write", "commit", "ack"]
+    assert sink.messages[0].priority == "high"
+    assert sink.messages[0].classification == "internal"
+    assert sink.messages[0].labels == ("default", "orders")
+    assert message.acked
+
+
+@pytest.mark.asyncio
 async def test_runner_writes_partial_fetch_before_batch_size_is_reached() -> None:
     events: list[str] = []
     messages = [FakeMessage(events) for _ in range(17)]
@@ -279,6 +346,26 @@ async def test_message_normalization_failure_does_not_ack(
     await runner.process_raw_batch([message])
 
     assert events == ["nak"]
+    assert not message.acked
+    assert message.nacked
+
+
+@pytest.mark.asyncio
+async def test_payload_encryption_failure_does_not_write_or_ack() -> None:
+    events: list[str] = []
+    message = FakeMessage(events)
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=RecordingSink(events),
+        payload_encryptor=FailingPayloadEncryptor(events),  # type: ignore[arg-type]
+    )
+
+    await runner.process_raw_batch([message])
+
+    assert events == ["encrypt", "nak"]
     assert not message.acked
     assert message.nacked
 

@@ -2,14 +2,19 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import gzip
 import json
+import os
+import secrets
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
 from nats_sinks import DestinationUnavailableError, NatsEnvelope, PermanentSinkError
+from nats_sinks.core.config import EncryptionConfig
+from nats_sinks.core.encryption import ENCRYPTED_PAYLOAD_KEY, PayloadEncryptor
 from nats_sinks.core.errors import ConfigurationError
 from nats_sinks.file import FileSink
 
@@ -52,6 +57,17 @@ def _read_file_record(path: Path) -> dict[str, object]:
     loaded = json.loads(data.decode("utf-8"))
     assert isinstance(loaded, dict)
     return loaded
+
+
+def _encryption_config() -> EncryptionConfig:
+    configured = os.getenv("NATS_SINKS_TEST_ENCRYPTION_KEY_B64")
+    key_b64 = configured or base64.b64encode(secrets.token_bytes(32)).decode("ascii")
+    return EncryptionConfig(
+        enabled=True,
+        algorithm="aes-256-gcm",
+        key_id="file-sink-test-key",
+        key_b64=key_b64,
+    )
 
 
 async def test_file_sink_writes_one_json_file_per_message(tmp_path: Path) -> None:
@@ -142,6 +158,37 @@ async def test_file_sink_gzip_compression_writes_multiple_files(tmp_path: Path) 
         {"order_id": "O-1002"},
         {"order_id": "O-1003"},
     ]
+
+
+async def test_file_sink_stores_core_encrypted_payload_as_json_envelope(tmp_path: Path) -> None:
+    config = _encryption_config()
+    encryptor = PayloadEncryptor(config)
+    sink = FileSink(directory=tmp_path, fsync=False)
+    message = encryptor.encrypt_envelope(_envelope(data=b"opaque encrypted upstream text"))
+
+    await sink.start()
+    await sink.write_batch([message])
+
+    record = _read_file_record(_json_files(tmp_path)[0])
+    assert ENCRYPTED_PAYLOAD_KEY in record["payload"]
+    assert encryptor.decrypt_payload(record["payload"]) == b"opaque encrypted upstream text"
+    assert record["metadata"]["headers"]["Nats-Msg-Id"] == "msg-1"
+
+
+async def test_file_sink_gzip_stores_decryptable_encrypted_payload(tmp_path: Path) -> None:
+    config = _encryption_config()
+    encryptor = PayloadEncryptor(config)
+    sink = FileSink(directory=tmp_path, fsync=False, compression="gzip")
+    message = encryptor.encrypt_envelope(_envelope(data=b'{"still":"recoverable"}'))
+
+    await sink.start()
+    await sink.write_batch([message])
+
+    path = _json_files(tmp_path)[0]
+    assert path.name.endswith(".json.gz")
+    record = _read_file_record(path)
+    assert ENCRYPTED_PAYLOAD_KEY in record["payload"]
+    assert encryptor.decrypt_payload(record["payload"]) == b'{"still":"recoverable"}'
 
 
 async def test_file_sink_gzip_duplicates_skip_existing_file(tmp_path: Path) -> None:

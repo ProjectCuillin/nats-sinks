@@ -30,6 +30,28 @@
     "enabled": false,
     "namespace": "nats_sinks"
   },
+  "message_metadata": {
+    "priority": {
+      "header": "Nats-Sinks-Priority",
+      "default": "routine"
+    },
+    "classification": {
+      "header": "Nats-Sinks-Classification",
+      "default": "NATO UNCLASSIFIED"
+    },
+    "labels": {
+      "header": "Nats-Sinks-Labels",
+      "default": []
+    },
+    "rules": [
+      {
+        "subject": "orders.urgent",
+        "priority": "immediate",
+        "classification": "NATO SECRET",
+        "labels": "mission-report;coalition;watch-floor"
+      }
+    ]
+  },
   "sink": {
     "type": "oracle",
     "dsn": "localhost:1521/FREEPDB1",

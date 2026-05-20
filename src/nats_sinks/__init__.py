@@ -16,6 +16,20 @@ framework users may construct sinks, but ACK decisions remain in the core
 runner and are never delegated to destination code.
 """
 
+from nats_sinks.core.config import (
+    EncryptionConfig,
+    EncryptionRuleConfig,
+    MessageMetadataConfig,
+    MessageMetadataFieldConfig,
+    MessageMetadataLabelsConfig,
+    MessageMetadataRuleConfig,
+)
+from nats_sinks.core.encryption import (
+    ENCRYPTED_PAYLOAD_KEY,
+    PayloadEncryptor,
+    SubjectPayloadEncryptor,
+    decrypt_payload,
+)
 from nats_sinks.core.envelope import NatsEnvelope
 from nats_sinks.core.errors import (
     AckError,
@@ -29,6 +43,11 @@ from nats_sinks.core.errors import (
     SinkError,
     TemporarySinkError,
     ValidationError,
+)
+from nats_sinks.core.message_metadata import (
+    DEFAULT_CLASSIFICATION_HEADER,
+    DEFAULT_LABELS_HEADER,
+    DEFAULT_PRIORITY_HEADER,
 )
 from nats_sinks.core.metadata import (
     NATS_RESERVED_HEADER_NAMES,
@@ -46,18 +65,29 @@ from nats_sinks.file import FileSink
 from nats_sinks.sinks.base import FlushableSink, HealthCheckableSink, SchemaAwareSink, Sink
 
 __all__ = [
+    "DEFAULT_CLASSIFICATION_HEADER",
+    "DEFAULT_LABELS_HEADER",
+    "DEFAULT_PRIORITY_HEADER",
+    "ENCRYPTED_PAYLOAD_KEY",
     "NATS_RESERVED_HEADER_NAMES",
     "AckError",
     "ConfigurationError",
     "DeadLetterError",
     "DestinationUnavailableError",
+    "EncryptionConfig",
+    "EncryptionRuleConfig",
     "FileSink",
     "FlushableSink",
     "HealthCheckableSink",
     "JetStreamSinkRunner",
+    "MessageMetadataConfig",
+    "MessageMetadataFieldConfig",
+    "MessageMetadataLabelsConfig",
+    "MessageMetadataRuleConfig",
     "NatsEnvelope",
     "NatsSinksError",
     "NormalizedPayload",
+    "PayloadEncryptor",
     "PayloadOriginalFormat",
     "PayloadStorageMode",
     "PermanentSinkError",
@@ -66,10 +96,12 @@ __all__ = [
     "SerializationError",
     "Sink",
     "SinkError",
+    "SubjectPayloadEncryptor",
     "TemporarySinkError",
     "ValidationError",
     "build_nats_metadata_snapshot",
     "datetime_to_epoch_ns",
+    "decrypt_payload",
     "normalize_payload_for_json_storage",
 ]
 

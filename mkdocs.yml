@@ -5,6 +5,12 @@ repo_url: https://github.com/ProjectCuillin/nats-sinks/
 edit_uri: edit/main/docs/
 theme:
   name: material
+markdown_extensions:
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
 nav:
   - Home: index.md
   - Getting Started: getting-started.md
@@ -14,6 +20,7 @@ nav:
   - NATS Connections: nats-connections.md
   - NATS Feature Gaps: nats-feature-gap-analysis.md
   - Sink Framework: sink-framework.md
+  - Payload Encryption: payload-encryption.md
   - Message Sizing: message-sizing.md
   - Performance: performance.md
   - CLI: cli.md

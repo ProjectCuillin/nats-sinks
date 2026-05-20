@@ -1,5 +1,10 @@
 # Oracle JetStream Example
 
+This example demonstrates the Oracle sink as an operational event store. It is
+useful when you want to validate idempotent database writes, metadata columns,
+and commit-before-ACK behavior before connecting a real mission or enterprise
+stream.
+
 Start services:
 
 ```bash

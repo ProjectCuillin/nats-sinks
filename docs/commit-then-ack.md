@@ -4,6 +4,11 @@ JetStream consumers must follow a commit-then-acknowledge processing model whene
 
 The acknowledgement to JetStream is the final step in message processing. It must be sent only after all required work has completed and the resulting state has been durably committed. An ACK is a formal statement that the message has been fully handled and no longer requires redelivery.
 
+In mission-oriented systems, that ACK can be read as an operational statement:
+the event has crossed the agreed durable boundary. Sending it early can hide a
+failed database write, missing file, or incomplete handoff from later recovery
+and audit work.
+
 ## Required Order
 
 1. Receive the message.
@@ -31,6 +36,11 @@ sequenceDiagram
 ## Why Early ACK Is Unsafe
 
 Acknowledging too early creates a silent-loss risk. JetStream may consider the message handled even if the destination write fails afterward. A duplicate caused by redelivery is usually manageable with idempotency. A missing write after early ACK is much harder to detect and repair.
+
+For defence logistics, operational reporting, or other sensitive workflows,
+silent loss is usually worse than safe duplication. A duplicate can be
+detected, reconciled, and explained. An event that was ACKed before durable
+success may simply disappear from the processing path.
 
 ## Failure Before Commit
 

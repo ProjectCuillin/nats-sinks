@@ -13,6 +13,11 @@ success.
 
 The examples assume Python `>=3.11`.
 
+The local example uses order-style subjects because they are easy to recognize.
+In a mission or defence prototype, the same flow could represent operational
+reports, logistics updates, audit events, or platform telemetry. The important
+behavior is the same: write durably first, then ACK.
+
 ## Install
 
 ```bash
@@ -23,7 +28,7 @@ python -m pip install nats-sinks
 For development:
 
 ```bash
-python -m pip install -e ".[dev,oracle,docs]"
+python -m pip install -e ".[dev,oracle,crypto,docs]"
 ```
 
 ## Start NATS

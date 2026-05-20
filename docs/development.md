@@ -14,7 +14,7 @@ Repository: [ProjectCuillin/nats-sinks](https://github.com/ProjectCuillin/nats-s
 python -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install -e ".[dev,oracle,docs]"
+python -m pip install -e ".[dev,oracle,crypto,docs]"
 ```
 
 ## Checks

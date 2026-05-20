@@ -24,6 +24,11 @@ from types import MappingProxyType
 from typing import Any
 
 from nats_sinks.core.errors import SerializationError
+from nats_sinks.core.message_metadata import (
+    case_insensitive_header,
+    normalise_labels_value,
+    normalise_metadata_value,
+)
 from nats_sinks.core.payload import (
     NormalizedPayload,
     PayloadStorageMode,
@@ -63,13 +68,6 @@ def _normalise_headers(headers: Mapping[str, object] | None) -> Mapping[str, str
     return MappingProxyType(normalised)
 
 
-def _case_insensitive_header(headers: Mapping[str, str], name: str) -> str | None:
-    for key, value in headers.items():
-        if key.lower() == name.lower():
-            return value
-    return None
-
-
 @dataclass(frozen=True, slots=True)
 class NatsEnvelope:
     """Immutable message envelope passed to sinks.
@@ -89,6 +87,9 @@ class NatsEnvelope:
     message_id: str | None
     redelivered: bool | None
     pending: int | None
+    priority: str | None = None
+    classification: str | None = None
+    labels: tuple[str, ...] = field(default_factory=tuple)
     reply: str | None = None
     domain: str | None = None
     received_at: datetime = field(default_factory=lambda: datetime.now(UTC))
@@ -100,11 +101,19 @@ class NatsEnvelope:
 
         if self.message_id is None:
             message_id = (
-                _case_insensitive_header(headers, "Nats-Msg-Id")
-                or _case_insensitive_header(headers, "Nats-Message-Id")
-                or _case_insensitive_header(headers, "message-id")
+                case_insensitive_header(headers, "Nats-Msg-Id")
+                or case_insensitive_header(headers, "Nats-Message-Id")
+                or case_insensitive_header(headers, "message-id")
             )
             object.__setattr__(self, "message_id", message_id)
+
+        object.__setattr__(self, "priority", normalise_metadata_value(self.priority))
+        object.__setattr__(
+            self,
+            "classification",
+            normalise_metadata_value(self.classification),
+        )
+        object.__setattr__(self, "labels", normalise_labels_value(self.labels))
 
     def idempotency_key(self) -> str:
         """Return a stable best-effort idempotency key for this message."""

@@ -14,6 +14,10 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 - Oracle duplicate-safe production write modes: `merge` and `insert_ignore`.
 - File sink idempotency support with deterministic file names and
   `skip_existing` duplicate handling.
+- Core payload encryption with AES-256-GCM and AES-256-CCM before sink writes.
+- Core message metadata for priority, classification, and labels so
+  mission-oriented deployments can preserve operational handling context across
+  all production sinks.
 - Commit-then-acknowledge contract tests proving ACK happens only after sink
   success and DLQ publication succeeds before ACK.
 - CLI.
@@ -24,6 +28,9 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 ## Phase 2
 
 - Better metrics.
+- Mission-support documentation examples for common operational patterns such
+  as restricted event storage, disconnected file handoff, DLQ triage, and
+  replay/recovery procedures.
 - Documented sink certification contract for idempotency, including required
   duplicate-redelivery tests for every new production sink.
 - Per-route or per-table Oracle idempotency overrides for deployments where
@@ -47,6 +54,9 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 - Multiple NATS seed URLs for clustered deployments.
 - NATS reconnect tuning and connection event metrics.
 - Least-privilege NATS permissions templates for sink users.
+- Payload encryption key rotation guidance and multi-key decryption helper
+  support.
+- Secret-manager integration patterns for encryption keys.
 - Certified TLS certificate authentication guidance.
 - Certified NKEY with challenge authentication support.
 - Certified decentralized JWT authentication/authorization support.

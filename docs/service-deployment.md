@@ -5,6 +5,12 @@ model works for every sink type. The examples run `nats-sink` from a Python
 virtual environment, load JSON configuration from `/etc/nats-sinks/config.json`,
 and optionally load secrets from `/etc/nats-sinks/nats-sink.env`.
 
+These examples are intentionally conservative because many mission-support and
+defence environments run long-lived services under operating-system control,
+with explicit service users, reviewed configuration paths, and protected
+environment files for secrets. The same pattern works for simple file sink
+deployments and Oracle-backed operational event stores.
+
 ## Layout
 
 ```text
@@ -105,3 +111,14 @@ destination commit but not yet ACKed may redeliver; idempotency must handle
 duplicates. Oracle deployments should install `nats-sinks[oracle]` and use an
 Oracle configuration file. File sink deployments can use the base package and
 should ensure the configured output directory is owned by the service user.
+
+If payload encryption is enabled, install `nats-sinks[crypto]` and place the
+base64 key environment variable named by `encryption.key_b64_env` in the
+protected service environment file. Keep that file readable only by root and
+the `nats-sink` service group. Do not put direct `encryption.key_b64` values in
+tracked config files.
+
+For sensitive operational deployments, also document who owns the service,
+where logs are collected, how DLQ alerts are handled, how output directories or
+Oracle tables are backed up, and which team is allowed to rotate NATS, Oracle,
+and encryption credentials.

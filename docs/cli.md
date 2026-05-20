@@ -10,6 +10,11 @@ delivery engine. It validates configuration, creates the selected sink, builds
 `JetStreamSinkRunner`, and then the core runner performs commit-then-ACK
 processing.
 
+For operational teams, this means the same command can be used during local
+tests, lab validation, and controlled service deployments. The behavior should
+be reviewed through configuration and logs rather than through ad hoc scripts
+that might accidentally weaken ACK ordering or secret handling.
+
 ```bash
 nats-sink run config.json
 nats-sink validate config.json
@@ -34,6 +39,11 @@ nats-sink validate examples/file-basic/config.json
 Displays the validated configuration as redacted JSON. Use this when you want
 to confirm defaults and environment-backed field names without printing
 resolved secrets.
+
+This is especially useful in reviewed environments because it lets operators
+confirm NATS subjects, sink type, message metadata defaults, encryption policy,
+and DLQ settings without exposing passwords, tokens, Oracle wallet passwords,
+or encryption keys.
 
 ```bash
 nats-sink show-effective-config examples/file-basic/config.json

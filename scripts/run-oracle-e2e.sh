@@ -12,6 +12,10 @@ DROP_TABLE_AFTER=false
 TABLE_OVERRIDE=""
 MESSAGE_COUNT_OVERRIDE=""
 BATCH_SIZE_OVERRIDE=""
+WITH_ENCRYPTION=false
+ENCRYPTION_ALGORITHM="aes-256-gcm"
+PRESERVE_KEY_MATERIAL=false
+KEY_DIR=""
 
 usage() {
   cat <<'USAGE'
@@ -23,6 +27,9 @@ Options:
   --table NAME               Override NATS_SINKS_E2E_ORACLE_TABLE for this run.
   --message-count N          Override NATS_SINKS_E2E_MESSAGE_COUNT for this run.
   --batch-size N             Override NATS_SINKS_E2E_BATCH_SIZE for this run.
+  --with-encryption          Encrypt payloads before Oracle writes and verify decryption.
+  --encryption-algorithm ALG  Use aes-256-gcm or aes-256-ccm with --with-encryption.
+  --preserve-key-material    Keep generated temporary e2e key material after the run.
   -h, --help                 Show this help.
 
 Defaults keep the Oracle test table after the run so operators can inspect rows.
@@ -52,6 +59,18 @@ while [[ $# -gt 0 ]]; do
       BATCH_SIZE_OVERRIDE="${2:?--batch-size requires a value}"
       shift 2
       ;;
+    --with-encryption)
+      WITH_ENCRYPTION=true
+      shift
+      ;;
+    --encryption-algorithm)
+      ENCRYPTION_ALGORITHM="${2:?--encryption-algorithm requires a value}"
+      shift 2
+      ;;
+    --preserve-key-material)
+      PRESERVE_KEY_MATERIAL=true
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -78,6 +97,17 @@ source_if_present ".local/nats-live/nats-sink.env"
 source_if_present ".local/oracle-adb/integration.env"
 source_if_present ".local/nats-oracle-e2e/integration.env"
 
+cleanup_key_material() {
+  if [[ -n "$KEY_DIR" ]]; then
+    if [[ "$PRESERVE_KEY_MATERIAL" == "true" ]]; then
+      echo "Preserved generated Oracle e2e encryption key material in: ${KEY_DIR}/nats-sinks-e2e-key.env"
+    else
+      rm -rf "$KEY_DIR"
+    fi
+  fi
+}
+trap cleanup_key_material EXIT INT TERM
+
 # Apply command-line overrides after local environment files are sourced so
 # repeatable test invocations cannot be accidentally changed by stale .local
 # defaults.
@@ -92,5 +122,19 @@ if [[ -n "$BATCH_SIZE_OVERRIDE" ]]; then
 fi
 export NATS_SINKS_E2E_DROP_TABLE_BEFORE="$DROP_TABLE_BEFORE"
 export NATS_SINKS_E2E_DROP_TABLE_AFTER="$DROP_TABLE_AFTER"
+
+if [[ "$WITH_ENCRYPTION" == "true" ]]; then
+  export NATS_SINKS_E2E_ENCRYPTION_ENABLED=true
+  export NATS_SINKS_E2E_ENCRYPTION_ALGORITHM="$ENCRYPTION_ALGORITHM"
+  export NATS_SINKS_E2E_ENCRYPTION_KEY_ID="nats-sinks-e2e-generated"
+  export NATS_SINKS_E2E_ENCRYPTION_KEY_B64_ENV="NATS_SINKS_E2E_ENCRYPTION_KEY_B64"
+  if [[ -z "${NATS_SINKS_E2E_ENCRYPTION_KEY_B64:-}" ]]; then
+    KEY_DIR="$(mktemp -d "${TMPDIR:-/tmp}/nats-sinks-oracle-e2e-key.XXXXXX")"
+    KEY_B64="$(python -c 'import base64, secrets; print(base64.b64encode(secrets.token_bytes(32)).decode("ascii"))')"
+    umask 077
+    printf 'NATS_SINKS_E2E_ENCRYPTION_KEY_B64=%s\n' "$KEY_B64" > "${KEY_DIR}/nats-sinks-e2e-key.env"
+    export NATS_SINKS_E2E_ENCRYPTION_KEY_B64="$KEY_B64"
+  fi
+fi
 
 python -m pytest -q -s -m integration tests/integration/test_nats_oracle_e2e.py

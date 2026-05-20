@@ -10,7 +10,131 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ## [Unreleased]
 
-No changes yet.
+No unreleased changes yet.
+
+## [0.3.0] - 2026-05-20
+
+This release is the next feature release after `0.2.1`. The main themes are
+safer payload handling and richer message context that is resolved once in the
+core runtime and then persisted consistently by every production sink.
+
+Highlights:
+
+- Payload encryption can now be enabled before sink delivery. The core runner
+  encrypts only the NATS message body with AES-256-GCM or AES-256-CCM, leaving
+  operational metadata available for routing, idempotency, observability, and
+  troubleshooting. Operators can enable one global policy for all subjects or
+  ordered per-subject rules for selective encryption and exemptions.
+- Every message can now carry normalized `priority`, `classification`, and
+  `labels` metadata. Values can come from configurable NATS headers,
+  deployment defaults, ordered subject-specific defaults, or remain null/empty
+  when neither is provided.
+- Oracle storage now includes dedicated `PRIORITY`, `CLASSIFICATION`, and `LABELS`
+  columns in the recommended table shape.
+- File sink JSON output now includes top-level `priority`, `classification`,
+  `labels`, and `labels_list` fields as well as the same values in the generic
+  metadata document.
+- Mermaid diagrams now render from the same Markdown source for Read the Docs
+  and GitHub Pages.
+- Public documentation now uses more mission-oriented wording where relevant,
+  with examples for defence logistics, operational reporting, sensitive
+  payload handling, audit trails, DLQ triage, and disconnected handoff patterns.
+
+Upgrade notes:
+
+- Existing Oracle tables must be migrated before using the `0.3.0` Oracle
+  default column mapping. Add nullable `PRIORITY`,
+  `CLASSIFICATION`, and `LABELS` columns, or configure
+  `sink.columns.priority`, `sink.columns.classification`, and
+  `sink.columns.labels` to match existing columns.
+- If an older retained Oracle integration or e2e test table is reused, the
+  test will fail fast with a schema message. Use a fresh table or the
+  documented drop-before-test flag for test-only tables.
+- Payload encryption requires installing the optional crypto extra:
+  `pip install "nats-sinks[crypto]"`.
+- When payload encryption is enabled, prefer metadata-based idempotency such as
+  JetStream stream sequence or message ID. Do not depend on plaintext payload
+  fields after the core encrypts the message body.
+
+Validation snapshot:
+
+- Full local check script passed with `164 passed, 8 skipped`.
+- Encryption-focused check passed with `68 passed`.
+- Sink capability check passed with `66 passed`.
+- Live NATS-to-Oracle e2e passed for both unencrypted and encrypted modes
+  against fresh retained test tables that include the new `LABELS` column.
+  The runs verified priority/classification/labels persistence, encrypted
+  payload storage, decrypt verification, and commit-then-ACK completion.
+
+### Added
+
+- Added optional core payload encryption before sink delivery, with
+  AES-256-GCM and AES-256-CCM support through the `nats-sinks[crypto]` extra.
+- Added encrypted payload envelope helpers and public Python imports for
+  `EncryptionConfig`, `EncryptionRuleConfig`, `PayloadEncryptor`,
+  `SubjectPayloadEncryptor`, and `decrypt_payload`.
+- Added subject-specific payload encryption rules with NATS wildcard matching,
+  first-match-wins behavior, disabled-rule exemptions, inherited global
+  encryption settings, and dedicated unit plus local file e2e coverage.
+- Added encryption coverage for core runner ordering, file sink storage,
+  gzip-plus-encryption file output, Oracle row mapping, local file e2e, and
+  live Oracle e2e opt-in mode.
+- Added `scripts/check-encryption.sh` for temporary test key generation and
+  encryption-focused validation, with a `--preserve-key-material` debug flag.
+- Added core-normalized `priority`, `classification`, and `labels` message
+  metadata fields with configurable NATS header extraction, defaults, file sink
+  persistence, Oracle columns, and unit/e2e coverage across present and missing
+  values.
+- Added subject-specific priority, classification, and labels defaults under
+  `message_metadata.rules`, using NATS wildcard matching and first-match-wins
+  resolution while preserving header values as authoritative.
+- Added encrypted file sink example configuration under
+  `examples/payload-encryption/`.
+- Added `scripts/check-gh-auth.sh` so maintainers can validate local GitHub CLI
+  authentication, and optionally start interactive browser login, before
+  pushing release tags.
+- Documented the GitHub CLI authentication preflight in the release and
+  publishing runbooks.
+- Documented payload encryption configuration, subject-specific encryption
+  rules, encrypted envelope shape, decryption helpers, key handling,
+  idempotency guidance, and encrypted Oracle/file sink behavior.
+- Documented priority/classification/labels message metadata configuration,
+  subject-specific defaults, semicolon-separated label storage, null/empty
+  handling, Oracle schema impact, file sink output shape, and test coverage.
+- Added concrete documentation examples showing how encrypted payloads,
+  NATO-style classification values, priority, and semicolon-separated labels
+  appear in file sink JSON records and Oracle table rows.
+- Added public PyPI and supported-Python-version badges to the README and
+  documentation home page, with publishing guidance for future badge updates.
+- Expanded `ROBOTS.md` and `AGENTS.md` with payload-encryption,
+  priority/classification/labels metadata, live Oracle e2e, retained
+  test-table, and Oracle JSON-column handling guidance for future maintainers
+  and AI agents.
+
+### Changed
+
+- Extended the recommended Oracle table DDL with nullable `PRIORITY`,
+  `CLASSIFICATION`, and `LABELS` columns.
+- Extended the generic metadata snapshot with a `message_metadata` object that
+  contains normalized `priority`, `classification`, and `labels` values.
+- Extended file sink output records with top-level `priority` and
+  `classification`, `labels`, and `labels_list` fields.
+- Updated the example file and Oracle configurations to show the new
+  `message_metadata` section.
+- Updated the sanitized test report with the latest local and live e2e
+  validation results.
+- Refined README and documentation wording so public readers in operational,
+  public-sector, and defence-adjacent environments can more easily map the
+  generic sink framework to mission event streams and secure data-handling
+  practices.
+- Updated example JSON configurations to demonstrate NATO-style classification
+  strings, priority defaults, and labels alongside encryption and sink storage
+  behavior.
+
+### Fixed
+
+- Enabled Mermaid fenced-code rendering in MkDocs so Read the Docs and GitHub
+  Pages can render diagrams from the same Markdown source.
 
 ## [0.2.1] - 2026-05-19
 

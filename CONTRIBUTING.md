@@ -7,6 +7,12 @@ and durable writes. Contributions should therefore be easy to review, clearly
 documented, and careful about failure behavior. When in doubt, prefer a small
 change with strong tests over a large change that is difficult to reason about.
 
+Some users will evaluate this project for operational, public-sector, or
+defence-adjacent environments. Contributions should therefore avoid casual
+handling of secrets, payloads, logs, message metadata, and failure semantics.
+Use clear wording, deterministic tests, and conservative defaults so reviewers
+can understand how a change behaves under recovery, replay, and audit.
+
 Repository: [ProjectCuillin/nats-sinks](https://github.com/ProjectCuillin/nats-sinks/)
 
 Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com).

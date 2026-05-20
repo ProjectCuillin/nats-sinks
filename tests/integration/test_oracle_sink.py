@@ -20,6 +20,8 @@ REQUIRED_ORACLE_TEST_COLUMNS = {
     "STREAM_SEQUENCE",
     "SUBJECT",
     "MESSAGE_ID",
+    "PRIORITY",
+    "CLASSIFICATION",
     "MESSAGE_CREATED_AT_EPOCH_NS",
     "JETSTREAM_TIMESTAMP_EPOCH_NS",
     "RECEIVED_AT_EPOCH_NS",
@@ -111,6 +113,9 @@ def _envelope(
     stream: str,
     sequence: int = 1,
     data: bytes = b'{"order_id":"O-IT-1001","amount":42.5}',
+    priority: str | None = None,
+    classification: str | None = None,
+    labels: tuple[str, ...] = (),
 ) -> NatsEnvelope:
     return NatsEnvelope(
         subject="orders.created",
@@ -124,6 +129,9 @@ def _envelope(
         message_id=None,
         redelivered=False,
         pending=0,
+        priority=priority,
+        classification=classification,
+        labels=labels,
     )
 
 
@@ -151,6 +159,25 @@ def _count_text_payload_envelopes(pool: Any, *, table: str, stream: str) -> int:
     if row is None:
         return 0
     return int(row[0])
+
+
+def _message_metadata_values(
+    pool: Any, *, table: str, stream: str
+) -> tuple[str | None, str | None, str | None]:
+    table_name = validate_identifier(table)
+    with pool.acquire() as connection:
+        with connection.cursor() as cursor:
+            # The table name is allow-list validated; data remains bind values.
+            sql = f"select priority, classification, labels from {table_name} where stream_name = :stream_name"  # noqa: E501, S608
+            cursor.execute(sql, {"stream_name": stream})
+            row: Mapping[int, Any] | tuple[Any, ...] | None = cursor.fetchone()
+    if row is None:
+        return (None, None, None)
+    return (
+        None if row[0] is None else str(row[0]),
+        None if row[1] is None else str(row[1]),
+        None if row[2] is None else str(row[2]),
+    )
 
 
 def _drop_table(pool: Any, *, table: str) -> None:
@@ -224,8 +251,23 @@ async def test_oracle_integration_auto_creates_table_and_writes_batch() -> None:
     await _start_sink_for_test(sink, table=table)
     try:
         await sink.healthcheck()
-        await sink.write_batch([_envelope(stream=stream)])
+        await sink.write_batch(
+            [
+                _envelope(
+                    stream=stream,
+                    priority="urgent",
+                    classification="restricted",
+                    labels=("billing", "urgent"),
+                )
+            ]
+        )
         assert await asyncio.to_thread(_count_rows, sink._pool, table=table, stream=stream) == 1
+        assert await asyncio.to_thread(
+            _message_metadata_values,
+            sink._pool,
+            table=table,
+            stream=stream,
+        ) == ("urgent", "restricted", "billing;urgent")
     finally:
         await _stop_sink_for_test(sink, table=table)
 

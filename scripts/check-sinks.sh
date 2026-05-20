@@ -16,6 +16,8 @@ pytest \
 
 nats-sink validate examples/file-basic/config.json
 nats-sink test-sink examples/file-basic/config.json
+nats-sink validate examples/payload-encryption/file-config.json
+nats-sink test-sink examples/payload-encryption/file-config.json
 nats-sink validate examples/oracle-jetstream/config.json
 
 if [ "${NATS_SINKS_RUN_LIVE_ORACLE:-0}" = "1" ]; then

@@ -7,6 +7,11 @@ Use this only with non-production systems or with explicit operator approval.
 The probe can subscribe to a subject and can optionally publish a test message
 after the subscription is active.
 
+For mission or defence lab environments, make sure the chosen subject is
+approved for testing and that the probe message cannot be confused with a real
+operational event. The script prints payload sizes by default and avoids
+printing payload contents unless explicitly requested.
+
 ## Prepare Local Ignored Files
 
 Create an ignored local directory:

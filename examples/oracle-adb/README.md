@@ -4,6 +4,11 @@ These examples show Oracle Autonomous Database connection shapes. They are
 templates only. Do not commit downloaded wallet files, database passwords, or
 wallet passwords.
 
+Autonomous Database is a common choice for managed operational data stores.
+When using it for mission, public-sector, or defence-adjacent streams, keep the
+wallet, service names, database users, and test payloads in ignored local paths
+or approved secret stores.
+
 Store local ADB material in an ignored directory such as:
 
 ```bash
@@ -22,4 +27,3 @@ export ORACLE_PASSWORD='replace-with-database-user-password'
 export ORACLE_WALLET_PASSWORD='replace-with-wallet-password'
 nats-sink test-sink examples/oracle-adb/config-mtls-wallet.json
 ```
-
