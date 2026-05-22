@@ -140,6 +140,12 @@ future JSON document, relational, object-storage, HTTP, and Kafka sinks should
 either reuse it or explicitly document why their destination requires a
 different payload storage model.
 
+Headers-only JetStream delivery needs an additional payload-presence contract.
+The current framework safely handles `b""`, but a future headers-only mode must
+record whether the producer sent an empty body or whether the NATS server
+omitted the body for metadata-only delivery. The design is tracked in
+[Headers-Only Delivery Evaluation](headers-only-delivery.md).
+
 For operational and defence-oriented streams, this neutrality is important
 because payloads may be JSON, plain text, opaque encrypted text, compressed
 bytes, or binary records from platform systems. The framework should preserve

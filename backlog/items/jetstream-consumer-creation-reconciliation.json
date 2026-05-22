@@ -6,7 +6,7 @@
   "target_release": "unscheduled",
   "labels": ["nats"],
   "problem": "The runner can bind to or create a durable consumer, but production operators often need explicit reconciliation behavior. They need to know whether configuration drift is detected, rejected, or updated, especially for consumer properties that affect redelivery, ACK timing, and backpressure.",
-  "proposal": "Add a clear consumer management mode that can bind-only, create-if-missing, or reconcile according to documented rules. The runner should validate expected stream, subject filters, durable name, ACK policy, and delivery-related settings. Unsafe drift should fail closed with a readable error rather than silently changing message delivery behavior.",
+  "proposal": "Add a clear consumer management mode that can bind-only, create-if-missing, or reconcile according to documented rules. The runner should validate expected stream, subject filters, durable name, ACK policy, headers-only mode when configured, and delivery-related settings. Unsafe drift should fail closed with a readable error rather than silently changing message delivery behavior.",
   "users": "Operators managing JetStream consumers across environments, maintainers testing NATS compatibility, and release engineers documenting production setup.",
   "delivery_semantics": "Consumer reconciliation is delivery-sensitive. The feature must preserve pull-based processing, explicit ACK after durable success, and bounded redelivery behavior. Drift that could weaken commit-then-ACK must be rejected or require explicit opt-in.",
   "security": "Consumer management may require broader NATS permissions than bind-only operation. Documentation must separate runtime least privilege from administrative reconciliation permissions and avoid embedding private account details.",
@@ -19,5 +19,8 @@
   ],
   "tests": "Add unit tests with mocked JetStream management APIs and optional integration tests against local NATS. Run scripts/check.sh and relevant e2e tests.",
   "documentation": "Update docs/configuration.md, docs/architecture.md, docs/operations.md, docs/security.md, docs/nats-feature-gap-analysis.md, ROADMAP.md, and CHANGELOG.md.",
-  "closeout": "Close after release publication. Include release tag, modes added, tests run, permission notes, and limitations."
+  "closeout": "Close after release publication. Include release tag, modes added, tests run, permission notes, headers-only compatibility notes, and limitations.",
+  "relationships": {
+    "related": ["#15"]
+  }
 }

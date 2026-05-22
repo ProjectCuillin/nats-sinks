@@ -1,0 +1,27 @@
+{
+  "id": "headers-only-sink-dlq-certification",
+  "title": "[Feature]: Certify sink and DLQ behavior for headers-only workflows",
+  "area": "Core runtime and delivery semantics",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["nats", "oracle", "file", "security", "testing"],
+  "problem": "Headers-only delivery changes what data reaches sinks and DLQ publication. Oracle, file, and future sinks must not silently store an empty payload as if the producer sent one, and DLQ records must not imply that the original payload was captured when NATS intentionally omitted it.",
+  "proposal": "Certify Oracle, file, and generic sink-contract behavior for headers-only messages once the envelope exposes payload-presence metadata. The standard sink metadata document should record omitted-body status, original size when known, and omission reason. DLQ payloads should include the same metadata and explicitly state that the original body was not available to the consumer.",
+  "users": "Operators using metadata-only custody, Oracle and file sink users, incident responders reviewing DLQs, and future sink authors who need one consistent headers-only contract.",
+  "delivery_semantics": "Sink success remains defined by durable metadata-only persistence. Original messages may be ACKed only after sink success or after DLQ publication succeeds. DLQ publication failure must leave originals unacknowledged.",
+  "security": "The feature must avoid fake payload placeholders, avoid payload logging, redact sensitive headers according to existing controls, and document that headers-only still exposes subjects, headers, sequence metadata, timestamps, and message size.",
+  "acceptance": [
+    "Oracle and file sink outputs record payload-presence metadata consistently.",
+    "DLQ records for headers-only messages clearly state that the original body was omitted.",
+    "Sink contract documentation explains metadata-only success and non-goals.",
+    "Tests cover successful sink writes, permanent failures, DLQ-before-ACK, DLQ publication failure, and no-payload-logging behavior.",
+    "Integration guidance explains how to test headers-only consumers without using production streams."
+  ],
+  "tests": "Add Oracle mapping tests, file mapping tests, sink contract tests, commit-then-ack tests, DLQ tests, and optional local NATS integration tests for headers-only consumers. Run scripts/check-sinks.sh and scripts/check.sh.",
+  "documentation": "Update docs/headers-only-delivery.md, docs/oracle-sink.md, docs/file-sink.md, docs/dead-letter-queues.md, docs/sink-framework.md, docs/testing.md, ROADMAP.md, and CHANGELOG.md.",
+  "closeout": "Close after the release containing headers-only sink and DLQ certification is published. Include release tag, output examples, tests run, and limitations.",
+  "relationships": {
+    "related": ["#15"],
+    "blocked_by": ["backlog:payload-presence-envelope-contract"]
+  }
+}

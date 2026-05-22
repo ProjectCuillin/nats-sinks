@@ -1,0 +1,26 @@
+{
+  "id": "payload-presence-envelope-contract",
+  "title": "[Feature]: Add payload presence metadata to NatsEnvelope",
+  "area": "Core runtime and delivery semantics",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["nats", "security", "testing"],
+  "problem": "The current envelope safely represents missing or empty message data as bytes, but it cannot distinguish a producer-sent empty payload from a payload intentionally omitted by a headers-only JetStream consumer. That ambiguity weakens audit records, DLQ explanations, and payload-hash idempotency fallback.",
+  "proposal": "Add a backward-compatible payload-presence contract to NatsEnvelope and the standard metadata snapshot. The core should detect headers-only messages through the NATS-provided message-size header, keep data as bytes for API compatibility, and expose explicit fields such as payload_present, payload_omitted, payload_omitted_reason, and original_payload_size_bytes. The contract should reject unsafe payload-hash fallback when payload bytes were omitted and no stronger idempotency key is available.",
+  "users": "Sink implementers, auditors reviewing custody records, and operators who need to prove whether a destination stored the original body or a metadata-only representation.",
+  "delivery_semantics": "Payload-presence metadata is descriptive and must not allow sinks to ACK messages. It must support existing commit-then-acknowledge handling and permanent-failure routing when an idempotency strategy is unsafe for omitted payloads.",
+  "security": "The metadata must not include the original payload. Message size can still be sensitive, so documentation must treat original_payload_size_bytes as operational metadata and keep it out of high-cardinality metric labels by default.",
+  "acceptance": [
+    "NatsEnvelope exposes explicit payload-presence metadata without breaking existing data access.",
+    "The standard metadata JSON document records payload presence, omission reason, and original size when available.",
+    "Headers-only payload-hash fallback is rejected or documented as unavailable.",
+    "Tests cover normal payloads, producer-empty payloads, headers-only omitted payloads, malformed size headers, and missing metadata.",
+    "Public API compatibility tests are updated."
+  ],
+  "tests": "Add unit tests for envelope construction, metadata snapshots, idempotency key selection, payload normalization, malformed Nats-Msg-Size values, and public API compatibility. Run scripts/check.sh.",
+  "documentation": "Update docs/headers-only-delivery.md, docs/sink-framework.md, docs/idempotency.md, docs/configuration.md, docs/security.md, ROADMAP.md, and CHANGELOG.md.",
+  "closeout": "Close after the release containing the payload-presence envelope contract is published. Include release tag, public API notes, tests run, and migration guidance.",
+  "relationships": {
+    "related": ["#15"]
+  }
+}

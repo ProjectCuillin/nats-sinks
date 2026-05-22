@@ -280,6 +280,13 @@ If an embedding application passes its own `nats-py` callbacks through
 `nats_options`, the runner wraps them so the application callback still runs
 after metrics have been recorded.
 
+Headers-only JetStream delivery is not yet a supported configuration switch in
+nats-sinks. The current runtime can process empty payload bytes, but it does
+not yet distinguish a producer-empty payload from a body omitted by a
+headers-only consumer. See
+[Headers-Only Delivery Evaluation](headers-only-delivery.md) for the design
+decision and follow-up backlog items.
+
 The `nats` section is also the source of truth for least-privilege NATS
 authorization planning. `nats.stream`, `nats.consumer`, `nats.subject`, and
 `dead_letter.subject` map directly to the permission placeholders described in

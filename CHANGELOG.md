@@ -50,6 +50,9 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   contract, then split the broad additional-observability roadmap item into
   individual connector backlog items for StatsD, Datadog, Splunk HEC, Elastic,
   Grafana Alloy, OCI Monitoring, Amazon CloudWatch, Azure Monitor, and syslog.
+- Added a headers-only JetStream delivery evaluation and split implementation
+  work into separate backlog items for consumer configuration,
+  payload-presence metadata, and sink or DLQ certification.
 
 ### Changed
 

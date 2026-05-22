@@ -84,6 +84,8 @@
   Infrastructure Monitoring, Amazon CloudWatch, Azure Monitor, and syslog
   bridges, all following the shared disabled-by-default observability connector
   contract.
+- Headers-only JetStream delivery support split into validated consumer
+  configuration, payload-presence metadata, and sink or DLQ certification.
 - Additional mission-support documentation examples for future operator
   runbooks, deeper replay drills, and sink-specific certification evidence.
 - Documented sink certification contract for idempotency, including required

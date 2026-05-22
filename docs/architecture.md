@@ -134,6 +134,13 @@ operator guidance.
 
 Raw `nats-py` messages expose `ack`, `nak`, and related methods. Passing raw messages into destination code would make it easy for a sink to ACK before durable success. `NatsEnvelope` prevents this by carrying payload and metadata without delivery-control methods.
 
+Headers-only JetStream consumers are intentionally treated as a separate
+design topic. nats-sinks can process empty payload bytes today, but explicit
+headers-only support must distinguish a producer-empty message from a body that
+the NATS server intentionally omitted. See
+[Headers-Only Delivery Evaluation](headers-only-delivery.md) for the staged
+design.
+
 ## Extension Model
 
 Future sinks should implement:

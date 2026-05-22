@@ -225,6 +225,14 @@ disabled rule intentionally leaves matching payloads unchanged. See
 [Payload Encryption](payload-encryption.md) for the full design and
 configuration reference.
 
+Headers-only delivery can reduce payload exposure to a sink process, but it is
+not a complete confidentiality control. Subjects, headers, stream metadata,
+sequence numbers, message size, priority, classification, labels, mission
+metadata, and DLQ records can remain sensitive. The headers-only design is
+tracked separately in
+[Headers-Only Delivery Evaluation](headers-only-delivery.md) so future support
+does not silently store omitted bodies as if producers sent empty payloads.
+
 Key rotation should use explicit `key_id` values. New runtime configuration
 encrypts with the active key, while authorized verification, replay, or
 migration tooling can use `PayloadKeyRegistry` to decrypt records written with

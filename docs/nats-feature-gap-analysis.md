@@ -101,7 +101,7 @@ Current gap details:
 | MaxAckPending | Server-side flow control for outstanding unacked messages. | `batch_size` bounds fetches, but consumer `MaxAckPending` is not configured. | Phase 2 |
 | DeliverPolicy | Start at all, new, last, sequence, time, or last-per-subject. | Not exposed; external consumer setup required. | Phase 2 |
 | Multiple FilterSubjects | Consumers can filter on multiple subjects. | Single `nats.subject` only. Oracle table routing happens after delivery. | Phase 2 |
-| HeadersOnly delivery | Consumers can deliver only headers. | Not supported; sinks expect payload bytes. | Phase 3 |
+| HeadersOnly delivery | Consumers can deliver only headers and expose the omitted body size through a NATS header. | Evaluated in [Headers-Only Delivery Evaluation](headers-only-delivery.md). Current code safely handles empty payloads, but explicit headers-only support is split into consumer configuration, payload-presence metadata, and sink or DLQ certification backlog items. | Phase 2 |
 | Consumer metadata | Consumers support user metadata. | Not exposed. | Phase 3 |
 | Push consumers | NATS supports push delivery to a subject. | Not supported by the runner by design today. | Phase 3 |
 | Ordered consumers | NATS supports ordered push and pull consumers for inspection/replay. | Not supported; not suitable for durable sink writes by default because ordered consumers do not use the same ACK semantics. | Phase 3 |
