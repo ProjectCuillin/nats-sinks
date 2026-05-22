@@ -123,7 +123,11 @@
 - Configurable consumer `AckWait`, `MaxDeliver`, `BackOff`, and `MaxAckPending`.
 - Configurable consumer deliver policies.
 - Multiple JetStream filter subjects.
-- Optional `AckSync` / double-ACK support after durable sink success.
+- Optional confirmed ACK support after durable sink success.
+- Optional confirmed ACK or terminal acknowledgement handling after successful
+  DLQ publication.
+- ACK confirmation metrics and an operator runbook for interpreting durable
+  success followed by ACK confirmation failure.
 - Optional `InProgress` handling for long-running sink writes.
 - JetStream advisory consumption for operational events and max-deliver signals.
 - Richer observability policies for bounded subject-aware metrics, if future

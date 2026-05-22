@@ -1,0 +1,26 @@
+{
+  "id": "ack-confirmation-metrics-runbook",
+  "title": "[Feature]: Add ACK confirmation metrics and operator runbook",
+  "area": "Metrics and observability",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["nats", "observability", "documentation", "testing"],
+  "problem": "If optional ACK confirmation is added, operators need metrics and runbook guidance that distinguish ordinary ACK attempts, confirmed ACK attempts, confirmation successes, timeouts, and failures after durable commit. Without clear names and operational guidance, confirmed ACK failures could be misread as sink failures or message loss.",
+  "proposal": "Add a small ACK confirmation metrics set and a public operator runbook. Suggested metric suffixes include acknowledgement confirmation attempts, successes, timeouts, failures, and elapsed seconds. The runbook should explain how to interpret a durable sink success followed by ACK confirmation failure, how idempotency handles redelivery, and which alerts should be symptoms-based rather than payload-specific.",
+  "users": "Operators who monitor sink workers, developers using the metrics snapshot and nats-sink-metrics CLI, and maintainers who need consistent observability semantics across core ACK paths.",
+  "delivery_semantics": "Metrics must observe ACK confirmation behavior without changing ACK ordering, retry behavior, DLQ behavior, or sink success definitions. A confirmation failure after durable success must be treated as a visibility and redelivery-risk event, not as proof that the sink write failed.",
+  "security": "Metric names and runbook examples must avoid sensitive subject values, payload bodies, credentials, hostnames, and private deployment details. Exporter guidance must keep sharing disabled by default and require explicit metric allow lists.",
+  "acceptance": [
+    "Metric names are stable, documented, and readable through nats-sink-metrics.",
+    "Metrics distinguish attempts, successes, timeouts, failures, and elapsed seconds.",
+    "The runbook explains durable success followed by ACK confirmation failure.",
+    "Prometheus and shell output examples show safe, non-sensitive names.",
+    "Tests cover metric registration, snapshot output, metrics CLI rendering, and no payload exposure."
+  ],
+  "tests": "Add unit tests for metric name registration, snapshot rendering, nats-sink-metrics table and Prometheus output, and documentation examples where practical. Run scripts/check.sh.",
+  "documentation": "Update metrics, observability, acknowledgement confirmation, operations, roadmap, and changelog documentation.",
+  "closeout": "Close after the release containing ACK confirmation metrics and the operator runbook is published. Include release tag, tests, docs, and limitations.",
+  "relationships": {
+    "related": ["#27", "backlog:confirmed-ack-after-sink-success", "backlog:confirmed-dlq-ack-after-publication"]
+  }
+}

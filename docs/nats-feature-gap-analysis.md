@@ -118,7 +118,7 @@ Current gap details:
 
 | NATS capability | NATS support | Current `nats-sinks` status | Suggested priority |
 | --- | --- | --- | --- |
-| Double ACK / AckSync | Client can wait for the server to confirm receipt of the ACK. | Runner uses ordinary ACK. If ACK is lost after destination commit, redelivery is handled by idempotency. | Phase 2 |
+| Double ACK / AckSync | Client can wait for the server to confirm receipt of the ACK. | Evaluated in [Acknowledgement Confirmation Evaluation](acknowledgement-confirmation.md). Runner still uses ordinary ACK by default; implementation work is split into optional confirmed ACK, DLQ confirmation, and metrics or runbook backlog items. | Phase 2 |
 | In-progress ACK | Extends `AckWait` while long processing continues. | Not supported; long Oracle writes can redeliver if server `AckWait` is too short. | Phase 2 |
 | Term ACK | Stops redelivery without marking successful processing. | Supported as explicit `dead_letter.ack_term_after_publish` policy only after DLQ publication succeeds. Disabled by default. | Implemented |
 | AckAll | ACK one message and implicitly ACK earlier messages. | Intentionally unsupported because commit-then-ack requires explicit per-message safety. | Not planned |
@@ -200,7 +200,8 @@ Other gaps are good candidates for future work:
 
 - certified credentials-file, NKEY, and JWT workflows,
 - explicit consumer configuration and reconciliation,
-- `AckSync` and `InProgress` support,
+- optional confirmed ACK support, ACK confirmation metrics, and `InProgress`
+  support,
 - multi-subject filters,
 - JetStream advisory consumption beyond the documented read-only advisory
   permission template.
@@ -218,6 +219,7 @@ Other gaps are good candidates for future work:
 - [NATS NKEY Authentication](https://docs.nats.io/running-a-nats-service/configuration/securing_nats/auth_intro/nkey_auth)
 - [NATS Decentralized JWT Authentication/Authorization](https://docs.nats.io/running-a-nats-service/configuration/securing_nats/auth_intro/jwt)
 - [JetStream Consumers](https://docs.nats.io/nats-concepts/jetstream/consumers)
+- [nats.py message acknowledgement methods](https://nats-io.github.io/nats.py/_modules/nats/aio/msg.html)
 - [JetStream Streams](https://docs.nats.io/nats-concepts/jetstream/streams)
 - [JetStream Model Deep Dive](https://docs.nats.io/using-nats/developer/develop_jetstream/model_deep_dive)
 - [NATS Subject Mapping And Partitioning](https://docs.nats.io/nats-concepts/subject_mapping)

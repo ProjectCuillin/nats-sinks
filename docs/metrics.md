@@ -252,6 +252,12 @@ published to DLQ and `dead_letter.ack_term_after_publish` is enabled. They are
 separate from normal ACK metrics because `AckTerm` means "stop redelivery after
 terminal failure handling", not "the sink successfully wrote the message".
 
+Confirmed ACK metrics are not emitted yet because the runtime does not yet
+expose a confirmed ACK option. The evaluated future metrics are documented in
+[Acknowledgement Confirmation Evaluation](acknowledgement-confirmation.md).
+Those future metrics should remain separate from ordinary ACK counters so an
+operator can distinguish "ACK sent" from "ACK confirmation received".
+
 ```bash
 nats-sink-metrics show .local/nats-sinks/metrics.json --metric "*term*"
 ```

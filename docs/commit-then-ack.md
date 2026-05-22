@@ -106,6 +106,23 @@ boundary easier to review and test.
 The full decision is documented in
 [ADR 0005: AckTerm And AckNext Evaluation](adr/0005-ackterm-acknext-evaluation.md).
 
+## Confirmed Acknowledgements
+
+Some NATS clients support a confirmed ACK operation, often called `AckSync` or
+double ACK. Confirmed ACK waits for the server to confirm that it processed the
+ACK. That can improve operational visibility, but it does not move the safety
+boundary.
+
+For `nats-sinks`, confirmed ACK must still be the final step. It may be useful
+as a future opt-in option after durable sink success, but it must never run
+before `sink.write_batch(...)` returns success and it must never be used to
+claim exactly-once delivery. If the sink commit succeeds and ACK confirmation
+then times out, the message may redeliver and idempotency must handle the
+duplicate.
+
+The evaluation and future implementation split are documented in
+[Acknowledgement Confirmation Evaluation](acknowledgement-confirmation.md).
+
 ## Non-Negotiable Invariant
 
 > A JetStream message must only be acknowledged after all required durable side effects have completed successfully. ACK is the final confirmation of successful processing, never a prerequisite for processing.

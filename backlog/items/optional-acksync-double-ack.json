@@ -3,21 +3,21 @@
   "title": "[Feature]: Evaluate optional AckSync support after durable sink success",
   "area": "Core runtime and delivery semantics",
   "priority": "P4 - research or design needed",
-  "target_release": "unscheduled",
-  "labels": ["nats"],
+  "target_release": "v0.4.1",
+  "labels": ["nats", "completed"],
   "problem": "JetStream supports acknowledged ACK confirmation patterns that can help operators know whether the server accepted an ACK. The project currently ACKs after durable sink success but does not expose an optional double-ACK style mode. Adding it requires care because ACK confirmation cannot become a prerequisite for durable work or a reason to claim exactly-once delivery.",
-  "proposal": "Evaluate and, if appropriate, implement an optional AckSync mode that is called only after the sink has committed durable state. The feature should have clear timeout behavior, metrics for ACK confirmation failures, and documentation explaining that redelivery may still occur if the commit succeeded and ACK confirmation failed.",
+  "proposal": "Evaluate optional AckSync support, document the safety boundary, and split any implementation work into separate feature requests. AckSync-style confirmation can improve ACK observability, but it must remain optional, disabled by default, bounded by timeouts, and executed only after the sink has committed durable state.",
   "users": "Operators who want stronger visibility into ACK acceptance and maintainers improving JetStream compatibility.",
   "delivery_semantics": "AckSync must run only after durable sink success. If AckSync fails after commit, the message may redeliver and idempotency must handle it. The feature must not ACK before commit and must not claim exactly-once behavior.",
   "security": "ACK confirmation logs and metrics must not include payloads or sensitive metadata. Timeouts must be bounded so ACK confirmation cannot stall shutdown indefinitely.",
   "acceptance": [
-    "AckSync behavior is optional and disabled by default.",
-    "AckSync is executed only after sink success.",
-    "Timeouts and failures are logged safely and counted.",
-    "Tests cover success, timeout, and failure after commit.",
-    "Documentation explains duplicate redelivery implications."
+    "Research documents how JetStream ACK confirmation differs from ordinary ACK.",
+    "Research confirms ACK confirmation must be executed only after sink success.",
+    "Recommended implementation work is split into separate feature requests.",
+    "Documentation explains duplicate redelivery implications.",
+    "The evaluation issue is closed with public findings and test evidence."
   ],
-  "tests": "Add mocked JetStream message tests for ACK ordering, AckSync timeout, and failure metrics. Run scripts/check.sh.",
-  "documentation": "Update docs/commit-then-ack.md, docs/configuration.md, docs/operations.md, docs/metrics.md, ROADMAP.md, and CHANGELOG.md.",
-  "closeout": "Close after release publication if implemented, or close with documented decision evidence if rejected. Include release tag or decision note, tests, and limitations."
+  "tests": "Run backlog manifest validation, Markdown link checks, and scripts/check.sh after the evaluation documentation and follow-up backlog items are in place.",
+  "documentation": "Update docs/acknowledgement-confirmation.md, docs/commit-then-ack.md, docs/configuration.md, docs/operations.md, docs/metrics.md, docs/nats-feature-gap-analysis.md, ROADMAP.md, docs/roadmap.md, and CHANGELOG.md.",
+  "closeout": "Close with documented decision evidence after the evaluation findings are posted and follow-up feature requests are created."
 }

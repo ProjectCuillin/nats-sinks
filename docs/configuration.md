@@ -190,6 +190,12 @@ production sink processing because it combines acknowledgement and fetching.
 `dead_letter.ack_term_after_publish` option and only after DLQ publication
 succeeds.
 
+Confirmed ACK, sometimes called `AckSync` or double ACK in client APIs, has
+been evaluated but is not yet a runtime configuration option. Any future option
+will be disabled by default and will run only after durable sink success. See
+[Acknowledgement Confirmation Evaluation](acknowledgement-confirmation.md) for
+the current design direction and limitations.
+
 ```mermaid
 flowchart TD
     JSON[config.json] --> Size{At most 1 MiB?}

@@ -128,6 +128,13 @@ nats-sink-metrics get .local/nats-sinks/metrics.json messages_failed_total --def
 The full CLI reference, Python hooks, shell examples, exit codes, and snapshot
 schema are documented in [Metrics](metrics.md).
 
+Confirmed JetStream acknowledgement support has been evaluated for a future
+release, but it is not enabled today. If that option is implemented later, it
+will provide stronger evidence that the server accepted the post-commit ACK,
+while still allowing redelivery if confirmation fails after durable sink
+success. See
+[Acknowledgement Confirmation Evaluation](acknowledgement-confirmation.md).
+
 Prometheus sharing should use the policy-controlled observability layer rather
 than an ad hoc shell redirection. The separate `nats-sink-observe` CLI can
 generate a disabled policy from runtime config, write a filtered textfile for

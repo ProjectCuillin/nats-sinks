@@ -53,6 +53,10 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 - Added a headers-only JetStream delivery evaluation and split implementation
   work into separate backlog items for consumer configuration,
   payload-presence metadata, and sink or DLQ certification.
+- Added an optional confirmed ACK evaluation and split future implementation
+  work into separate backlog items for confirmed ACK after sink success,
+  confirmed DLQ acknowledgement behavior, and ACK confirmation metrics with an
+  operator runbook.
 
 ### Changed
 
