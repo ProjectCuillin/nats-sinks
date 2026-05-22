@@ -42,6 +42,7 @@ from nats_sinks.oracle import OracleSink
 from nats_sinks.sinks.base import HealthCheckableSink, Sink
 from nats_sinks.sinks.connectors import SinkConnector, load_entry_point_connectors
 from nats_sinks.sinks.registry import SinkRegistry
+from nats_sinks.spool import SpoolSink, replay_spool_to_sink
 
 app = typer.Typer(help="Run NATS JetStream sink connectors.")
 
@@ -84,6 +85,18 @@ def _registry(plugins: SinkPluginConfig | None = None) -> SinkRegistry:
             requires_extra="oracle",
             documentation="docs/oracle-sink.md",
             certification=("commit-then-ack", "unit", "integration", "live-e2e"),
+        )
+    )
+    registry.register_connector(
+        SinkConnector(
+            name="spool",
+            factory=SpoolSink.from_mapping,
+            summary="Built-in encrypted local edge spool sink.",
+            built_in=True,
+            production_ready=True,
+            requires_extra="crypto",
+            documentation="docs/spool-sink.md",
+            certification=("commit-then-ack", "unit", "replay"),
         )
     )
     if plugins is not None and plugins.enabled:
@@ -450,3 +463,75 @@ def test_sink(
         typer.echo(f"Unexpected sink test failure: {type(exc).__name__}", err=True)
         raise typer.Exit(1) from exc
     typer.echo("Sink test succeeded.")
+
+
+@app.command("replay-spool")
+def replay_spool(
+    spool_config: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    target_config: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    max_records: Annotated[
+        int | None,
+        typer.Option(
+            "--max-records",
+            help="Maximum committed spool records to replay during this invocation.",
+        ),
+    ] = None,
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
+) -> None:
+    """Replay committed spool records into a configured target sink.
+
+    Both arguments are normal nats-sinks JSON configuration files.  The first
+    must select `sink.type: "spool"` and points at the local spool directory.
+    The second selects the final destination sink, such as `file` or `oracle`.
+    Replay never ACKs JetStream messages because the original ACK boundary was
+    the local spool commit performed by `nats-sink run`.
+    """
+
+    if max_records is not None and max_records < 1:
+        typer.echo("Configuration error: --max-records must be greater than zero", err=True)
+        raise typer.Exit(2)
+
+    loaded_spool = _load_or_exit(spool_config)
+    loaded_target = _load_or_exit(target_config)
+    spool_sink = _build_sink(loaded_spool)
+    target_sink = _build_sink(loaded_target)
+    if not isinstance(spool_sink, SpoolSink):
+        typer.echo("Configuration error: first config must use sink.type 'spool'", err=True)
+        raise typer.Exit(2)
+    if isinstance(target_sink, SpoolSink):
+        typer.echo("Configuration error: target config must not use sink.type 'spool'", err=True)
+        raise typer.Exit(2)
+
+    async def _replay() -> None:
+        await spool_sink.start()
+        if dry_run:
+            entries = await asyncio.to_thread(spool_sink.committed_entries)
+            limited = entries if max_records is None else entries[:max_records]
+            typer.echo(f"Dry run complete; {len(limited)} committed spool record(s) eligible.")
+            return
+
+        await target_sink.start()
+        try:
+            result = await replay_spool_to_sink(
+                spool_sink,
+                target_sink,
+                max_records=max_records,
+            )
+        finally:
+            await target_sink.stop()
+        typer.echo(
+            "Replay complete: "
+            f"scanned={result.scanned_records} "
+            f"replayed={result.replayed_records} "
+            f"deleted={result.deleted_records} "
+            f"failed={result.failed_records}"
+        )
+
+    try:
+        asyncio.run(_replay())
+    except NatsSinksError as exc:
+        typer.echo(f"Replay failed: {exc}", err=True)
+        raise typer.Exit(1) from exc
+    except Exception as exc:
+        typer.echo(f"Unexpected replay failure: {type(exc).__name__}", err=True)
+        raise typer.Exit(1) from exc

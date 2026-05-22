@@ -74,6 +74,9 @@
   `create_if_missing`, and `reconcile` modes, plus safe drift validation for
   delivery-sensitive settings such as filter subject, ACK policy, AckWait,
   MaxDeliver, MaxAckPending, and headers-only state.
+- Encrypted edge spool-and-forward sink for disconnected operation, with
+  bounded local custody, deterministic duplicate handling, priority-aware
+  replay, and explicit forwarding into a final destination sink.
 - Richer durable pull-consumer policy configuration for plural filter subjects,
   server-side BackOff, MaxWaiting, consumer replicas, memory-storage state, and
   bounded low-sensitivity consumer metadata.

@@ -41,6 +41,7 @@ nav:
   - Sinks:
       - Oracle Sink: oracle-sink.md
       - File Sink: file-sink.md
+      - Edge Spool Sink: spool-sink.md
   - Data Handling:
       - Payload Encryption: payload-encryption.md
       - Tamper-Evident Custody: tamper-evident-custody.md

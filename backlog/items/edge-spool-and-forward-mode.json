@@ -2,11 +2,11 @@
   "id": "edge-spool-and-forward-mode",
   "title": "[Feature]: Add edge spool-and-forward mode for disconnected operation",
   "area": "Operations and deployment",
-  "priority": "P4 - research or design needed",
-  "target_release": "unscheduled",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
   "labels": ["deployment", "security", "nats"],
   "problem": "Edge and deployed environments may experience intermittent network availability, dependency outages, or restricted connectivity. nats-sinks currently relies on JetStream redelivery and destination availability, but it does not provide a local encrypted spool that can preserve normalized events for later durable forwarding when a destination is temporarily unavailable.",
-  "proposal": "Research and design an optional edge spool-and-forward mode with encrypted local storage, bounded disk usage, deterministic idempotency, priority-aware draining, safe cleanup, and explicit operator controls. The mode should remain optional and should not weaken the core commit-then-acknowledge invariant.",
+  "proposal": "Implement an optional edge spool-and-forward sink with encrypted local storage, bounded disk usage, deterministic idempotency, priority-aware draining, safe cleanup, and explicit operator controls. The mode remains optional and does not weaken the core commit-then-acknowledge invariant.",
   "users": "Operators in disconnected or degraded networks, platform engineers, field-support teams, mission-support integrators, and maintainers designing reliable edge deployments.",
   "delivery_semantics": "The ACK boundary must be explicit. If local spool is configured as the durable destination for a phase, ACK may occur only after the event is safely committed to the encrypted spool. Forwarding from spool to a final sink is a second at-least-once workflow that must preserve idempotency and recovery behavior.",
   "security": "Spool files must be encrypted when enabled, bounded by size and count, stored under a validated base directory, protected from path traversal, and excluded from logs. Operators must understand that local disk custody has different risk than database or object storage custody.",
@@ -17,7 +17,7 @@
     "Replay preserves idempotency keys and metadata.",
     "Tests cover crash recovery, duplicate replay, full spool behavior, and cleanup."
   ],
-  "tests": "Begin with design tests for path validation and metadata serialization. If implemented, add unit and integration tests for encrypted spool writes, replay, duplicate handling, full-disk simulation where practical, priority-aware draining, and graceful shutdown.",
+  "tests": "Add unit coverage for secure configuration defaults, encrypted spool writes, replay, duplicate handling, capacity-limit behavior, priority-aware draining, and cleanup. Keep live integration testing optional because the sink can be validated with deterministic local files.",
   "documentation": "Update docs/operations.md, docs/security.md, docs/file-sink.md, docs/idempotency.md, docs/use-cases, ROADMAP.md, and CHANGELOG.md with diagrams and operator guidance.",
   "closeout": "Close after the release containing design or implementation is published. Include release tag, ACK boundary decision, tests run, and limitations."
 }

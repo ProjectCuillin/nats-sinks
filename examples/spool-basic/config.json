@@ -1,0 +1,30 @@
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "spool-orders-sink",
+    "subject": "orders.*"
+  },
+  "delivery": {
+    "batch_size": 100,
+    "batch_timeout_ms": 1000,
+    "max_in_flight_batches": 1,
+    "ack_policy": "after_sink_commit"
+  },
+  "sink": {
+    "type": "spool",
+    "directory": ".local/spool-basic/spool",
+    "max_records": 10000,
+    "max_bytes": 1073741824,
+    "duplicate_policy": "skip_existing",
+    "drain_ordering": "priority",
+    "delete_after_replay": true,
+    "fsync": true,
+    "encryption": {
+      "enabled": true,
+      "algorithm": "aes-256-gcm",
+      "key_id": "local-spool-example",
+      "key_b64_env": "NATS_SINKS_SPOOL_KEY_B64"
+    }
+  }
+}

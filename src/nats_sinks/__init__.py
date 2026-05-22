@@ -134,6 +134,7 @@ from nats_sinks.sinks.connectors import (
     load_entry_point_connectors,
     normalize_connector_name,
 )
+from nats_sinks.spool import SpoolReplayResult, SpoolSink, SpoolSinkConfig, replay_spool_to_sink
 
 __all__ = [
     "CUSTODY_SCHEMA",
@@ -204,6 +205,9 @@ __all__ = [
     "SizePolicyEvaluation",
     "SizePolicyViolation",
     "SizePolicyViolationError",
+    "SpoolReplayResult",
+    "SpoolSink",
+    "SpoolSinkConfig",
     "SubjectPayloadEncryptor",
     "TemporarySinkError",
     "ValidationError",
@@ -229,6 +233,7 @@ __all__ = [
     "parse_jetstream_advisory",
     "parse_mission_metadata_header",
     "qualified_metric_name",
+    "replay_spool_to_sink",
     "validate_advisory_subject",
     "write_metrics_snapshot",
 ]

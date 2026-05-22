@@ -31,6 +31,7 @@ from nats_sinks import (
 )
 from nats_sinks.file import FileSink as ReadmeFileSink
 from nats_sinks.oracle import OracleSink as ReadmeOracleSink
+from nats_sinks.spool import SpoolSink as ReadmeSpoolSink
 
 PUBLIC_API_CONTRACT: dict[str, tuple[str, ...]] = {
     "nats_sinks": (
@@ -87,6 +88,9 @@ PUBLIC_API_CONTRACT: dict[str, tuple[str, ...]] = {
         "SizePolicyEvaluation",
         "SizePolicyViolation",
         "SizePolicyViolationError",
+        "SpoolReplayResult",
+        "SpoolSink",
+        "SpoolSinkConfig",
         "SubjectPayloadEncryptor",
         "TemporarySinkError",
         "ValidationError",
@@ -112,6 +116,7 @@ PUBLIC_API_CONTRACT: dict[str, tuple[str, ...]] = {
         "parse_jetstream_advisory",
         "parse_mission_metadata_header",
         "qualified_metric_name",
+        "replay_spool_to_sink",
         "validate_advisory_subject",
         "write_metrics_snapshot",
     ),
@@ -171,6 +176,24 @@ PUBLIC_API_CONTRACT: dict[str, tuple[str, ...]] = {
     "nats_sinks.oracle": (
         "OracleSink",
         "OracleSinkConfig",
+    ),
+    "nats_sinks.spool": (
+        "SPOOL_RECORD_SCHEMA",
+        "SPOOL_RECORD_VERSION",
+        "SPOOL_WRAPPER_SCHEMA",
+        "SPOOL_WRAPPER_VERSION",
+        "SpoolDrainOrdering",
+        "SpoolDuplicatePolicy",
+        "SpoolReplayResult",
+        "SpoolSink",
+        "SpoolSinkConfig",
+        "build_plain_record",
+        "envelope_from_plain_record",
+        "priority_rank",
+        "replay_spool_to_sink",
+        "spool_filename_for_envelope",
+        "unwrap_record",
+        "wrap_record",
     ),
     "nats_sinks.observability": (
         "NATS_MONITORING_ALLOWED_ENDPOINTS",
@@ -307,6 +330,7 @@ def test_public_api_smoke_imports_match_readme_examples() -> None:
     assert ReadmeSink is nats_sinks.Sink
     assert ReadmeFileSink is nats_sinks.FileSink
     assert ReadmeOracleSink.__name__ == "OracleSink"
+    assert ReadmeSpoolSink is nats_sinks.SpoolSink
 
 
 def test_public_metric_helper_contract_remains_stable() -> None:
