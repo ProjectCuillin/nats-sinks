@@ -13,66 +13,77 @@ markdown_extensions:
           format: !!python/name:pymdownx.superfences.fence_code_format
 nav:
   - Home: index.md
-  - Getting Started: getting-started.md
-  - Architecture: architecture.md
-  - Commit Then ACK: commit-then-ack.md
-  - Configuration: configuration.md
-  - NATS Connections: nats-connections.md
-  - NATS Permissions: nats-permissions.md
-  - JetStream Topology: jetstream-topology.md
-  - NATS Feature Gaps: nats-feature-gap-analysis.md
-  - Sink Framework: sink-framework.md
-  - Mission Metadata: mission-metadata.md
-  - Payload Encryption: payload-encryption.md
-  - Priority Lanes: priority-lanes.md
-  - Message Sizing: message-sizing.md
-  - Performance: performance.md
+  - Start Here:
+      - Getting Started: getting-started.md
+      - Configuration: configuration.md
+      - CLI: cli.md
+      - Python Usage: python-usage.md
+  - Core Concepts:
+      - Architecture: architecture.md
+      - Commit Then ACK: commit-then-ack.md
+      - Sink Framework: sink-framework.md
+      - Idempotency: idempotency.md
+      - Dead Letter Queues: dead-letter-queues.md
+      - Message Sizing: message-sizing.md
+      - Performance: performance.md
+  - NATS:
+      - Connections: nats-connections.md
+      - Permissions: nats-permissions.md
+      - JetStream Topology: jetstream-topology.md
+      - Feature Gap Analysis: nats-feature-gap-analysis.md
+  - Sinks:
+      - Oracle Sink: oracle-sink.md
+      - File Sink: file-sink.md
+  - Data Handling:
+      - Payload Encryption: payload-encryption.md
+      - Priority Lanes: priority-lanes.md
+      - Mission Metadata: mission-metadata.md
   - Observability:
       - Overview: observability.md
       - Metrics Snapshot And CLI: metrics.md
       - Prometheus Integration: prometheus.md
       - NATS Server Monitoring: nats-server-monitoring.md
-  - Dependency Management: dependency-management.md
-  - Hash-Verified Installs: hash-verified-installs.md
-  - SBOM: sbom.md
-  - CLI: cli.md
-  - Oracle Sink: oracle-sink.md
-  - File Sink: file-sink.md
-  - Python Usage: python-usage.md
-  - Public API Compatibility: public-api.md
-  - Idempotency: idempotency.md
-  - Dead Letter Queues: dead-letter-queues.md
-  - Backlog Management: backlog-management.md
-  - Branch Workflow: branch-workflow.md
-  - Security: security.md
-  - Security Rule Review: security-rule-review.md
-  - Operations: operations.md
-  - Service Deployment: service-deployment.md
-  - Kubernetes Deployment: kubernetes.md
-  - Testing: testing.md
-  - Latest Test Report: test-report.md
+  - Deployment:
+      - Operations: operations.md
+      - Service Deployment: service-deployment.md
+      - Kubernetes Deployment: kubernetes.md
+  - Security And Supply Chain:
+      - Security: security.md
+      - Security Rule Review: security-rule-review.md
+      - Dependency Management: dependency-management.md
+      - Hash-Verified Installs: hash-verified-installs.md
+      - SBOM: sbom.md
+  - Testing And Quality:
+      - Testing: testing.md
+      - Latest Test Report: test-report.md
+      - Public API Compatibility: public-api.md
   - Use Cases:
       - Overview: use-cases/index.md
-      - Mission-Support Operational Examples: use-cases/mission-support/index.md
-      - Restricted Event Storage: use-cases/mission-support/restricted-event-storage.md
-      - Disconnected File Handoff: use-cases/mission-support/disconnected-file-handoff.md
-      - DLQ Triage And Replay Preparation: use-cases/mission-support/dlq-triage-and-replay.md
-      - Destination Outage Recovery: use-cases/mission-support/destination-outage-recovery.md
-      - Defence And Mission Support: use-cases/defence/index.md
-      - F2T2EA Event Phase Tagging: use-cases/defence/f2t2ea-event-phase-tagging.md
-      - Sensor Event Custody: use-cases/defence/sensor-event-custody.md
-      - Classification And Labels: use-cases/defence/classification-and-labels.md
-      - Chain Of Custody: use-cases/defence/chain-of-custody.md
-      - Cross-Domain Handoff Preparation: use-cases/defence/cross-domain-handoff-preparation.md
-      - Edge Operation: use-cases/defence/edge-operation.md
-      - Audit-Oriented Persistence: use-cases/defence/audit-oriented-persistence.md
-      - Synthetic Mission Testing: use-cases/defence/synthetic-mission-testing.md
-  - Development: development.md
-  - Read the Docs: read-the-docs.md
-  - GitHub Pages: github-pages.md
-  - Release: release.md
-  - Publishing Releases: publishing.md
-  - Roadmap: roadmap.md
+      - Mission-Support Operational Examples:
+          - Overview: use-cases/mission-support/index.md
+          - Restricted Event Storage: use-cases/mission-support/restricted-event-storage.md
+          - Disconnected File Handoff: use-cases/mission-support/disconnected-file-handoff.md
+          - DLQ Triage And Replay Preparation: use-cases/mission-support/dlq-triage-and-replay.md
+          - Destination Outage Recovery: use-cases/mission-support/destination-outage-recovery.md
+      - Defence And Mission Support:
+          - Overview: use-cases/defence/index.md
+          - F2T2EA Event Phase Tagging: use-cases/defence/f2t2ea-event-phase-tagging.md
+          - Sensor Event Custody: use-cases/defence/sensor-event-custody.md
+          - Classification And Labels: use-cases/defence/classification-and-labels.md
+          - Chain Of Custody: use-cases/defence/chain-of-custody.md
+          - Cross-Domain Handoff Preparation: use-cases/defence/cross-domain-handoff-preparation.md
+          - Edge Operation: use-cases/defence/edge-operation.md
+          - Audit-Oriented Persistence: use-cases/defence/audit-oriented-persistence.md
+          - Synthetic Mission Testing: use-cases/defence/synthetic-mission-testing.md
+  - Project Workflow:
+      - Development: development.md
+      - Backlog Management: backlog-management.md
+      - Branch Workflow: branch-workflow.md
+      - Read the Docs: read-the-docs.md
+      - GitHub Pages: github-pages.md
+      - Release: release.md
+      - Publishing Releases: publishing.md
+      - Roadmap: roadmap.md
   - ADRs:
       - Core Owns Delivery Semantics: adr/0001-core-owns-delivery-semantics.md
       - Commit Then Acknowledge: adr/0002-commit-then-acknowledge.md

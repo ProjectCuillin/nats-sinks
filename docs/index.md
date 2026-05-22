@@ -138,56 +138,105 @@ API remains intentionally small so it can stabilize before `1.0.0`.
 
 ## Where To Start
 
-- Read [Getting Started](getting-started.md) for a local run.
-- Read [Architecture](architecture.md) to understand the runtime boundary.
-- Read [Commit Then ACK](commit-then-ack.md) before implementing any sink.
-- Read [Oracle Sink](oracle-sink.md) for table design, modes, and transactions.
-- Read [File Sink](file-sink.md) for local file output, atomic writes, and
-  duplicate handling.
-- Read [Payload Encryption](payload-encryption.md) when stored message bodies
-  should be encrypted while metadata remains available for operations.
-- Read [Priority-Aware Processing Lanes](priority-lanes.md) when mixed-urgency
-  batches should prefer urgent messages without claiming strict total ordering.
-- Read [Mission Metadata](mission-metadata.md) when you need a validated JSON
-  context object for mission, operation, platform, source-system, track,
-  confidence, releasability, or lifecycle metadata.
-- Read [Observability](observability.md) for the external-sharing model and
-  its sub-pages for [Metrics](metrics.md), [Prometheus Integration](prometheus.md),
-  and [NATS Server Monitoring](nats-server-monitoring.md).
-- Read [Prometheus Integration](prometheus.md) when you want
-  policy-controlled Prometheus export through node_exporter or the optional
-  native HTTP endpoint as separate Linux services.
-- Read [NATS Server Monitoring](nats-server-monitoring.md) when you need to
-  understand why server endpoints such as `/jsz` and `/healthz` stay outside
-  the delivery worker.
-- Read [NATS Least-Privilege Permissions](nats-permissions.md) when preparing
-  production NATS runtime accounts, DLQ publish rights, or advisory-reader
-  accounts.
-- Read [Advanced JetStream Topology](jetstream-topology.md) when mirrors,
-  sources, subject transforms, republish rules, compression, placement, or
-  stream metadata are part of the event path.
-- Read [Use Cases](use-cases/index.md) when you want blueprints that combine
-  generic nats-sinks features for a specific operational context without
-  changing the framework into a one-use-case product.
-- Read [Mission-Support Operational Examples](use-cases/mission-support/index.md)
-  when you want complete patterns for restricted event storage, disconnected
-  file handoff, DLQ triage, and destination outage recovery.
-- Read [Synthetic Mission Testing](use-cases/defence/synthetic-mission-testing.md)
-  when you need repeatable fake mission-style scenarios for release evidence,
-  file-sink smoke checks, or future sink certification without live services.
-- Read [Sensor Event Custody](use-cases/defence/sensor-event-custody.md),
-  [Classification And Labels](use-cases/defence/classification-and-labels.md),
-  [Chain Of Custody](use-cases/defence/chain-of-custody.md),
-  [Cross-Domain Handoff Preparation](use-cases/defence/cross-domain-handoff-preparation.md),
-  [Edge Operation](use-cases/defence/edge-operation.md), and
-  [Audit-Oriented Persistence](use-cases/defence/audit-oriented-persistence.md)
-  for concrete mission-support blueprint examples based on current generic
-  runtime features.
-- Read [F2T2EA Event Phase Tagging](use-cases/defence/f2t2ea-event-phase-tagging.md)
-  when you need an optional metadata-only lifecycle tagging pattern built on
-  the generic mission metadata feature and kept separate from targeting,
-  fire-control, and decision automation.
-- Read [Security](security.md) before deploying with real credentials or payloads.
+The documentation is organized as a tree so readers can move from first use to
+operations without hunting through a long flat list.
+
+### Start Here
+
+- [Getting Started](getting-started.md): run a local example.
+- [Configuration](configuration.md): understand the JSON configuration shape.
+- [CLI](cli.md): use `nats-sink`, `nats-sink-metrics`, and
+  `nats-sink-observe`.
+- [Python Usage](python-usage.md): embed the framework in another Python
+  project.
+
+### Core Concepts
+
+- [Architecture](architecture.md): understand the runtime boundary.
+- [Commit Then ACK](commit-then-ack.md): learn the non-negotiable delivery
+  invariant before implementing or operating any sink.
+- [Sink Framework](sink-framework.md): understand how future sinks fit into the
+  package without breaking the public API.
+- [Idempotency](idempotency.md), [Dead Letter Queues](dead-letter-queues.md),
+  [Message Sizing](message-sizing.md), and [Performance](performance.md):
+  understand delivery behavior under duplicate, malformed, large, or high-rate
+  conditions.
+
+### NATS
+
+- [NATS Connections](nats-connections.md): configure URLs, authentication, TLS,
+  and reconnect behavior.
+- [NATS Least-Privilege Permissions](nats-permissions.md): prepare runtime,
+  DLQ, management, and advisory-reader accounts.
+- [Advanced JetStream Topology](jetstream-topology.md): review mirrors, sources,
+  transforms, republish behavior, placement, compression, metadata, and
+  idempotency implications.
+- [NATS Feature Gap Analysis](nats-feature-gap-analysis.md): track what NATS
+  supports that nats-sinks does not yet manage directly.
+
+### Sinks
+
+- [Oracle Sink](oracle-sink.md): table design, write modes, staging-table
+  merge mode, metadata columns, Autonomous Database, and transactions.
+- [File Sink](file-sink.md): atomic local files, deterministic filenames,
+  duplicate handling, gzip compression, and handoff patterns.
+
+### Data Handling
+
+- [Payload Encryption](payload-encryption.md): encrypt stored message bodies
+  while keeping safe operational metadata available.
+- [Priority-Aware Processing Lanes](priority-lanes.md): prefer urgent messages
+  inside already-fetched bounded batches without claiming strict total
+  ordering.
+- [Mission Metadata](mission-metadata.md): add a validated JSON context object
+  for mission, operation, platform, source-system, track, confidence,
+  releasability, or lifecycle metadata.
+
+### Observability
+
+- [Observability](observability.md): start here for the external-sharing model.
+- [Metrics Snapshot And CLI](metrics.md): inspect local snapshots and use
+  shell/Python-friendly metric output.
+- [Prometheus Integration](prometheus.md): configure the policy-controlled
+  textfile connector or optional native HTTP endpoint.
+- [NATS Server Monitoring](nats-server-monitoring.md): understand why endpoints
+  such as `/jsz` and `/healthz` stay outside the delivery worker.
+
+### Deployment, Security, And Quality
+
+- [Operations](operations.md), [Service Deployment](service-deployment.md), and
+  [Kubernetes Deployment](kubernetes.md): deploy and operate the worker and
+  optional observability services.
+- [Security](security.md), [Security Rule Review](security-rule-review.md),
+  [Dependency Management](dependency-management.md),
+  [Hash-Verified Installs](hash-verified-installs.md), and [SBOM](sbom.md):
+  prepare high-trust deployment and supply-chain workflows.
+- [Testing](testing.md), [Latest Test Report](test-report.md), and
+  [Public API Compatibility](public-api.md): verify behavior and protect the
+  supported import surface.
+
+### Use Cases
+
+- [Use Cases](use-cases/index.md): start here for implementation blueprints
+  that combine generic nats-sinks features without turning the framework into a
+  one-use-case product.
+- [Mission-Support Operational Examples](use-cases/mission-support/index.md):
+  restricted event storage, disconnected file handoff, DLQ triage, and
+  destination outage recovery.
+- [Defence And Mission Support](use-cases/defence/index.md): sensor event
+  custody, F2T2EA phase tagging, classification and labels, chain of custody,
+  cross-domain handoff preparation, edge operation, audit-oriented persistence,
+  and synthetic mission testing.
+
+### Project Workflow
+
+- [Development](development.md), [Backlog Management](backlog-management.md),
+  [Branch Workflow](branch-workflow.md), [Read the Docs](read-the-docs.md),
+  [GitHub Pages](github-pages.md), [Release](release.md),
+  [Publishing Releases](publishing.md), and [Roadmap](roadmap.md): maintain the
+  project, publish documentation, and prepare releases.
+
+Read [Security](security.md) before deploying with real credentials or payloads.
 
 ## What Is Next
 

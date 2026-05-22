@@ -27,6 +27,10 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 - Grouped Prometheus integration, metrics snapshot guidance, and NATS server
   monitoring under the Observability documentation section so external
   monitoring connectors are presented as sub-pages of the observability model.
+- Reorganized the MkDocs navigation into a broader tree with sections for
+  start-here material, core concepts, NATS, sinks, data handling,
+  observability, deployment, security and supply chain, testing and quality,
+  use cases, project workflow, and ADRs.
 
 ### Fixed
 
