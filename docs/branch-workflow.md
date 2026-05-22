@@ -151,6 +151,13 @@ scripts/open-release-pr.sh \
   --repo ProjectCuillin/nats-sinks \
   --base release-v0.4.1
 
+# Feature branch back into the release branch. Ready non-main PRs are eligible
+# for guarded auto-approval by default.
+scripts/open-release-pr.sh \
+  --repo ProjectCuillin/nats-sinks \
+  --base release-v0.4.1 \
+  --ready
+
 # Release branch into main when the release is explicitly approved.
 scripts/open-release-pr.sh --repo ProjectCuillin/nats-sinks --base main
 ```
@@ -165,6 +172,59 @@ scripts/run-release-validation.sh --repo ProjectCuillin/nats-sinks
 That helper starts the manual `CI`, `Docs`, and `CodeQL` workflows for the
 current branch. Use it only when the branch is ready for merge or release
 validation.
+
+## Guarded Non-Main Auto-Approval
+
+Issue, feature, and bug pull requests can be approved automatically when they
+target another work branch, such as a release branch or a parent feature
+branch. This is intended for pull requests raised by the local maintainer
+workflow itself. It keeps the development branch moving while preserving the
+protected release boundary around `main`.
+
+The guardrail is strict:
+
+- automated approval is allowed only when the pull request base is not `main`;
+- release pull requests into `main` are never auto-approved;
+- draft pull requests are not approved by default;
+- the helper can require the pull request author to match the current GitHub
+  identity;
+- local checks, issue evidence, documentation, and changelog updates are still
+  required before merge.
+
+Use the dedicated helper to validate the rule directly:
+
+```bash
+scripts/approve-non-main-pr.sh \
+  --repo ProjectCuillin/nats-sinks \
+  --pr 123 \
+  --expected-author louwersj \
+  --dry-run
+```
+
+Example successful dry-run output:
+
+```text
+PR #123 is eligible for non-main auto-approval.
+```
+
+The same helper refuses release-bound pull requests:
+
+```text
+Refusing to auto-approve a pull request targeting main.
+```
+
+`scripts/open-release-pr.sh` calls this helper automatically after creating or
+updating a ready pull request whose base branch is not `main`. Use
+`--no-auto-approve-non-main` or
+`NATS_SINKS_AUTO_APPROVE_NON_MAIN_PR=false` when a branch should stay
+unapproved for manual inspection. If `--auto-approve-non-main` is explicitly
+passed for a PR targeting `main`, the script exits before approval. GitHub may
+not allow or count a self-approval under branch protection rules, depending on
+repository settings. In that case the helper leaves the pull request open and
+prints a warning unless approval was explicitly requested. Use a separate
+reviewer or bot identity when true automatic approval is required. This helper
+is a convenience for non-main development flow, not a substitute for
+maintainer release approval.
 
 The repository also includes a manual `.github/workflows/auto-pr.yml` workflow
 for token-gated pull request creation. It is not triggered by branch pushes.

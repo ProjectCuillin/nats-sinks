@@ -87,6 +87,13 @@ silent loss after an early ACK is not.
   to open or refresh a draft pull request against the correct hierarchy
   target, then run `scripts/run-release-validation.sh` only when the branch is
   ready for merge or release validation.
+- For issue, feature, and bug pull requests raised by this workflow,
+  `scripts/open-release-pr.sh --ready` auto-approves ready non-main PRs by
+  default. Use `--no-auto-approve-non-main` only when manual inspection is
+  needed before approval. The approval helper must refuse PRs targeting
+  `main`, should verify the expected author when possible, and does not
+  replace release validation, maintainer review, issue evidence, docs, or
+  changelog work. Release PRs into `main` are always manual.
 - The `Branch Pull Request` workflow is manual and token-gated. Do not
   re-enable push-triggered pull request creation unless the maintainer
   explicitly changes the release policy. Do not create release tags from
