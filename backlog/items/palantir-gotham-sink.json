@@ -1,0 +1,31 @@
+{
+  "id": "palantir-gotham-sink",
+  "title": "[Feature]: Add a Palantir Gotham sink",
+  "area": "Future sink",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "security", "testing", "documentation"],
+  "problem": "Palantir Gotham is used in mission and national-security settings where selected operational events may need to be handed to Gotham-backed workflows or object models. nats-sinks does not currently provide a Gotham connector and must be careful not to imply tactical automation, targeting, or weapons-release behavior.",
+  "proposal": "Research, design, and later implement a Palantir Gotham sink only for approved durable data handoff use cases. Public Gotham API documentation should be evaluated to identify safe write targets, authentication, response validation, and object model constraints. Because Gotham environments are highly deployment-specific, the first implementation step should be a contract-oriented fake Gotham client and a strict adapter boundary. A production connector should not be certified until it has been validated against an approved non-production Gotham environment with appropriate permissions.",
+  "users": "Mission system integrators, operational data custody teams, and maintainers who need a controlled, auditable event handoff path into Palantir Gotham without weakening nats-sinks delivery guarantees.",
+  "delivery_semantics": "The core runner must own ACK behavior. The Gotham sink must never ACK messages. It may return success only after Gotham has accepted the configured durable write and the response is unambiguous. Rejected, unauthorized, throttled, preview-only, unsupported, partial, or ambiguous responses must raise framework errors so the core avoids ACK. Duplicate redelivery must be addressed with deterministic external IDs or another documented idempotency mechanism.",
+  "security": "The sink must not log payloads, tokens, resource identifiers, endpoint details, or operationally sensitive metadata by default. Configuration must validate target names, object types, write modes, timeout values, and endpoint schemes. Documentation must cover least-privilege application permissions, strict environment separation, non-production certification, and the boundary that nats-sinks stores or forwards events but does not perform targeting or lethal-decision automation.",
+  "acceptance": [
+    "Research records the public Gotham API capabilities that are relevant to durable event handoff and clearly marks any unavailable or customer-specific details.",
+    "A design note defines the safe connector boundary, public import path, config type, authentication model, and supported target model before implementation starts.",
+    "A local fake Gotham client or contract harness exists before live integration is attempted.",
+    "Functional requirements cover record mapping, external identifiers, metadata mapping, idempotency, payload encryption compatibility, duplicate handling, and batch behavior.",
+    "Non-functional requirements cover timeouts, bounded retries, response validation, partial failure handling, and operator-readable errors.",
+    "Security requirements cover redaction, least privilege, environment separation, no payload logging, and sanitized test evidence.",
+    "Documentation states the intended durable data handoff scope and avoids claiming tactical automation or operational decision authority."
+  ],
+  "tests": "Build unit and contract tests with a fake Gotham client for success, authorization failure, invalid target, unsupported preview-only API response, throttling, timeout, partial acceptance, duplicate external ID, and ambiguous response handling. Add commit-then-ack tests proving success allows ACK and all failed or ambiguous responses prevent ACK. Live tests must be optional and require explicit ignored local configuration for an approved non-production Gotham environment.",
+  "documentation": "Add a dedicated Palantir Gotham sink page when implementation starts. Update docs/sink-framework.md, docs/configuration.md, docs/security.md, docs/operations.md, docs/testing.md, docs/use-cases/defence/, ROADMAP.md, docs/roadmap.md, and CHANGELOG.md. Documentation must explain the durable event handoff scope and the difference between a local fake client, contract certification, and live Gotham certification.",
+  "closeout": "Close only after the release containing the Gotham sink or its approved design phase is published. Include release tag, selected API surface, mock test evidence, live-test status if available, documentation updated, and known limitations.",
+  "relationships": {
+    "related": [
+      "backlog:sink-certification-contract-and-tests",
+      "backlog:defence-use-case-blueprints"
+    ]
+  }
+}

@@ -234,6 +234,20 @@ silent loss after an early ACK is not.
   behavior, native dependencies, HTTP/web/upload/plugin features, or release
   workflow changes may require reopening controls previously marked
   `Not applicable`.
+- Treat each new destination as a sink connector with documented durable
+  success, idempotency, security, and certification requirements. Oracle
+  Database and FileSink are first-party built-ins; future Oracle-family sinks
+  should also be first-party connectors unless governance explicitly changes
+  that posture.
+- Keep external connector discovery disabled by default and allow-list based.
+  Never let JSON configuration choose arbitrary module paths, class paths, or
+  dynamic imports. External connectors must expose `SinkConnector` metadata,
+  match the allow-listed entry-point name, and pass certification tests before
+  production recommendation.
+- Palantir Foundry, Palantir Gotham, and other third-party platform connectors
+  require local fake clients or contract harnesses before live certification is
+  attempted. Do not imply production certification from public documentation
+  alone.
 - Prefer environment-backed encryption key fields such as
   `encryption.key_b64_env`; never commit direct encryption key material.
 - Document and test `encryption.rules` whenever they change. Rule order is a

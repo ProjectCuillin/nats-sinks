@@ -206,6 +206,68 @@ async def test_oracle_insert_ignore_rowcount_reports_ignored_duplicates() -> Non
 
 
 @pytest.mark.asyncio
+async def test_oracle_merge_records_unknown_outcome_metrics() -> None:
+    metrics = InMemoryMetrics()
+    cursor = DuplicateReportingCursor(rowcount=2)
+    sink = OracleSink(
+        dsn="localhost:1521/FREEPDB1",
+        user="app_user",
+        password="example",  # noqa: S106 - local test placeholder
+        table="NATS_SINK_EVENTS",
+        mode="merge",
+        metrics=metrics,
+    )
+    sink._pool = RecordingPool(RecordingConnection(cursor))
+
+    await sink.write_batch(
+        [envelope_with_subject("orders.created", 1), envelope_with_subject("orders.created", 2)]
+    )
+
+    assert metrics.counters[MetricNames.ORACLE_MERGE_ROWS_TOTAL] == 2
+    assert metrics.counters[MetricNames.ORACLE_MERGE_OUTCOME_UNKNOWN_TOTAL] == 2
+    assert metrics.counters[MetricNames.ORACLE_DUPLICATES_TOTAL] == 0
+
+
+@pytest.mark.asyncio
+async def test_oracle_merge_without_update_columns_reports_noop_duplicates() -> None:
+    metrics = InMemoryMetrics()
+    cursor = DuplicateReportingCursor(rowcount=1)
+    sink = OracleSink(
+        dsn="localhost:1521/FREEPDB1",
+        user="app_user",
+        password="example",  # noqa: S106 - local test placeholder
+        table="NATS_SINK_EVENTS",
+        mode="merge",
+        merge_update_columns=[],
+        metrics=metrics,
+    )
+    sink._pool = RecordingPool(RecordingConnection(cursor))
+
+    await sink.write_batch(
+        [envelope_with_subject("orders.created", 1), envelope_with_subject("orders.created", 2)]
+    )
+
+    statement = cursor.executions[0][0]
+    assert "when matched then update" not in statement
+    assert metrics.counters[MetricNames.ORACLE_MERGE_ROWS_TOTAL] == 2
+    assert metrics.counters[MetricNames.ORACLE_MERGE_OUTCOME_UNKNOWN_TOTAL] == 0
+    assert metrics.counters[MetricNames.ORACLE_DUPLICATES_TOTAL] == 1
+    assert metrics.counters[MetricNames.ORACLE_DUPLICATE_NOOP_TOTAL] == 1
+
+
+def test_oracle_merge_update_columns_apply_only_to_merge_mode() -> None:
+    with pytest.raises(ConfigurationError, match="merge_update_columns"):
+        OracleSink(
+            dsn="localhost:1521/FREEPDB1",
+            user="app_user",
+            password="example",  # noqa: S106 - local test placeholder
+            table="NATS_SINK_EVENTS",
+            mode="insert_ignore",
+            merge_update_columns=[],
+        )
+
+
+@pytest.mark.asyncio
 async def test_oracle_plain_insert_duplicate_records_conflict_and_raises() -> None:
     metrics = InMemoryMetrics()
     sink = OracleSink(
@@ -480,6 +542,141 @@ async def test_oracle_routes_different_subjects_to_different_tables() -> None:
     assert any("NATS_SINK_EVENTS" in sql for sql in statements)
     assert "alter session disable parallel dml" in pool.connection.cursor_instance.statements
     assert pool.connection.committed
+
+
+@pytest.mark.asyncio
+async def test_oracle_route_can_override_idempotency_to_message_id() -> None:
+    sink = OracleSink(
+        dsn="localhost:1521/FREEPDB1",
+        user="app_user",
+        password="example",  # noqa: S106 - local test placeholder
+        table="NATS_SINK_EVENTS",
+        mode="merge",
+        table_routes=[
+            {
+                "subject": "orders.by-id",
+                "table": "ORDER_MESSAGE_ID_EVENTS",
+                "idempotency": {"strategy": "message_id", "columns": ["MESSAGE_ID"]},
+            }
+        ],
+    )
+    pool = RecordingPool()
+    sink._pool = pool
+
+    await sink.write_batch(
+        [
+            envelope_with_subject("orders.updated", 1),
+            envelope_with_subject("orders.by-id", 2),
+        ]
+    )
+
+    executions = pool.connection.cursor_instance.executions
+    default_sql = next(sql for sql, _rows in executions if "NATS_SINK_EVENTS" in sql)
+    routed_sql, routed_rows = next(
+        (sql, rows) for sql, rows in executions if "ORDER_MESSAGE_ID_EVENTS" in sql
+    )
+    assert "target.STREAM_NAME = source.STREAM_NAME" in default_sql
+    assert "target.STREAM_SEQUENCE = source.STREAM_SEQUENCE" in default_sql
+    assert "target.MESSAGE_ID = source.MESSAGE_ID" in routed_sql
+    assert routed_rows[0]["message_id"] == "m-2"
+
+
+@pytest.mark.asyncio
+async def test_oracle_route_can_override_idempotency_to_payload_field() -> None:
+    sink = OracleSink(
+        dsn="localhost:1521/FREEPDB1",
+        user="app_user",
+        password="example",  # noqa: S106 - local test placeholder
+        table="NATS_SINK_EVENTS",
+        mode="merge",
+        table_routes=[
+            {
+                "subject": "orders.payload-key",
+                "table": "ORDER_PAYLOAD_KEY_EVENTS",
+                "idempotency": {
+                    "strategy": "payload_field",
+                    "payload_field": "order_id",
+                    "columns": ["MESSAGE_ID"],
+                },
+                "merge_update_columns": [],
+            }
+        ],
+    )
+    pool = RecordingPool()
+    sink._pool = pool
+
+    await sink.write_batch([envelope_with_subject("orders.payload-key", 3)])
+
+    routed_sql, routed_rows = pool.connection.cursor_instance.executions[0]
+    assert "ORDER_PAYLOAD_KEY_EVENTS" in routed_sql
+    assert "target.MESSAGE_ID = source.MESSAGE_ID" in routed_sql
+    assert "when matched then update" not in routed_sql
+    assert routed_rows[0]["message_id"] == "O-1001"
+
+
+@pytest.mark.asyncio
+async def test_oracle_insert_ignore_route_uses_route_specific_key() -> None:
+    sink = OracleSink(
+        dsn="localhost:1521/FREEPDB1",
+        user="app_user",
+        password="example",  # noqa: S106 - local test placeholder
+        table="NATS_SINK_EVENTS",
+        mode="insert_ignore",
+        table_routes=[
+            {
+                "subject": "orders.by-id",
+                "table": "ORDER_MESSAGE_ID_EVENTS",
+                "idempotency": {"strategy": "message_id", "columns": ["MESSAGE_ID"]},
+            }
+        ],
+    )
+    pool = RecordingPool()
+    sink._pool = pool
+
+    await sink.write_batch([envelope_with_subject("orders.by-id", 4)])
+
+    routed_sql, routed_rows = pool.connection.cursor_instance.executions[0]
+    assert "ORDER_MESSAGE_ID_EVENTS" in routed_sql
+    assert "target.MESSAGE_ID = source.MESSAGE_ID" in routed_sql
+    assert "when matched then update" not in routed_sql
+    assert routed_rows[0]["message_id"] == "m-4"
+
+
+def test_oracle_rejects_conflicting_policies_for_same_table() -> None:
+    with pytest.raises(ConfigurationError, match="conflicting Oracle idempotency policy"):
+        OracleSink(
+            dsn="localhost:1521/FREEPDB1",
+            user="app_user",
+            password="example",  # noqa: S106 - local test placeholder
+            table="NATS_SINK_EVENTS",
+            mode="merge",
+            table_routes=[
+                {
+                    "subject": "orders.by-id",
+                    "table": "SHARED_EVENTS",
+                    "idempotency": {"strategy": "message_id", "columns": ["MESSAGE_ID"]},
+                },
+                {"subject": "orders.default-key", "table": "SHARED_EVENTS"},
+            ],
+        )
+
+
+def test_oracle_route_merge_update_columns_apply_only_to_merge_mode() -> None:
+    with pytest.raises(ConfigurationError, match=r"table_routes\[\]\.merge_update_columns"):
+        OracleSink(
+            dsn="localhost:1521/FREEPDB1",
+            user="app_user",
+            password="example",  # noqa: S106 - local test placeholder
+            table="NATS_SINK_EVENTS",
+            mode="insert_ignore",
+            table_routes=[
+                {
+                    "subject": "orders.by-id",
+                    "table": "ORDER_MESSAGE_ID_EVENTS",
+                    "merge_update_columns": [],
+                }
+            ],
+        )
 
 
 @pytest.mark.asyncio

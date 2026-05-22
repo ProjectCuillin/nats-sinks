@@ -104,6 +104,34 @@ GitHub issues. For future sinks, add a small adapter that accepts the generated
 envelopes and returns a sanitized `SyntheticScenarioReport` rather than
 building a sink-specific generator from scratch.
 
+## Connector Development
+
+New sinks should be treated as connectors with a small public contract and a
+large responsibility: they must not return success until their destination
+success boundary has been crossed. Start with the generic framework before
+writing destination-specific code:
+
+1. Add or update the GitHub backlog issue with functional, non-functional,
+   security, documentation, and test requirements.
+2. Decide whether the sink is a first-party connector in this repository or an
+   optional third-party package discovered through the safe entry-point path.
+3. Implement a sink class that accepts `NatsEnvelope` objects and never sees raw
+   NATS client messages.
+4. Register a `SinkConnector` descriptor with a stable lowercase name,
+   production-readiness state, documentation pointer, and certification labels.
+5. Add public API compatibility tests when the sink exposes a documented import
+   path.
+6. Add deterministic fake-client unit tests before any live integration tests.
+7. Add integration or end-to-end scripts behind explicit markers and ignored
+   local config directories.
+
+First-party Oracle-family sinks, including proposed OCI Object Storage,
+Oracle MySQL, Oracle Berkeley DB, Oracle NoSQL Database, and OCI Streaming,
+should live in this repository unless governance decides otherwise. External
+connectors should use the `nats_sinks.sinks` entry-point group and should not be
+enabled in production without an explicit `plugins.allowed_sinks` entry and
+connector certification evidence.
+
 ## Documentation
 
 ```bash

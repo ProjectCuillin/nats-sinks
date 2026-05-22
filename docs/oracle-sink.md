@@ -80,8 +80,9 @@ This section lists every Oracle sink field accepted under the top-level
 | `https_proxy` | no | `null` | Proxy hostname or URL understood by Oracle Net. | HTTPS proxy used by TCPS connections in proxy-controlled networks. |
 | `https_proxy_port` | no | `null` | Integer `1` to `65535`. | Proxy port. Requires `https_proxy`. |
 | `table` | no | `NATS_SINK_EVENTS` | Valid Oracle identifier, optionally schema-qualified. | Default target table for messages that do not match a table route. |
-| `table_routes` | no | empty list | List of route objects. | Optional subject-to-table routing rules. Each object contains `subject` and `table`. |
+| `table_routes` | no | empty list | List of route objects. | Optional subject-to-table routing rules. Each object contains `subject`, `table`, and optional route policy overrides. See [Table Route Objects](#table-route-objects). |
 | `mode` | no | `merge` | `merge`, `insert_ignore`, `insert`, `append` | Oracle write mode. See [Write Mode Values](#write-mode-values). |
+| `merge_update_columns` | no | `null` | `null`, an empty list, or a list of mapped Oracle column names. | Controls which non-key columns are updated when `mode` is `merge`. `null` preserves the default of updating every non-key column. An empty list leaves matched rows unchanged. |
 | `auto_create` | no | `false` | `true` or `false`. | Creates the recommended table shape at sink startup when missing. Use for local tests; production should normally use migrations and keep this false. |
 | `payload_mode` | no | `json_or_envelope` | `json_or_envelope`, `json_only`, `text_envelope`, `bytes_envelope` | Controls how message bytes become JSON storage content. See [Payload Modes](#payload-modes). |
 | `payload_column` | no | `null` | Valid Oracle column identifier. | Legacy convenience alias for `columns.payload`. If set, it updates the payload column mapping. |
@@ -99,6 +100,8 @@ Validation rules:
 - configure either `wallet_password` or `wallet_password_env`, not both,
 - wallet password fields require `wallet_location`,
 - `https_proxy_port` requires `https_proxy`,
+- `merge_update_columns` applies only when `mode` is `merge`,
+- `merge_update_columns` must reference configured non-key Oracle columns,
 - `staging.enabled=true` requires `mode` to be `merge` or `insert_ignore`,
 - `staging.enabled=true` requires `staging.table`,
 - Oracle table and column identifiers are allow-list validated before SQL is
@@ -123,6 +126,59 @@ it lets redelivery land on the same operational event row instead of producing
 an extra record. Use `append` only when duplicate rows are acceptable under the
 destination's audit and reconciliation rules.
 
+### Merge Update Controls
+
+By default, `merge` preserves the original `nats-sinks` behavior: when the
+configured idempotency key already exists, Oracle updates every non-key column
+with the newest normalized message content. This is useful when operators want
+redelivery to refresh metadata, custody details, headers, or payload envelopes
+on the existing durable row.
+
+Some mission, audit, and evidentiary workloads prefer stricter record
+immutability. For those cases, set `merge_update_columns` explicitly:
+
+```json
+{
+  "sink": {
+    "type": "oracle",
+    "dsn": "localhost:1521/FREEPDB1",
+    "user": "app_user",
+    "password_env": "ORACLE_PASSWORD",
+    "table": "NATS_SINK_EVENTS",
+    "mode": "merge",
+    "merge_update_columns": ["PAYLOAD_JSON", "METADATA_JSON"]
+  }
+}
+```
+
+This example updates only the payload and metadata JSON columns when a row
+already exists. Every listed value must be a configured Oracle column name and
+must not be part of the idempotency key. nats-sinks validates these identifiers
+before SQL is generated.
+
+To make `merge` insert missing rows and leave existing rows unchanged, use an
+empty list:
+
+```json
+{
+  "sink": {
+    "type": "oracle",
+    "dsn": "localhost:1521/FREEPDB1",
+    "user": "app_user",
+    "password_env": "ORACLE_PASSWORD",
+    "table": "NATS_SINK_EVENTS",
+    "mode": "merge",
+    "merge_update_columns": []
+  }
+}
+```
+
+With an empty update list, a redelivered message that matches the idempotency
+key is treated as safe prior processing. The Oracle transaction must still
+commit before the sink returns success, and the core still ACKs only after
+that success. This setting is useful when the first stored event row is the
+authoritative record and later redeliveries should not alter it.
+
 ### Duplicate And Conflict Metrics
 
 Oracle idempotency should be visible to operators. A redelivery that is safely
@@ -138,6 +194,9 @@ metrics recorder used by the core runner:
 | `oracle_conflicts_total` | Oracle write conflicts observed by the sink, such as `ORA-00001` duplicate-key conflicts. |
 | `oracle_duplicates_total` | Rows identified as duplicate prior processing through idempotent Oracle handling. |
 | `oracle_duplicate_ignored_total` | Duplicate rows safely ignored by `insert_ignore` mode. |
+| `oracle_duplicate_noop_total` | Duplicate rows safely left unchanged by `merge` with `merge_update_columns: []`. |
+| `oracle_merge_rows_total` | Rows committed through Oracle `merge` mode. |
+| `oracle_merge_outcome_unknown_total` | `merge` rows where Oracle did not reliably expose whether the row was inserted or matched. |
 
 When the sink is created by `nats-sink run` and `metrics.snapshot_file` is
 enabled, these counters are written to the same local JSON snapshot as the core
@@ -173,16 +232,22 @@ Example output:
 KIND     METRIC                           VALUE  DESCRIPTION
 counter  oracle_conflicts_total               1  Oracle write conflicts observed by OracleSink, such as duplicate-key conflicts.
 counter  oracle_duplicate_ignored_total       7  Oracle duplicate rows safely ignored by insert_ignore mode.
-counter  oracle_duplicates_total              7  Oracle rows identified as duplicate prior processing through idempotent handling.
+counter  oracle_duplicate_noop_total          3  Oracle duplicate rows safely left unchanged by merge mode with no update columns.
+counter  oracle_duplicates_total             10  Oracle rows identified as duplicate prior processing through idempotent handling.
+counter  oracle_merge_outcome_unknown_total  64  Oracle merge rows where insert-versus-match outcome is not reliably exposed.
+counter  oracle_merge_rows_total             64  Oracle rows committed through merge mode.
 ```
 
 For `insert_ignore`, nats-sinks counts ignored duplicates when Oracle reports
 that fewer rows were affected than attempted, or when `ORA-00001` is observed
-and treated as safe prior processing. For `insert`, the same `ORA-00001`
-increments `oracle_conflicts_total` and remains a failure. For `merge`, Oracle
-does not expose reliable per-row "inserted versus matched" counts through the
-current batch execution path, so the sink does not guess. This preserves metric
-accuracy and avoids overclaiming duplicate visibility.
+and treated as safe prior processing. For `merge` with
+`merge_update_columns: []`, nats-sinks can count matched rows as no-op
+duplicates when Oracle reports fewer affected rows than attempted. For
+update-enabled `merge`, Oracle does not reliably expose per-row "inserted
+versus matched" counts through the current batch execution path, so the sink
+increments `oracle_merge_outcome_unknown_total` instead of guessing. For
+`insert`, `ORA-00001` increments `oracle_conflicts_total` and remains a
+failure.
 
 These metrics do not include table names, subjects, message IDs,
 classification values, labels, payloads, or Oracle constraint names. They must
@@ -222,6 +287,12 @@ The `payload_field` strategy is intentionally strict. A path such as
 fields, null values, objects, and arrays are rejected before Oracle commit.
 That keeps the idempotency key stable and prevents language-specific string
 representations from becoming durable database keys.
+
+Routes inherit this sink-level idempotency configuration by default. A route
+may override it when a specific subject family or table has its own durable
+key, for example when one table uses JetStream stream sequence and another
+uses producer-supplied message IDs. If multiple routes point to the same table,
+their effective idempotency and merge-update policies must match.
 
 ### Column Mapping
 
@@ -281,8 +352,21 @@ Each `table_routes` item has this shape:
 | --- | --- | --- | --- |
 | `subject` | yes | NATS subject pattern using literal tokens, `*`, or final `>`. | Route pattern tested against the message subject. |
 | `table` | yes | Valid Oracle table identifier. | Destination table for matching messages. |
+| `idempotency` | no | Same object shape as [Idempotency Configuration](#idempotency-configuration). | Route-specific idempotency strategy and columns. Omit this field to inherit the sink default. |
+| `merge_update_columns` | no | `null`, an empty list, or a list of mapped Oracle column names. | Route-specific matched-row update policy for `merge` mode. Omit this field to inherit the sink default. |
 
 Routes are evaluated in order, and the first matching route wins.
+
+Per-route overrides are intentionally conservative:
+
+- omitted route fields inherit the sink-level default,
+- route-specific `idempotency.columns` are used for that table's generated
+  `merge` or `insert_ignore` predicate,
+- route-specific `payload_field` extraction is applied before Oracle row
+  mapping for matching messages,
+- `merge_update_columns` applies only when the sink-level `mode` is `merge`,
+- if several routes target the same table, nats-sinks rejects conflicting
+  effective policies at startup.
 
 ## Choosing An Oracle Connection Type
 
@@ -1073,6 +1157,11 @@ environments unless those inputs are controlled.
 - `insert`: plain insert. Duplicate key errors are failures.
 - `append`: insert with Oracle append hint. This is not idempotent by default.
 
+`merge_update_columns` refines `merge` behavior without changing the
+commit-then-ACK contract. Leave it unset to update every non-key column, set it
+to selected mapped column names to restrict updates, or set it to `[]` to leave
+matched rows unchanged.
+
 ## Idempotency
 
 Recommended strategy:
@@ -1104,9 +1193,33 @@ table writes in one Oracle transaction before returning success.
     "password_env": "ORACLE_PASSWORD",
     "table": "NATS_SINK_EVENTS",
     "table_routes": [
-      {"subject": "orders.created", "table": "ORDER_CREATED_EVENTS"},
-      {"subject": "orders.cancelled", "table": "ORDER_CANCELLED_EVENTS"},
-      {"subject": "payments.>", "table": "PAYMENT_EVENTS"}
+      {
+        "subject": "orders.created",
+        "table": "ORDER_CREATED_EVENTS"
+      },
+      {
+        "subject": "orders.by-id",
+        "table": "ORDER_MESSAGE_ID_EVENTS",
+        "idempotency": {
+          "strategy": "message_id",
+          "columns": ["MESSAGE_ID"]
+        },
+        "merge_update_columns": ["PAYLOAD_JSON", "METADATA_JSON"]
+      },
+      {
+        "subject": "orders.payload-key",
+        "table": "ORDER_PAYLOAD_KEY_EVENTS",
+        "idempotency": {
+          "strategy": "payload_field",
+          "payload_field": "order_id",
+          "columns": ["MESSAGE_ID"]
+        },
+        "merge_update_columns": []
+      },
+      {
+        "subject": "payments.>",
+        "table": "PAYMENT_EVENTS"
+      }
     ],
     "mode": "merge",
     "idempotency": {
@@ -1122,27 +1235,33 @@ Routing rules:
 - routes are evaluated in order,
 - the first matching route wins,
 - unmatched subjects use the default `table`,
+- route `idempotency` overrides are optional and inherit the sink default when
+  omitted,
+- route `merge_update_columns` can restrict or disable matched-row updates for
+  that route's table,
 - `*` matches one subject token,
 - `>` matches one or more remaining tokens and must be the final token,
-- all route table names are validated as Oracle identifiers.
+- all route table and column names are validated as Oracle identifiers.
 
 ```mermaid
 flowchart TD
     M[Envelope subject] --> R{Route match?}
     R -->|orders.created| T1[ORDER_CREATED_EVENTS]
-    R -->|orders.cancelled| T2[ORDER_CANCELLED_EVENTS]
-    R -->|payments.>| T3[PAYMENT_EVENTS]
+    R -->|orders.by-id| T2[ORDER_MESSAGE_ID_EVENTS<br/>message_id key]
+    R -->|orders.payload-key| T3[ORDER_PAYLOAD_KEY_EVENTS<br/>payload_field key]
+    R -->|payments.>| T4[PAYMENT_EVENTS]
     R -->|no match| D[NATS_SINK_EVENTS]
     T1 --> C[Single Oracle transaction]
     T2 --> C
     T3 --> C
+    T4 --> C
     D --> C
     C --> ACK[Runner ACK after commit]
 ```
 
 Every routed table must have compatible columns and compatible idempotency
-constraints. If one routed table write fails before commit, the whole batch is
-not ACKed.
+constraints for its effective policy. If one routed table write fails before
+commit, the whole batch is not ACKed.
 
 When `auto_create` is enabled for local development, OracleSink attempts to
 create the default table and each configured route table. Production

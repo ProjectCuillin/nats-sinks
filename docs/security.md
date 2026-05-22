@@ -55,6 +55,39 @@ checks:
 This fail-closed behavior helps operators catch mistakes before a sink connects
 to NATS or acknowledges any JetStream message.
 
+## Sink Connector Supply Chain
+
+Sink connectors are code, not data. Loading a Python entry point imports and
+executes code from an installed distribution, so optional connector discovery is
+treated as a supply-chain trust decision.
+
+Secure defaults:
+
+- Oracle Database and FileSink are first-party built-in connectors and do not
+  require plugin discovery.
+- Optional third-party discovery is disabled by default.
+- When discovery is enabled, `plugins.allowed_sinks` must explicitly list each
+  external connector name.
+- The runtime never accepts module paths, class paths, or dynamic import names
+  from JSON configuration.
+- External connectors must return a typed `SinkConnector` descriptor and must
+  match the allow-listed entry-point name.
+- Production deployments should keep `plugins.require_production_ready=true`.
+
+Before enabling an external connector, review the package source, dependency
+tree, release history, license, maintainer posture, and certification evidence.
+Install it through normal package-management and change-control processes. Do
+not install connector packages dynamically at runtime, and do not grant the
+service account broader filesystem, network, database, or cloud permissions
+merely because a connector asks for them.
+
+Future Oracle-family sinks such as OCI Object Storage, Oracle MySQL,
+Oracle Berkeley DB, Oracle NoSQL Database, and OCI Streaming are expected to be
+first-party connectors in this repository unless project governance changes
+that posture. Palantir Foundry, Palantir Gotham, and other third-party platform
+connectors require the same connector certification evidence before production
+recommendation.
+
 ## Production Secure Development Baseline
 
 Every feature should be reviewed as a small threat model before implementation.
@@ -164,6 +197,21 @@ covered, partially covered, roadmap, or not applicable for the current package
 surface.
 
 ## Pre-Sink Policy Gate
+
+The optional `size_policy` gate is the first general resource-control layer for
+message shape. When enabled, it bounds sink-bound payload bytes, header count,
+header lengths, label count, label lengths, mission metadata JSON size,
+standard metadata JSON size, approximate normalized record size, and accepted
+batch size before any sink write. It is intentionally sink-neutral so Oracle,
+file, and future sinks all receive the same protection. Rejections are
+permanent validation failures and follow the same DLQ-before-ACK rule as other
+pre-sink failures.
+
+Use `size_policy` for broad resource and abuse-case controls, then use
+`pre_sink_policy` for semantic requirements such as classification, required
+labels, encryption, or approved mission metadata keys. Detailed configuration
+is documented in [Configuration](configuration.md#size_policy), and operational
+tuning guidance is in [Message Sizing](message-sizing.md).
 
 The optional `pre_sink_policy` gate is a security and correctness control that
 runs after the core has built a validated `NatsEnvelope`, resolved generic
@@ -332,13 +380,14 @@ Bcrypt is a server-side storage control. The client still needs the clear-text
 password to authenticate, so username/password and token authentication should
 use TLS in production.
 
-WebSocket transport is evaluated but not yet production-certified by
-`nats-sinks`. The configuration validator accepts `ws://` and `wss://` because
-NATS and `nats-py` support those schemes, but operators should prefer
-`tls://` until WebSocket guardrails, optional header handling, and integration
-certification are implemented. When WebSocket transport is introduced, prefer
-`wss://`, verify certificates, avoid credentials in URLs or headers, and assume
-that reverse proxies may log paths, headers, and client metadata. See
+WebSocket transport is supported with explicit guardrails. Prefer `wss://`,
+verify certificates, use `tls_ca_file` for private CAs, and reserve `ws://` for
+local labs or explicitly approved controlled networks. Do not place credentials
+in WebSocket URLs. Optional WebSocket headers must be bounded, validated, and
+redacted; sensitive header values such as `Authorization` or `Cookie` must come
+from environment variables through `nats.websocket_headers_env`. Assume that
+reverse proxies may log paths, headers, and client metadata, and review proxy
+retention before using WebSocket transport for sensitive event custody. See
 [WebSocket Connection Evaluation](websocket-connection-evaluation.md).
 
 Use least-privilege NATS subject permissions for the runtime account. A

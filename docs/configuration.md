@@ -160,6 +160,21 @@ Oracle-specific fields inside the `sink` object.
     "key_id": null,
     "max_hash_input_bytes": 16777216
   },
+  "size_policy": {
+    "enabled": false,
+    "max_payload_bytes": 16777216,
+    "max_header_count": 128,
+    "max_header_name_bytes": 256,
+    "max_header_value_bytes": 8192,
+    "max_headers_bytes": 65536,
+    "max_label_count": 64,
+    "max_label_bytes": 128,
+    "max_labels_bytes": 4096,
+    "max_mission_metadata_bytes": 8192,
+    "max_standard_metadata_bytes": 262144,
+    "max_normalized_record_bytes": 20971520,
+    "max_batch_messages": 10000
+  },
   "pre_sink_policy": {
     "enabled": false,
     "unmatched_subject_action": "reject",
@@ -175,6 +190,11 @@ Oracle-specific fields inside the `sink` object.
         "allowed_mission_metadata_keys": ["profile", "phase", "operation"]
       }
     ]
+  },
+  "plugins": {
+    "enabled": false,
+    "allowed_sinks": [],
+    "require_production_ready": true
   },
   "sink": {
     "type": "file",
@@ -218,7 +238,9 @@ The top-level sections are:
 | `message_metadata` | no | Optional priority, classification, and labels extraction defaults applied to every message before sink delivery. |
 | `custody` | no | Optional tamper-evident payload and metadata hashes computed by the core before sink delivery. Disabled by default. |
 | `encryption` | no | Optional core payload encryption before messages are passed to any sink. |
+| `size_policy` | no | Optional destination-neutral payload, header, metadata, label, record, and batch-size bounds evaluated before any sink write. Disabled by default. |
 | `pre_sink_policy` | no | Optional fail-closed validation gate evaluated after normalization and core payload transformation, but before any sink write. |
+| `plugins` | no | Optional allow-listed discovery for externally installed sink connectors. Disabled by default. Built-in Oracle and file sinks do not need this section. |
 | `sink` | yes | Destination-specific sink configuration. `sink.type` chooses the sink implementation. |
 
 The only supported `delivery.ack_policy` value is `after_sink_commit`, which
@@ -274,8 +296,8 @@ classification, and labels without changing producer payloads.
 
 | Field | Required | Default | Valid values | Description |
 | --- | --- | --- | --- | --- |
-| `url` | no | `nats://localhost:4222` | URL using `nats`, `tls`, `ws`, or `wss`. | Single server URL passed to `nats-py` when `urls` is not set. Use `tls://` for certified encrypted TCP connections today. `ws://` and `wss://` are accepted by validation but remain evaluated, not production-certified, until the WebSocket follow-up work is implemented. Unsupported schemes fail validation. |
-| `urls` | no | `[]` | Non-empty list of URLs using `nats`, `tls`, `ws`, or `wss`. | Optional seed server list for clustered deployments. When set, it is passed to `nats-py` as `servers` and takes precedence over `url`. If any seed URL uses `tls://`, or if TLS certificate files are configured, the CLI builds a TLS context. WebSocket seed lists should not mix `ws` or `wss` URLs with `nats` or `tls` URLs. |
+| `url` | no | `nats://localhost:4222` | URL using `nats`, `tls`, `ws`, or `wss`. | Single server URL passed to `nats-py` when `urls` is not set. Use `tls://` for encrypted TCP connections. Use `wss://` for approved WebSocket deployments and keep certificate verification enabled. `ws://` is intended only for local labs or explicitly accepted controlled networks. Unsupported schemes and credentials embedded in URLs fail validation. |
+| `urls` | no | `[]` | Non-empty list of URLs using `nats`, `tls`, `ws`, or `wss`. | Optional seed server list for clustered deployments. When set, it is passed to `nats-py` as `servers` and takes precedence over `url`. If any seed URL uses `tls://` or `wss://`, or if TLS certificate files are configured, the CLI builds a TLS context. WebSocket seed lists must not mix `ws` or `wss` URLs with `nats` or `tls` URLs. |
 | `stream` | yes | none | Non-empty JetStream stream name. | Stream that owns the messages consumed by the sink. |
 | `consumer` | yes | none | Consumer/durable name accepted by NATS. | Durable consumer name when `durable` is true. It is also used in logging and metrics context. |
 | `subject` | yes | none | NATS subject or wildcard subject, for example `orders.*` or `orders.>`. | Subject used for pull subscription binding. It should be covered by the configured stream subjects. |
@@ -292,6 +314,8 @@ classification, and labels without changing producer payloads.
 | `tls_cert_file` | no | `null` | Local file path. | Optional client certificate file for mutual TLS transport. |
 | `tls_key_file` | no | `null` | Local file path. | Optional client private key file. Requires `tls_cert_file` when set. |
 | `tls_verify` | no | `true` | `true` or `false`. | Enables certificate verification and hostname checking. Keep enabled in production. |
+| `websocket_headers` | no | `{}` | Object with HTTP header names and non-sensitive string values. | Optional WebSocket handshake headers for approved proxy routing hints. Values are bounded, control characters are rejected, protocol-owned headers are rejected, and sensitive header names such as `Authorization` must use `websocket_headers_env` instead. Only valid with `ws://` or `wss://` transport. |
+| `websocket_headers_env` | no | `{}` | Object with HTTP header names and environment variable names. | Optional WebSocket handshake headers whose values are read from environment variables at connection time. Use this for sensitive proxy or gateway material. The JSON config and redacted effective config show only redacted values, not resolved secrets. Only valid with `ws://` or `wss://` transport. |
 | `no_echo` | no | `false` | `true` or `false`. | Passes `no_echo` to `nats-py`, asking the NATS server not to echo messages published on this connection back to subscriptions on the same connection. Normal sink workers should usually leave this disabled because JetStream pull delivery and DLQ publication do not require same-connection echo suppression. |
 | `allow_reconnect` | no | `true` | `true` or `false`. | Enables `nats-py` automatic reconnect behavior after connection loss. Production deployments should normally keep this enabled. |
 | `connect_timeout_seconds` | no | `2` | Integer `1` to `300`. | Initial NATS connection timeout passed as `connect_timeout`. |
@@ -312,9 +336,14 @@ Validation rules:
   `nkey_seed_file` are mutually exclusive authentication modes,
 - `url` and every `urls` entry must use one of the supported NATS client
   schemes: `nats`, `tls`, `ws`, or `wss`,
-- WebSocket schemes are allowed syntactically, but production-certified
-  WebSocket support is tracked separately in
-  [WebSocket Connection Evaluation](websocket-connection-evaluation.md),
+- WebSocket URL lists must be all WebSocket (`ws`/`wss`) or all non-WebSocket
+  (`nats`/`tls`); mixed transport lists fail validation before connection
+  setup,
+- WebSocket headers are allowed only with `ws://` or `wss://` and are validated
+  through bounded allow-list rules,
+- WebSocket URLs must not contain credentials; use `password_env`, `token_env`,
+  `creds_file`, `nkey_seed_file`, or approved header environment variables
+  instead,
 - `tls_key_file` requires `tls_cert_file`,
 - bcrypted NATS passwords are a server-side storage detail; the client still
   sends the clear-text password from `password` or `password_env`.
@@ -1124,6 +1153,67 @@ not digital signatures. For the full model, examples, privacy guidance, and
 sink storage behavior, read
 [Tamper-Evident Custody Metadata](tamper-evident-custody.md).
 
+### `size_policy`
+
+The `size_policy` section is an optional core runtime gate for message and
+metadata size limits. It is disabled by default to preserve compatibility with
+existing deployments, but when enabled it runs before `sink.write_batch(...)`
+for every configured sink. Oracle, file, and future sinks therefore receive
+only messages that passed the same destination-neutral size policy.
+
+The policy is evaluated after message normalization and optional payload
+encryption, so `max_payload_bytes` refers to the sink-bound payload bytes. If
+encryption is enabled, the encrypted payload envelope is measured. The policy
+also measures normalized headers, labels, mission metadata, the standard
+nats-sinks metadata document, an approximate normalized record size, and the
+accepted batch size.
+
+A violation is a permanent validation failure. If DLQ is enabled, the rejected
+message is published to DLQ and the original JetStream message is ACKed or
+terminally acknowledged only after DLQ publication succeeds. If DLQ
+publication fails, the original message is not ACKed. Error text includes
+sanitized reason codes and sizes, but not payloads, header values, labels,
+mission metadata values, credentials, private endpoints, table names, or file
+paths.
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `enabled` | no | `false` | `true` or `false`. | Enables the core size policy. |
+| `max_payload_bytes` | no | `16777216` | Integer `0` to `1073741824`. | Maximum sink-bound payload bytes after core payload transformation. |
+| `max_header_count` | no | `128` | Integer `0` to `1000000`. | Maximum number of normalized headers. |
+| `max_header_name_bytes` | no | `256` | Integer `1` to `65536`. | Maximum UTF-8 byte length of a single header name. |
+| `max_header_value_bytes` | no | `8192` | Integer `0` to `1073741824`. | Maximum UTF-8 byte length of a single header value. |
+| `max_headers_bytes` | no | `65536` | Integer `0` to `1073741824`. | Maximum combined UTF-8 bytes across normalized header names and values. |
+| `max_label_count` | no | `64` | Integer `0` to `1000000`. | Maximum number of normalized labels. |
+| `max_label_bytes` | no | `128` | Integer `1` to `65536`. | Maximum UTF-8 byte length of a single normalized label. |
+| `max_labels_bytes` | no | `4096` | Integer `0` to `1073741824`. | Maximum combined UTF-8 bytes across normalized labels. |
+| `max_mission_metadata_bytes` | no | `8192` | Integer `0` to `1073741824`. | Maximum compact JSON size of the validated mission metadata object. |
+| `max_standard_metadata_bytes` | no | `262144` | Integer `0` to `1073741824`. | Maximum compact JSON size of the standard nats-sinks metadata document generated for destination storage. |
+| `max_normalized_record_bytes` | no | `20971520` | Integer `0` to `1073741824`. | Maximum approximate sink-bound record size, calculated as payload bytes plus standard metadata JSON bytes. |
+| `max_batch_messages` | no | `10000` | Integer `1` to `1000000`. | Maximum number of messages accepted in one post-normalization batch. This should normally be greater than or equal to `delivery.batch_size`. |
+
+Example: enable strict but still practical limits for operational events:
+
+```json
+{
+  "size_policy": {
+    "enabled": true,
+    "max_payload_bytes": 1048576,
+    "max_header_count": 32,
+    "max_header_value_bytes": 2048,
+    "max_headers_bytes": 16384,
+    "max_label_count": 12,
+    "max_label_bytes": 64,
+    "max_mission_metadata_bytes": 4096,
+    "max_standard_metadata_bytes": 65536,
+    "max_normalized_record_bytes": 1179648,
+    "max_batch_messages": 256
+  }
+}
+```
+
+For operational tuning guidance, see [Message Sizing](message-sizing.md).
+
 ### `pre_sink_policy`
 
 The `pre_sink_policy` section is an optional core runtime gate. It is disabled
@@ -1216,6 +1306,46 @@ All other fields under `sink` are sink-specific:
 - `file` fields are documented in [File Sink](file-sink.md),
 - `oracle` fields are documented in [Oracle Sink](oracle-sink.md).
 
+### `plugins`
+
+The `plugins` section controls optional discovery for externally installed sink
+connectors. It is disabled by default because Python plugin loading is a
+code-execution and supply-chain trust boundary. You do not need this section
+for the built-in Oracle Database sink or the built-in FileSink.
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `enabled` | no | `false` | `true` or `false`. | Enables optional entry-point discovery for externally installed connectors. Keep this `false` unless an operator has reviewed and installed a trusted connector package. |
+| `allowed_sinks` | no | `[]` | List of connector names matching `^[a-z][a-z0-9_-]{0,63}$`. | Explicit allow-list of external connector names that may be loaded. The runner never loads every installed connector automatically. When `enabled` is `true`, at least one name is required. |
+| `require_production_ready` | no | `true` | `true` or `false`. | Requires discovered external connectors to declare `production_ready=true` in their `SinkConnector` descriptor. Keep this enabled for real deployments. |
+
+Example:
+
+```json
+{
+  "plugins": {
+    "enabled": true,
+    "allowed_sinks": ["acme_archive"],
+    "require_production_ready": true
+  },
+  "sink": {
+    "type": "acme_archive",
+    "directory": "/var/lib/nats-sinks/acme-archive"
+  }
+}
+```
+
+That example loads only the `acme_archive` connector from the Python entry-point
+group `nats_sinks.sinks`, and only if the package returns a valid
+`SinkConnector` descriptor with the same name. The JSON configuration does not
+contain a module path or class path. This is intentional: runtime configuration
+must not be able to choose arbitrary imports.
+
+First-party future Oracle-family sinks, such as OCI Object Storage, Oracle
+MySQL, Oracle Berkeley DB, Oracle NoSQL Database, and OCI Streaming, are
+expected to be added as built-in connectors in this repository unless project
+governance changes that decision. They should not require `plugins.enabled`.
+
 ## Delivery Settings
 
 The `delivery.batch_size` value is a maximum fetch and write size, not a
@@ -1260,7 +1390,12 @@ secret-handling guidance, and examples. The current production sinks are:
 
 - `"type": "oracle"` for Oracle Database. Detailed Oracle connection options,
   Autonomous Database wallet settings, table routing, payload modes, and column
-  mappings live in [Oracle Sink](oracle-sink.md).
+  mappings live in [Oracle Sink](oracle-sink.md). Oracle-specific write
+  controls such as `mode`, `idempotency`, `staging`, and
+  `merge_update_columns` are intentionally documented there rather than in the
+  generic configuration page. Route-specific Oracle idempotency overrides are
+  also documented on the Oracle page because they depend on Oracle table
+  design and constraints.
 - `"type": "file"` for local JSON file output. File durability, duplicate
   policies, deterministic file names, optional gzip compression, and filesystem safety live in
   [File Sink](file-sink.md).

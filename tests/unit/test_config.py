@@ -12,6 +12,7 @@ import pytest
 from nats_sinks.core.config import (
     MAX_CONFIG_BYTES,
     ConfigurationError,
+    SinkPluginConfig,
     load_config,
     redacted_config,
 )
@@ -77,6 +78,64 @@ def test_nats_no_echo_can_be_enabled_with_env_override(
     config = load_config(path)
 
     assert config.nats.no_echo is True
+
+
+def test_sink_plugin_config_defaults_to_disabled() -> None:
+    config = SinkPluginConfig()
+
+    assert config.enabled is False
+    assert config.allowed_sinks == ()
+    assert config.require_production_ready is True
+
+
+def test_sink_plugin_config_normalizes_explicit_allow_list() -> None:
+    config = SinkPluginConfig(enabled=True, allowed_sinks=["  ACME_File  ", "acme-http"])
+
+    assert config.allowed_sinks == ("acme_file", "acme-http")
+
+
+def test_sink_plugin_config_requires_allow_list_when_enabled() -> None:
+    with pytest.raises(ValueError, match="requires at least one allowed sink name"):
+        SinkPluginConfig(enabled=True)
+
+
+def test_sink_plugin_config_rejects_duplicate_or_unsafe_names() -> None:
+    with pytest.raises(ValueError, match="duplicate sink name"):
+        SinkPluginConfig(allowed_sinks=["acme", "ACME"])
+
+    with pytest.raises(ValueError, match="entries must start"):
+        SinkPluginConfig(allowed_sinks=["../acme"])
+
+
+def test_load_config_accepts_disabled_plugin_section(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*"
+  },
+  "plugins": {
+    "enabled": false,
+    "allowed_sinks": [],
+    "require_production_ready": true
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/tmp/nats-sinks-test"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(path, env_overrides=False)
+
+    assert config.plugins.enabled is False
+    assert config.plugins.allowed_sinks == ()
 
 
 def test_invalid_json_root_raises(tmp_path: Path) -> None:
@@ -187,7 +246,7 @@ def test_redacted_config_hides_secrets(monkeypatch: pytest.MonkeyPatch, tmp_path
     assert os.environ["NATS_SINKS_NATS_URL"] == "nats://localhost:4222"
 
 
-def test_redacted_config_hides_nats_url_credentials(tmp_path: Path) -> None:
+def test_nats_url_credentials_are_rejected(tmp_path: Path) -> None:
     path = tmp_path / "config.json"
     path.write_text(
         """
@@ -210,9 +269,40 @@ def test_redacted_config_hides_nats_url_credentials(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
+    with pytest.raises(ConfigurationError, match="must not include credentials"):
+        load_config(path, env_overrides=False)
+
+
+def test_redacted_config_hides_websocket_header_values(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "wss://nats.example:8443",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*",
+    "websocket_headers": {
+      "X-Route-Hint": "approved-edge"
+    },
+    "websocket_headers_env": {
+      "Authorization": "NATS_WS_AUTHORIZATION"
+    }
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/tmp/nats-sinks-test"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
     rendered = redacted_config(load_config(path, env_overrides=False))
 
-    assert rendered["nats"]["url"] == "********"
+    assert rendered["nats"]["websocket_headers"]["X-Route-Hint"] == "********"
+    assert rendered["nats"]["websocket_headers_env"]["Authorization"] == "********"
 
 
 def test_redacted_config_hides_oracle_wallet_password(tmp_path: Path) -> None:
@@ -522,6 +612,77 @@ def test_pre_sink_policy_config_validates_subject_rules(tmp_path: Path) -> None:
     assert config.pre_sink_policy.enabled
     assert config.pre_sink_policy.rules[0].subject == "orders.*"
     assert config.pre_sink_policy.rules[0].required_labels == ("orders", "audit")
+
+
+def test_size_policy_config_loads_documented_bounds(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*"
+  },
+  "size_policy": {
+    "enabled": true,
+    "max_payload_bytes": 1024,
+    "max_header_count": 16,
+    "max_header_name_bytes": 128,
+    "max_header_value_bytes": 512,
+    "max_headers_bytes": 4096,
+    "max_label_count": 8,
+    "max_label_bytes": 64,
+    "max_labels_bytes": 512,
+    "max_mission_metadata_bytes": 2048,
+    "max_standard_metadata_bytes": 8192,
+    "max_normalized_record_bytes": 16384,
+    "max_batch_messages": 32
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/tmp/nats-sinks-test"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(path, env_overrides=False)
+
+    assert config.size_policy.enabled is True
+    assert config.size_policy.max_payload_bytes == 1024
+    assert config.size_policy.max_batch_messages == 32
+
+
+def test_size_policy_rejects_inconsistent_aggregate_limits(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*"
+  },
+  "size_policy": {
+    "enabled": true,
+    "max_payload_bytes": 1024,
+    "max_normalized_record_bytes": 512
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/tmp/nats-sinks-test"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError, match=r"size_policy\.max_normalized_record_bytes"):
+        load_config(path, env_overrides=False)
 
 
 def test_enabled_pre_sink_policy_requires_explicit_rules(tmp_path: Path) -> None:

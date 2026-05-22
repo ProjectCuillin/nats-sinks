@@ -82,12 +82,13 @@ change control:
 - `metadata` is for low-sensitivity operational labels only. It must not carry
   secrets, payloads, connection details, or classified mission content.
 
-The certified production connection path is still direct NATS TCP with
+The primary production connection path is still direct NATS TCP with
 `nats://` for controlled local use or `tls://` for encrypted production
-connectivity. WebSocket URLs are accepted by configuration validation because
-NATS and `nats-py` support `ws://` and `wss://`, but WebSocket transport remains
-an evaluated future capability until the follow-up guardrails and integration
-certification work are complete. See
+connectivity. WebSocket transport is also supported for environments where
+HTTP-aware network boundaries or approved gateways require `ws://` or
+`wss://`. Use `wss://` with certificate verification for operational
+deployments, keep WebSocket header values redacted, and review proxy logs as
+part of the deployment threat model. See
 [WebSocket Connection Evaluation](websocket-connection-evaluation.md) before
 approving WebSocket transport in an operational deployment.
 
@@ -448,6 +449,30 @@ The runner should stop fetching new messages before shutdown and let the active
 batch reach a durable boundary. If the process exits before ACK, JetStream may
 redeliver. Idempotency is required, and production sinks should treat
 redelivery as a normal operational event rather than an exceptional condition.
+
+## Size Policy Operations
+
+Use `size_policy` when producer contracts or operational security policy need
+hard limits before data reaches any sink. The policy is disabled by default for
+compatibility. When enabled, it bounds the sink-bound payload, normalized
+headers, labels, mission metadata, standard metadata, approximate record size,
+and accepted batch size.
+
+Start with observed production-like traffic rather than guesses:
+
+1. Measure normal and peak payload sizes.
+2. Review NATS server `max_payload`, `delivery.batch_size`, Oracle column
+   choices, file-system capacity, and downstream replay tooling.
+3. Set size limits slightly above the largest legitimate message shape.
+4. Enable DLQ for rejected messages so operators can triage malformed or
+   oversized inputs without losing custody of the event.
+5. Monitor `size_policy_messages_rejected_total`,
+   `messages_failed_total`, and `messages_dlq_total`.
+
+For tactical or mission-support deployments, include these limits in the
+interface control document for each subject family. A sensor event, platform
+status update, logistics report, or encrypted operational note should have a
+known maximum shape before it enters the durable event custody path.
 
 ## Reprocessing
 

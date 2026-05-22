@@ -352,6 +352,37 @@ ACKed or terminally acknowledged only after DLQ publication succeeds.
 For configuration details, read
 [Configuration](configuration.md#pre_sink_policy).
 
+## Size Policy Metrics
+
+Size policy metrics are emitted only when `size_policy.enabled` is true. They
+show aggregate pass and rejection counts without exporting payloads, header
+values, labels, mission metadata values, subjects, table names, file paths, or
+other sensitive operational detail.
+
+```bash
+nats-sink-metrics show .local/nats-sinks/metrics.json --metric "size_policy_*"
+```
+
+Example table output:
+
+```text
+KIND     METRIC                               VALUE  DESCRIPTION
+counter  size_policy_batches_passed_total        24  Batches with at least one message accepted by the core size policy.
+counter  size_policy_batches_rejected_total       1  Batches with at least one message rejected by the core size policy.
+counter  size_policy_messages_passed_total     1536  Messages accepted by the core size policy before sink delivery.
+counter  size_policy_messages_rejected_total      4  Messages rejected by the core size policy before sink delivery.
+counter  size_policy_evaluation_errors_total      0  Messages left redeliverable because size-policy evaluation failed unexpectedly.
+```
+
+Use these counters with `messages_failed_total` and `messages_dlq_total`.
+A size-policy rejection is a permanent validation failure. The rejected message
+does not reach the sink. When DLQ is enabled, the original JetStream message is
+ACKed or terminally acknowledged only after DLQ publication succeeds.
+
+For configuration and tuning details, read
+[Configuration](configuration.md#size_policy) and
+[Message Sizing](message-sizing.md).
+
 ## Priority Lane Metrics
 
 Priority lane metrics are emitted only when `delivery.priority_lanes.enabled`
@@ -414,6 +445,9 @@ The Oracle-specific counters are:
 | `oracle_conflicts_total` | Oracle write conflicts observed by `OracleSink`, such as `ORA-00001` duplicate-key conflicts. |
 | `oracle_duplicates_total` | Rows identified as duplicate prior processing through an idempotent Oracle write path. |
 | `oracle_duplicate_ignored_total` | Duplicate rows safely ignored by `insert_ignore` mode. |
+| `oracle_duplicate_noop_total` | Duplicate rows safely left unchanged by `merge` with `merge_update_columns: []`. |
+| `oracle_merge_rows_total` | Rows committed through Oracle `merge` mode. |
+| `oracle_merge_outcome_unknown_total` | `merge` rows where Oracle did not reliably expose whether the row was inserted or matched. |
 
 For `insert_ignore`, nats-sinks generates an Oracle `merge` that inserts only
 when the idempotency key is not already present. When Oracle reports that fewer
@@ -423,9 +457,11 @@ mode, the conflict is counted and then treated as a safe duplicate success.
 
 For `merge`, Oracle updates matching rows and inserts missing rows. The current
 execution path does not reliably expose per-row "inserted versus matched"
-counts across driver versions, so nats-sinks does not claim `merge` duplicate
-counts unless a duplicate-key conflict is explicitly observed. This keeps the
-metric honest rather than guessing.
+counts across driver versions when updates are enabled, so nats-sinks records
+`oracle_merge_outcome_unknown_total` instead of guessing. If `merge` is
+configured with `merge_update_columns: []`, matched rows are left unchanged; in
+that no-update mode a lower affected-row count can be reported as
+`oracle_duplicate_noop_total` and included in `oracle_duplicates_total`.
 
 Show Oracle duplicate and conflict counters:
 
@@ -439,7 +475,10 @@ Example table output:
 KIND     METRIC                           VALUE  DESCRIPTION
 counter  oracle_conflicts_total               1  Oracle write conflicts observed by OracleSink, such as duplicate-key conflicts.
 counter  oracle_duplicate_ignored_total       7  Oracle duplicate rows safely ignored by insert_ignore mode.
-counter  oracle_duplicates_total              7  Oracle rows identified as duplicate prior processing through idempotent handling.
+counter  oracle_duplicate_noop_total          3  Oracle duplicate rows safely left unchanged by merge mode with no update columns.
+counter  oracle_duplicates_total             10  Oracle rows identified as duplicate prior processing through idempotent handling.
+counter  oracle_merge_outcome_unknown_total  64  Oracle merge rows where insert-versus-match outcome is not reliably exposed.
+counter  oracle_merge_rows_total             64  Oracle rows committed through merge mode.
 ```
 
 Use shell output in service scripts:
@@ -455,7 +494,10 @@ Example shell output:
 ```text
 ORACLE_CONFLICTS_TOTAL=1
 ORACLE_DUPLICATE_IGNORED_TOTAL=7
-ORACLE_DUPLICATES_TOTAL=7
+ORACLE_DUPLICATE_NOOP_TOTAL=3
+ORACLE_DUPLICATES_TOTAL=10
+ORACLE_MERGE_OUTCOME_UNKNOWN_TOTAL=64
+ORACLE_MERGE_ROWS_TOTAL=64
 ```
 
 Read one value with a safe default:
@@ -835,6 +877,11 @@ The preferred metric suffixes are:
 | `policy_batches_passed_total` | counter | Batches whose messages all passed pre-sink policy evaluation. |
 | `policy_batches_rejected_total` | counter | Batches with at least one message rejected by pre-sink policy evaluation. |
 | `policy_evaluation_errors_total` | counter | Messages affected by unexpected pre-sink policy evaluation errors. |
+| `size_policy_messages_passed_total` | counter | Messages accepted by the core size policy before sink delivery. |
+| `size_policy_messages_rejected_total` | counter | Messages rejected by the core size policy before sink delivery. |
+| `size_policy_batches_passed_total` | counter | Batches with at least one message accepted by the core size policy. |
+| `size_policy_batches_rejected_total` | counter | Batches with at least one message rejected by the core size policy. |
+| `size_policy_evaluation_errors_total` | counter | Messages affected by unexpected size-policy evaluation errors. |
 | `nats_connection_disconnected_total` | counter | NATS client disconnect events observed by the runner. |
 | `nats_connection_reconnected_total` | counter | NATS client reconnect events observed by the runner. |
 | `nats_connection_closed_total` | counter | NATS client closed events observed by the runner. |
@@ -862,6 +909,9 @@ The preferred metric suffixes are:
 | `oracle_conflicts_total` | counter | Oracle write conflicts observed by OracleSink, such as duplicate-key conflicts. |
 | `oracle_duplicates_total` | counter | Oracle rows identified as duplicate prior processing through idempotent handling. |
 | `oracle_duplicate_ignored_total` | counter | Oracle duplicate rows safely ignored by `insert_ignore` mode. |
+| `oracle_duplicate_noop_total` | counter | Oracle duplicate rows safely left unchanged by `merge` mode with no update columns. |
+| `oracle_merge_rows_total` | counter | Oracle rows committed through `merge` mode. |
+| `oracle_merge_outcome_unknown_total` | counter | Oracle merge rows where insert-versus-match outcome is not reliably exposed. |
 | `last_sink_success_epoch_seconds` | gauge | Unix epoch seconds for the latest durable sink success followed by ACK. |
 | `current_batch_messages` | gauge | Number of messages in the active batch currently being processed. |
 

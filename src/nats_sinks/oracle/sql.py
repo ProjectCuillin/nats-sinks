@@ -52,6 +52,7 @@ class OracleWriteSql:
     bind_names: tuple[str, ...]
     columns: tuple[str, ...]
     key_columns: tuple[str, ...]
+    update_columns: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,6 +69,7 @@ class OracleStagingSql:
     bind_names: tuple[str, ...]
     columns: tuple[str, ...]
     key_columns: tuple[str, ...]
+    update_columns: tuple[str, ...] = ()
 
 
 def validate_identifier(identifier: str) -> str:
@@ -94,12 +96,55 @@ def _write_columns(columns: OracleColumnMapping) -> tuple[tuple[str, str], ...]:
     return tuple((FIELD_TO_BIND[field], column) for field, column in validated.items())
 
 
+def _merge_update_columns(
+    *,
+    column_names: tuple[str, ...],
+    key_columns: tuple[str, ...],
+    configured_update_columns: list[str] | None,
+) -> tuple[str, ...]:
+    """Return validated Oracle columns that may be updated by `merge`.
+
+    `None` preserves the original nats-sinks behavior and updates every
+    non-key column.  An explicit empty list means "do not update matched rows";
+    in that mode the merge inserts missing rows and leaves duplicates
+    unchanged.  Explicit column names are validated against the generated
+    column mapping because Oracle identifiers cannot be protected by bind
+    variables.
+    """
+
+    if configured_update_columns is None:
+        return tuple(column for column in column_names if column not in key_columns)
+
+    requested = tuple(validate_identifier(column) for column in configured_update_columns)
+    if len(requested) != len(set(requested)):
+        raise ConfigurationError("merge_update_columns must not contain duplicate columns")
+
+    allowed_columns = set(column_names)
+    unknown_columns = [column for column in requested if column not in allowed_columns]
+    if unknown_columns:
+        raise ConfigurationError(
+            "merge_update_columns contains columns that are not present in the Oracle column "
+            f"mapping: {', '.join(unknown_columns)}"
+        )
+
+    key_column_set = set(key_columns)
+    key_overlap = [column for column in requested if column in key_column_set]
+    if key_overlap:
+        raise ConfigurationError(
+            "merge_update_columns must not include idempotency key columns: "
+            f"{', '.join(key_overlap)}"
+        )
+
+    return requested
+
+
 def build_write_sql(
     *,
     table: str,
     columns: OracleColumnMapping,
     mode: OracleWriteMode,
     key_columns: list[str],
+    merge_update_columns: list[str] | None = None,
 ) -> OracleWriteSql:
     """Generate bind-variable SQL for a configured Oracle write mode."""
 
@@ -123,6 +168,7 @@ def build_write_sql(
             bind_names=bind_names,
             columns=column_names,
             key_columns=(),
+            update_columns=(),
         )
 
     selects = ", ".join(f":{bind} as {column}" for bind, column in write_columns)
@@ -145,16 +191,24 @@ def build_write_sql(
             bind_names=bind_names,
             columns=column_names,
             key_columns=validated_key_columns,
+            update_columns=(),
         )
 
-    update_columns = [column for column in column_names if column not in validated_key_columns]
-    set_clause = ", ".join(f"target.{column} = source.{column}" for column in update_columns)
+    update_columns = _merge_update_columns(
+        column_names=column_names,
+        key_columns=validated_key_columns,
+        configured_update_columns=merge_update_columns,
+    )
+    matched_clause = ""
+    if update_columns:
+        set_clause = ", ".join(f"target.{column} = source.{column}" for column in update_columns)
+        matched_clause = f"when matched then update set {set_clause} "  # nosec B608
     # Identifiers are allow-list validated above; all data values remain bind variables.
     sql = (
         f"merge into {table_name} target "  # noqa: S608  # nosec B608
         f"using (select {selects} from dual) source "
         f"on ({on_clause}) "
-        f"when matched then update set {set_clause} "
+        f"{matched_clause}"
         f"when not matched then insert ({', '.join(column_names)}) values ({insert_values})"
     )
     return OracleWriteSql(
@@ -163,6 +217,7 @@ def build_write_sql(
         bind_names=bind_names,
         columns=column_names,
         key_columns=validated_key_columns,
+        update_columns=update_columns,
     )
 
 
@@ -174,6 +229,7 @@ def build_staging_merge_sql(
     columns: OracleColumnMapping,
     mode: OracleWriteMode,
     key_columns: list[str],
+    merge_update_columns: list[str] | None = None,
     cleanup: OracleStagingCleanupMode = "delete_on_success",
 ) -> OracleStagingSql:
     """Generate SQL for array-loading a staging table and set-merging target rows.
@@ -221,11 +277,21 @@ def build_staging_merge_sql(
             f"{merge_prefix}when not matched then insert ({', '.join(column_names)}) "  # noqa: S608  # nosec B608
             f"values ({merge_insert_values})"
         )
+        update_columns: tuple[str, ...] = ()
     else:
-        update_columns = [column for column in column_names if column not in validated_key_columns]
-        set_clause = ", ".join(f"target.{column} = source.{column}" for column in update_columns)
+        update_columns = _merge_update_columns(
+            column_names=column_names,
+            key_columns=validated_key_columns,
+            configured_update_columns=merge_update_columns,
+        )
+        matched_clause = ""
+        if update_columns:
+            set_clause = ", ".join(
+                f"target.{column} = source.{column}" for column in update_columns
+            )
+            matched_clause = f"when matched then update set {set_clause} "  # nosec B608
         merge_sql = (
-            f"{merge_prefix}when matched then update set {set_clause} "  # noqa: S608  # nosec B608
+            f"{merge_prefix}{matched_clause}"  # noqa: S608  # nosec B608
             f"when not matched then insert ({', '.join(column_names)}) "
             f"values ({merge_insert_values})"
         )
@@ -249,4 +315,5 @@ def build_staging_merge_sql(
         bind_names=(batch_bind_name, *bind_names),
         columns=column_names,
         key_columns=validated_key_columns,
+        update_columns=update_columns,
     )

@@ -1,0 +1,30 @@
+{
+  "id": "oracle-nosql-database-sink",
+  "title": "[Feature]: Add an Oracle NoSQL Database sink",
+  "area": "Future sink",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "sink-oracle", "security", "testing"],
+  "problem": "Oracle NoSQL Database and Oracle NoSQL Database Cloud Service can store key-oriented operational events with predictable lookup patterns. nats-sinks does not yet provide a first-party NoSQL sink for teams that want Oracle-family storage without a relational table schema.",
+  "proposal": "Research, design, and later implement a first-party Oracle-family Oracle NoSQL Database sink using the official Python SDK. The sink should store normalized message envelopes as JSON-like records, support deterministic primary keys based on stream and sequence or message ID, expose duplicate policies through conditional put behavior where available, and document cloud and on-prem deployment differences. The design must identify how table creation, schema evolution, throughput limits, and regional consistency affect commit-then-acknowledge behavior.",
+  "users": "Teams using Oracle NoSQL Database for operational data, edge-to-cloud event custody, or flexible JSON records where relational schemas are not the preferred destination model.",
+  "delivery_semantics": "The core runner must own ACK behavior. The NoSQL sink may return success only after the SDK reports that every configured put or conditional put has completed successfully. Conditional duplicate success must be explicit and tested. If a write, table lookup, throughput limit, timeout, or commit-equivalent operation fails, the sink must raise a framework error and the core must not ACK.",
+  "security": "Authentication must support cloud and on-prem modes without logging credentials. Table names, compartment references, consistency settings, capacity settings, and key templates must be validated. Payloads must not be logged by default. Documentation must include least-privilege policy examples for cloud deployments and safe credential placement for local tests.",
+  "acceptance": [
+    "A design note selects the public import path, config type, optional dependency extra, supported deployment modes, and table model.",
+    "Functional requirements cover JSON envelope storage, deterministic keys, duplicate policies, metadata storage, encryption compatibility, and optional table creation controls.",
+    "Non-functional requirements cover throughput limits, SDK timeouts, retry classification, bounded payload sizes, and graceful shutdown.",
+    "Security requirements cover authentication modes, least privilege, redaction, identifier validation, and no payload logging by default.",
+    "Tests cover fake SDK writes, duplicate behavior, config validation, table name validation, error classification, and no ACK on sink failure.",
+    "Documentation covers setup, schema, idempotency, limitations, and live test gating."
+  ],
+  "tests": "Use fake Oracle NoSQL SDK clients for unit tests so no network calls are made. Cover table and key validation, row mapping, conditional put success, conditional conflict success when configured, throughput errors, authentication errors, and sink contract behavior. Live tests must be optional and use ignored local configuration only.",
+  "documentation": "Add a dedicated Oracle NoSQL sink page when implementation starts. Update docs/sink-framework.md, docs/configuration.md, docs/idempotency.md, docs/security.md, docs/operations.md, docs/testing.md, ROADMAP.md, docs/roadmap.md, and CHANGELOG.md.",
+  "closeout": "Close only after the release containing the Oracle NoSQL Database sink is published. Include release tag, tested deployment mode, tests run, documentation updated, and known limitations.",
+  "relationships": {
+    "related": [
+      "backlog:sink-certification-contract-and-tests",
+      "backlog:mission-event-metadata-profile"
+    ]
+  }
+}

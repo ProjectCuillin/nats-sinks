@@ -14,11 +14,11 @@ logs from live systems.
 | Field | Value |
 | --- | --- |
 | Overall result | Pass |
-| Report generated | 2026-05-22 15:13:53 CEST |
+| Report generated | 2026-05-22 18:37:20 CEST |
 | Project version | `0.4.0` post-release development |
 | Python version | 3.12.4 |
 | Git revision checked | Active `release-v0.4.1` branch-first workflow workspace |
-| Worktree state | Active workspace with quiet branch-first release workflow automation, GitHub `main` branch protection, draft pull request helpers, manual release-validation dispatch, CODEOWNERS review ownership, pull request governance checks, release tag validation against `main`, updated release/backlog/contributor documentation, Oracle high-throughput staging-table merge mode for issue `#31`, tamper-evident custody metadata for issue `#60`, optional JetStream advisory observation for issue `#18`, explicit durable pull-consumer management for issue `#19`, richer JetStream consumer policy configuration for issue `#20`, optional NATS no-echo connection configuration for issue `#25`, OpenTelemetry OTLP metrics export for issue `#26`, and the previously validated `0.4.0` capability set covering secure-development hardening, strict JSON config loading, log-injection sanitization, secret-scan automation, the 316-control security rule review, project-specific security controls, expanded public API compatibility tests and documentation, release-version consistency checks, generated GitHub Dependency Graph manifests, detailed local backlog JSON items synced to GitHub Issues, release-target backlog labels, sanitized backlog comment tooling, completed-label workflow support for fixed or implemented issues awaiting release, stricter backlog lifecycle enforcement, release-gated backlog close automation, OCI Object Storage sink backlog tracking, standardized SPDX source headers, metrics snapshots and CLI, observability policy core, Prometheus and NATS monitoring connectors, Kubernetes examples, unified Debian/Oracle Linux systemd installer, NATS reconnect tuning, least-privilege NATS permission templates, JetStream topology guidance, retry backoff with jitter, priority-aware lanes, synthetic mission testing, mission-support examples, CycloneDX SBOM generation, release checksums, hash-verified installation guidance, property-style tests, defence and mission-support blueprints, generic mission metadata, payload encryption, and Oracle/file sink support |
+| Worktree state | Active workspace with safe sink connector framework implementation for issue `#35`, new Oracle-family, Palantir, and common sink connector backlog items synced to GitHub Issues, quiet branch-first release workflow automation, WebSocket transport guardrails for issues `#129`, `#130`, and `#132`, completed WebSocket test-isolation bugs `#139` and `#140`, GitHub `main` branch protection, draft pull request helpers, manual release-validation dispatch, CODEOWNERS review ownership, pull request governance checks, release tag validation against `main`, updated release/backlog/contributor documentation, Oracle high-throughput staging-table merge mode for issue `#31`, tamper-evident custody metadata for issue `#60`, optional JetStream advisory observation for issue `#18`, explicit durable pull-consumer management for issue `#19`, richer JetStream consumer policy configuration for issue `#20`, optional NATS no-echo connection configuration for issue `#25`, OpenTelemetry OTLP metrics export for issue `#26`, and the previously validated `0.4.0` capability set covering secure-development hardening, strict JSON config loading, log-injection sanitization, secret-scan automation, the 316-control security rule review, project-specific security controls, expanded public API compatibility tests and documentation, release-version consistency checks, generated GitHub Dependency Graph manifests, detailed local backlog JSON items synced to GitHub Issues, release-target backlog labels, sanitized backlog comment tooling, completed-label workflow support for fixed or implemented issues awaiting release, stricter backlog lifecycle enforcement, release-gated backlog close automation, OCI Object Storage sink backlog tracking, standardized SPDX source headers, metrics snapshots and CLI, observability policy core, Prometheus and NATS monitoring connectors, Kubernetes examples, unified Debian/Oracle Linux systemd installer, NATS reconnect tuning, least-privilege NATS permission templates, JetStream topology guidance, retry backoff with jitter, priority-aware lanes, synthetic mission testing, mission-support examples, CycloneDX SBOM generation, release checksums, hash-verified installation guidance, property-style tests, defence and mission-support blueprints, generic mission metadata, payload encryption, and Oracle/file sink support |
 | Live NATS details | Redacted |
 | Live Oracle details | Redacted |
 
@@ -26,7 +26,8 @@ This validation refresh covered the core framework, strict JSON configuration
 loading, safe log formatting, high-confidence secret scanning, the 316-control
 security rule review, additional project-specific controls, expanded public API
 compatibility checks and documentation, release-version consistency automation, clearer basic
-metrics counters, local JSON metrics snapshots, the `nats-sink-metrics`
+metrics counters, WebSocket transport guardrails, optional WebSocket connection
+headers, a collision-safe local WebSocket certification harness, local JSON metrics snapshots, the `nats-sink-metrics`
 inspection CLI, the `nats-sink-observe` observability policy CLI,
 policy-controlled Prometheus textfile export, optional native Prometheus HTTP
 endpoint support, the disabled-by-default OpenTelemetry OTLP metrics
@@ -94,6 +95,7 @@ flowchart LR
     NATSMon[NATS server monitoring connector] --> Report
     Advisories[JetStream advisory observer] --> Report
     Consumers[Durable consumer policy] --> Report
+    WebSocket[WebSocket guardrails and e2e harness] --> Report
     K8s[Kubernetes examples] --> Report
     OracleMetrics[Oracle duplicate/conflict metrics] --> Report
     OracleBenchmark[Oracle phase benchmark] --> Report
@@ -135,6 +137,44 @@ When refreshing this report:
 The current workspace is prepared on the `release-v0.4.1` branch after the
 published `0.4.0` release and has passed local validation. It includes:
 
+- safe sink connector framework work for issue `#35`, including
+  `SinkConnector` metadata, explicit `SinkRegistry` connector registration,
+  built-in first-party Oracle and FileSink descriptors, optional
+  disabled-by-default allow-listed entry-point discovery for reviewed external
+  connectors, plugin configuration validation, public API compatibility
+  coverage, security guidance, and connector development documentation,
+- researched and synchronized GitHub backlog items for Oracle-family connector
+  candidates, Palantir Foundry and Palantir Gotham, and low-priority
+  Kafka-style destination patterns such as search, warehouse, object storage,
+  stream, document database, key-value, and wide-column sinks,
+- full local validation after the connector framework implementation:
+  `scripts/check.sh` passed with `616 passed, 8 skipped` in the main pytest
+  run, `120 passed` in the encryption and sink contract suite, and `98 passed`
+  in the sink suite; Ruff format/check, mypy, backlog and bug manifest
+  validation, PyPI-facing Markdown link checks, documentation builds,
+  CLI smoke checks, high-confidence secret scan, Bandit, package build,
+  SBOM/checksum generation, and Twine metadata checks also passed,
+- WebSocket transport guardrails for issues `#129`, `#130`, and `#132`,
+  including fail-closed mixed transport rejection, credential-free NATS URLs,
+  secure WebSocket TLS context construction with local CA support, optional
+  redacted WebSocket connection headers, a reusable collision-safe harness, and
+  `scripts/run-websocket-e2e.sh` for optional local WebSocket certification,
+- bug issue `#139`, which fixed the new WebSocket harness unit tests so they
+  mock port probes instead of binding sockets, preserving the no-network unit
+  test rule,
+- bug issue `#140`, which fixed noisy transient startup tracebacks in the
+  optional WebSocket e2e script by waiting for the temporary local WebSocket
+  listener before invoking the NATS client,
+- full local validation after the WebSocket implementation:
+  `scripts/check.sh` passed with `575 passed, 8 skipped` in the main pytest
+  run, `108 passed` in the encryption and runner-ordering suite, and
+  `85 passed` in the sink suite; Ruff format/check, mypy, backlog and bug
+  manifest validation, Markdown link checks, documentation builds, CLI smoke
+  checks, high-confidence secret scan, Bandit, package build, SBOM/checksum
+  generation, and Twine metadata checks also passed,
+- optional local WebSocket e2e validation passed with synthetic messages and a
+  non-even batch size, selecting local loopback ports, writing all messages
+  through the file sink, and reporting clean sanitized JSON output,
 - optional JetStream advisory observation for issue `#18`, disabled by
   default, isolated from sink ACK behavior, bounded by safe JSON parsing and
   advisory-subject validation, and exposed through sanitized low-cardinality
@@ -370,8 +410,16 @@ published `0.4.0` release and has passed local validation. It includes:
   version unless an operator explicitly sets `NATS_SINKS_PACKAGE_SPEC`,
 - Oracle duplicate/conflict counters for idempotent Oracle operations:
   `oracle_conflicts_total`, `oracle_duplicates_total`, and
-  `oracle_duplicate_ignored_total`, including CLI filtering through
+  `oracle_duplicate_ignored_total`, plus Oracle merge visibility counters for
+  no-update duplicates, merge rows, and update-enabled merge rows with unknown
+  insert-versus-match outcome, including CLI filtering through
   `nats-sink-metrics show --metric "oracle_*"`,
+- Oracle per-route idempotency overrides for subject-to-table routing,
+  including inherited defaults, message-ID keys, payload-field keys, and
+  route-specific merge update controls,
+- core size-policy controls for sink-bound payload bytes, normalized headers,
+  labels, mission metadata, standard metadata, approximate record size, and
+  accepted batch size before any Oracle, file, or future sink write,
 - clearer Oracle runtime errors for `ORA-00904`, `ORA-00942`, and `ORA-01017`
   so schema drift, missing table grants, and authentication failures are
   explained in operator-facing language without logging secrets,
@@ -488,8 +536,8 @@ ordering, DLQ-before-ACK ordering, and deterministic unhappy-path handling.
 | Observability focused checks | `pytest tests/unit/test_observability_policy.py tests/unit/test_nats_monitoring.py tests/unit/test_observability_cli.py tests/unit/test_public_api.py tests/unit/test_systemd_install_script.py` | Pass | Covered disabled policy generation, NATS monitoring endpoint validation, sanitized snapshot generation, optional Prometheus and OTLP behavior, CLI behavior, public API compatibility, and systemd asset coverage |
 | Observability CLI smoke | `python -m nats_sinks.cli.observability init-prometheus-policy ...`, `validate-policy`, and `prometheus-textfile --dry-run` | Pass | Generated and validated a disabled Prometheus policy from the file sink example; disabled policy rendered a no-metrics Prometheus comment without needing a snapshot |
 | Unified systemd installer checks | `sh -n scripts/install-systemd*.sh` and `pytest tests/unit/test_systemd_install_script.py` | Pass | Shell syntax passed for the unified installer and compatibility wrappers; unit tests confirmed OS detection branches, local-checkout detection, GitHub asset-fetch support, package-spec-aware tagged installs, Prometheus service assets, NATS monitoring service assets, and wrapper delegation |
-| Oracle duplicate/conflict metric checks | `pytest tests/unit/test_oracle_sink_contract.py tests/unit/test_metrics_cli.py` | Pass | Covered duplicate-key conflict counting, safe `insert_ignore` duplicate counting, strict insert conflict failure, CLI `oracle_*` filtering, and metric name listing |
-| Metrics CLI smoke | `python -m nats_sinks.cli.metrics --version` and `python -m nats_sinks.cli.metrics describe --format names` | Pass | Printed `0.4.0`; `describe --format names` listed `oracle_conflicts_total`, `oracle_duplicates_total`, and `oracle_duplicate_ignored_total` |
+| Oracle duplicate/conflict metric checks | `pytest tests/unit/test_oracle_sink_contract.py tests/unit/test_metrics_cli.py` | Pass | Covered duplicate-key conflict counting, safe `insert_ignore` duplicate counting, configurable no-update `merge` duplicate counting, merge outcome visibility counters, strict insert conflict failure, CLI `oracle_*` filtering, and metric name listing |
+| Metrics CLI smoke | `python -m nats_sinks.cli.metrics --version` and `python -m nats_sinks.cli.metrics describe --format names` | Pass | Printed `0.4.0`; `describe --format names` listed Oracle duplicate, conflict, no-op duplicate, and merge visibility counters |
 | Read the Docs documentation build | `scripts/check-docs.sh` | Pass | MkDocs site built successfully with the default Read the Docs canonical URL in an isolated temporary output directory |
 | GitHub Pages documentation build | `scripts/check-docs.sh` | Pass | MkDocs site built successfully with the GitHub Pages canonical URL in an isolated temporary output directory |
 | Security scan | `scripts/security.sh` | Pass | High-confidence secret scan passed; Bandit passed; expected targeted Oracle SQL `nosec` annotations were reported as warnings only |

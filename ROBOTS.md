@@ -570,6 +570,30 @@ Production operations depend on useful, safe signals:
   checked, UTF-8 checked, and free of payloads, secrets, credentials,
   certificate material, private key material, and sensitive operational content.
 
+## Sink Connector Framework
+
+- Treat every new destination as a sink connector with a documented durable
+  success boundary, idempotency model, security model, and certification plan.
+- Oracle Database and FileSink are first-party built-in connectors. Future
+  Oracle-family sinks, such as OCI Object Storage, Oracle MySQL,
+  Oracle Berkeley DB, Oracle NoSQL Database, and OCI Streaming, should also be
+  first-party connectors in this repository unless governance explicitly
+  changes that posture.
+- External connector discovery is a code-execution and supply-chain boundary.
+  Keep it disabled by default, require `plugins.allowed_sinks`, and never allow
+  JSON configuration to specify arbitrary module paths, class paths, or dynamic
+  imports.
+- External connectors must expose a `SinkConnector` descriptor, match the
+  allow-listed entry-point name, declare compatibility metadata, and pass
+  certification tests before production recommendation.
+- Do not mark a connector production-ready merely because it implements the
+  Python protocol. Require tests for ACK-after-durable-success, no ACK on
+  failure, duplicate redelivery, secret redaction, no payload logging by
+  default, and destination-specific commit behavior.
+- Palantir Foundry, Palantir Gotham, and other third-party platform connectors
+  require local fake clients or contract harnesses before live certification is
+  attempted. Never imply live certification from public documentation alone.
+
 ## Data And Idempotency
 
 At-least-once delivery means duplicate processing is normal:

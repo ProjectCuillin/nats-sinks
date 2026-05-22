@@ -111,6 +111,23 @@ def test_nats_options_support_multiple_seed_urls_and_reconnect_tuning() -> None:
     assert options["drain_timeout"] == 15
 
 
+def test_nats_config_rejects_mixed_websocket_and_tcp_seed_urls() -> None:
+    with pytest.raises(ValueError, match="must not mix WebSocket transports"):
+        app_config(
+            {
+                "urls": [
+                    "ws://nats-ws.example:8080",
+                    "tls://nats.example:4222",
+                ],
+            }
+        )
+
+
+def test_nats_config_rejects_credentials_in_urls() -> None:
+    with pytest.raises(ValueError, match="must not include credentials"):
+        app_config({"url": "wss://token-value@nats.example:8443"})
+
+
 def test_nats_config_rejects_ambiguous_seed_urls() -> None:
     with pytest.raises(ValueError, match=r"nats\.urls"):
         app_config({"urls": ["nats://nats-a.example:4222", "   "]})
@@ -158,3 +175,88 @@ def test_nats_options_uses_local_ca_file_for_tls(
         "certfile": "/etc/nats/client.crt",
         "keyfile": "/etc/nats/client.key",
     }
+
+
+def test_nats_options_builds_tls_context_for_wss(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, Any] = {}
+
+    class FakeContext:
+        check_hostname = True
+        verify_mode = ssl.CERT_REQUIRED
+
+    def fake_create_default_context(*, cafile: str | None = None) -> FakeContext:
+        captured["cafile"] = cafile
+        return FakeContext()
+
+    monkeypatch.setattr(cli_main.ssl, "create_default_context", fake_create_default_context)
+    config = app_config(
+        {
+            "url": "wss://nats.example:8443",
+            "tls_ca_file": "/etc/nats/websocket-ca.crt",
+        }
+    )
+
+    options = cli_main._nats_options(config)
+
+    assert options["servers"] == ["wss://nats.example:8443"]
+    assert options["tls"].check_hostname is True
+    assert captured == {"cafile": "/etc/nats/websocket-ca.crt"}
+
+
+def test_nats_options_passes_validated_websocket_headers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("NATS_WS_AUTHORIZATION", "Bearer local-lab-token")
+    config = app_config(
+        {
+            "url": "wss://nats.example:8443",
+            "websocket_headers": {"X-Route-Hint": "approved-edge"},
+            "websocket_headers_env": {"Authorization": "NATS_WS_AUTHORIZATION"},
+        }
+    )
+
+    options = cli_main._nats_options(config)
+
+    assert options["ws_connection_headers"] == {
+        "X-Route-Hint": "approved-edge",
+        "Authorization": "Bearer local-lab-token",
+    }
+
+
+def test_nats_config_rejects_websocket_headers_without_websocket_transport() -> None:
+    with pytest.raises(ValueError, match="require ws:// or wss://"):
+        app_config({"websocket_headers": {"X-Route-Hint": "approved-edge"}})
+
+
+def test_nats_config_rejects_direct_sensitive_websocket_header() -> None:
+    with pytest.raises(ValueError, match="websocket_headers_env"):
+        app_config(
+            {
+                "url": "wss://nats.example:8443",
+                "websocket_headers": {"Authorization": "Bearer token"},
+            }
+        )
+
+
+def test_nats_config_rejects_protocol_owned_websocket_header() -> None:
+    with pytest.raises(ValueError, match="protocol header"):
+        app_config(
+            {
+                "url": "wss://nats.example:8443",
+                "websocket_headers": {"Sec-WebSocket-Key": "not-allowed"},
+            }
+        )
+
+
+def test_nats_options_missing_websocket_header_environment_variable_raises() -> None:
+    config = app_config(
+        {
+            "url": "wss://nats.example:8443",
+            "websocket_headers_env": {"Authorization": "MISSING_NATS_WS_AUTHORIZATION"},
+        }
+    )
+
+    with pytest.raises(ConfigurationError, match="MISSING_NATS_WS_AUTHORIZATION"):
+        cli_main._nats_options(config)

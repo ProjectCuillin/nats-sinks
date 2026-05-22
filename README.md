@@ -82,6 +82,9 @@ used immediately:
   classification, labels, mission metadata, encrypted payloads, and payload
   size limits by subject. Rejected messages never reach a sink and follow the
   DLQ-before-ACK rule when DLQ is configured.
+- Optional core size policy enforcement that can bound sink-bound payload
+  bytes, normalized headers, labels, mission metadata, standard metadata,
+  approximate record size, and accepted batch size before any sink write.
 - `nats_sinks.oracle.OracleSink`, the production Oracle Database sink with
   connection pooling, Oracle Autonomous Database connection options, `merge`
   and `insert_ignore` idempotent modes, optional high-throughput staging-table
@@ -91,6 +94,10 @@ used immediately:
   filenames, atomic temporary-file placement, optional `fsync`, duplicate
   handling, optional Python standard-library gzip compression, metadata
   persistence, and the same payload normalization contract used by Oracle.
+- A safe sink connector framework with first-party Oracle and file connectors,
+  stable `SinkConnector` metadata, explicit `SinkRegistry` resolution, and
+  disabled-by-default allow-listed entry-point discovery for reviewed external
+  connectors.
 - Basic metrics counters and timing observations for fetched, prepared,
   written, ACKed, NAKed, failed, DLQ, sink write, ACK error, and active batch
   behavior. The built-in runtime can write a local JSON snapshot when
@@ -115,6 +122,11 @@ used immediately:
   including multiple seed URLs, reconnect wait, maximum reconnect attempts,
   ping behavior, pending buffer size, drain timeout, and connection event
   metrics.
+- WebSocket NATS transport guardrails for approved `ws://` local labs and
+  `wss://` deployments, including mixed transport rejection, credential-free
+  URLs, local CA TLS handling, validated optional WebSocket headers, and a
+  collision-safe local certification harness. See
+  [WebSocket Connection Evaluation](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/websocket-connection-evaluation.md).
 - Exponential retry backoff with optional jitter for retryable failures, so
   temporary destination outages can slow down without weakening the
   commit-then-acknowledge invariant.
@@ -883,6 +895,8 @@ Phase 1:
 - Oracle sink.
 - File sink.
 - NATS reconnect tuning and connection event metrics.
+- WebSocket connection guardrails, optional headers, and local certification
+  harness.
 - Policy-controlled Prometheus textfile export and optional native Prometheus
   HTTP scrape endpoint as separate observability services.
 - Policy-controlled OpenTelemetry OTLP metrics export to an OpenTelemetry
@@ -906,13 +920,18 @@ Phase 1:
 Phase 2:
 
 - More idempotency strategies.
+- First-party Oracle-family sink designs for OCI Object Storage, Oracle MySQL,
+  Oracle Berkeley DB, Oracle NoSQL Database, and OCI Streaming.
+- High-priority Palantir Foundry and Palantir Gotham connector evaluations
+  with local contract mocks before any live certification claim.
 - Oracle MySQL sink design for MySQL and MySQL HeatWave deployments.
 - HTTP sink.
 - S3 sink design with deterministic object keys.
 - Native OCI Object Storage sink design with deterministic object keys,
   workload identity support, checksums, multipart upload, and least-privilege
   bucket guidance.
-- Kafka and other backend evaluation through the sink framework.
+- Kafka, search, warehouse, document database, key-value, and wide-column
+  backend evaluation through the sink framework.
 - Docker image.
 - Certified TLS certificate authentication guidance.
 - Certified NKEY with challenge authentication support.
@@ -923,11 +942,11 @@ Phase 2:
 
 Phase 3:
 
-- Plugin discovery.
+- External connector marketplace guidance and certification evidence beyond
+  the current allow-listed entry-point framework.
 - Sink certification tests.
 - Helm chart.
 - Advanced observability connectors and bounded subject-aware metric policies.
-- WebSocket connection support.
 - Push and ordered consumer evaluation where compatible with project semantics.
 - Stream management helpers beyond the current topology guidance.
 - Future sink certification tests.

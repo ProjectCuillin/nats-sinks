@@ -23,6 +23,9 @@ release, and closed only after the containing release is published.
 - Fail-closed pre-sink policy enforcement for subject-scoped requirements such
   as priority, classification, labels, mission metadata, encrypted payloads,
   approved mission metadata keys, and bounded sink-bound payload size.
+- Core size policy enforcement for sink-bound payload bytes, headers, labels,
+  mission metadata, standard metadata, approximate record size, and accepted
+  batch size before any sink write.
 - Core message metadata for priority, classification, and labels so
   mission-oriented deployments can preserve operational handling context across
   all production sinks.
@@ -52,12 +55,23 @@ release, and closed only after the containing release is published.
 - Kubernetes deployment examples with JSON ConfigMaps, Secret references,
   mounted trust material, security contexts, resource limits, graceful
   shutdown settings, and optional Prometheus observability sidecars.
-- Oracle duplicate/conflict metrics for idempotent Oracle operations, readable
-  through the same metrics snapshot and `nats-sink-metrics` CLI.
+- Oracle duplicate/conflict metrics and configurable Oracle `merge`
+  update-column controls for idempotent Oracle operations, readable through
+  the same metrics snapshot and `nats-sink-metrics` CLI.
+- Oracle subject-to-table routes with optional per-route idempotency overrides
+  for stream sequence, message ID, and payload-field keys.
 - Multiple NATS seed URLs, reconnect tuning, and connection event metrics for
   clustered or controlled-network deployments.
+- WebSocket connection guardrails for explicit `ws://` and `wss://` transport,
+  mixed URL-list rejection, credential-free URLs, `wss://` local CA behavior,
+  optional redacted WebSocket connection headers, and a local certification
+  harness.
 - Optional NATS no-echo connection setting for specialized same-connection
   publish/subscribe policy requirements.
+- Safe sink connector framework with `SinkConnector` metadata, explicit
+  `SinkRegistry` resolution, first-party Oracle and FileSink descriptors, and
+  disabled-by-default allow-listed entry-point discovery for reviewed external
+  connectors.
 - Optional JetStream advisory observation for selected `$JS.EVENT.ADVISORY...`
   subjects with disabled-by-default configuration and aggregate metrics only.
 - Explicit durable pull-consumer management with `bind_only`,
@@ -114,11 +128,10 @@ release, and closed only after the containing release is published.
   runbooks, deeper replay drills, and sink-specific certification evidence.
 - Documented sink certification contract for idempotency, including required
   duplicate-redelivery tests for every new production sink.
-- Per-route or per-table Oracle idempotency overrides for deployments where
-  different subjects need different durable keys.
-- More Oracle duplicate handling controls, such as clearer `merge`
-  update-column controls and deeper merge insert-versus-match visibility where
-  Oracle execution metadata can support it reliably.
+- Deeper certification evidence and runbooks for complex multi-route Oracle
+  idempotency deployments.
+- Deeper Oracle merge insert-versus-match visibility if future Oracle driver
+  metadata can support it reliably without guessing.
 - HTTP sink idempotency-key support, retry safety guidance, and clear warnings
   for endpoints that cannot provide idempotent semantics.
 - S3 sink design with atomic object keys and safe duplicate overwrite/skip
@@ -129,6 +142,14 @@ release, and closed only after the containing release is published.
 - Oracle MySQL sink design for MySQL and MySQL HeatWave deployments, including
   Connector/Python evaluation, transaction commit timing, idempotent upserts,
   TLS verification, and least-privilege account guidance.
+- Oracle Berkeley DB, Oracle NoSQL Database, and OCI Streaming sink evaluations
+  as first-party Oracle-family connector candidates.
+- Palantir Foundry and Palantir Gotham sink evaluations with local fake-client
+  or contract-harness testing before any live certification claim.
+- Elasticsearch or OpenSearch, Snowflake, BigQuery, Azure object storage,
+  Kafka, MongoDB, Redis, and Cassandra-compatible sink evaluations at low
+  priority so the project can learn from common Kafka-style connector patterns
+  without prematurely broadening the production surface.
 - HTTP sink.
 - Docker image.
 - Optional dedicated secret-manager connectors for encryption keys when a
@@ -136,8 +157,8 @@ release, and closed only after the containing release is published.
 - Expanded property-based or dedicated fuzz tooling if the deterministic
   bounded generator suite reaches its limits or future parsers become more
   complex.
-- Expanded metadata-size and schema policy controls for deployments that need
-  stricter mission metadata validation than the current root-key allow list.
+- Expanded mission metadata schema policy controls for deployments that need
+  stricter validation than the current root-key allow list and size policy.
 - Hash-verified installation guidance for high-trust environments.
 - Certified TLS certificate authentication guidance.
 - Certified NKEY with challenge authentication support.
@@ -159,21 +180,13 @@ release, and closed only after the containing release is published.
 - Bounded subject-family metric aggregation without raw subject export by
   default.
 - Subject-aware observability certification tests and operator runbook.
-- WebSocket connection configuration guardrails for explicit `ws://` and
-  `wss://` transport validation, mixed URL-list rejection, and TLS local CA
-  behavior.
-
 ## Phase 3
 
-- Plugin discovery.
+- External connector marketplace guidance, certification evidence, and
+  governance beyond the current allow-listed entry-point framework.
 - Sink certification tests.
 - Helm chart.
 - Advanced observability.
-- Optional WebSocket connection header support with redaction and environment
-  variable sourcing for sensitive values.
-- WebSocket integration certification harness and operator runbook for
-  `ws://`, `wss://`, reconnect behavior, and unchanged commit-then-ACK
-  contracts.
 - Push-consumer capability and configuration guardrails.
 - Opt-in bounded push-consumer runner mode.
 - Push-consumer delivery-contract and flow-control certification tests.

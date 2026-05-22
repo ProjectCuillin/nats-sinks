@@ -1,0 +1,32 @@
+{
+  "id": "routing-match-policy-subject-metadata-labels",
+  "title": "[Feature]: Add route matching by subject, priority, classification, labels, and approved headers",
+  "area": "Configuration",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "unscheduled",
+  "labels": ["nats", "sink-new", "security"],
+  "problem": "Routing decisions are currently limited. Oracle table routing is subject-based and Oracle-specific, while priority, classification, labels, and headers are normalized metadata that cannot yet drive generic sink selection. Users need route policies that combine the delivered NATS subject with operational metadata so messages can be sent to the right durable destinations without custom code.",
+  "proposal": "Define a generic route-match policy schema that can match on NATS subject patterns, normalized priority values, normalized classification values, label membership, and explicitly approved NATS headers. The schema should support exact allow-listed values for priority and classification, labels_all, labels_any, and labels_none semantics, optional subject patterns using the same NATS wildcard rules already used by the project, and a clear route evaluation mode such as first matching route or all matching routes. Header matching should be opt-in, bounded, and limited to configured header names and simple value comparisons. The examples must include at least two match sets for the same subject and label pattern: one route for priority urgent plus classification NATO SECRET plus labels sensor and audit that selects a mixed Oracle and file target set, and one route for priority urgent plus classification NATO UNCLASS plus the same labels that selects only a named Oracle sink called oracle_unclass.",
+  "users": "Operators who need to separate audit, archive, high-priority, classified, mission-tagged, or tenant-like event families into different sinks based on normalized message context.",
+  "delivery_semantics": "Route matching only selects destination sinks. It must not ACK, commit, or change retry behavior by itself. Invalid route configuration should fail validation before the service starts. A message that matches no route must follow a configured fail-closed policy such as reject to DLQ, use a default route, or leave unprocessed for redelivery depending on explicit operator configuration.",
+  "security": "Metadata and headers are untrusted external input. The implementation must normalize and bound subject, priority, classification, label, and header values before matching. It must reject malformed route expressions early, avoid unbounded regular expressions, avoid logging payloads, and avoid exporting sensitive subject or label values through metrics unless a policy explicitly allows them.",
+  "acceptance": [
+    "Route policies can match on subject, priority, classification, labels_all, labels_any, labels_none, and allow-listed headers.",
+    "Route matching uses typed, normalized envelope metadata rather than raw unvalidated input.",
+    "Configuration validation rejects malformed subject patterns, unknown match operators, excessive value counts, and ambiguous route modes.",
+    "Configuration validation accepts the documented NATO SECRET and NATO UNCLASS match-set example and rejects malformed variants through nats-sink validate.",
+    "Tests cover all combinations of subject-only, priority-only, classification-only, labels_all, labels_any, labels_none, header-only, and combined match policies.",
+    "Unit tests cover missing metadata, empty labels, multiple labels, case handling, header absence, and no-route behavior.",
+    "Documentation includes examples for routing to Oracle, file, and mixed destinations without exposing sensitive operational names."
+  ],
+  "tests": "Add unit tests for every match operator and malformed configuration path. Add property-style tests for subject and label matching if practical. Add CLI validation tests for valid and invalid route configurations. Add smoke tests that route the same test messages to different file sink destinations based on subject, priority, classification, and labels. Include explicit tests where NATO SECRET routes to multiple targets and NATO UNCLASS routes only to oracle_unclass.",
+  "documentation": "Update docs/configuration.md, docs/sink-framework.md, docs/architecture.md, docs/operations.md, docs/file-sink.md, docs/oracle-sink.md, and CHANGELOG.md when implemented.",
+  "closeout": "Close only after a release containing the route-match policy is published. Close-out evidence must include supported match fields, validation limits, tests run, documentation updated, and known limitations.",
+  "relationships": {
+    "related": [
+      "backlog:core-routing-fanout-sink",
+      "backlog:data-centric-security-label-profile",
+      "backlog:priority-aware-processing-lanes"
+    ]
+  }
+}

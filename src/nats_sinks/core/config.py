@@ -79,6 +79,8 @@ AES_256_KEY_BYTES = 32
 MAX_ENCRYPTION_KEY_ID_LENGTH = 128
 MAX_CONFIG_BYTES = 1_048_576
 NATS_ALLOWED_URL_SCHEMES = frozenset({"nats", "tls", "ws", "wss"})
+NATS_WEBSOCKET_URL_SCHEMES = frozenset({"ws", "wss"})
+NATS_NON_WEBSOCKET_URL_SCHEMES = frozenset({"nats", "tls"})
 MAX_CONSUMER_FILTER_SUBJECTS = 64
 MAX_CONSUMER_BACKOFF_ENTRIES = 128
 MAX_CONSUMER_BACKOFF_SECONDS = 604_800
@@ -88,10 +90,45 @@ MAX_CONSUMER_METADATA_VALUE_LENGTH = 512
 CONSUMER_METADATA_KEY_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.:/-]{0,127}$")
 PRIORITY_LANE_NAME_RE = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
 PRE_SINK_POLICY_MISSION_KEY_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.:-]{0,127}$")
+WEBSOCKET_HEADER_NAME_RE = re.compile(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,128}$")
+WEBSOCKET_HEADER_ENV_RE = re.compile(r"^[A-Z_][A-Z0-9_]{0,127}$")
 ASCII_CONTROL_MAX = 31
 ASCII_DELETE = 127
+MAX_WEBSOCKET_HEADERS = 32
+MAX_WEBSOCKET_HEADER_VALUE_LENGTH = 2048
+WEBSOCKET_DANGEROUS_HEADERS = frozenset(
+    {
+        "connection",
+        "content-length",
+        "host",
+        "sec-websocket-accept",
+        "sec-websocket-extensions",
+        "sec-websocket-key",
+        "sec-websocket-protocol",
+        "sec-websocket-version",
+        "transfer-encoding",
+        "upgrade",
+    }
+)
+WEBSOCKET_ENV_ONLY_HEADERS = frozenset(
+    {
+        "authorization",
+        "cookie",
+        "proxy-authorization",
+        "x-api-key",
+        "x-auth-token",
+    }
+)
 MAX_POLICY_LABEL_LENGTH = 128
 MAX_POLICY_PAYLOAD_BYTES = 1_073_741_824
+DEFAULT_SIZE_POLICY_MAX_PAYLOAD_BYTES = 16_777_216
+DEFAULT_SIZE_POLICY_MAX_HEADERS_BYTES = 65_536
+DEFAULT_SIZE_POLICY_MAX_STANDARD_METADATA_BYTES = 262_144
+DEFAULT_SIZE_POLICY_MAX_NORMALIZED_RECORD_BYTES = 20_971_520
+MAX_SIZE_POLICY_BYTES = 1_073_741_824
+MAX_SIZE_POLICY_COUNT = 1_000_000
+SINK_PLUGIN_NAME_RE = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
+MAX_SINK_PLUGIN_NAMES = 32
 POLICY_SECRET_KEY_PARTS = (
     "password",
     "passwd",
@@ -119,6 +156,121 @@ def _validate_nats_server_url(value: str, *, field: str) -> str:
         raise ValueError(f"{field} must use one of these schemes: {allowed}")
     if not parsed.netloc:
         raise ValueError(f"{field} must include a host")
+    if parsed.username is not None or parsed.password is not None:
+        raise ValueError(
+            f"{field} must not include credentials; use nats.user, nats.password_env, "
+            "nats.token_env, nats.creds_file, or nats.nkey_seed_file instead"
+        )
+    return rendered
+
+
+def _nats_url_scheme(value: str) -> str:
+    """Return the already-validated NATS URL scheme."""
+
+    return urlsplit(value).scheme
+
+
+def _validate_websocket_transport_mix(urls: list[str]) -> None:
+    """Reject seed lists that mix WebSocket and non-WebSocket transports.
+
+    `nats-py` selects different transport implementations for WebSocket and
+    normal TCP/TLS connections.  Rejecting mixed seed lists before connection
+    setup gives operators a deterministic error instead of a late transport
+    failure after startup begins.
+    """
+
+    schemes = {_nats_url_scheme(url) for url in urls}
+    if schemes & NATS_WEBSOCKET_URL_SCHEMES and schemes & NATS_NON_WEBSOCKET_URL_SCHEMES:
+        raise ValueError(
+            "nats.urls must not mix WebSocket transports (ws or wss) with "
+            "non-WebSocket transports (nats or tls)"
+        )
+
+
+def _is_websocket_transport(urls: list[str]) -> bool:
+    """Return true when the effective NATS seed list uses WebSocket transport."""
+
+    return any(_nats_url_scheme(url) in NATS_WEBSOCKET_URL_SCHEMES for url in urls)
+
+
+def _validate_websocket_header_name(name: str, *, source: str) -> str:
+    """Validate one WebSocket connection header name.
+
+    The value is sent during the WebSocket handshake and may be logged by
+    proxies outside this process, so the project keeps the accepted grammar
+    intentionally narrow and rejects protocol-owned headers.
+    """
+
+    rendered = name.strip()
+    if rendered != name or not WEBSOCKET_HEADER_NAME_RE.fullmatch(rendered):
+        raise ValueError(
+            f"{source} header names must be HTTP token names without surrounding whitespace"
+        )
+    if rendered.casefold() in WEBSOCKET_DANGEROUS_HEADERS:
+        raise ValueError(f"{source} must not configure WebSocket protocol header {rendered!r}")
+    return rendered
+
+
+def _validate_websocket_header_value(value: str, *, source: str) -> str:
+    """Validate one WebSocket connection header value."""
+
+    if len(value) > MAX_WEBSOCKET_HEADER_VALUE_LENGTH:
+        raise ValueError(
+            f"{source} values must be at most {MAX_WEBSOCKET_HEADER_VALUE_LENGTH} characters"
+        )
+    if any(ord(char) <= ASCII_CONTROL_MAX or ord(char) == ASCII_DELETE for char in value):
+        raise ValueError(f"{source} values must not contain control characters")
+    if value.strip() != value:
+        raise ValueError(f"{source} values must not have surrounding whitespace")
+    return value
+
+
+def _validate_websocket_header_env_name(value: str, *, source: str) -> str:
+    """Validate an environment variable name used as a header value source."""
+
+    rendered = value.strip()
+    if rendered != value or not WEBSOCKET_HEADER_ENV_RE.fullmatch(rendered):
+        raise ValueError(
+            f"{source} environment variable names must use uppercase letters, digits, or '_'"
+        )
+    return rendered
+
+
+def _validate_websocket_header_mapping(
+    value: object,
+    *,
+    source: str,
+    env_values: bool,
+) -> dict[str, str]:
+    """Validate direct or environment-sourced WebSocket header configuration."""
+
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError(f"{source} must be an object with header names as keys")
+    if len(value) > MAX_WEBSOCKET_HEADERS:
+        raise ValueError(f"{source} supports at most {MAX_WEBSOCKET_HEADERS} headers")
+
+    rendered: dict[str, str] = {}
+    seen: set[str] = set()
+    for raw_name, raw_value in value.items():
+        if not isinstance(raw_name, str) or not isinstance(raw_value, str):
+            raise ValueError(f"{source} header names and values must be strings")
+        name = _validate_websocket_header_name(raw_name, source=source)
+        lowered_name = name.casefold()
+        if lowered_name in seen:
+            raise ValueError(f"{source} must not contain duplicate header names")
+        if not env_values and lowered_name in WEBSOCKET_ENV_ONLY_HEADERS:
+            raise ValueError(
+                f"{source}.{name} must use nats.websocket_headers_env so the value "
+                "comes from the runtime environment and is redacted everywhere"
+            )
+        seen.add(lowered_name)
+        rendered[name] = (
+            _validate_websocket_header_env_name(raw_value, source=f"{source}.{name}")
+            if env_values
+            else _validate_websocket_header_value(raw_value, source=f"{source}.{name}")
+        )
     return rendered
 
 
@@ -176,6 +328,8 @@ class NatsConfig(BaseModel):
     tls_cert_file: str | None = None
     tls_key_file: str | None = None
     tls_verify: bool = True
+    websocket_headers: dict[str, str] = Field(default_factory=dict)
+    websocket_headers_env: dict[str, str] = Field(default_factory=dict)
     # Keep server-side echo suppression opt-in so ordinary JetStream pull
     # consumers preserve the same connection behavior unless an operator has a
     # specific same-connection publish/subscribe reason to enable it.
@@ -213,6 +367,24 @@ class NatsConfig(BaseModel):
             raise ValueError("configure a single NATS authentication method")
         if self.tls_key_file is not None and self.tls_cert_file is None:
             raise ValueError("nats.tls_key_file requires nats.tls_cert_file")
+        effective_urls = self.urls or [self.url]
+        _validate_websocket_transport_mix(effective_urls)
+        if (self.websocket_headers or self.websocket_headers_env) and not _is_websocket_transport(
+            effective_urls
+        ):
+            raise ValueError(
+                "nats.websocket_headers and nats.websocket_headers_env require ws:// "
+                "or wss:// transport"
+            )
+        header_names = {name.casefold() for name in self.websocket_headers}
+        header_env_names = {name.casefold() for name in self.websocket_headers_env}
+        duplicates = sorted(header_names & header_env_names)
+        if duplicates:
+            joined = ", ".join(duplicates)
+            raise ValueError(
+                "nats.websocket_headers and nats.websocket_headers_env must not "
+                f"configure the same header twice: {joined}"
+            )
         return self
 
     @field_validator("url")
@@ -231,6 +403,28 @@ class NatsConfig(BaseModel):
         for item in value:
             rendered_urls.append(_validate_nats_server_url(item, field="nats.urls"))
         return rendered_urls
+
+    @field_validator("websocket_headers", mode="before")
+    @classmethod
+    def validate_websocket_headers(cls, value: object) -> dict[str, str]:
+        """Validate non-sensitive WebSocket headers declared directly in JSON."""
+
+        return _validate_websocket_header_mapping(
+            value,
+            source="nats.websocket_headers",
+            env_values=False,
+        )
+
+    @field_validator("websocket_headers_env", mode="before")
+    @classmethod
+    def validate_websocket_headers_env(cls, value: object) -> dict[str, str]:
+        """Validate WebSocket headers whose values are resolved from env vars."""
+
+        return _validate_websocket_header_mapping(
+            value,
+            source="nats.websocket_headers_env",
+            env_values=True,
+        )
 
     def resolve_password(self) -> str | None:
         """Resolve the NATS password only when opening a connection."""
@@ -255,6 +449,26 @@ class NatsConfig(BaseModel):
         if token is None:
             raise ConfigurationError(f"environment variable {self.token_env} is not set")
         return token
+
+    def resolve_websocket_headers(self) -> dict[str, str]:
+        """Resolve and validate optional WebSocket connection headers.
+
+        Direct headers are intended for non-sensitive routing hints.  Sensitive
+        values, such as authorization material expected by a reverse proxy,
+        should use `websocket_headers_env` so the JSON configuration and
+        redacted effective configuration never contain the value.
+        """
+
+        headers = dict(self.websocket_headers)
+        for name, env_name in self.websocket_headers_env.items():
+            value = os.getenv(env_name)
+            if value is None:
+                raise ConfigurationError(f"environment variable {env_name} is not set")
+            headers[name] = _validate_websocket_header_value(
+                value,
+                source=f"environment variable {env_name}",
+            )
+        return headers
 
 
 class ConsumerManagementConfig(BaseModel):
@@ -727,6 +941,79 @@ class PreSinkPolicyConfig(BaseModel):
 
         if self.enabled and not self.rules:
             raise ValueError("pre_sink_policy.enabled requires at least one rule")
+        return self
+
+
+class SizePolicyConfig(BaseModel):
+    """Optional destination-neutral payload and metadata size policy.
+
+    The policy is disabled by default to preserve compatibility with existing
+    deployments.  When enabled, it fails closed before any sink receives a
+    message.  Violations are permanent validation failures, so the runner can
+    publish them to DLQ before ACK according to the normal commit-then-ACK
+    rules.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    max_payload_bytes: int = Field(
+        default=DEFAULT_SIZE_POLICY_MAX_PAYLOAD_BYTES,
+        ge=0,
+        le=MAX_SIZE_POLICY_BYTES,
+    )
+    max_header_count: int = Field(default=128, ge=0, le=MAX_SIZE_POLICY_COUNT)
+    max_header_name_bytes: int = Field(default=256, ge=1, le=65_536)
+    max_header_value_bytes: int = Field(default=8192, ge=0, le=MAX_SIZE_POLICY_BYTES)
+    max_headers_bytes: int = Field(
+        default=DEFAULT_SIZE_POLICY_MAX_HEADERS_BYTES,
+        ge=0,
+        le=MAX_SIZE_POLICY_BYTES,
+    )
+    max_label_count: int = Field(default=64, ge=0, le=MAX_SIZE_POLICY_COUNT)
+    max_label_bytes: int = Field(default=128, ge=1, le=65_536)
+    max_labels_bytes: int = Field(default=4096, ge=0, le=MAX_SIZE_POLICY_BYTES)
+    max_mission_metadata_bytes: int = Field(
+        default=DEFAULT_MAX_MISSION_METADATA_BYTES,
+        ge=0,
+        le=MAX_SIZE_POLICY_BYTES,
+    )
+    max_standard_metadata_bytes: int = Field(
+        default=DEFAULT_SIZE_POLICY_MAX_STANDARD_METADATA_BYTES,
+        ge=0,
+        le=MAX_SIZE_POLICY_BYTES,
+    )
+    max_normalized_record_bytes: int = Field(
+        default=DEFAULT_SIZE_POLICY_MAX_NORMALIZED_RECORD_BYTES,
+        ge=0,
+        le=MAX_SIZE_POLICY_BYTES,
+    )
+    max_batch_messages: int = Field(default=10_000, ge=1, le=MAX_SIZE_POLICY_COUNT)
+
+    @model_validator(mode="after")
+    def validate_aggregate_limits(self) -> SizePolicyConfig:
+        """Reject aggregate limits that are lower than their component limits."""
+
+        if self.max_headers_bytes < self.max_header_name_bytes:
+            raise ValueError(
+                "size_policy.max_headers_bytes must be greater than or equal to "
+                "size_policy.max_header_name_bytes"
+            )
+        if self.max_headers_bytes < self.max_header_value_bytes:
+            raise ValueError(
+                "size_policy.max_headers_bytes must be greater than or equal to "
+                "size_policy.max_header_value_bytes"
+            )
+        if self.max_labels_bytes < self.max_label_bytes:
+            raise ValueError(
+                "size_policy.max_labels_bytes must be greater than or equal to "
+                "size_policy.max_label_bytes"
+            )
+        if self.max_normalized_record_bytes < self.max_payload_bytes:
+            raise ValueError(
+                "size_policy.max_normalized_record_bytes must be greater than or equal to "
+                "size_policy.max_payload_bytes"
+            )
         return self
 
 
@@ -1495,6 +1782,61 @@ class SinkConfig(BaseModel):
     type: str
 
 
+class SinkPluginConfig(BaseModel):
+    """Optional allow-listed discovery for externally installed sink connectors.
+
+    The default is deliberately disabled because Python entry-point loading is
+    a code-execution boundary.  Built-in sinks such as Oracle and File do not
+    need this setting.  Operators enable it only when they have installed and
+    reviewed a trusted connector package and want the CLI registry to load that
+    specific sink name.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    allowed_sinks: tuple[str, ...] = Field(default_factory=tuple)
+    require_production_ready: bool = True
+
+    @field_validator("allowed_sinks", mode="before")
+    @classmethod
+    def normalize_allowed_sinks(cls, value: object) -> tuple[str, ...]:
+        """Normalize and validate the external connector allow-list."""
+
+        if value is None:
+            return ()
+        if not isinstance(value, list | tuple):
+            raise ValueError("plugins.allowed_sinks must be a list of sink names")
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for item in value:
+            if not isinstance(item, str):
+                raise ValueError("plugins.allowed_sinks entries must be strings")
+            name = item.strip().lower()
+            if not SINK_PLUGIN_NAME_RE.fullmatch(name):
+                raise ValueError(
+                    "plugins.allowed_sinks entries must start with a lowercase letter and "
+                    "contain only lowercase letters, digits, '_' or '-'"
+                )
+            if name in seen:
+                raise ValueError(f"plugins.allowed_sinks contains duplicate sink name {name!r}")
+            seen.add(name)
+            normalized.append(name)
+        if len(normalized) > MAX_SINK_PLUGIN_NAMES:
+            raise ValueError(
+                f"plugins.allowed_sinks supports at most {MAX_SINK_PLUGIN_NAMES} names"
+            )
+        return tuple(normalized)
+
+    @model_validator(mode="after")
+    def validate_enabled_policy(self) -> SinkPluginConfig:
+        """Require an explicit allow-list when plugin discovery is enabled."""
+
+        if self.enabled and not self.allowed_sinks:
+            raise ValueError("plugins.enabled requires at least one allowed sink name")
+        return self
+
+
 class AppConfig(BaseModel):
     """Top-level application configuration."""
 
@@ -1511,7 +1853,9 @@ class AppConfig(BaseModel):
     mission_metadata: MissionMetadataConfig = Field(default_factory=MissionMetadataConfig)
     encryption: EncryptionConfig = Field(default_factory=EncryptionConfig)
     custody: CustodyConfig = Field(default_factory=CustodyConfig)
+    size_policy: SizePolicyConfig = Field(default_factory=SizePolicyConfig)
     pre_sink_policy: PreSinkPolicyConfig = Field(default_factory=PreSinkPolicyConfig)
+    plugins: SinkPluginConfig = Field(default_factory=SinkPluginConfig)
     sink: SinkConfig
 
 
@@ -1637,6 +1981,8 @@ def _redact_value(key: str, value: Any) -> Any:
     if value is None:
         return None
     key_lower = key.lower()
+    if key_lower in {"websocket_headers", "websocket_headers_env"} and isinstance(value, dict):
+        return {str(header_name): "********" for header_name in value}
     if any(part in key_lower for part in SENSITIVE_KEY_PARTS):
         return "********"
     if key_lower in {"dsn", "url"} and isinstance(value, str) and "@" in value:

@@ -1,0 +1,28 @@
+{
+  "id": "kafka-sink",
+  "title": "[Feature]: Evaluate a Kafka sink",
+  "area": "Future sink",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "security", "testing"],
+  "problem": "Some deployments need a controlled bridge from NATS JetStream into Apache Kafka or Kafka-compatible platforms. nats-sinks does not yet provide a Kafka sink and must carefully define durable success across two messaging systems.",
+  "proposal": "Evaluate a Kafka sink that publishes normalized envelopes or configured payload projections to Kafka topics with deterministic keys, bounded producer configuration, delivery report validation, and clear idempotency limitations. The design should decide whether producer idempotence and transactions are required or optional.",
+  "users": "Platform teams bridging NATS into Kafka-based analytics, data lake, or enterprise integration environments.",
+  "delivery_semantics": "The sink must never ACK messages. It may return success only after Kafka delivery reports confirm all required records. If Kafka producer delivery is failed, timed out, or ambiguous, the sink must raise framework errors and the core must not ACK. Downstream Kafka consumers must still be idempotent.",
+  "security": "The sink must validate topic names, key templates, TLS and SASL options, timeout values, and payload projection modes. Logs must not include credentials, payloads, or broker secrets by default.",
+  "acceptance": [
+    "Research identifies the producer library and durable success boundary.",
+    "Functional requirements cover topic mapping, key construction, batch publish, duplicate behavior, metadata projection, and headers.",
+    "Non-functional requirements cover backpressure, producer queue bounds, timeouts, delivery report handling, and throughput tuning.",
+    "Security requirements cover TLS, SASL, credential redaction, topic allow-listing, and no payload logging.",
+    "Tests cover fake producer success, delivery failure, timeout, unsafe topic rejection, and no ACK on sink failure."
+  ],
+  "tests": "Use fake producer clients for unit tests and gate live tests behind ignored local config. Include commit-then-ack contract tests.",
+  "documentation": "If implemented, add a dedicated Kafka sink documentation page and update sink framework, configuration, security, operations, testing, roadmap, and changelog docs.",
+  "closeout": "Close after research decision or released connector. Include selected library, durable success boundary, tests, documentation, and known limitations.",
+  "relationships": {
+    "related": [
+      "backlog:sink-certification-contract-and-tests"
+    ]
+  }
+}

@@ -39,6 +39,59 @@ def test_build_merge_sql_uses_bind_variables() -> None:
     assert ":metadata_json" in statement.sql
     assert ":mission_metadata_json" in statement.sql
     assert ":stored_at_epoch_ns" in statement.sql
+    assert "target.PAYLOAD_JSON = source.PAYLOAD_JSON" in statement.sql
+    assert statement.update_columns
+
+
+def test_build_merge_sql_can_limit_update_columns() -> None:
+    statement = build_write_sql(
+        table="nats_sink_events",
+        columns=OracleColumnMapping(),
+        mode="merge",
+        key_columns=["STREAM_NAME", "STREAM_SEQUENCE"],
+        merge_update_columns=["payload_json", "metadata_json"],
+    )
+
+    assert "target.PAYLOAD_JSON = source.PAYLOAD_JSON" in statement.sql
+    assert "target.METADATA_JSON = source.METADATA_JSON" in statement.sql
+    assert "target.SUBJECT = source.SUBJECT" not in statement.sql
+    assert statement.update_columns == ("PAYLOAD_JSON", "METADATA_JSON")
+
+
+def test_build_merge_sql_can_leave_matched_rows_unchanged() -> None:
+    statement = build_write_sql(
+        table="nats_sink_events",
+        columns=OracleColumnMapping(),
+        mode="merge",
+        key_columns=["STREAM_NAME", "STREAM_SEQUENCE"],
+        merge_update_columns=[],
+    )
+
+    assert "when matched then update" not in statement.sql
+    assert "when not matched then insert" in statement.sql
+    assert statement.update_columns == ()
+
+
+def test_build_merge_sql_rejects_unknown_update_columns() -> None:
+    with pytest.raises(ConfigurationError, match="not present"):
+        build_write_sql(
+            table="nats_sink_events",
+            columns=OracleColumnMapping(),
+            mode="merge",
+            key_columns=["STREAM_NAME", "STREAM_SEQUENCE"],
+            merge_update_columns=["NOT_A_MAPPED_COLUMN"],
+        )
+
+
+def test_build_merge_sql_rejects_key_update_columns() -> None:
+    with pytest.raises(ConfigurationError, match="idempotency key columns"):
+        build_write_sql(
+            table="nats_sink_events",
+            columns=OracleColumnMapping(),
+            mode="merge",
+            key_columns=["STREAM_NAME", "STREAM_SEQUENCE"],
+            merge_update_columns=["STREAM_SEQUENCE"],
+        )
 
 
 def test_build_insert_ignore_sql_has_no_update_clause() -> None:
@@ -100,9 +153,26 @@ def test_build_staging_merge_sql_loads_stage_and_merges_target() -> None:
         statement.merge_sql
     )
     assert "when matched then update" in statement.merge_sql
+    assert statement.update_columns
     assert statement.cleanup_sql == (
         "delete from NATS_SINK_EVENTS_STAGE where NATS_SINKS_BATCH_ID = :nats_sinks_batch_id"
     )
+
+
+def test_build_staging_merge_sql_can_leave_matched_rows_unchanged() -> None:
+    statement = build_staging_merge_sql(
+        target_table="nats_sink_events",
+        staging_table="nats_sink_events_stage",
+        batch_id_column="nats_sinks_batch_id",
+        columns=OracleColumnMapping(),
+        mode="merge",
+        key_columns=["STREAM_NAME", "STREAM_SEQUENCE"],
+        merge_update_columns=[],
+    )
+
+    assert "when matched then update" not in statement.merge_sql
+    assert "when not matched then insert" in statement.merge_sql
+    assert statement.update_columns == ()
 
 
 def test_build_staging_insert_ignore_sql_has_no_update_clause() -> None:

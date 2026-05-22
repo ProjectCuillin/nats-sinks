@@ -42,7 +42,7 @@ ISSUE_FIELD_PRIORITY_VALUES = {
 }
 
 Runner = Callable[[Sequence[str]], object]
-ApiRunner = Callable[[Sequence[str], Mapping[str, object] | None], object]
+ApiRunner = Callable[[Sequence[str], object | None], object]
 _ISSUE_FIELD_CACHE: dict[tuple[str, str], Mapping[str, object]] = {}
 
 
@@ -87,13 +87,15 @@ def run_gh(args: Sequence[str]) -> object:
     return None
 
 
-def run_gh_api(args: Sequence[str], payload: Mapping[str, object] | None = None) -> object:
+def run_gh_api(args: Sequence[str], payload: object | None = None) -> object:
     """Run ``gh api`` with optional JSON input.
 
     GitHub's Issue Field Values endpoint accepts structured JSON bodies. The
     helper keeps command construction fixed and passes the body through stdin so
     no value is interpolated into a shell command or exposed as process-list
-    arguments.
+    arguments.  The Issue Field Values endpoint currently expects an array of
+    field-value objects for batch updates, so callers are allowed to pass either
+    mappings or sequences when an endpoint requires that shape.
     """
 
     gh_executable = shutil.which("gh")
@@ -303,7 +305,7 @@ def _put_issue_field_value(
             "--input",
             "-",
         ],
-        {"issue_field_values": [{"field_id": field_id, "value": value}]},
+        [{"field_id": field_id, "value": value}],
     )
 
 

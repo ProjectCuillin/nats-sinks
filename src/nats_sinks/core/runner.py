@@ -36,6 +36,7 @@ from nats_sinks.core.config import (
     MessageMetadataConfig,
     MissionMetadataConfig,
     PreSinkPolicyConfig,
+    SizePolicyConfig,
 )
 from nats_sinks.core.consumer import envelope_from_nats_message
 from nats_sinks.core.consumer_management import ensure_jetstream_consumer
@@ -62,6 +63,7 @@ from nats_sinks.core.metrics import (
 from nats_sinks.core.policy import evaluate_pre_sink_policy, policy_violation_error
 from nats_sinks.core.priority import order_by_priority_lanes
 from nats_sinks.core.retry import RetryPolicy
+from nats_sinks.core.size_policy import evaluate_size_policy, size_policy_violation_error
 from nats_sinks.sinks.base import Sink
 
 LOGGER = logging.getLogger(__name__)
@@ -100,6 +102,7 @@ class JetStreamSinkRunner:
         encryption: EncryptionConfig | None = None,
         custody: CustodyConfig | None = None,
         advisories: JetStreamAdvisoryConfig | None = None,
+        size_policy: SizePolicyConfig | None = None,
         pre_sink_policy: PreSinkPolicyConfig | None = None,
         metrics: MetricsRecorder | None = None,
         nats_options: Mapping[str, Any] | None = None,
@@ -129,6 +132,7 @@ class JetStreamSinkRunner:
         self.encryption = encryption or EncryptionConfig()
         self.custody = custody or CustodyConfig()
         self.advisories = advisories or JetStreamAdvisoryConfig()
+        self.size_policy = size_policy or SizePolicyConfig()
         self.pre_sink_policy = pre_sink_policy or PreSinkPolicyConfig()
         self.metrics = metrics or NoopMetrics()
         self.nats_options = dict(nats_options or {})
@@ -392,6 +396,58 @@ class JetStreamSinkRunner:
                 log_exception=True,
             )
             return
+        try:
+            size_evaluation = evaluate_size_policy(envelopes, self.size_policy)
+        except PermanentSinkError as exc:
+            await self._handle_policy_rejections(
+                raw_message_list,
+                envelopes,
+                exc,
+                context="size policy rejection",
+            )
+            return
+        except Exception as exc:
+            await self._handle_temporary_failure(
+                raw_message_list,
+                exc,
+                context="size policy evaluation failure",
+                error_metric=MetricNames.SIZE_POLICY_EVALUATION_ERRORS_TOTAL,
+                log_exception=True,
+            )
+            return
+
+        if self.size_policy.enabled:
+            if size_evaluation.accepted_indexes:
+                increment_metric(
+                    self.metrics,
+                    MetricNames.SIZE_POLICY_MESSAGES_PASSED_TOTAL,
+                    len(size_evaluation.accepted_indexes),
+                )
+                increment_metric(self.metrics, MetricNames.SIZE_POLICY_BATCHES_PASSED_TOTAL)
+            if size_evaluation.rejected_indexes:
+                increment_metric(
+                    self.metrics,
+                    MetricNames.SIZE_POLICY_MESSAGES_REJECTED_TOTAL,
+                    len(size_evaluation.rejected_indexes),
+                )
+                increment_metric(self.metrics, MetricNames.SIZE_POLICY_BATCHES_REJECTED_TOTAL)
+
+        if size_evaluation.has_rejections:
+            rejected_raw = [raw_message_list[index] for index in size_evaluation.rejected_indexes]
+            rejected_envelopes = [envelopes[index] for index in size_evaluation.rejected_indexes]
+            await self._handle_policy_rejections(
+                rejected_raw,
+                rejected_envelopes,
+                size_policy_violation_error(size_evaluation.violations),
+                context="size policy rejection",
+            )
+            raw_message_list = [
+                raw_message_list[index] for index in size_evaluation.accepted_indexes
+            ]
+            envelopes = [envelopes[index] for index in size_evaluation.accepted_indexes]
+            if not raw_message_list:
+                return
+
         try:
             policy_evaluation = evaluate_pre_sink_policy(envelopes, self.pre_sink_policy)
         except PermanentSinkError as exc:

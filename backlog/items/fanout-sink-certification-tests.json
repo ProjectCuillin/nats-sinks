@@ -1,0 +1,33 @@
+{
+  "id": "fanout-sink-certification-tests",
+  "title": "[Feature]: Add certification tests for routing and fan-out sink behavior",
+  "area": "Testing",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["testing", "sink-new", "nats"],
+  "problem": "Routing and fan-out will touch the core delivery invariant and every sink type. A small implementation bug could ACK too early, route to the wrong destination, hide optional sink failures, or fail to preserve idempotent redelivery. The project needs reusable certification tests that every current and future sink can run against routing and fan-out behavior.",
+  "proposal": "Build a certification test suite for fan-out routing. The suite should include mock sinks for exact ACK-order tests, file sink smoke tests for real writes, Oracle sink contract tests using mocks, CLI validation tests, and optional live integration guidance. It should verify one-to-one routing, one-to-many routing, required child failure, optional child timeout, no-route policies, metadata-based matching, redelivery-safe duplicate behavior, and sanitized logging. The certification fixtures must include the documented sample where a NATO SECRET urgent sensor audit event routes to oracle_secret and file_audit, while a NATO UNCLASS urgent sensor audit event routes only to oracle_unclass.",
+  "users": "Maintainers, sink implementers, release engineers, and external contributors adding new sink types or changing routing behavior.",
+  "delivery_semantics": "The certification suite must prove that ACK remains the final step for required durable side effects. Tests must include the partial-success case where one required sink succeeds and another required sink fails, and prove the original message is not ACKed in that case. Optional sink tests must prove the feature is explicit and bounded.",
+  "security": "Test fixtures must avoid real credentials, server addresses, sensitive subjects, certificate material, private keys, and operational payloads. Negative tests should include malformed metadata, excessive labels, unsafe headers, and redaction checks.",
+  "acceptance": [
+    "Certification tests cover one-to-one routing, one-to-many fan-out, required failure, optional timeout, no-route behavior, and metadata matching.",
+    "Tests prove ACK is blocked until every required selected sink succeeds.",
+    "Tests prove optional sinks are explicit, bounded, logged, and not represented as guaranteed delivery when ACK happens before optional commit.",
+    "nats-sink validate is covered for valid fan-out configuration and invalid route, sink, match, optional wait, and redaction scenarios.",
+    "The test matrix covers routing by subject, priority, classification, labels_all, labels_any, labels_none, approved headers, and combined match sets.",
+    "The certification pattern is documented for future sink implementers.",
+    "scripts/check.sh or an equivalent release check includes the relevant routing and fan-out certification tests."
+  ],
+  "tests": "Add dedicated unit, smoke, CLI-validation, contract, and negative-path tests under tests/unit and tests/integration as appropriate. Cover valid NATO SECRET and NATO UNCLASS examples, malformed JSON config, missing sink definitions, unknown target sinks, duplicate sink names, duplicate route names, no-route policies, optional wait defaults, optional wait bounds, required failure after partial success, optional timeout before ACK, secret redaction, and payload logging disabled by default. Keep live Oracle and live NATS coverage behind integration markers and local secret-free configuration. Run scripts/check.sh before close-out.",
+  "documentation": "Update docs/testing.md, docs/development.md, docs/sink-framework.md, docs/architecture.md, docs/operations.md, ROBOTS.md, AGENTS.md, and CHANGELOG.md when implemented.",
+  "closeout": "Close only after a release containing the routing and fan-out certification suite is published. Close-out evidence must include test names, checks run, documentation updates, and how future sinks should use the suite.",
+  "relationships": {
+    "related": [
+      "backlog:core-routing-fanout-sink",
+      "backlog:routing-match-policy-subject-metadata-labels",
+      "backlog:optional-sink-ack-gate-wait-policy",
+      "backlog:sink-certification-contract-and-tests"
+    ]
+  }
+}

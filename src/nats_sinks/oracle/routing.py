@@ -52,8 +52,21 @@ def resolve_table_for_subject(
 ) -> str:
     """Resolve the configured Oracle table for a message subject."""
 
+    route = resolve_route_for_subject(subject, routes=routes)
+    if route is not None:
+        return validate_identifier(route.table)
+    return validate_identifier(default_table)
+
+
+def resolve_route_for_subject(
+    subject: str,
+    *,
+    routes: list[OracleTableRoute],
+) -> OracleTableRoute | None:
+    """Return the first configured route matching a subject, if any."""
+
     for route in routes:
         pattern = validate_subject_pattern(route.subject)
         if matches_subject(pattern, subject):
-            return validate_identifier(route.table)
-    return validate_identifier(default_table)
+            return route
+    return None

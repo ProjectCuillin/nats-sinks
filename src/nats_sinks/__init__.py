@@ -43,6 +43,8 @@ from nats_sinks.core.config import (
     PreSinkPolicyRuleConfig,
     PriorityLaneConfig,
     PriorityLanesConfig,
+    SinkPluginConfig,
+    SizePolicyConfig,
 )
 from nats_sinks.core.consumer_management import (
     ConsumerDrift,
@@ -78,6 +80,7 @@ from nats_sinks.core.errors import (
     RetryExhaustedError,
     SerializationError,
     SinkError,
+    SizePolicyViolationError,
     TemporarySinkError,
     ValidationError,
 )
@@ -116,8 +119,21 @@ from nats_sinks.core.payload import (
 )
 from nats_sinks.core.policy import PolicyEvaluation, PolicyViolation, evaluate_pre_sink_policy
 from nats_sinks.core.runner import JetStreamSinkRunner
+from nats_sinks.core.size_policy import (
+    SizePolicyEvaluation,
+    SizePolicyViolation,
+    evaluate_size_policy,
+)
 from nats_sinks.file import FileSink
 from nats_sinks.sinks.base import FlushableSink, HealthCheckableSink, SchemaAwareSink, Sink
+from nats_sinks.sinks.connectors import (
+    SINK_CONNECTOR_API_VERSION,
+    SINK_CONNECTOR_ENTRY_POINT_GROUP,
+    SinkConnector,
+    SinkConnectorStatus,
+    load_entry_point_connectors,
+    normalize_connector_name,
+)
 
 __all__ = [
     "CUSTODY_SCHEMA",
@@ -132,6 +148,8 @@ __all__ = [
     "METRIC_SPECS",
     "MISSION_METADATA_PROFILE_VERSION",
     "NATS_RESERVED_HEADER_NAMES",
+    "SINK_CONNECTOR_API_VERSION",
+    "SINK_CONNECTOR_ENTRY_POINT_GROUP",
     "AckError",
     "ConfigurationError",
     "ConsumerDrift",
@@ -178,7 +196,14 @@ __all__ = [
     "SchemaAwareSink",
     "SerializationError",
     "Sink",
+    "SinkConnector",
+    "SinkConnectorStatus",
     "SinkError",
+    "SinkPluginConfig",
+    "SizePolicyConfig",
+    "SizePolicyEvaluation",
+    "SizePolicyViolation",
+    "SizePolicyViolationError",
     "SubjectPayloadEncryptor",
     "TemporarySinkError",
     "ValidationError",
@@ -193,9 +218,12 @@ __all__ = [
     "detect_consumer_drift",
     "ensure_jetstream_consumer",
     "evaluate_pre_sink_policy",
+    "evaluate_size_policy",
     "is_encrypted_payload_envelope",
+    "load_entry_point_connectors",
     "load_metrics_snapshot",
     "metric_rows_from_snapshot",
+    "normalize_connector_name",
     "normalize_payload_for_json_storage",
     "observe_jetstream_advisory_message",
     "parse_jetstream_advisory",

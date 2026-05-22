@@ -55,8 +55,83 @@ separate domain-specific transfer path.
 ## nats-sinks Behavior
 
 `NatsEnvelope.subject` is a Python string and is not truncated by the framework.
-`NatsEnvelope.data` is bytes and is passed to sinks without framework-level size
-limits beyond the NATS server and client behavior.
+`NatsEnvelope.data` is bytes. By default, the framework preserves compatibility
+and relies on NATS server/client limits plus destination-specific constraints.
+Deployments that need a stricter application contract can enable the generic
+`size_policy` gate.
+
+When `size_policy.enabled` is `true`, the runner validates the sink-bound
+payload and metadata after normalization and optional payload encryption, but
+before any sink write. The same policy protects Oracle, file, and future sinks.
+A rejected message never reaches a sink. If DLQ is configured, the message is
+published to DLQ and the original JetStream message is ACKed only after DLQ
+publication succeeds.
+
+```mermaid
+sequenceDiagram
+    participant JS as JetStream
+    participant R as nats-sinks runner
+    participant SP as size_policy
+    participant S as sink
+    participant D as DLQ
+
+    JS->>R: deliver message
+    R->>R: normalize envelope and optional encryption
+    R->>SP: check payload, headers, labels, metadata, record, batch
+    alt Size policy passes
+        R->>S: write_batch(...)
+        S-->>R: durable success
+        R->>JS: ACK
+    else Size policy rejects
+        R->>D: publish DLQ JSON
+        D-->>R: publish success
+        R->>JS: ACK or AckTerm original
+    end
+```
+
+The size policy currently supports these bounds:
+
+| Field | What It Limits |
+| --- | --- |
+| `max_payload_bytes` | Sink-bound payload bytes. If encryption is enabled, this is the encrypted payload envelope. |
+| `max_header_count` | Number of normalized headers. |
+| `max_header_name_bytes` | Largest single header name after UTF-8 encoding. |
+| `max_header_value_bytes` | Largest single header value after UTF-8 encoding. |
+| `max_headers_bytes` | Combined header-name and header-value bytes. |
+| `max_label_count` | Number of normalized labels. |
+| `max_label_bytes` | Largest single label after UTF-8 encoding. |
+| `max_labels_bytes` | Combined label bytes. |
+| `max_mission_metadata_bytes` | Compact JSON size of mission metadata. |
+| `max_standard_metadata_bytes` | Compact JSON size of the standard nats-sinks metadata document. |
+| `max_normalized_record_bytes` | Approximate payload-plus-standard-metadata size. |
+| `max_batch_messages` | Number of messages accepted in one already-fetched batch. |
+
+Example:
+
+```json
+{
+  "size_policy": {
+    "enabled": true,
+    "max_payload_bytes": 1048576,
+    "max_header_count": 32,
+    "max_header_value_bytes": 2048,
+    "max_headers_bytes": 16384,
+    "max_label_count": 12,
+    "max_label_bytes": 64,
+    "max_mission_metadata_bytes": 4096,
+    "max_standard_metadata_bytes": 65536,
+    "max_normalized_record_bytes": 1179648,
+    "max_batch_messages": 256
+  }
+}
+```
+
+Operators should tune these values against producer contracts, NATS
+`max_payload`, `delivery.batch_size`, destination column or file-size policy,
+and memory budgets. In mission-support environments, size policy is often part
+of the interface control document: sensor reports, weapon-system status
+events, audit observations, and encrypted payloads should have explicit
+maximum sizes before they enter a persistent custody path.
 
 Destination schemas are responsible for storing subject and payload safely.
 

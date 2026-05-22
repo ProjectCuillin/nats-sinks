@@ -6,15 +6,18 @@ environments where direct NATS TCP connectivity is not always available, for
 example behind controlled proxies, demilitarized network segments, or platform
 boundaries where WebSocket transport is already approved.
 
-The conclusion is deliberately cautious:
+The conclusion is deliberately cautious and operationally focused:
 
 - NATS and `nats-py` support WebSocket-style connection URLs.
-- `nats-sinks` already validates `ws://` and `wss://` URL schemes.
-- Current `nats-sinks` releases should treat WebSocket transport as accepted
-  by configuration validation but not yet production-certified.
-- Production certification should be added through separate follow-up work for
-  configuration guardrails, optional WebSocket headers, and an integration test
-  harness.
+- `nats-sinks` validates `ws://` and `wss://` URL schemes and rejects
+  credentials embedded in URLs.
+- WebSocket seed URL lists must not mix WebSocket and non-WebSocket transports.
+- `wss://` uses the same verified TLS context and private CA support as
+  `tls://`.
+- Optional WebSocket connection headers are disabled by default, bounded,
+  validated, redacted, and limited to WebSocket transports.
+- The repository includes a collision-safe local WebSocket certification
+  harness for maintainers who have `nats-server` installed.
 - Transport choice must never change the commit-then-acknowledge invariant.
 
 ## What NATS Supports
@@ -49,8 +52,8 @@ The upstream `nats.py` release notes for v2.12.0 mention custom WebSocket
 headers through `ws_connection_headers`. See
 [nats.py releases](https://github.com/nats-io/nats.py/releases).
 
-This means the building blocks exist, but `nats-sinks` still needs a certified
-project-level policy before documenting WebSocket transport as production-ready.
+This means the building blocks exist, and `nats-sinks` now places a small,
+reviewable policy layer in front of them.
 
 ## Current nats-sinks State
 
@@ -61,19 +64,19 @@ The current configuration model allows the following URL schemes:
 - `ws`
 - `wss`
 
-This validation is useful because it prevents arbitrary URL schemes from
-reaching `nats-py`. However, the current project has not yet added
-WebSocket-specific certification tests, proxy guidance, or optional header
-configuration. Operators should therefore treat WebSocket transport as an
-evaluated future capability rather than a certified production path.
+This validation prevents arbitrary URL schemes from reaching `nats-py`. The
+current project also adds WebSocket-specific checks for mixed seed lists,
+URL-embedded credentials, `wss://` TLS context construction, and optional
+header safety.
 
 ```mermaid
 flowchart LR
     Config[config.json] --> Validate[Scheme allow list]
-    Validate --> Options[nats-py connection options]
+    Validate --> Guardrails[WebSocket guardrails]
+    Guardrails --> Options[nats-py connection options]
     Options --> Client[nats-py]
-    Client -->|future certified path| WS[ws/wss transport]
-    Client -->|current certified path| TCP[nats/tls transport]
+    Client --> WS[ws/wss transport]
+    Client --> TCP[nats/tls transport]
 ```
 
 ## Security Considerations
@@ -95,6 +98,48 @@ Production guidance should require:
 - document that proxy logs may capture paths, headers, and client identities;
 - ensure NATS users can be restricted to `WEBSOCKET` or `STANDARD` connection
   types where server policy requires it.
+
+## Configuration Guardrails
+
+`nats-sinks` applies these WebSocket-specific guardrails before opening a
+connection:
+
+| Guardrail | Purpose |
+| --- | --- |
+| Reject credentials in NATS URLs. | Prevent passwords, tokens, and bearer material from appearing in config files, process listings, logs, or issue comments. |
+| Reject mixed WebSocket and non-WebSocket seed lists. | Avoid late transport-selection failures in `nats-py` and keep connection behavior predictable. |
+| Build a TLS context for `wss://`. | Ensure private CA files, client certificates, and `tls_verify` are applied consistently for TLS and WebSocket TLS. |
+| Validate WebSocket header names and values. | Prevent protocol-owned headers, control characters, oversized values, and ambiguous duplicate names. |
+| Require environment variables for sensitive header values. | Keep sensitive proxy or gateway material out of JSON configuration and redacted output. |
+
+Example `wss://` configuration:
+
+```json
+{
+  "nats": {
+    "url": "wss://nats.example.com:8443",
+    "stream": "ORDERS",
+    "consumer": "orders-sink",
+    "subject": "orders.*",
+    "tls_ca_file": "/etc/nats/certs/private-ca.crt",
+    "websocket_headers": {
+      "X-Route-Hint": "approved-edge"
+    },
+    "websocket_headers_env": {
+      "Authorization": "NATS_WS_AUTHORIZATION"
+    }
+  },
+  "sink": {
+    "type": "file",
+    "directory": ".local/file-sink/events"
+  }
+}
+```
+
+`websocket_headers` should contain only non-sensitive routing hints.
+`websocket_headers_env` maps header names to environment variable names and is
+the required path for `Authorization`, `Cookie`, `Proxy-Authorization`,
+`X-Api-Key`, and `X-Auth-Token` style headers.
 
 ## Delivery Semantics
 
@@ -123,18 +168,72 @@ The same failure rules apply:
 - proxy or WebSocket close events should be observed as connection events, not
   destination success.
 
-## Recommended Implementation Split
+## Local Certification Harness
 
-The evaluation recommends three follow-up feature requests:
+The repository includes an optional local live test for WebSocket transport:
 
-1. Add explicit WebSocket connection configuration guardrails.
-2. Add optional WebSocket connection header support with safe secret handling.
-3. Add a WebSocket integration certification harness and operator runbook.
+```bash
+scripts/run-websocket-e2e.sh --message-count 16 --batch-size 8
+```
 
-This keeps configuration, header/proxy behavior, and certification evidence
-reviewable as separate changes.
+The harness:
+
+- checks whether the normal local NATS, monitoring, and WebSocket ports are
+  already in use;
+- selects free loopback alternatives when necessary;
+- writes a temporary NATS config under `.local/websocket-e2e`;
+- starts only the NATS process it owns;
+- publishes synthetic messages over WebSocket;
+- consumes them through the existing `JetStreamSinkRunner`;
+- writes them to the file sink; and
+- verifies ACK-after-sink-success by using the same runner processing path as
+  normal sink operation.
+
+Example sanitized output:
+
+```json
+{"monitoring_port": 8222, "nats_port": 4222, "transport": "websocket", "websocket_port": 8080}
+{"commit_then_ack": "verified by JetStreamSinkRunner.process_raw_batch", "files_written": 16, "messages_processed": 16, "messages_published": 16}
+{"status": "passed"}
+```
+
+If `nats-server` is not installed, the script exits with a clear message and no
+test server is started. Use `--preserve-work-dir` when you need to inspect the
+generated local config and output files. Do not copy preserved `.local`
+material into public issues unless it has been reviewed for secrets and private
+infrastructure details.
+
+## Manual `wss://` Certification
+
+The local live script uses plaintext `ws://` because it generates no
+certificate material and must remain dependency-light. To certify `wss://` in a
+specific lab, configure a NATS server WebSocket listener with TLS, store the
+local CA certificate under an ignored directory, and run `nats-sink validate`
+and a normal sink test with:
+
+```json
+{
+  "nats": {
+    "url": "wss://127.0.0.1:8443",
+    "tls_ca_file": ".local/nats-websocket/ca.crt",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*"
+  },
+  "sink": {
+    "type": "file",
+    "directory": ".local/websocket-wss/events"
+  }
+}
+```
+
+The expected security posture is the same as `tls://`: keep `tls_verify` true,
+trust only the intended local CA, and avoid credentials in URLs.
 
 ## Current Status
 
-This release documents the evaluation and creates follow-up feature requests.
-It does not certify WebSocket transport for production use yet.
+This release provides WebSocket guardrails, optional WebSocket header support,
+and a collision-safe local certification harness. Operators still need to
+validate their own reverse proxies, TLS termination, NATS server authorization,
+and log-retention controls before approving WebSocket transport for production
+event custody.

@@ -74,6 +74,9 @@ The current release provides the following production-ready foundation:
   classification, labels, mission metadata, encrypted payloads, and payload
   size limits by subject. Policy rejections never reach a sink and follow the
   DLQ-before-ACK rule when DLQ is configured.
+- Optional core size policy enforcement that can bound sink-bound payload
+  bytes, normalized headers, labels, mission metadata, standard metadata,
+  approximate record size, and accepted batch size before any sink write.
 - A CLI command named `nats-sink` for validation, redacted effective config,
   sink health checks, and running sink processes.
 - A companion CLI command named `nats-sink-metrics` for inspecting local JSON
@@ -121,6 +124,10 @@ The current release provides the following production-ready foundation:
   file placement, deterministic filenames, duplicate handling, optional gzip
   compression, metadata persistence, and the same payload normalization contract
   used by Oracle.
+- A safe sink connector framework with first-party Oracle and file connector
+  descriptors, explicit registry resolution, public connector metadata, and
+  disabled-by-default allow-listed entry-point discovery for reviewed external
+  connectors.
 - Tests and documentation for the commit-then-acknowledge invariant across the
   core runtime and both production sinks.
 
@@ -221,6 +228,8 @@ operations without hunting through a long flat list.
   releasability, or lifecycle metadata.
 - [Configuration](configuration.md#pre_sink_policy): configure the optional
   pre-sink policy gate for destination-neutral validation before sink writes.
+- [Message Sizing](message-sizing.md): configure and tune payload, header,
+  metadata, label, record, and batch-size guardrails before sink writes.
 
 ### Observability
 

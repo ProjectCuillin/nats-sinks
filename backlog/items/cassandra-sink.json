@@ -1,0 +1,28 @@
+{
+  "id": "cassandra-sink",
+  "title": "[Feature]: Evaluate a Cassandra-compatible sink",
+  "area": "Future sink",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "security", "testing"],
+  "problem": "Wide-column stores are common destinations for high-volume event projections. nats-sinks does not yet provide a Cassandra-compatible sink for Cassandra, ScyllaDB, or similar deployments.",
+  "proposal": "Evaluate a Cassandra-compatible sink with deterministic primary keys, prepared statements, configurable consistency levels, bounded batch behavior, and explicit duplicate handling. The design should decide whether Cassandra and compatible systems can share one connector without hiding important semantic differences.",
+  "users": "Platform and data teams that need high-volume event projection into wide-column stores while preserving controlled ACK behavior.",
+  "delivery_semantics": "The sink must never ACK messages. It may return success only after the configured consistency level reports success for every required write. Failed, timed-out, overloaded, or ambiguous writes must raise framework errors. Duplicate redelivery must be safe through primary key design and idempotent writes.",
+  "security": "The sink must validate keyspace names, table names, consistency levels, TLS settings, authentication mode, and payload size limits. Logs must redact credentials, payloads, and cluster details by default.",
+  "acceptance": [
+    "Research identifies supported products, driver choice, and consistency-level defaults.",
+    "Functional requirements cover prepared statements, primary keys, duplicate behavior, metadata columns, payload envelopes, and table design.",
+    "Non-functional requirements cover batch sizing, consistency, retry classification, timeouts, and throughput tuning.",
+    "Security requirements cover TLS, credential redaction, identifier validation, least privilege, and no payload logging.",
+    "Tests cover fake driver success, consistency failure, timeout, duplicate behavior, and no ACK on sink failure."
+  ],
+  "tests": "Use fake driver sessions for unit tests and gate live tests behind ignored local config. Include commit-then-ack contract tests.",
+  "documentation": "If implemented, add a dedicated Cassandra sink documentation page and update sink framework, configuration, security, operations, testing, roadmap, and changelog docs.",
+  "closeout": "Close after research decision or released connector. Include selected driver, supported products, tests, documentation, and known limitations.",
+  "relationships": {
+    "related": [
+      "backlog:sink-certification-contract-and-tests"
+    ]
+  }
+}

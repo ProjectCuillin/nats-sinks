@@ -1,0 +1,28 @@
+{
+  "id": "elasticsearch-opensearch-sink",
+  "title": "[Feature]: Evaluate an Elasticsearch and OpenSearch sink",
+  "area": "Future sink",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "security", "testing"],
+  "problem": "Search and indexing destinations are common in streaming connector ecosystems. nats-sinks does not yet provide an Elasticsearch or OpenSearch sink for searchable operational events, observability records, or audit records.",
+  "proposal": "Evaluate a future Elasticsearch and OpenSearch sink that writes normalized envelopes or selected payload fields to configured indexes with deterministic document IDs, bounded bulk requests, retry classification, and strict mapping guidance. The design should decide whether one connector can support both products safely or whether separate connectors are required.",
+  "users": "Operators and developers who need searchable event custody, operational log enrichment, or low-latency search over selected JetStream events.",
+  "delivery_semantics": "The sink must never ACK messages. It may return success only after the search backend bulk request has completed and all required document writes have been accepted. Rejected, partial, ambiguous, or mapping-failed results must raise framework errors. Deterministic document IDs are required for safe redelivery.",
+  "security": "The sink must validate index names, document ID templates, URL schemes, TLS settings, authentication mode, batch sizes, and payload projection modes. Logs must not contain credentials, payload bodies, or full backend responses by default.",
+  "acceptance": [
+    "Research identifies whether Elasticsearch and OpenSearch should share one connector or use separate connectors.",
+    "Functional requirements cover bulk indexing, deterministic document IDs, duplicate behavior, index templates, metadata mapping, and payload projection.",
+    "Non-functional requirements cover bulk sizing, backpressure, retry classification, throttling, and mapping failure handling.",
+    "Security requirements cover TLS verification, credential redaction, endpoint allow-listing, and no payload logging by default.",
+    "Tests cover fake bulk success, partial failure, mapping failure, timeout, duplicate document ID behavior, and no ACK on sink failure."
+  ],
+  "tests": "Use fake client objects for unit tests and gate live tests behind ignored local config. Include commit-then-ack contract tests and index-name validation tests.",
+  "documentation": "If implemented, add a dedicated search sink documentation page under the sink documentation tree and update README.md, docs/sink-framework.md, docs/configuration.md, docs/security.md, docs/testing.md, ROADMAP.md, docs/roadmap.md, and CHANGELOG.md.",
+  "closeout": "Close after the research decision or released connector. Include selected approach, tests, documentation, and known limitations.",
+  "relationships": {
+    "related": [
+      "backlog:sink-certification-contract-and-tests"
+    ]
+  }
+}

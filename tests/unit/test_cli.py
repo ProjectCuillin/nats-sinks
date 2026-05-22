@@ -8,8 +8,9 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from nats_sinks import InMemoryMetrics, MetricNames, __version__
-from nats_sinks.cli.main import _attach_metrics_to_sink, app
+from nats_sinks import InMemoryMetrics, MetricNames, SinkPluginConfig, __version__
+from nats_sinks.cli.main import _attach_metrics_to_sink, _registry, app
+from nats_sinks.core.errors import ConfigurationError
 from nats_sinks.oracle import OracleSink
 
 
@@ -154,3 +155,22 @@ def test_cli_metrics_hook_attaches_oracle_sink_counters() -> None:
     sink._record_duplicate_ignored(1)
 
     assert metrics.counters[MetricNames.ORACLE_DUPLICATES_TOTAL] == 1
+
+
+def test_cli_registry_always_exposes_first_party_connectors() -> None:
+    registry = _registry()
+
+    assert registry.names() == ("file", "oracle")
+    assert registry.connector("file").built_in is True
+    assert registry.connector("oracle").production_ready is True
+
+
+def test_cli_registry_rejects_missing_allow_listed_plugin() -> None:
+    plugins = SinkPluginConfig(enabled=True, allowed_sinks=("missing",))
+
+    try:
+        _registry(plugins)
+    except ConfigurationError as exc:
+        assert "allowed sink connector(s) not installed: missing" in str(exc)
+    else:  # pragma: no cover - defensive guard for a fail-closed path
+        raise AssertionError("missing plugin connector should fail closed")

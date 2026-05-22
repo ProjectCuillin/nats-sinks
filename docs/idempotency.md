@@ -105,12 +105,19 @@ as success rather than creating duplicate business effects.
 
 The current production implementations are Oracle and FileSink. Oracle
 duplicate handling is documented in [Oracle Sink](oracle-sink.md), including
-`merge`, `insert_ignore`, `insert`, and `append` behavior. File duplicate
-handling is documented in [File Sink](file-sink.md), including deterministic
-file names and `skip_existing`, `overwrite`, and `fail` policies.
+`merge`, configurable merge update columns, `insert_ignore`, `insert`, and
+`append` behavior. File duplicate handling is documented in
+[File Sink](file-sink.md), including deterministic file names and
+`skip_existing`, `overwrite`, and `fail` policies.
 Destination-specific key-column, filename, or payload-field details are kept on
 the sink pages so future sinks can document their own backend-native approach
 without changing this generic guide.
+
+Oracle table routes may also override the sink-level idempotency policy. That
+lets one Oracle sink process several subject families while using stream
+sequence keys for one table, message IDs for another, and payload-field keys
+for a third. Route overrides are validated before processing starts, and the
+core still ACKs only after the full Oracle transaction commits.
 
 The generic core also protects idempotency by owning all acknowledgement
 decisions. Sinks never receive raw NATS messages and cannot ACK early. If a sink
@@ -123,9 +130,10 @@ ACKed only after DLQ publication succeeds.
 Future idempotency work should focus on certifying every new sink, not only on
 adding more strategy names. Planned areas include:
 
-- per-route or per-table Oracle idempotency overrides,
-- duplicate counters and metrics for Oracle duplicate handling,
-- configurable Oracle `merge` update columns,
+- additional certification evidence for complex multi-route Oracle
+  idempotency deployments,
+- richer duplicate counters and metrics where backend drivers expose reliable
+  committed outcomes,
 - HTTP idempotency-key support and explicit warnings for unsafe endpoints,
 - S3 sinks with deterministic object keys and atomic overwrite-or-skip
   behavior,

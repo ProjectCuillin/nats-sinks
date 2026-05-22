@@ -29,6 +29,8 @@ def _snapshot(path: Path) -> Path:
     increment_metric(metrics, MetricNames.MESSAGES_TERMINATED_TOTAL, 1)
     increment_metric(metrics, MetricNames.ORACLE_DUPLICATES_TOTAL, 2)
     increment_metric(metrics, MetricNames.ORACLE_DUPLICATE_IGNORED_TOTAL, 2)
+    increment_metric(metrics, MetricNames.ORACLE_DUPLICATE_NOOP_TOTAL, 1)
+    increment_metric(metrics, MetricNames.ORACLE_MERGE_ROWS_TOTAL, 3)
     observe_metric(metrics, MetricNames.SINK_BATCH_WRITE_SECONDS, 0.25)
     observe_metric(metrics, MetricNames.SINK_BATCH_WRITE_SECONDS, 0.75)
     set_metric_value(metrics, MetricNames.CURRENT_BATCH_MESSAGES, 4.0)
@@ -92,6 +94,8 @@ def test_metrics_cli_filters_oracle_duplicate_metrics(tmp_path: Path) -> None:
     assert result.exit_code == 0
     assert "ORACLE_DUPLICATES_TOTAL=2" in result.stdout
     assert "ORACLE_DUPLICATE_IGNORED_TOTAL=2" in result.stdout
+    assert "ORACLE_DUPLICATE_NOOP_TOTAL=1" in result.stdout
+    assert "ORACLE_MERGE_ROWS_TOTAL=3" in result.stdout
     assert "MESSAGES_FETCHED_TOTAL" not in result.stdout
 
 

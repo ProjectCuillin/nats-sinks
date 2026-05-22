@@ -1,0 +1,31 @@
+{
+  "id": "multi-sink-instance-configuration",
+  "title": "[Feature]: Add named multi-sink instance configuration",
+  "area": "Configuration",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "sink-oracle", "sink-file", "security"],
+  "problem": "The current configuration model centers on one sink object. To route one message to multiple Oracle databases, multiple tables represented by independent Oracle sink instances, one Oracle sink plus one file sink, or multiple file destinations, the project needs a stable way to declare and validate multiple named sink instances without breaking existing single-sink users.",
+  "proposal": "Introduce a backward-compatible multi-sink configuration shape with a named sink registry, such as a top-level sinks object or equivalent routing section. Each named sink should contain the same sink-specific configuration currently used by standalone sinks. Route configuration should reference child sinks by validated names rather than copying full sink definitions into every route. The CLI should validate all named sinks, show redacted effective configuration for each, and support testing a specific sink or all configured sinks where practical. The documentation must explain that individual sinks are configured in the named sink registry, for example oracle_secret, file_audit, and oracle_unclass, and routes only reference those names under their targets. The sample configuration must show oracle_secret and oracle_unclass as separate Oracle sink instances with independent connection settings and target tables, plus file_audit as a separate file sink destination.",
+  "users": "Operators running multiple Oracle Database backends, multiple Oracle tables that should receive the same message independently, separate file archives, or mixed sink topologies from one nats-sinks service.",
+  "delivery_semantics": "Multi-sink configuration defines sink instances but does not by itself change ACK behavior. ACK behavior is controlled by the routing and fan-out layer. Every sink instance must retain its own durable success contract, and the fan-out layer must decide which selected instances are required before ACK.",
+  "security": "Sink instance names must be short, bounded, and validated. Redacted effective config must remove or mask Oracle passwords, wallet paths when policy requires, tokens, connection strings with credentials, local sensitive paths, and other secrets. Dynamic sink loading must continue to use the safe registry rather than arbitrary imports from configuration.",
+  "acceptance": [
+    "Configuration supports multiple named sink instances while preserving existing single sink configuration.",
+    "Named sink references are validated and unknown sink names fail configuration validation.",
+    "The CLI can validate and show redacted effective configuration for all named sinks.",
+    "The CLI can explain or report which named sink definitions are referenced by each route without printing secrets.",
+    "The documentation clearly separates route match configuration from individual Oracle and file sink configuration.",
+    "Unit tests cover multiple Oracle configs, multiple file configs, mixed configs, duplicate names, unknown names, and secret redaction.",
+    "Documentation includes examples for two Oracle backends, two tables in one Oracle backend represented by separate sink instances, Oracle plus file, and two file destinations."
+  ],
+  "tests": "Add config and CLI unit tests for named sink loading, redaction, validation, duplicate names, unknown route references, sink-specific validation errors, missing required child fields, invalid sink names, unsafe sink names, optional wait policy placement, and backward compatibility. Add smoke tests with multiple file sink instances and mock Oracle sink instances. Include validation for the documented oracle_secret, file_audit, and oracle_unclass example.",
+  "documentation": "Update README, docs/configuration.md, docs/cli.md, docs/sink-framework.md, docs/file-sink.md, docs/oracle-sink.md, docs/security.md, and CHANGELOG.md when implemented.",
+  "closeout": "Close only after a release containing named multi-sink configuration is published. Close-out evidence must include schema examples, backward compatibility checks, tests run, documentation updates, and limitations.",
+  "relationships": {
+    "related": [
+      "backlog:core-routing-fanout-sink",
+      "backlog:routing-match-policy-subject-metadata-labels"
+    ]
+  }
+}

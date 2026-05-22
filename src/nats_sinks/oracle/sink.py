@@ -59,12 +59,17 @@ from nats_sinks.oracle.config import (
 from nats_sinks.oracle.ddl import create_events_table_ddl, create_staging_events_table_ddl
 from nats_sinks.oracle.errors import is_duplicate_error, oracle_error_code
 from nats_sinks.oracle.mapping import envelope_to_row
-from nats_sinks.oracle.routing import resolve_table_for_subject, validate_subject_pattern
+from nats_sinks.oracle.routing import (
+    resolve_route_for_subject,
+    resolve_table_for_subject,
+    validate_subject_pattern,
+)
 from nats_sinks.oracle.sql import (
     OracleStagingSql,
     OracleWriteSql,
     build_staging_merge_sql,
     build_write_sql,
+    validate_identifier,
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -89,6 +94,18 @@ class _OracleWriteStats:
 
     duplicates: int = 0
     duplicate_ignored: int = 0
+    duplicate_noop: int = 0
+    merge_rows: int = 0
+    merge_outcome_unknown: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class _OracleTablePolicy:
+    """Effective Oracle write policy for one validated target table."""
+
+    table_name: str
+    idempotency: OracleIdempotencyConfig
+    merge_update_columns: list[str] | None
 
 
 class OracleSink:
@@ -115,6 +132,7 @@ class OracleSink:
         https_proxy_port: int | None = None,
         table: str = "NATS_SINK_EVENTS",
         mode: OracleWriteMode = "merge",
+        merge_update_columns: list[str] | None = None,
         auto_create: bool = False,
         payload_mode: PayloadStorageMode = "json_or_envelope",
         idempotency: OracleIdempotencyConfig | dict[str, Any] | None = None,
@@ -146,6 +164,7 @@ class OracleSink:
                         "https_proxy_port": https_proxy_port,
                         "table": table,
                         "mode": mode,
+                        "merge_update_columns": merge_update_columns,
                         "auto_create": auto_create,
                         "payload_mode": payload_mode,
                         "idempotency": idempotency or {},
@@ -161,10 +180,25 @@ class OracleSink:
         self._oracledb: Any | None = None
         self._write_sql_cache: dict[str, OracleWriteSql] = {}
         self._staging_sql_cache: dict[str, OracleStagingSql] = {}
-        self._prepare_sql_for_table(self.config.table)
+        self._table_policies: dict[str, _OracleTablePolicy] = {}
+        self._register_table_policy(
+            table=self.config.table,
+            idempotency=self.config.idempotency,
+            merge_update_columns=self.config.merge_update_columns,
+        )
         for route in self.config.table_routes:
             validate_subject_pattern(route.subject)
-            self._prepare_sql_for_table(route.table)
+            self._register_table_policy(
+                table=route.table,
+                idempotency=route.idempotency or self.config.idempotency,
+                merge_update_columns=(
+                    route.merge_update_columns
+                    if route.merge_update_columns is not None
+                    else self.config.merge_update_columns
+                ),
+            )
+        for policy in self._table_policies.values():
+            self._prepare_sql_for_policy(policy)
 
         if self.config.mode == "append":
             LOGGER.warning(
@@ -203,6 +237,7 @@ class OracleSink:
             https_proxy_port=config.https_proxy_port,
             table=config.table,
             mode=config.mode,
+            merge_update_columns=config.merge_update_columns,
             auto_create=config.auto_create,
             payload_mode=config.payload_mode,
             staging=config.staging,
@@ -370,54 +405,118 @@ class OracleSink:
             )
             row = envelope_to_row(
                 message,
-                idempotency=self.config.idempotency,
+                idempotency=self._policy_for_subject(message.subject).idempotency,
                 payload_mode=self.config.payload_mode,
             )
             rows_by_table.setdefault(table, []).append(row)
         return rows_by_table
 
-    def _write_sql_for_table(self, table: str) -> OracleWriteSql:
+    def _write_sql_for_policy(self, policy: _OracleTablePolicy) -> OracleWriteSql:
         sql = build_write_sql(
-            table=table,
+            table=policy.table_name,
             columns=self.config.columns,
             mode=self.config.mode,
-            key_columns=self.config.idempotency.columns,
+            key_columns=policy.idempotency.columns,
+            merge_update_columns=policy.merge_update_columns,
         )
         self._write_sql_cache[sql.table_name] = sql
         return sql
 
-    def _staging_sql_for_table(self, table: str) -> OracleStagingSql:
+    def _staging_sql_for_policy(self, policy: _OracleTablePolicy) -> OracleStagingSql:
         if not self.config.staging.table:
             raise ConfigurationError("Oracle staging table is not configured")
         sql = build_staging_merge_sql(
-            target_table=table,
+            target_table=policy.table_name,
             staging_table=self.config.staging.table,
             batch_id_column=self.config.staging.batch_id_column,
             columns=self.config.columns,
             mode=self.config.mode,
-            key_columns=self.config.idempotency.columns,
+            key_columns=policy.idempotency.columns,
+            merge_update_columns=policy.merge_update_columns,
             cleanup=self.config.staging.cleanup,
         )
         self._staging_sql_cache[sql.target_table_name] = sql
         return sql
 
-    def _prepare_sql_for_table(self, table: str) -> None:
-        self._write_sql_for_table(table)
+    def _prepare_sql_for_policy(self, policy: _OracleTablePolicy) -> None:
+        self._write_sql_for_policy(policy)
         if self.config.staging.enabled:
-            self._staging_sql_for_table(table)
+            self._staging_sql_for_policy(policy)
+
+    def _register_table_policy(
+        self,
+        *,
+        table: str,
+        idempotency: OracleIdempotencyConfig,
+        merge_update_columns: list[str] | None,
+    ) -> None:
+        """Register the effective policy for one target table.
+
+        Multiple subject routes may point to the same table, but they must not
+        disagree about the idempotency key or merge update behavior.  Allowing
+        conflicting policies for the same table would make duplicates
+        unpredictable and would hide a configuration error until production
+        redelivery.
+        """
+
+        table_name = validate_identifier(table)
+        policy = _OracleTablePolicy(
+            table_name=table_name,
+            idempotency=idempotency,
+            merge_update_columns=merge_update_columns,
+        )
+        existing = self._table_policies.get(table_name)
+        if existing is not None and self._policy_signature(existing) != self._policy_signature(
+            policy
+        ):
+            raise ConfigurationError(
+                f"conflicting Oracle idempotency policy configured for table {table_name}"
+            )
+        self._table_policies[table_name] = policy
+
+    def _policy_for_subject(self, subject: str) -> _OracleTablePolicy:
+        route = resolve_route_for_subject(subject, routes=self.config.table_routes)
+        table = route.table if route is not None else self.config.table
+        return self._policy_for_table_name(validate_identifier(table))
+
+    def _policy_for_table_name(self, table_name: str) -> _OracleTablePolicy:
+        policy = self._table_policies.get(table_name)
+        if policy is None:
+            raise ConfigurationError(f"Oracle policy for table {table_name} is not configured")
+        return policy
+
+    def _policy_signature(
+        self,
+        policy: _OracleTablePolicy,
+    ) -> tuple[str, tuple[str, ...], str | None, tuple[str, ...] | None]:
+        update_columns: tuple[str, ...] | None = None
+        if policy.merge_update_columns is not None:
+            update_columns = tuple(
+                validate_identifier(column) for column in policy.merge_update_columns
+            )
+        return (
+            policy.idempotency.strategy,
+            tuple(validate_identifier(column) for column in policy.idempotency.columns),
+            policy.idempotency.payload_field,
+            update_columns,
+        )
 
     def _write_rows_sync(self, rows_by_table: dict[str, list[dict[str, Any]]]) -> _OracleWriteStats:
         pool = self._require_pool()
-        duplicate_ignored = 0
+        stats = _OracleWriteStats()
         with pool.acquire() as connection:
             commit_started: float | None = None
             try:
                 self._prepare_connection_sync(connection)
                 with connection.cursor() as cursor:
                     if self.config.staging.enabled:
-                        duplicate_ignored += self._write_staging_rows_sync(cursor, rows_by_table)
+                        stats = self._combine_write_stats(
+                            stats, self._write_staging_rows_sync(cursor, rows_by_table)
+                        )
                     else:
-                        duplicate_ignored += self._write_direct_rows_sync(cursor, rows_by_table)
+                        stats = self._combine_write_stats(
+                            stats, self._write_direct_rows_sync(cursor, rows_by_table)
+                        )
                 commit_started = time.perf_counter()
                 connection.commit()
             except Exception as exc:
@@ -437,23 +536,20 @@ class OracleSink:
                     MetricNames.ORACLE_COMMIT_SECONDS,
                     time.perf_counter() - commit_started,
                 )
-        return _OracleWriteStats(
-            duplicates=duplicate_ignored,
-            duplicate_ignored=duplicate_ignored,
-        )
+        return stats
 
     def _write_direct_rows_sync(
         self,
         cursor: Any,
         rows_by_table: dict[str, list[dict[str, Any]]],
-    ) -> int:
-        duplicate_ignored = 0
+    ) -> _OracleWriteStats:
+        stats = _OracleWriteStats()
         for table, rows in rows_by_table.items():
             if not rows:
                 continue
             sql = self._write_sql_cache.get(table)
             if sql is None:
-                sql = self._write_sql_for_table(table)
+                sql = self._write_sql_for_policy(self._policy_for_table_name(table))
             execute_started = time.perf_counter()
             cursor.executemany(sql.sql, rows)
             observe_metric(
@@ -461,27 +557,27 @@ class OracleSink:
                 MetricNames.ORACLE_EXECUTE_SECONDS,
                 time.perf_counter() - execute_started,
             )
-            duplicate_ignored += self._duplicate_ignored_count(cursor, rows)
-        return duplicate_ignored
+            stats = self._combine_write_stats(stats, self._write_stats_from_cursor(cursor, rows))
+        return stats
 
     def _write_staging_rows_sync(
         self,
         cursor: Any,
         rows_by_table: dict[str, list[dict[str, Any]]],
-    ) -> int:
-        duplicate_ignored = 0
+    ) -> _OracleWriteStats:
+        stats = _OracleWriteStats()
         for table, rows in rows_by_table.items():
             if not rows:
                 continue
             sql = self._staging_sql_cache.get(table)
             if sql is None:
-                sql = self._staging_sql_for_table(table)
+                sql = self._staging_sql_for_policy(self._policy_for_table_name(table))
             batch_id = uuid.uuid4().hex
             staging_rows = [{sql.batch_bind_name: batch_id, **row} for row in rows]
             execute_started = time.perf_counter()
             cursor.executemany(sql.insert_sql, staging_rows)
             cursor.execute(sql.merge_sql, {sql.batch_bind_name: batch_id})
-            duplicate_ignored += self._duplicate_ignored_count(cursor, rows)
+            stats = self._combine_write_stats(stats, self._write_stats_from_cursor(cursor, rows))
             if sql.cleanup_sql is not None:
                 cursor.execute(sql.cleanup_sql, {sql.batch_bind_name: batch_id})
             observe_metric(
@@ -489,7 +585,59 @@ class OracleSink:
                 MetricNames.ORACLE_EXECUTE_SECONDS,
                 time.perf_counter() - execute_started,
             )
-        return duplicate_ignored
+        return stats
+
+    def _write_stats_from_cursor(
+        self,
+        cursor: Any,
+        rows: Sequence[dict[str, Any]],
+    ) -> _OracleWriteStats:
+        """Build committed-write metrics from stable Oracle execution metadata.
+
+        Oracle exposes affected-row counts for some `merge` statements, but it
+        does not reliably tell the Python client which individual rows were
+        inserted versus updated.  nats-sinks therefore records only outcomes it
+        can describe honestly.  In update-enabled merge mode the rows are
+        counted as processed with unknown insert-versus-match outcome.  In
+        insert-only idempotent paths, a lower rowcount means a prior durable row
+        was safely left unchanged.
+        """
+
+        attempted = len(rows)
+        if self.config.mode == "insert_ignore":
+            duplicates = self._rowcount_no_change_count(cursor, rows)
+            return _OracleWriteStats(
+                duplicates=duplicates,
+                duplicate_ignored=duplicates,
+            )
+        if self.config.mode == "merge":
+            if self.config.merge_update_columns == []:
+                duplicates = self._rowcount_no_change_count(cursor, rows)
+                return _OracleWriteStats(
+                    duplicates=duplicates,
+                    duplicate_noop=duplicates,
+                    merge_rows=attempted,
+                )
+            return _OracleWriteStats(
+                merge_rows=attempted,
+                merge_outcome_unknown=attempted,
+            )
+        return _OracleWriteStats()
+
+    def _combine_write_stats(
+        self,
+        left: _OracleWriteStats,
+        right: _OracleWriteStats,
+    ) -> _OracleWriteStats:
+        """Combine per-table write observations without carrying raw row data."""
+
+        return _OracleWriteStats(
+            duplicates=left.duplicates + right.duplicates,
+            duplicate_ignored=left.duplicate_ignored + right.duplicate_ignored,
+            duplicate_noop=left.duplicate_noop + right.duplicate_noop,
+            merge_rows=left.merge_rows + right.merge_rows,
+            merge_outcome_unknown=left.merge_outcome_unknown + right.merge_outcome_unknown,
+        )
 
     def _duplicate_ignored_count(self, cursor: Any, rows: Sequence[dict[str, Any]]) -> int:
         """Estimate duplicates skipped by `insert_ignore` using Oracle rowcount.
@@ -503,6 +651,11 @@ class OracleSink:
 
         if self.config.mode != "insert_ignore":
             return 0
+        return self._rowcount_no_change_count(cursor, rows)
+
+    def _rowcount_no_change_count(self, cursor: Any, rows: Sequence[dict[str, Any]]) -> int:
+        """Estimate rows left unchanged when Oracle exposes affected rowcount."""
+
         raw_rowcount = getattr(cursor, "rowcount", None)
         if raw_rowcount is None:
             return 0
@@ -528,8 +681,20 @@ class OracleSink:
     def _record_write_stats(self, stats: object) -> None:
         """Record optional Oracle-specific counters after committed success."""
 
-        if isinstance(stats, _OracleWriteStats) and stats.duplicates:
+        if not isinstance(stats, _OracleWriteStats):
+            return
+        if stats.merge_rows:
+            increment_metric(self.metrics, MetricNames.ORACLE_MERGE_ROWS_TOTAL, stats.merge_rows)
+        if stats.merge_outcome_unknown:
+            increment_metric(
+                self.metrics,
+                MetricNames.ORACLE_MERGE_OUTCOME_UNKNOWN_TOTAL,
+                stats.merge_outcome_unknown,
+            )
+        if stats.duplicate_ignored:
             self._record_duplicate_ignored(stats.duplicate_ignored)
+        if stats.duplicate_noop:
+            self._record_duplicate_noop(stats.duplicate_noop)
 
     def _record_oracle_conflict(self, count: int) -> None:
         """Record Oracle conflicts without including table names or payload data."""
@@ -543,6 +708,14 @@ class OracleSink:
             return
         increment_metric(self.metrics, MetricNames.ORACLE_DUPLICATES_TOTAL, count)
         increment_metric(self.metrics, MetricNames.ORACLE_DUPLICATE_IGNORED_TOTAL, count)
+
+    def _record_duplicate_noop(self, count: int) -> None:
+        """Record duplicate rows left unchanged by merge with no update columns."""
+
+        if count <= 0:
+            return
+        increment_metric(self.metrics, MetricNames.ORACLE_DUPLICATES_TOTAL, count)
+        increment_metric(self.metrics, MetricNames.ORACLE_DUPLICATE_NOOP_TOTAL, count)
 
     def _prepare_connection_sync(self, connection: Any) -> None:
         """Apply session settings that keep sink writes transaction-friendly."""

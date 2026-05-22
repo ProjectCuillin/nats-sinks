@@ -174,6 +174,58 @@ The test creates a unique child directory under `NATS_SINKS_FILE_E2E_DIRECTORY`
 for each run. Keep that directory under `.local/` or another ignored location
 when retaining files.
 
+## Local WebSocket End-To-End Test
+
+WebSocket transport has two layers of testing:
+
+- unit tests for configuration guardrails, optional header validation,
+  redaction, TLS context construction, and collision-safe harness helpers;
+- an optional live local script that starts a temporary NATS server with
+  JetStream and WebSocket enabled.
+
+The unit tests never bind sockets and never start `nats-server`:
+
+```bash
+pytest tests/unit/test_nats_connection_options.py tests/unit/test_websocket_harness.py
+```
+
+The live script requires the `nats-server` executable on `PATH`:
+
+```bash
+scripts/run-websocket-e2e.sh --message-count 16 --batch-size 8
+```
+
+The script is designed to avoid collisions with developer machines where NATS
+is already running. It checks the default local NATS, monitoring, and WebSocket
+ports and chooses free loopback alternatives when needed. It only terminates
+the temporary `nats-server` process that it started.
+
+Example sanitized output:
+
+```json
+{"monitoring_port": 8222, "nats_port": 4222, "transport": "websocket", "websocket_port": 8080}
+{"commit_then_ack": "verified by JetStreamSinkRunner.process_raw_batch", "files_written": 16, "messages_processed": 16, "messages_published": 16}
+{"status": "passed"}
+```
+
+Use `--message-count` to change the number of synthetic messages and
+`--batch-size` to exercise partial or multiple fetch batches:
+
+```bash
+scripts/run-websocket-e2e.sh --message-count 23 --batch-size 8
+```
+
+Use `--preserve-work-dir` only for local debugging:
+
+```bash
+scripts/run-websocket-e2e.sh --preserve-work-dir
+```
+
+Generated files live under `.local/websocket-e2e` by default and must not be
+committed. The generated NATS config and output files are synthetic and
+loopback-only, but maintainers should still review preserved files before
+copying excerpts into public GitHub issues or release evidence.
+
 ## Synthetic Mission Scenario Harness
 
 The repository includes a synthetic scenario harness for repeatable

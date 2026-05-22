@@ -19,6 +19,7 @@ The most important top-level imports are:
 from nats_sinks import JetStreamSinkRunner, NatsEnvelope, Sink
 from nats_sinks.file import FileSink
 from nats_sinks.oracle import OracleSink
+from nats_sinks.sinks import SinkConnector, SinkRegistry
 ```
 
 These imports are intentionally stable. A user should not need to know whether
@@ -56,7 +57,8 @@ The tests also cover:
   `collect_nats_monitoring_snapshot`, `render_otlp_metrics_json`,
   `export_otlp_metrics`, and `render_nats_monitoring_prometheus`,
 - sink extension points such as `Sink`, `HealthCheckableSink`,
-  `SchemaAwareSink`, `FlushableSink`, and `SinkRegistry`,
+  `SchemaAwareSink`, `FlushableSink`, `SinkRegistry`, `SinkConnector`,
+  `load_entry_point_connectors`, and `normalize_connector_name`,
 - production sink package exports for `nats_sinks.file` and
   `nats_sinks.oracle`,
 - documented configuration helpers such as `load_config` and
@@ -119,25 +121,32 @@ scripts/check.sh
 When a feature should become part of the supported Python API, update the code,
 documentation, and compatibility test together.
 
-For example, if a future Postgres sink is added, the intended public import
-would likely be:
+For example, if a future first-party Oracle MySQL sink is added, the intended
+public import would likely be:
 
 ```python
-from nats_sinks.postgres import PostgresSink
+from nats_sinks.mysql import MySqlSink
 ```
 
 The release-ready change should then include:
 
-1. `src/nats_sinks/postgres/__init__.py` exporting `PostgresSink`.
+1. `src/nats_sinks/mysql/__init__.py` exporting `MySqlSink`.
 2. Documentation showing the import.
-3. A `tests/unit/test_public_api.py` contract entry for `nats_sinks.postgres`.
+3. A `tests/unit/test_public_api.py` contract entry for `nats_sinks.mysql`.
 4. Changelog text explaining the new public API.
 5. Sink-specific unit tests and integration tests behind the appropriate
    markers.
+6. A `SinkConnector` descriptor registered in the explicit sink registry.
 
 This keeps new sinks additive. Existing imports such as
 `from nats_sinks.oracle import OracleSink` and
 `from nats_sinks.file import FileSink` should continue to work.
+
+Third-party connector packages should normally expose a `SinkConnector`
+descriptor through the `nats_sinks.sinks` entry-point group. The descriptor API
+is part of the public extension surface, but plugin discovery remains disabled
+by default and allow-list based. See [Sink Framework](sink-framework.md) for
+the connector descriptor and certification requirements.
 
 ## Breaking Changes
 

@@ -94,12 +94,20 @@ class OracleColumnMapping(BaseModel):
 
 
 class OracleTableRoute(BaseModel):
-    """Route messages matching a NATS subject pattern to a specific Oracle table."""
+    """Route messages matching a NATS subject pattern to a table and policy.
+
+    A route inherits the sink-level idempotency and merge-update policy unless
+    it provides explicit overrides.  Keeping route policy inside the validated
+    route object lets one OracleSink handle several subject families without
+    requiring separate worker processes for every table.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     subject: str
     table: str
+    idempotency: OracleIdempotencyConfig | None = None
+    merge_update_columns: list[str] | None = None
 
 
 class OracleStagingConfig(BaseModel):
@@ -158,6 +166,7 @@ class OracleSinkConfig(BaseModel):
     table: str = "NATS_SINK_EVENTS"
     table_routes: list[OracleTableRoute] = Field(default_factory=list)
     mode: OracleWriteMode = "merge"
+    merge_update_columns: list[str] | None = None
     auto_create: bool = False
     payload_mode: PayloadStorageMode = "json_or_envelope"
     payload_column: str | None = None
@@ -189,6 +198,14 @@ class OracleSinkConfig(BaseModel):
             self.columns.payload = self.payload_column
         if self.headers_column:
             self.columns.headers = self.headers_column
+        if self.merge_update_columns is not None and self.mode != "merge":
+            raise ValueError("sink.merge_update_columns applies only when sink.mode is 'merge'")
+        for route in self.table_routes:
+            if route.merge_update_columns is not None and self.mode != "merge":
+                raise ValueError(
+                    "sink.table_routes[].merge_update_columns applies only when "
+                    "sink.mode is 'merge'"
+                )
         if self.staging.enabled and self.mode not in {"merge", "insert_ignore"}:
             raise ValueError(
                 "sink.staging.enabled requires sink.mode to be 'merge' or 'insert_ignore'"

@@ -27,7 +27,7 @@ import typer
 from pydantic import ValidationError as PydanticValidationError
 
 from nats_sinks import __version__
-from nats_sinks.core.config import AppConfig, load_config, redacted_config
+from nats_sinks.core.config import AppConfig, SinkPluginConfig, load_config, redacted_config
 from nats_sinks.core.errors import ConfigurationError, NatsSinksError
 from nats_sinks.core.logging import configure_logging
 from nats_sinks.core.metrics import JsonFileMetrics, MetricsRecorder
@@ -35,6 +35,7 @@ from nats_sinks.core.runner import JetStreamSinkRunner
 from nats_sinks.file import FileSink
 from nats_sinks.oracle import OracleSink
 from nats_sinks.sinks.base import HealthCheckableSink, Sink
+from nats_sinks.sinks.connectors import SinkConnector, load_entry_point_connectors
 from nats_sinks.sinks.registry import SinkRegistry
 
 app = typer.Typer(help="Run NATS JetStream sink connectors.")
@@ -48,10 +49,44 @@ def _version_callback(value: bool) -> None:
         raise typer.Exit()
 
 
-def _registry() -> SinkRegistry:
+def _registry(plugins: SinkPluginConfig | None = None) -> SinkRegistry:
+    """Build the explicit sink connector registry.
+
+    Oracle Database and FileSink are first-party built-ins and are always
+    registered.  External connectors are loaded only when the JSON config
+    explicitly enables plugin discovery and allow-lists the connector name.
+    """
+
     registry = SinkRegistry()
-    registry.register("file", FileSink.from_mapping)
-    registry.register("oracle", OracleSink.from_mapping)
+    registry.register_connector(
+        SinkConnector(
+            name="file",
+            factory=FileSink.from_mapping,
+            summary="Built-in local JSON file sink.",
+            built_in=True,
+            production_ready=True,
+            documentation="docs/file-sink.md",
+            certification=("commit-then-ack", "unit", "integration"),
+        )
+    )
+    registry.register_connector(
+        SinkConnector(
+            name="oracle",
+            factory=OracleSink.from_mapping,
+            summary="Built-in Oracle Database sink.",
+            built_in=True,
+            production_ready=True,
+            requires_extra="oracle",
+            documentation="docs/oracle-sink.md",
+            certification=("commit-then-ack", "unit", "integration", "live-e2e"),
+        )
+    )
+    if plugins is not None and plugins.enabled:
+        for connector in load_entry_point_connectors(
+            allowed_names=plugins.allowed_sinks,
+            require_production_ready=plugins.require_production_ready,
+        ):
+            registry.register_connector(connector)
     return registry
 
 
@@ -70,7 +105,7 @@ def _load_or_exit(config_path: Path) -> AppConfig:
 def _build_sink(config: AppConfig) -> Sink:
     raw_sink = _raw_sink_config(config)
     sink_type = str(raw_sink.get("type", ""))
-    return _registry().create(sink_type, raw_sink)
+    return _registry(config.plugins).create(sink_type, raw_sink)
 
 
 def _attach_metrics_to_sink(sink: Sink, metrics: MetricsRecorder | None) -> None:
@@ -102,6 +137,7 @@ def _nats_options(config: AppConfig) -> dict[str, Any]:
 
     password = config.nats.resolve_password()
     token = config.nats.resolve_token()
+    websocket_headers = config.nats.resolve_websocket_headers()
     servers = config.nats.urls or [config.nats.url]
     options: dict[str, Any] = {
         key: value
@@ -126,6 +162,7 @@ def _nats_options(config: AppConfig) -> dict[str, Any]:
             "max_outstanding_pings": config.nats.max_outstanding_pings,
             "pending_size": config.nats.pending_size_bytes,
             "drain_timeout": config.nats.drain_timeout_seconds,
+            "ws_connection_headers": websocket_headers or None,
         }.items()
         if value is not None
     }
@@ -136,6 +173,7 @@ def _nats_options(config: AppConfig) -> dict[str, Any]:
             config.nats.tls_cert_file,
             config.nats.tls_key_file,
             any(server.startswith("tls://") for server in servers),
+            any(server.startswith("wss://") for server in servers),
         )
     ):
         # A local CA file lets operators trust a private or self-signed NATS
@@ -255,6 +293,7 @@ def run(
             encryption=loaded.encryption,
             custody=loaded.custody,
             advisories=loaded.advisories,
+            size_policy=loaded.size_policy,
             pre_sink_policy=loaded.pre_sink_policy,
             metrics=metrics,
             nats_options=_nats_options(loaded),

@@ -21,6 +21,27 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   and `insert_ignore` writes, including validated staging configuration,
   staging-table DDL helpers, rollback-safe transaction handling, duplicate
   metrics support, unit coverage, and operator documentation.
+- Added Oracle `merge_update_columns` controls so operators can preserve the
+  existing "update all non-key columns" behavior, restrict matched-row updates
+  to selected columns, or leave matched rows unchanged, with validated SQL
+  identifier handling and unit coverage.
+- Added Oracle per-route idempotency overrides so subject-to-table routes can
+  inherit the sink default or use route-specific stream-sequence, message-ID,
+  or payload-field keys with compatible merge update controls.
+- Added a safe sink connector framework with `SinkConnector` metadata,
+  first-party Oracle and FileSink descriptors, explicit `SinkRegistry`
+  registration, disabled-by-default allow-listed Python entry-point discovery
+  for reviewed external connectors, plugin configuration validation, and public
+  API compatibility coverage.
+- Added researched backlog items for first-party Oracle-family sink candidates:
+  OCI Object Storage, Oracle MySQL, Oracle Berkeley DB, Oracle NoSQL Database,
+  and OCI Streaming.
+- Added high-priority Palantir Foundry and Palantir Gotham sink backlog items,
+  each requiring local fake-client or contract-harness testing before any live
+  certification claim.
+- Added low-priority research backlog items for common Kafka-style destination
+  patterns: Elasticsearch or OpenSearch, Snowflake, BigQuery, Azure object
+  storage, Kafka, MongoDB, Redis, and Cassandra-compatible stores.
 - Added `PayloadKeyRegistry`, a public multi-key payload decryption helper for
   key-rotation windows, replay tooling, migration checks, and incident-response
   verification without adding cloud secret-manager SDKs to the core package.
@@ -46,6 +67,10 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   acknowledging originals when DLQ publication fails.
 - Added pre-sink policy metrics, public policy helper exports, configuration
   validation, commit-then-ACK contract coverage, and operator documentation.
+- Added optional core `size_policy` controls for sink-bound payload bytes,
+  normalized headers, labels, mission metadata, standard metadata, approximate
+  record size, and accepted batch size, with permanent-failure DLQ-before-ACK
+  handling, aggregate metrics, tests, and operator documentation.
 - Added an observability connector evaluation matrix and shared connector
   contract, then split the broad additional-observability roadmap item into
   individual connector backlog items for StatsD, Datadog, Splunk HEC, Elastic,
@@ -77,6 +102,20 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   into separate backlog items for WebSocket configuration guardrails, optional
   connection header support, and an integration certification harness while
   keeping `nats://` and `tls://` as the certified production transports today.
+- Added WebSocket NATS transport guardrails for `ws://` and `wss://`, including
+  fail-closed mixed transport rejection, rejection of credentials embedded in
+  URLs, `wss://` TLS context construction with local CA support, and unchanged
+  commit-then-ACK processing.
+- Added optional WebSocket connection header configuration through
+  `nats.websocket_headers` and `nats.websocket_headers_env`, with bounded
+  header validation, environment-sourced sensitive values, protocol-owned
+  header rejection, redacted effective configuration, and `nats-py`
+  `ws_connection_headers` option construction.
+- Added a collision-safe local WebSocket certification harness and
+  `scripts/run-websocket-e2e.sh`, which starts only its own temporary
+  loopback `nats-server`, chooses free alternative ports when defaults are
+  occupied, publishes synthetic messages over WebSocket, writes them through
+  `FileSink`, and verifies the runner's ACK-after-sink-success path.
 - Added optional tamper-evident custody metadata, including core configuration,
   deterministic payload and metadata hash helpers, optional previous-record
   hash capture, runner fail-closed behavior before sink writes, file sink
@@ -105,6 +144,10 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   timeout and retry controls, environment-sourced headers, sanitized CLI
   output, unit coverage, public API exports, documentation, and systemd
   service/timer examples.
+- Added detailed backlog items for future generic multi-sink routing and
+  fan-out, including route matching by subject and metadata, named sink
+  instances, optional ACK-gating wait policy, partial-failure metrics, and
+  routing certification tests.
 
 ### Changed
 
@@ -127,11 +170,22 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 - Updated the NATS feature-gap analysis and roadmap so terminal
   acknowledgement work is represented as a narrow future DLQ-after-success
   feature instead of an open-ended AckTerm/AckNext evaluation.
+- Expanded the WebSocket certification backlog requirements so the future
+  local test harness must detect occupied NATS ports, select free loopback
+  alternatives, and avoid interfering with unrelated running NATS processes.
+- Expanded Oracle duplicate visibility so `nats-sink-metrics` can report
+  merge rows, update-enabled merge rows with unknown insert-versus-match
+  outcome, and no-update merge duplicates left unchanged after commit.
 
 ### Fixed
 
+- Fixed the new WebSocket harness unit tests so they mock loopback port probes
+  rather than binding real sockets, preserving the no-network-unit-tests rule
+  for locked-down CI and developer sandboxes.
 - Fixed GitHub backlog relationship sync so native issue dependencies submit
   numeric `issue_id` values to the GitHub API instead of string values.
+- Fixed GitHub backlog and bug priority sync so native Issue Priority field
+  updates use the current GitHub Issue Field Values API payload shape.
 - Fixed the high-confidence secret scanner so it prefers `rg` when available
   but falls back to `grep` in minimal CI environments where ripgrep is not
   installed.

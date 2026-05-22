@@ -125,9 +125,17 @@ class MetricNames:
     POLICY_BATCHES_PASSED_TOTAL = "policy_batches_passed_total"
     POLICY_BATCHES_REJECTED_TOTAL = "policy_batches_rejected_total"
     POLICY_EVALUATION_ERRORS_TOTAL = "policy_evaluation_errors_total"
+    SIZE_POLICY_MESSAGES_PASSED_TOTAL = "size_policy_messages_passed_total"
+    SIZE_POLICY_MESSAGES_REJECTED_TOTAL = "size_policy_messages_rejected_total"
+    SIZE_POLICY_BATCHES_PASSED_TOTAL = "size_policy_batches_passed_total"
+    SIZE_POLICY_BATCHES_REJECTED_TOTAL = "size_policy_batches_rejected_total"
+    SIZE_POLICY_EVALUATION_ERRORS_TOTAL = "size_policy_evaluation_errors_total"
     ORACLE_CONFLICTS_TOTAL = "oracle_conflicts_total"
     ORACLE_DUPLICATES_TOTAL = "oracle_duplicates_total"
     ORACLE_DUPLICATE_IGNORED_TOTAL = "oracle_duplicate_ignored_total"
+    ORACLE_DUPLICATE_NOOP_TOTAL = "oracle_duplicate_noop_total"
+    ORACLE_MERGE_ROWS_TOTAL = "oracle_merge_rows_total"
+    ORACLE_MERGE_OUTCOME_UNKNOWN_TOTAL = "oracle_merge_outcome_unknown_total"
     LAST_SINK_SUCCESS_EPOCH_SECONDS = "last_sink_success_epoch_seconds"
     CURRENT_BATCH_MESSAGES = "current_batch_messages"
 
@@ -408,6 +416,31 @@ METRIC_SPECS: tuple[MetricSpec, ...] = (
         "Messages left redeliverable because policy evaluation failed unexpectedly.",
     ),
     MetricSpec(
+        MetricNames.SIZE_POLICY_MESSAGES_PASSED_TOTAL,
+        "counter",
+        "Messages accepted by the core size policy before sink delivery.",
+    ),
+    MetricSpec(
+        MetricNames.SIZE_POLICY_MESSAGES_REJECTED_TOTAL,
+        "counter",
+        "Messages rejected by the core size policy before sink delivery.",
+    ),
+    MetricSpec(
+        MetricNames.SIZE_POLICY_BATCHES_PASSED_TOTAL,
+        "counter",
+        "Batches with at least one message accepted by the core size policy.",
+    ),
+    MetricSpec(
+        MetricNames.SIZE_POLICY_BATCHES_REJECTED_TOTAL,
+        "counter",
+        "Batches with at least one message rejected by the core size policy.",
+    ),
+    MetricSpec(
+        MetricNames.SIZE_POLICY_EVALUATION_ERRORS_TOTAL,
+        "counter",
+        "Messages left redeliverable because size-policy evaluation failed unexpectedly.",
+    ),
+    MetricSpec(
         MetricNames.ORACLE_CONFLICTS_TOTAL,
         "counter",
         "Oracle write conflicts observed by OracleSink, such as duplicate-key conflicts.",
@@ -421,6 +454,21 @@ METRIC_SPECS: tuple[MetricSpec, ...] = (
         MetricNames.ORACLE_DUPLICATE_IGNORED_TOTAL,
         "counter",
         "Oracle duplicate rows safely ignored by insert_ignore mode.",
+    ),
+    MetricSpec(
+        MetricNames.ORACLE_DUPLICATE_NOOP_TOTAL,
+        "counter",
+        "Oracle duplicate rows safely left unchanged by merge mode with no update columns.",
+    ),
+    MetricSpec(
+        MetricNames.ORACLE_MERGE_ROWS_TOTAL,
+        "counter",
+        "Oracle rows committed through merge mode.",
+    ),
+    MetricSpec(
+        MetricNames.ORACLE_MERGE_OUTCOME_UNKNOWN_TOTAL,
+        "counter",
+        "Oracle merge rows where insert-versus-match outcome is not reliably exposed.",
     ),
     MetricSpec(
         MetricNames.LAST_SINK_SUCCESS_EPOCH_SECONDS,

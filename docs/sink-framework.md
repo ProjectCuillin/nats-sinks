@@ -264,6 +264,127 @@ publish it to a DLQ, or fail configuration before startup.
 | `SerializationError` | Payload cannot be encoded or decoded for the destination. | Treat as permanent unless the sink documents otherwise. |
 | `DestinationUnavailableError` | Destination is not currently reachable or commit failed. | Treat as temporary; do not ACK. |
 
+## Connector Framework
+
+The implementation term for a destination is **sink connector**. A connector is
+the combination of:
+
+- a public sink class such as `OracleSink` or `FileSink`,
+- a factory that builds that sink from the selected JSON `sink` object,
+- metadata describing production readiness, documentation, optional dependency
+  extras, and certification evidence,
+- tests proving the sink follows the shared delivery contract.
+
+The connector framework exists so nats-sinks can grow without weakening the
+core safety model. It is not a marketplace that blindly loads arbitrary Python
+modules. Configuration never names a module path, class path, or arbitrary
+import string. It names a sink type, and that type is resolved through an
+explicit registry.
+
+```mermaid
+flowchart LR
+    Config[JSON config sink.type] --> Registry[SinkRegistry]
+    Registry --> BuiltIn[Built-in connector descriptors]
+    Registry --> Optional[Optional allow-listed entry points]
+    BuiltIn --> File[FileSink]
+    BuiltIn --> Oracle[OracleSink]
+    Optional --> ThirdParty[Reviewed external connector]
+    ThirdParty --> Contract[Sink protocol and certification tests]
+```
+
+Today, the first-party production connectors are built in:
+
+| Connector | Config value | Import path | Status |
+| --- | --- | --- | --- |
+| Oracle Database | `oracle` | `nats_sinks.oracle.OracleSink` | Production connector in this repository. |
+| File | `file` | `nats_sinks.file.FileSink` | Production connector in this repository. |
+
+Future Oracle-family sinks such as OCI Object Storage, Oracle MySQL,
+Oracle Berkeley DB, Oracle NoSQL Database, and OCI Streaming are intended to
+be first-party connectors in this repository unless project governance decides
+otherwise later. They should use the same connector descriptor and certification
+tests as Oracle Database and FileSink, but they do not need external plugin
+discovery.
+
+Optional third-party connector discovery is intentionally disabled by default.
+When enabled, it uses Python packaging entry points under the group
+`nats_sinks.sinks`, but it only loads names listed in `plugins.allowed_sinks`.
+Every loaded object must be a `SinkConnector` descriptor and, by default, must
+declare itself production-ready.
+
+```json
+{
+  "plugins": {
+    "enabled": true,
+    "allowed_sinks": ["acme_archive"],
+    "require_production_ready": true
+  },
+  "sink": {
+    "type": "acme_archive",
+    "directory": "/var/lib/nats-sinks/acme-archive"
+  }
+}
+```
+
+That configuration says: “load exactly the `acme_archive` connector if the
+package is installed, the descriptor name matches, and the connector is marked
+production-ready.” It does not load every package that advertises the entry
+point group.
+
+### Connector Descriptor
+
+External connector packages should expose a descriptor rather than a raw
+factory function:
+
+```python
+from nats_sinks.sinks import SINK_CONNECTOR_API_VERSION, SinkConnector
+
+from acme_nats_sink.archive import AcmeArchiveSink
+
+
+connector = SinkConnector(
+    name="acme_archive",
+    factory=AcmeArchiveSink.from_mapping,
+    summary="Acme Archive sink for controlled object handoff.",
+    status="production",
+    api_version=SINK_CONNECTOR_API_VERSION,
+    built_in=False,
+    production_ready=True,
+    documentation="docs/acme-archive-sink.md",
+    certification=("commit-then-ack", "unit", "integration"),
+)
+```
+
+The package can then publish the descriptor through a Python entry point:
+
+```toml
+[project.entry-points."nats_sinks.sinks"]
+acme_archive = "acme_nats_sink.archive:connector"
+```
+
+This descriptor shape gives operators a way to inspect connector metadata and
+gives maintainers a stable compatibility surface to test. It also keeps unsafe
+dynamic imports out of runtime JSON configuration.
+
+### Certification Expectations
+
+A connector should not be described as production-ready until it passes the
+same baseline evidence as built-in sinks:
+
+- unit tests for config validation and row, file, object, or request mapping,
+- commit-then-ack tests proving ACK happens only after sink success,
+- failure tests proving no ACK on sink failure,
+- duplicate redelivery tests for the documented idempotency strategy,
+- secret-redaction and no-payload-logging tests,
+- destination-specific integration tests behind explicit markers or scripts,
+- documentation explaining durable success, duplicate behavior, security, and
+  operational limitations.
+
+Connector certification is deliberately stricter than simply “implements the
+protocol.” A sink can satisfy Python typing while still returning success too
+early, logging sensitive payloads, or lacking duplicate controls. Certification
+is the human and automated evidence that those risks have been addressed.
+
 ## Extension Checklist
 
 Future destination modules should follow this checklist before being described
@@ -278,7 +399,7 @@ as production-ready:
 - use bind variables or equivalent safe APIs for values,
 - document idempotency strategy and failure behavior,
 - add CLI configuration examples using JSON,
-- add integration tests behind the `integration` marker.
+- add integration tests behind the `integration` marker,
 - add a local or external end-to-end test proving the core runner does not ACK
   until the sink has crossed its durable success boundary.
 
@@ -304,6 +425,8 @@ The stable extension points are:
   `PermanentSinkError`,
 - `SinkRegistry`, which resolves explicit sink names instead of importing
   arbitrary modules from config,
+- `SinkConnector`, which describes a connector factory, production-readiness
+  state, documentation pointer, and certification evidence,
 - the JSON `sink` object, which requires `type` and allows sink-specific fields
   to be validated by the selected destination implementation.
 
@@ -314,7 +437,8 @@ look like this:
 2. Add a public class, for example `PostgresSink`, that implements the sink
    contract.
 3. Add an optional dependency extra such as `nats-sinks[postgres]`.
-4. Register the sink factory in the CLI registry under a lowercase name.
+4. Register a `SinkConnector` descriptor in the CLI registry under a lowercase
+   name.
 5. Add destination-specific docs, for example `docs/postgres-sink.md`.
 6. Add deterministic unit tests and integration tests behind the
    `integration` marker.
@@ -348,11 +472,20 @@ logic into every backend.
 
 ## Future Destinations
 
-Future sinks should live in destination modules such as:
+Future first-party sinks should live in destination modules such as:
 
+- `nats_sinks.oci_object_storage`
 - `nats_sinks.mysql`
-- `nats_sinks.http`
-- `nats_sinks.s3`
+- `nats_sinks.oci_streaming`
+- `nats_sinks.oracle_nosql`
+- `nats_sinks.berkeley_db`
+
+Future non-Oracle sinks may be first-party modules, carefully reviewed optional
+connectors, or research backlog items depending on demand, maintainership, and
+security posture. Examples include HTTP, S3-compatible object storage,
+Elasticsearch or OpenSearch, Snowflake, BigQuery, Azure object storage, Kafka,
+MongoDB, Redis, Cassandra-compatible stores, Palantir Foundry, and Palantir
+Gotham.
 
 No future sink should be considered production-ready until it has tests proving
 that durable success happens before ACK and that duplicate redelivery is safe.

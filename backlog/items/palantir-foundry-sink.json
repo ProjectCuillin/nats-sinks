@@ -1,0 +1,31 @@
+{
+  "id": "palantir-foundry-sink",
+  "title": "[Feature]: Add a Palantir Foundry sink",
+  "area": "Future sink",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "security", "testing", "documentation"],
+  "problem": "Palantir Foundry is a high-value operational data platform in many mission, industrial, and government environments. nats-sinks does not currently provide a sink that can hand selected JetStream events into Foundry datasets, objects, or supported ingestion APIs while preserving commit-then-acknowledge behavior and clear auditability.",
+  "proposal": "Research, design, and later implement a Palantir Foundry sink behind an optional dependency or HTTP client layer. The first phase should identify the supported Foundry write targets, authentication model, API permissions, dataset or object write constraints, and whether an official SDK is appropriate. Because public documentation and customer-specific Foundry deployments may differ, the implementation must include a local fake Foundry client or contract test harness that mimics the small API surface used by nats-sinks without requiring access to a live Foundry environment. The sink should be a first-class connector using the safe connector framework and certification tests, but it should not claim production readiness until tested against an approved Foundry environment.",
+  "users": "Mission data teams, operational analytics teams, platform engineers, and maintainers evaluating controlled handoff from NATS JetStream into Palantir Foundry.",
+  "delivery_semantics": "The core runner must own ACK behavior. The Foundry sink must never ACK messages. It may return success only after Foundry has accepted the configured write operation and any required response validation has passed. If a write is rejected, throttled, unauthorized, partially accepted, or ambiguous, the sink must raise a framework error and the core must not ACK. Duplicate redelivery must be handled through deterministic record keys, dataset partitioning, or an explicitly documented idempotency strategy.",
+  "security": "Authentication tokens, OAuth client material, service identities, Foundry resource identifiers, and endpoint details must not be logged or committed. Configuration must validate resource identifiers, write modes, payload projection modes, and timeout values. The sink must fail closed on missing scopes, unsupported write targets, or ambiguous responses. Documentation must describe least-privilege Foundry application permissions, payload privacy, classification metadata, and safe local mock testing.",
+  "acceptance": [
+    "Research identifies the Foundry write API or SDK surface that should be used and records any uncertainty or customer-specific dependency.",
+    "A design note defines the public import path, config type, optional dependency posture, authentication modes, and supported Foundry target type.",
+    "A local fake Foundry client or contract test harness exists before live integration is attempted.",
+    "Functional requirements cover record mapping, metadata mapping, idempotency keys, payload encryption compatibility, duplicate handling, and batch behavior.",
+    "Non-functional requirements cover timeouts, bounded retries, throttling, batch sizes, response validation, and operator-readable errors.",
+    "Security requirements cover token redaction, least-privilege scopes, no payload logging, endpoint allow-listing, and sanitized evidence.",
+    "Documentation includes examples, limitations, and the difference between mock certification and live Foundry certification."
+  ],
+  "tests": "Build unit tests around a fake Foundry client with deterministic success, validation failure, authorization failure, throttling, partial acceptance, timeout, and duplicate scenarios. Add commit-then-ack contract tests proving success allows ACK and any failed or ambiguous Foundry response prevents ACK. Add optional live tests only when an approved Foundry test environment and ignored local config are available.",
+  "documentation": "Add a dedicated Palantir Foundry sink page when implementation starts. Update docs/sink-framework.md, docs/configuration.md, docs/security.md, docs/operations.md, docs/testing.md, docs/use-cases/defence/, ROADMAP.md, docs/roadmap.md, and CHANGELOG.md. Documentation must make clear that public docs and local mocks are not a substitute for customer-approved live certification.",
+  "closeout": "Close only after the release containing the Foundry sink or its approved design phase is published. Include release tag, API surface selected, mock test evidence, live-test status if available, documentation updated, and known limitations.",
+  "relationships": {
+    "related": [
+      "backlog:sink-certification-contract-and-tests",
+      "backlog:defence-use-case-blueprints"
+    ]
+  }
+}

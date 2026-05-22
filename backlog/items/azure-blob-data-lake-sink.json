@@ -1,0 +1,28 @@
+{
+  "id": "azure-blob-data-lake-sink",
+  "title": "[Feature]: Evaluate an Azure Blob Storage and Data Lake sink",
+  "area": "Future sink",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "security", "testing"],
+  "problem": "Object and lake storage sinks are common in streaming connector ecosystems. nats-sinks has FileSink and an OCI Object Storage proposal, but no Azure Blob Storage or Data Lake sink for Azure-centered deployments.",
+  "proposal": "Evaluate an Azure object-storage sink that writes normalized envelopes as deterministic blobs under safe prefixes with duplicate detection, optional compression, checksum validation, and support for Azure identity patterns. The design should determine whether Blob Storage and Data Lake can share one connector safely.",
+  "users": "Azure platform teams, data lake teams, and operators that need durable object handoff from JetStream.",
+  "delivery_semantics": "The sink must never ACK messages. It may return success only after every blob write has been durably accepted and any required duplicate or checksum verification has completed. Failed, partial, or ambiguous object writes must raise framework errors.",
+  "security": "The sink must validate account, container, prefix, blob key template, authentication mode, TLS behavior, and metadata fields. It must redact tokens, account keys, connection strings, payload bodies, and signed URLs from logs.",
+  "acceptance": [
+    "Research decides whether Blob Storage and Data Lake share one connector or require separate connectors.",
+    "Functional requirements cover deterministic blob keys, duplicate policies, compression, checksums, metadata, and payload envelopes.",
+    "Non-functional requirements cover multipart or block upload behavior, bounded concurrency, retries, timeouts, and cleanup.",
+    "Security requirements cover managed identity, secret redaction, safe prefixes, TLS verification, and no payload logging.",
+    "Tests cover fake client success, duplicate handling, upload failure, unsafe key rejection, and no ACK on sink failure."
+  ],
+  "tests": "Use fake Azure client objects for unit tests and gate live tests behind ignored local config. Include object-key validation and commit-then-ack contract tests.",
+  "documentation": "If implemented, add a dedicated Azure object-storage sink page and update sink framework, configuration, security, operations, testing, roadmap, and changelog docs.",
+  "closeout": "Close after research decision or released connector. Include selected approach, tests, documentation, and known limitations.",
+  "relationships": {
+    "related": [
+      "backlog:sink-certification-contract-and-tests"
+    ]
+  }
+}

@@ -2,8 +2,8 @@
   "id": "websocket-connection-configuration-guardrails",
   "title": "[Feature]: Add WebSocket connection configuration guardrails",
   "area": "Core runtime and delivery semantics",
-  "priority": "P3 - backlog candidate",
-  "target_release": "unscheduled",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
   "labels": [
     "nats",
     "security",

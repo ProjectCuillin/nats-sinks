@@ -84,6 +84,11 @@ from nats_sinks.core.payload import (
 from nats_sinks.core.policy import PolicyEvaluation, PolicyViolation, evaluate_pre_sink_policy
 from nats_sinks.core.priority import PriorityLaneAssignment, order_by_priority_lanes
 from nats_sinks.core.runner import JetStreamSinkRunner
+from nats_sinks.core.size_policy import (
+    SizePolicyEvaluation,
+    SizePolicyViolation,
+    evaluate_size_policy,
+)
 
 __all__ = [
     "CUSTODY_SCHEMA",
@@ -117,6 +122,8 @@ __all__ = [
     "PolicyEvaluation",
     "PolicyViolation",
     "PriorityLaneAssignment",
+    "SizePolicyEvaluation",
+    "SizePolicyViolation",
     "SubjectPayloadEncryptor",
     "advisory_kind_from_subject",
     "attach_custody_metadata",
@@ -129,6 +136,7 @@ __all__ = [
     "detect_consumer_drift",
     "ensure_jetstream_consumer",
     "evaluate_pre_sink_policy",
+    "evaluate_size_policy",
     "is_encrypted_payload_envelope",
     "load_metrics_snapshot",
     "metric_rows_from_snapshot",

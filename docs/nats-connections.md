@@ -261,11 +261,12 @@ passes it to `nats-py`, even when the fallback `url` field remains at its
 default value.
 
 `ws://` and `wss://` are accepted by configuration validation because NATS and
-`nats-py` support WebSocket transport. That does not yet make WebSocket
-transport production-certified in `nats-sinks`. WebSocket deployment still
-needs explicit project-level guardrails for mixed URL lists, `wss://` local CA
-trust, optional connection headers, proxy behavior, and integration evidence.
-See [WebSocket Connection Evaluation](websocket-connection-evaluation.md).
+`nats-py` support WebSocket transport. `nats-sinks` adds project guardrails on
+top of that client behavior: credentials in URLs are rejected, WebSocket seed
+lists cannot be mixed with `nats://` or `tls://` seed URLs, `wss://` uses the
+same verified TLS context and local CA support as `tls://`, and optional
+WebSocket headers are validated and redacted. See
+[WebSocket Connection Evaluation](websocket-connection-evaluation.md).
 
 Do not embed credentials in any URL. Use `token_env` or `password_env` so
 secrets stay out of configuration files, process listings, logs, and support
@@ -440,8 +441,9 @@ flowchart TD
 ## WebSocket Transport Status
 
 NATS supports WebSocket connections, and the `nats-sinks` URL validator accepts
-`ws://` and `wss://`. The current certified production path remains `nats://`
-or `tls://` until WebSocket-specific follow-up work is implemented.
+`ws://` and `wss://`. WebSocket support is a transport option, not a separate
+delivery mode. The runner still receives JetStream messages, writes them
+through the sink, and ACKs only after durable success.
 
 Use this current status table when reviewing deployments:
 
@@ -449,12 +451,101 @@ Use this current status table when reviewing deployments:
 | --- | --- | --- |
 | `nats://` | Supported. | Use only in isolated local development or protected networks where plaintext transport is explicitly accepted. |
 | `tls://` | Supported and documented for production. | Preferred production transport today. Use `tls_ca_file` for private CAs. |
-| `ws://` | Accepted by validation, not production-certified. | Use only for local labs or explicit evaluation. |
-| `wss://` | Accepted by validation, not production-certified. | Preferred future WebSocket transport after guardrails and certification tests are added. |
+| `ws://` | Supported with guardrails. | Use only for local labs or explicitly approved controlled networks because it is plaintext WebSocket transport. |
+| `wss://` | Supported with guardrails. | Preferred WebSocket transport. Keep `tls_verify` enabled and use `tls_ca_file` for private CAs. |
 
 WebSocket transport must not change commit-then-acknowledge behavior. A
 WebSocket connection failure is a transport event; it is not sink success and
 must never trigger an ACK by itself.
+
+### WebSocket Guardrails
+
+The WebSocket configuration model fails closed before a connection attempt when
+the transport shape is ambiguous or unsafe:
+
+- `nats.url` and every `nats.urls` entry must use one of `nats`, `tls`, `ws`,
+  or `wss`.
+- URL-embedded credentials such as `wss://user:password@example` are rejected.
+  Use the normal authentication fields or environment-sourced headers instead.
+- `nats.urls` must not mix WebSocket and non-WebSocket transports in the same
+  seed list.
+- `wss://` builds an `ssl.SSLContext` and honors `tls_ca_file`,
+  `tls_cert_file`, `tls_key_file`, and `tls_verify`.
+- `websocket_headers` and `websocket_headers_env` are accepted only for
+  `ws://` or `wss://` connections.
+
+Example local-lab WebSocket configuration:
+
+```json
+{
+  "nats": {
+    "url": "ws://127.0.0.1:8080",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*"
+  },
+  "sink": {
+    "type": "file",
+    "directory": ".local/file-sink/events",
+    "fsync": false
+  }
+}
+```
+
+Example approved `wss://` configuration with a private CA and a non-sensitive
+proxy routing hint:
+
+```json
+{
+  "nats": {
+    "url": "wss://nats.example.com:8443",
+    "stream": "ORDERS",
+    "consumer": "oracle-orders-sink",
+    "subject": "orders.*",
+    "tls_ca_file": "/etc/nats/certs/private-ca.crt",
+    "websocket_headers": {
+      "X-Route-Hint": "approved-edge"
+    },
+    "websocket_headers_env": {
+      "Authorization": "NATS_WS_AUTHORIZATION"
+    }
+  },
+  "sink": {
+    "type": "oracle",
+    "dsn": "example_low",
+    "user": "NATS_SINK_APP",
+    "password_env": "ORACLE_PASSWORD",
+    "table": "NATS_SINK_EVENTS"
+  }
+}
+```
+
+`Authorization`, `Cookie`, `Proxy-Authorization`, `X-Api-Key`, and
+`X-Auth-Token` style headers must be configured through
+`websocket_headers_env`. The effective configuration view redacts both direct
+and environment-sourced WebSocket header values.
+
+```bash
+export NATS_WS_AUTHORIZATION='replace-with-local-test-value'
+nats-sink validate config.json
+nats-sink show-effective-config config.json
+```
+
+The redacted output uses the same secret handling as other authentication
+fields:
+
+```json
+{
+  "nats": {
+    "websocket_headers": {
+      "X-Route-Hint": "********"
+    },
+    "websocket_headers_env": {
+      "Authorization": "********"
+    }
+  }
+}
+```
 
 ## Live Connection Probe
 

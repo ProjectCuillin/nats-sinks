@@ -27,12 +27,12 @@ def _load_script() -> ModuleType:
 
 def test_sync_issue_planning_sets_native_issue_priority_field() -> None:
     script = _load_script()
-    api_calls: list[tuple[list[str], dict[str, object] | None]] = []
+    api_calls: list[tuple[list[str], object | None]] = []
 
     def fake_runner(args: list[str]) -> Any:
         raise AssertionError(f"unexpected call: {args}")
 
-    def fake_api_runner(args: list[str], payload: dict[str, object] | None = None) -> Any:
+    def fake_api_runner(args: list[str], payload: object | None = None) -> Any:
         api_calls.append((args, payload))
         if args[0] == "orgs/ProjectCuillin/issue-fields":
             return [
@@ -78,7 +78,7 @@ def test_sync_issue_planning_sets_native_issue_priority_field() -> None:
             "--input",
             "-",
         ],
-        {"issue_field_values": [{"field_id": 101, "value": "High"}]},
+        [{"field_id": 101, "value": "High"}],
     ) in api_calls
 
 
@@ -193,9 +193,9 @@ def test_issue_priority_field_requires_expected_options() -> None:
 
 def test_sync_issue_planning_uses_explicit_field_id_without_listing_org_fields() -> None:
     script = _load_script()
-    api_calls: list[tuple[list[str], dict[str, object] | None]] = []
+    api_calls: list[tuple[list[str], object | None]] = []
 
-    def fake_api_runner(args: list[str], payload: dict[str, object] | None = None) -> Any:
+    def fake_api_runner(args: list[str], payload: object | None = None) -> Any:
         api_calls.append((args, payload))
         if args[:2] == ["--method", "POST"]:
             return {}
@@ -230,6 +230,6 @@ def test_sync_issue_planning_uses_explicit_field_id_without_listing_org_fields()
                 "--input",
                 "-",
             ],
-            {"issue_field_values": [{"field_id": 41029122, "value": "Urgent"}]},
+            [{"field_id": 41029122, "value": "Urgent"}],
         )
     ]

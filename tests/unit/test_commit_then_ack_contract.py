@@ -25,6 +25,7 @@ from nats_sinks.core.config import (
     PreSinkPolicyConfig,
     PriorityLaneConfig,
     PriorityLanesConfig,
+    SizePolicyConfig,
 )
 from nats_sinks.core.errors import AckError, DeadLetterError
 from nats_sinks.core.metrics import InMemoryMetrics, MetricNames
@@ -859,6 +860,112 @@ async def test_pre_sink_policy_rejection_without_dlq_leaves_message_unacked() ->
                 "rules": [{"subject": "orders.*", "require_classification": True}],
             }
         ),
+        dead_letter=DeadLetterConfig(enabled=False),
+    )
+
+    await runner.process_raw_batch([message])
+
+    assert events == []
+    assert not message.acked
+    assert not message.nacked
+
+
+@pytest.mark.asyncio
+async def test_size_policy_rejection_goes_to_dlq_before_ack_without_sink_write() -> None:
+    events: list[str] = []
+    message = FakeMessage(events, data=b"oversized")
+    metrics = InMemoryMetrics()
+    js = FakeJetStream(events)
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=RecordingSink(events),
+        size_policy=SizePolicyConfig(enabled=True, max_payload_bytes=4),
+        dead_letter=DeadLetterConfig(enabled=True, subject="orders.dlq"),
+        jetstream=js,
+        metrics=metrics,
+    )
+
+    await runner.process_raw_batch([message])
+
+    assert events == ["dlq", "ack"]
+    assert message.acked
+    assert js.published[0][0] == "orders.dlq"
+    assert metrics.counters[MetricNames.SIZE_POLICY_MESSAGES_REJECTED_TOTAL] == 1
+    assert metrics.counters[MetricNames.SIZE_POLICY_BATCHES_REJECTED_TOTAL] == 1
+    assert metrics.counters[MetricNames.SINK_WRITE_ERRORS_TOTAL] == 0
+    assert metrics.counters[MetricNames.MESSAGES_WRITTEN_TOTAL] == 0
+
+
+@pytest.mark.asyncio
+async def test_size_policy_mixed_batch_dlqs_rejected_and_writes_accepted() -> None:
+    events: list[str] = []
+    accepted = FakeMessage(events, data=b"ok")
+    accepted.metadata.sequence = FakeSequence(stream=1, consumer=1)
+    rejected = FakeMessage(events, data=b"too-large")
+    rejected.metadata.sequence = FakeSequence(stream=2, consumer=2)
+    sink = MetadataRecordingSink(events)
+    metrics = InMemoryMetrics()
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=sink,
+        size_policy=SizePolicyConfig(enabled=True, max_payload_bytes=4),
+        dead_letter=DeadLetterConfig(enabled=True, subject="orders.dlq"),
+        jetstream=FakeJetStream(events),
+        metrics=metrics,
+    )
+
+    await runner.process_raw_batch([accepted, rejected])
+
+    assert events == ["dlq", "ack", "write", "commit", "ack"]
+    assert accepted.acked
+    assert rejected.acked
+    assert [message.data for message in sink.messages] == [b"ok"]
+    assert metrics.counters[MetricNames.SIZE_POLICY_MESSAGES_PASSED_TOTAL] == 1
+    assert metrics.counters[MetricNames.SIZE_POLICY_MESSAGES_REJECTED_TOTAL] == 1
+    assert metrics.counters[MetricNames.MESSAGES_WRITTEN_TOTAL] == 1
+    assert metrics.counters[MetricNames.MESSAGES_ACKED_TOTAL] == 2
+
+
+@pytest.mark.asyncio
+async def test_size_policy_dlq_failure_does_not_ack_or_write() -> None:
+    events: list[str] = []
+    message = FakeMessage(events, data=b"oversized")
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=RecordingSink(events),
+        size_policy=SizePolicyConfig(enabled=True, max_payload_bytes=4),
+        dead_letter=DeadLetterConfig(enabled=True, subject="orders.dlq"),
+        jetstream=FakeJetStream(events, fail_publish=True),
+    )
+
+    with pytest.raises(DeadLetterError):
+        await runner.process_raw_batch([message])
+
+    assert events == ["dlq"]
+    assert not message.acked
+    assert not message.nacked
+
+
+@pytest.mark.asyncio
+async def test_size_policy_rejection_without_dlq_leaves_message_unacked() -> None:
+    events: list[str] = []
+    message = FakeMessage(events, data=b"oversized")
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=RecordingSink(events),
+        size_policy=SizePolicyConfig(enabled=True, max_payload_bytes=4),
         dead_letter=DeadLetterConfig(enabled=False),
     )
 

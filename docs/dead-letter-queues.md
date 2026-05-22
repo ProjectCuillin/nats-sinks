@@ -18,6 +18,9 @@ Examples:
 - invalid JSON payload,
 - missing required idempotency field,
 - validation failure,
+- size-policy rejection such as oversized payload, too many headers, labels
+  outside the configured bounds, or a normalized record that exceeds the
+  deployment contract,
 - pre-sink policy rejection such as missing classification, missing required
   labels, unencrypted payload on a subject that requires encryption, or a
   payload that exceeds an approved size limit,
@@ -56,13 +59,19 @@ for the design decision and safety limits.
 sequenceDiagram
     participant JS as JetStream
     participant R as Runner
+    participant Z as Size policy
     participant P as Pre-sink policy
     participant S as Sink
     participant Q as DLQ Subject
 
     JS->>R: Deliver message
-    R->>P: Evaluate optional policy
-    alt Policy rejects
+    R->>Z: Evaluate optional size policy
+    alt Size policy rejects
+        Z-->>R: SizePolicyViolationError
+    else Size policy passes
+        R->>P: Evaluate optional semantic policy
+    end
+    alt Pre-sink policy rejects
         P-->>R: PolicyViolationError
     else Policy passes
         R->>S: write_batch
