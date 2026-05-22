@@ -73,9 +73,9 @@ used immediately:
   envelopes are delivered to Oracle, file, or future sinks.
 - `nats_sinks.oracle.OracleSink`, the production Oracle Database sink with
   connection pooling, Oracle Autonomous Database connection options, `merge`
-  and `insert_ignore` idempotent modes, subject-to-table routing, metadata
-  persistence, payload normalization, and explicit transaction commit before
-  ACK.
+  and `insert_ignore` idempotent modes, optional high-throughput staging-table
+  merge mode, subject-to-table routing, metadata persistence, payload
+  normalization, and explicit transaction commit before ACK.
 - `nats_sinks.file.FileSink`, the production local file sink with deterministic
   filenames, atomic temporary-file placement, optional `fsync`, duplicate
   handling, optional Python standard-library gzip compression, metadata

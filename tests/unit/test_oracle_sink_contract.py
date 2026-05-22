@@ -73,6 +73,7 @@ def encryption_config() -> EncryptionConfig:
 class FakeCursor:
     def __init__(self) -> None:
         self.statements: list[str] = []
+        self.statement_binds: list[tuple[str, dict[str, Any] | None]] = []
         self.executions: list[tuple[str, list[dict[str, Any]]]] = []
 
     def __enter__(self) -> FakeCursor:
@@ -81,8 +82,9 @@ class FakeCursor:
     def __exit__(self, *args: object) -> None:
         return None
 
-    def execute(self, sql: str) -> None:
+    def execute(self, sql: str, binds: dict[str, Any] | None = None) -> None:
         self.statements.append(sql)
+        self.statement_binds.append((sql, binds))
 
     def executemany(self, sql: str, rows: list[dict[str, Any]]) -> None:
         self.executions.append((sql, rows))
@@ -96,10 +98,19 @@ class DuplicateReportingCursor(FakeCursor):
         self.rowcount = rowcount
 
 
+class ExecutemanyFailingCursor(FakeCursor):
+    """Cursor test double that fails after connection preparation has succeeded."""
+
+    def executemany(self, sql: str, rows: list[dict[str, Any]]) -> None:
+        super().executemany(sql, rows)
+        raise RuntimeError("ORA-00904: invalid identifier")
+
+
 class RecordingConnection:
     def __init__(self, cursor: FakeCursor | None = None) -> None:
         self.cursor_instance = cursor or FakeCursor()
         self.committed = False
+        self.rolled_back = False
 
     def __enter__(self) -> RecordingConnection:
         return self
@@ -112,6 +123,9 @@ class RecordingConnection:
 
     def commit(self) -> None:
         self.committed = True
+
+    def rollback(self) -> None:
+        self.rolled_back = True
 
 
 class RecordingPool:
@@ -231,6 +245,130 @@ async def test_oracle_commit_failure_raises_temporary_error() -> None:
 
     with pytest.raises(DestinationUnavailableError):
         await sink.write_batch([envelope()])
+
+
+def test_oracle_staging_requires_explicit_table() -> None:
+    with pytest.raises(ConfigurationError, match=r"sink\.staging\.table"):
+        OracleSink(
+            dsn="localhost:1521/FREEPDB1",
+            user="app_user",
+            password="example",  # noqa: S106 - local test placeholder
+            table="NATS_SINK_EVENTS",
+            mode="merge",
+            staging={"enabled": True},
+        )
+
+
+def test_oracle_staging_rejects_append_mode() -> None:
+    with pytest.raises(ConfigurationError, match=r"sink\.staging\.enabled requires"):
+        OracleSink(
+            dsn="localhost:1521/FREEPDB1",
+            user="app_user",
+            password="example",  # noqa: S106 - local test placeholder
+            table="NATS_SINK_EVENTS",
+            mode="append",
+            staging={"enabled": True, "table": "NATS_SINK_EVENTS_STAGE"},
+        )
+
+
+@pytest.mark.asyncio
+async def test_oracle_staging_merge_loads_stage_merges_cleans_and_commits() -> None:
+    sink = OracleSink(
+        dsn="localhost:1521/FREEPDB1",
+        user="app_user",
+        password="example",  # noqa: S106 - local test placeholder
+        table="NATS_SINK_EVENTS",
+        mode="merge",
+        staging={"enabled": True, "table": "NATS_SINK_EVENTS_STAGE"},
+    )
+    pool = RecordingPool()
+    sink._pool = pool
+
+    await sink.write_batch(
+        [envelope_with_subject("orders.created", 1), envelope_with_subject("orders.created", 2)]
+    )
+
+    cursor = pool.connection.cursor_instance
+    assert cursor.executions[0][0].startswith("insert into NATS_SINK_EVENTS_STAGE")
+    staging_rows = cursor.executions[0][1]
+    assert len(staging_rows) == 2
+    batch_ids = {row["nats_sinks_batch_id"] for row in staging_rows}
+    assert len(batch_ids) == 1
+    assert any(sql.startswith("merge into NATS_SINK_EVENTS target") for sql in cursor.statements)
+    assert any(sql.startswith("delete from NATS_SINK_EVENTS_STAGE") for sql in cursor.statements)
+    merge_binds = [
+        binds
+        for sql, binds in cursor.statement_binds
+        if sql.startswith("merge into NATS_SINK_EVENTS target")
+    ]
+    assert merge_binds == [{"nats_sinks_batch_id": next(iter(batch_ids))}]
+    assert pool.connection.committed
+    assert not pool.connection.rolled_back
+
+
+@pytest.mark.asyncio
+async def test_oracle_staging_insert_ignore_reports_duplicate_metrics() -> None:
+    metrics = InMemoryMetrics()
+    cursor = DuplicateReportingCursor(rowcount=1)
+    sink = OracleSink(
+        dsn="localhost:1521/FREEPDB1",
+        user="app_user",
+        password="example",  # noqa: S106 - local test placeholder
+        table="NATS_SINK_EVENTS",
+        mode="insert_ignore",
+        staging={"enabled": True, "table": "NATS_SINK_EVENTS_STAGE"},
+        metrics=metrics,
+    )
+    sink._pool = RecordingPool(RecordingConnection(cursor))
+
+    await sink.write_batch(
+        [envelope_with_subject("orders.created", 1), envelope_with_subject("orders.created", 2)]
+    )
+
+    assert metrics.counters[MetricNames.ORACLE_DUPLICATES_TOTAL] == 1
+    assert metrics.counters[MetricNames.ORACLE_DUPLICATE_IGNORED_TOTAL] == 1
+
+
+@pytest.mark.asyncio
+async def test_oracle_staging_keep_cleanup_leaves_stage_rows_for_operator_review() -> None:
+    sink = OracleSink(
+        dsn="localhost:1521/FREEPDB1",
+        user="app_user",
+        password="example",  # noqa: S106 - local test placeholder
+        table="NATS_SINK_EVENTS",
+        mode="merge",
+        staging={"enabled": True, "table": "NATS_SINK_EVENTS_STAGE", "cleanup": "keep"},
+    )
+    pool = RecordingPool()
+    sink._pool = pool
+
+    await sink.write_batch([envelope_with_subject("orders.created", 1)])
+
+    assert not any(
+        sql.startswith("delete from NATS_SINK_EVENTS_STAGE")
+        for sql in pool.connection.cursor_instance.statements
+    )
+    assert pool.connection.committed
+
+
+@pytest.mark.asyncio
+async def test_oracle_staging_write_failure_rolls_back_without_commit() -> None:
+    sink = OracleSink(
+        dsn="localhost:1521/FREEPDB1",
+        user="app_user",
+        password="example",  # noqa: S106 - local test placeholder
+        table="NATS_SINK_EVENTS",
+        mode="merge",
+        staging={"enabled": True, "table": "NATS_SINK_EVENTS_STAGE"},
+    )
+    connection = RecordingConnection(ExecutemanyFailingCursor())
+    sink._pool = RecordingPool(connection)
+
+    with pytest.raises(PermanentSinkError, match="invalid Oracle identifier"):
+        await sink.write_batch([envelope_with_subject("orders.created", 1)])
+
+    assert connection.rolled_back
+    assert not connection.committed
 
 
 def test_oracle_pool_options_include_autonomous_wallet_settings(

@@ -96,8 +96,6 @@ release, and closed only after the containing release is published.
 - More Oracle duplicate handling controls, such as clearer `merge`
   update-column controls and deeper merge insert-versus-match visibility where
   Oracle execution metadata can support it reliably.
-- Oracle high-throughput write mode using array-loaded staging tables followed
-  by one set-based merge into the destination table.
 - Postgres sink with `ON CONFLICT`-based idempotent `merge` and `insert_ignore`
   behavior.
 - HTTP sink idempotency-key support, retry safety guidance, and clear warnings

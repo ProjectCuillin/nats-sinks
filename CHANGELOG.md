@@ -17,6 +17,10 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   governance checks, CODEOWNERS review, branch protection tooling, and release
   workflow validation that tags are cut only from commits already merged into
   `main`.
+- Added optional Oracle high-throughput staging-table merge mode for `merge`
+  and `insert_ignore` writes, including validated staging configuration,
+  staging-table DDL helpers, rollback-safe transaction handling, duplicate
+  metrics support, unit coverage, and operator documentation.
 
 ### Fixed
 

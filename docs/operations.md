@@ -243,6 +243,13 @@ benchmark. Treat throughput numbers from local or lab tests as environment
 observations until you have a documented benchmark plan, realistic payloads,
 repeatable infrastructure, and clear p95/p99 latency goals.
 
+For Oracle deployments using high-throughput staging mode, monitor the staging
+table as an operational object, not as an implementation detail. The default
+`delete_on_success` cleanup removes staged rows before commit; retained rows may
+indicate a failed transaction, an intentionally configured `cleanup="keep"`
+review mode, or an external cleanup gap. Alert on unexpected staging-table
+growth and document who may inspect or purge staged operational data.
+
 ## Load And Failure Rehearsals
 
 Operators and maintainers can run synthetic load profiles before a live

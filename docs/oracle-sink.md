@@ -88,6 +88,7 @@ This section lists every Oracle sink field accepted under the top-level
 | `headers_column` | no | `null` | Valid Oracle column identifier. | Legacy convenience alias for `columns.headers`. If set, it updates the headers column mapping. |
 | `columns` | no | default column mapping object | Object documented in [Column Mapping](#column-mapping). | Maps framework fields to Oracle column names. |
 | `idempotency` | no | stream sequence defaults | Object documented in [Idempotency Configuration](#idempotency-configuration). | Defines the key columns used by idempotent write modes. |
+| `staging` | no | disabled | Object documented in [High-Throughput Staging Mode](#high-throughput-staging-mode). | Optional advanced write path that array-loads rows into a staging table and then performs one set-based merge into the target table. |
 | `pool_min` | no | `1` | Integer greater than or equal to `1`. | Minimum number of connections in the Oracle connection pool. |
 | `pool_max` | no | `4` | Integer greater than or equal to `1`. | Maximum number of connections in the Oracle connection pool. Must be sized for the deployment and database service limits. |
 | `pool_increment` | no | `1` | Integer greater than or equal to `1`. | Number of connections added when the pool grows. |
@@ -98,6 +99,8 @@ Validation rules:
 - configure either `wallet_password` or `wallet_password_env`, not both,
 - wallet password fields require `wallet_location`,
 - `https_proxy_port` requires `https_proxy`,
+- `staging.enabled=true` requires `mode` to be `merge` or `insert_ignore`,
+- `staging.enabled=true` requires `staging.table`,
 - Oracle table and column identifiers are allow-list validated before SQL is
   generated,
 - values are always bound with Oracle bind variables, not concatenated into SQL.
@@ -867,16 +870,129 @@ sequenceDiagram
     R->>R: ACK after Oracle success
 ```
 
-For larger Oracle volumes, a future staging-table path may be useful:
+## High-Throughput Staging Mode
 
-1. insert the batch into a temporary or staging table with array DML,
+For larger Oracle volumes, `OracleSink` can use an optional staging-table path:
+
+1. array-load the batch into a configured staging table,
 2. run one set-based `merge` from staging into the target table,
-3. commit once,
-4. ACK after the commit.
+3. optionally delete the staged rows for the batch,
+4. commit once,
+5. let the core runner ACK only after the commit has succeeded.
 
-That can reduce per-row `merge` overhead while keeping idempotency and
-commit-then-acknowledge intact. It should be added as an explicit Oracle write
-mode only after benchmarks and integration tests prove the behavior.
+This mode is disabled by default because it requires an additional database
+object, operational ownership for the staging table, and performance testing in
+the target Oracle service class. It is intended for production systems where
+per-row `merge` overhead is a measured bottleneck and the team is ready to
+manage the staging object through normal change-control processes.
+
+```mermaid
+sequenceDiagram
+    participant R as Runner
+    participant O as OracleSink
+    participant DB as Oracle
+
+    R->>O: write_batch(envelopes)
+    O->>DB: executemany insert into staging table
+    O->>DB: merge target using staging rows for batch_id
+    O->>DB: delete staging rows for batch_id
+    O->>DB: commit
+    DB-->>O: durable success
+    O-->>R: return success
+    R->>R: ACK after Oracle success
+```
+
+Example configuration:
+
+```json
+{
+  "sink": {
+    "type": "oracle",
+    "dsn": "localhost:1521/FREEPDB1",
+    "user": "app_user",
+    "password_env": "ORACLE_PASSWORD",
+    "table": "NATS_SINK_EVENTS",
+    "mode": "merge",
+    "staging": {
+      "enabled": true,
+      "table": "NATS_SINK_EVENTS_STAGE",
+      "batch_id_column": "NATS_SINKS_BATCH_ID",
+      "cleanup": "delete_on_success"
+    },
+    "idempotency": {
+      "strategy": "stream_sequence",
+      "columns": ["STREAM_NAME", "STREAM_SEQUENCE"]
+    }
+  }
+}
+```
+
+Staging options:
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `enabled` | no | `false` | `true` or `false` | Enables the staging-table write path. |
+| `table` | required when enabled | `null` | Valid Oracle identifier, optionally schema-qualified. | Staging table used for array-loaded batch rows. |
+| `batch_id_column` | no | `NATS_SINKS_BATCH_ID` | Valid Oracle column identifier. | Column that scopes staged rows to the active sink batch. |
+| `cleanup` | no | `delete_on_success` | `delete_on_success`, `keep` | Deletes staged rows before commit or keeps them for controlled operator review. |
+
+Only `merge` and `insert_ignore` are accepted with staging enabled. `insert` and
+`append` are rejected during configuration validation because the staging path
+exists to preserve idempotent set-based writes, not to create a second
+non-idempotent append mode.
+
+The recommended staging table shape mirrors the target table columns and adds a
+batch identifier. It intentionally has no primary key because idempotency is
+enforced when the staged rows are merged into the target table.
+
+```sql
+create table NATS_SINK_EVENTS_STAGE (
+    NATS_SINKS_BATCH_ID varchar2(64) not null,
+    stream_name       varchar2(255) not null,
+    stream_sequence   number not null,
+    subject           clob not null,
+    message_id        varchar2(512),
+    priority          clob,
+    classification    clob,
+    labels            clob,
+    received_at       timestamp default systimestamp not null,
+    message_created_at_epoch_ns number(19),
+    jetstream_timestamp_epoch_ns number(19),
+    received_at_epoch_ns number(19) not null,
+    stored_at_epoch_ns number(19) not null,
+    payload_json      json,
+    headers_json      json,
+    metadata_json     json,
+    mission_metadata_json json
+);
+
+create index NATS_SINK_EVENTS_STAGE_BID_I
+    on NATS_SINK_EVENTS_STAGE (NATS_SINKS_BATCH_ID);
+```
+
+The index is recommended for production staging tables so cleanup and merge
+source selection stay bounded to the active batch. Create the target and
+staging tables with your normal migration tooling. `auto_create=true` can
+create both objects for local tests, but production deployments should normally
+keep `auto_create=false` and manage schema changes explicitly.
+
+Transaction behavior:
+
+- if the staging insert fails, Oracle rolls back and the core does not ACK,
+- if the merge fails, Oracle rolls back and the core does not ACK,
+- if cleanup fails, Oracle rolls back and the core does not ACK,
+- if commit fails, the sink raises a temporary error and the core does not ACK,
+- if commit succeeds but the process stops before ACK, JetStream may redeliver
+  and the idempotent target merge handles the duplicate.
+
+`cleanup="keep"` is useful only for controlled troubleshooting because staged
+rows remain in the staging table after commit. It can increase storage use and
+must be paired with an operator-owned cleanup process. The default
+`delete_on_success` is safer for long-running services.
+
+Use the Oracle benchmark script to compare normal mode and staging mode in your
+own non-production environment before enabling this path for operational
+traffic.
 
 ## Oracle Benchmark Script
 

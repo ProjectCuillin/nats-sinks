@@ -29,6 +29,7 @@ from nats_sinks.core.payload import PayloadStorageMode
 
 OracleWriteMode = Literal["insert", "insert_ignore", "merge", "append"]
 IdempotencyStrategy = Literal["stream_sequence", "message_id", "payload_field"]
+OracleStagingCleanupMode = Literal["delete_on_success", "keep"]
 
 
 class OracleIdempotencyConfig(BaseModel):
@@ -101,6 +102,32 @@ class OracleTableRoute(BaseModel):
     table: str
 
 
+class OracleStagingConfig(BaseModel):
+    """Optional high-throughput staging-table configuration.
+
+    Staging is advanced Oracle behavior and is intentionally disabled by
+    default.  When enabled, OracleSink first array-loads normalized rows into a
+    validated staging table, then performs one set-based merge into the
+    destination table.  The staging table must have the same event columns as
+    the destination table plus the configured batch-id column.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    table: str | None = None
+    batch_id_column: str = "NATS_SINKS_BATCH_ID"
+    cleanup: OracleStagingCleanupMode = "delete_on_success"
+
+    @model_validator(mode="after")
+    def validate_staging_table(self) -> OracleStagingConfig:
+        """Require explicit staging objects when high-throughput mode is enabled."""
+
+        if self.enabled and not self.table:
+            raise ValueError("sink.staging.table is required when sink.staging.enabled is true")
+        return self
+
+
 class OracleSinkConfig(BaseModel):
     """Validated configuration for OracleSink.
 
@@ -137,6 +164,7 @@ class OracleSinkConfig(BaseModel):
     headers_column: str | None = None
     columns: OracleColumnMapping = Field(default_factory=OracleColumnMapping)
     idempotency: OracleIdempotencyConfig = Field(default_factory=OracleIdempotencyConfig)
+    staging: OracleStagingConfig = Field(default_factory=OracleStagingConfig)
     pool_min: int = Field(default=1, ge=1)
     pool_max: int = Field(default=4, ge=1)
     pool_increment: int = Field(default=1, ge=1)
@@ -161,6 +189,10 @@ class OracleSinkConfig(BaseModel):
             self.columns.payload = self.payload_column
         if self.headers_column:
             self.columns.headers = self.headers_column
+        if self.staging.enabled and self.mode not in {"merge", "insert_ignore"}:
+            raise ValueError(
+                "sink.staging.enabled requires sink.mode to be 'merge' or 'insert_ignore'"
+            )
         return self
 
     def resolve_password(self) -> str:

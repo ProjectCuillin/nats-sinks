@@ -20,7 +20,7 @@ import re
 from dataclasses import dataclass
 
 from nats_sinks.core.errors import ConfigurationError
-from nats_sinks.oracle.config import OracleColumnMapping, OracleWriteMode
+from nats_sinks.oracle.config import OracleColumnMapping, OracleStagingCleanupMode, OracleWriteMode
 
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_$#]{0,127}$")
 
@@ -49,6 +49,22 @@ class OracleWriteSql:
 
     table_name: str
     sql: str
+    bind_names: tuple[str, ...]
+    columns: tuple[str, ...]
+    key_columns: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class OracleStagingSql:
+    """Generated SQL for the optional staging-table merge path."""
+
+    target_table_name: str
+    staging_table_name: str
+    batch_id_column: str
+    batch_bind_name: str
+    insert_sql: str
+    merge_sql: str
+    cleanup_sql: str | None
     bind_names: tuple[str, ...]
     columns: tuple[str, ...]
     key_columns: tuple[str, ...]
@@ -145,6 +161,92 @@ def build_write_sql(
         table_name=table_name,
         sql=sql,
         bind_names=bind_names,
+        columns=column_names,
+        key_columns=validated_key_columns,
+    )
+
+
+def build_staging_merge_sql(
+    *,
+    target_table: str,
+    staging_table: str,
+    batch_id_column: str,
+    columns: OracleColumnMapping,
+    mode: OracleWriteMode,
+    key_columns: list[str],
+    cleanup: OracleStagingCleanupMode = "delete_on_success",
+) -> OracleStagingSql:
+    """Generate SQL for array-loading a staging table and set-merging target rows.
+
+    The generated statements keep all row values as bind variables.  Only
+    table and column identifiers are interpolated, and every identifier is
+    validated through the same strict allow-list as the normal write path.
+    """
+
+    if mode not in {"merge", "insert_ignore"}:
+        raise ConfigurationError("staging merge SQL requires mode 'merge' or 'insert_ignore'")
+
+    target_table_name = validate_identifier(target_table)
+    staging_table_name = validate_identifier(staging_table)
+    validated_batch_id_column = validate_identifier(batch_id_column)
+    write_columns = _write_columns(columns)
+    bind_names = tuple(bind for bind, _column in write_columns)
+    column_names = tuple(column for _bind, column in write_columns)
+    validated_key_columns = tuple(validate_identifier(column) for column in key_columns)
+    if not validated_key_columns:
+        raise ConfigurationError("staging merge requires at least one idempotency key column")
+
+    batch_bind_name = "nats_sinks_batch_id"
+    staging_columns = (validated_batch_id_column, *column_names)
+    staging_binds = (batch_bind_name, *bind_names)
+    insert_values = ", ".join(f":{bind}" for bind in staging_binds)
+    # Identifiers are allow-list validated above; all data values remain bind variables.
+    insert_sql = (
+        f"insert into {staging_table_name} ({', '.join(staging_columns)}) values ({insert_values})"  # noqa: S608  # nosec B608
+    )
+
+    source_columns = ", ".join(column_names)
+    on_clause = " and ".join(
+        f"target.{column} = source.{column}" for column in validated_key_columns
+    )
+    merge_insert_values = ", ".join(f"source.{column}" for column in column_names)
+    merge_prefix = (
+        f"merge into {target_table_name} target "  # noqa: S608  # nosec B608
+        f"using (select {source_columns} from {staging_table_name} "
+        f"where {validated_batch_id_column} = :{batch_bind_name}) source "
+        f"on ({on_clause}) "
+    )
+    if mode == "insert_ignore":
+        merge_sql = (
+            f"{merge_prefix}when not matched then insert ({', '.join(column_names)}) "  # noqa: S608  # nosec B608
+            f"values ({merge_insert_values})"
+        )
+    else:
+        update_columns = [column for column in column_names if column not in validated_key_columns]
+        set_clause = ", ".join(f"target.{column} = source.{column}" for column in update_columns)
+        merge_sql = (
+            f"{merge_prefix}when matched then update set {set_clause} "  # noqa: S608  # nosec B608
+            f"when not matched then insert ({', '.join(column_names)}) "
+            f"values ({merge_insert_values})"
+        )
+
+    cleanup_sql = None
+    if cleanup == "delete_on_success":
+        # Identifiers are allow-list validated above; all data values remain bind variables.
+        cleanup_sql = (
+            f"delete from {staging_table_name} "  # noqa: S608  # nosec B608
+            f"where {validated_batch_id_column} = :{batch_bind_name}"
+        )
+
+    return OracleStagingSql(
+        target_table_name=target_table_name,
+        staging_table_name=staging_table_name,
+        batch_id_column=validated_batch_id_column,
+        batch_bind_name=batch_bind_name,
+        insert_sql=insert_sql,
+        merge_sql=merge_sql,
+        cleanup_sql=cleanup_sql,
+        bind_names=(batch_bind_name, *bind_names),
         columns=column_names,
         key_columns=validated_key_columns,
     )

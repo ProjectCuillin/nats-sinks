@@ -26,6 +26,7 @@ import asyncio
 import importlib
 import logging
 import time
+import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -51,14 +52,20 @@ from nats_sinks.core.payload import PayloadStorageMode
 from nats_sinks.oracle.config import (
     OracleIdempotencyConfig,
     OracleSinkConfig,
+    OracleStagingConfig,
     OracleTableRoute,
     OracleWriteMode,
 )
-from nats_sinks.oracle.ddl import create_events_table_ddl
+from nats_sinks.oracle.ddl import create_events_table_ddl, create_staging_events_table_ddl
 from nats_sinks.oracle.errors import is_duplicate_error, oracle_error_code
 from nats_sinks.oracle.mapping import envelope_to_row
 from nats_sinks.oracle.routing import resolve_table_for_subject, validate_subject_pattern
-from nats_sinks.oracle.sql import OracleWriteSql, build_write_sql
+from nats_sinks.oracle.sql import (
+    OracleStagingSql,
+    OracleWriteSql,
+    build_staging_merge_sql,
+    build_write_sql,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -111,6 +118,7 @@ class OracleSink:
         auto_create: bool = False,
         payload_mode: PayloadStorageMode = "json_or_envelope",
         idempotency: OracleIdempotencyConfig | dict[str, Any] | None = None,
+        staging: OracleStagingConfig | dict[str, Any] | None = None,
         table_routes: list[OracleTableRoute] | list[dict[str, Any]] | None = None,
         config: OracleSinkConfig | None = None,
         metrics: MetricsRecorder | None = None,
@@ -141,6 +149,7 @@ class OracleSink:
                         "auto_create": auto_create,
                         "payload_mode": payload_mode,
                         "idempotency": idempotency or {},
+                        "staging": staging or {},
                         "table_routes": table_routes or [],
                     }
                 )
@@ -151,10 +160,11 @@ class OracleSink:
         self._pool: Any | None = None
         self._oracledb: Any | None = None
         self._write_sql_cache: dict[str, OracleWriteSql] = {}
-        self._write_sql_for_table(self.config.table)
+        self._staging_sql_cache: dict[str, OracleStagingSql] = {}
+        self._prepare_sql_for_table(self.config.table)
         for route in self.config.table_routes:
             validate_subject_pattern(route.subject)
-            self._write_sql_for_table(route.table)
+            self._prepare_sql_for_table(route.table)
 
         if self.config.mode == "append":
             LOGGER.warning(
@@ -195,6 +205,7 @@ class OracleSink:
             mode=config.mode,
             auto_create=config.auto_create,
             payload_mode=config.payload_mode,
+            staging=config.staging,
             config=config,
             metrics=metrics,
         )
@@ -267,6 +278,19 @@ class OracleSink:
                 if oracle_error_code(exc) == "ORA-00955":
                     continue
                 raise self._translate_exception(exc, "Oracle schema creation failed") from exc
+        if self.config.staging.enabled and self.config.staging.table:
+            ddl = create_staging_events_table_ddl(
+                self.config.staging.table,
+                batch_id_column=self.config.staging.batch_id_column,
+            )
+            try:
+                await asyncio.to_thread(self._execute_ddl_sync, ddl)
+            except Exception as exc:
+                if oracle_error_code(exc) == "ORA-00955":
+                    return
+                raise self._translate_exception(
+                    exc, "Oracle staging schema creation failed"
+                ) from exc
 
     async def write_batch(self, messages: Sequence[NatsEnvelope]) -> None:
         """Write and commit a batch. Success means Oracle commit completed."""
@@ -362,45 +386,110 @@ class OracleSink:
         self._write_sql_cache[sql.table_name] = sql
         return sql
 
+    def _staging_sql_for_table(self, table: str) -> OracleStagingSql:
+        if not self.config.staging.table:
+            raise ConfigurationError("Oracle staging table is not configured")
+        sql = build_staging_merge_sql(
+            target_table=table,
+            staging_table=self.config.staging.table,
+            batch_id_column=self.config.staging.batch_id_column,
+            columns=self.config.columns,
+            mode=self.config.mode,
+            key_columns=self.config.idempotency.columns,
+            cleanup=self.config.staging.cleanup,
+        )
+        self._staging_sql_cache[sql.target_table_name] = sql
+        return sql
+
+    def _prepare_sql_for_table(self, table: str) -> None:
+        self._write_sql_for_table(table)
+        if self.config.staging.enabled:
+            self._staging_sql_for_table(table)
+
     def _write_rows_sync(self, rows_by_table: dict[str, list[dict[str, Any]]]) -> _OracleWriteStats:
         pool = self._require_pool()
         duplicate_ignored = 0
         with pool.acquire() as connection:
-            self._prepare_connection_sync(connection)
-            with connection.cursor() as cursor:
-                for table, rows in rows_by_table.items():
-                    if not rows:
-                        continue
-                    sql = self._write_sql_cache.get(table)
-                    if sql is None:
-                        sql = self._write_sql_for_table(table)
-                    execute_started = time.perf_counter()
-                    cursor.executemany(sql.sql, rows)
-                    observe_metric(
-                        self.metrics,
-                        MetricNames.ORACLE_EXECUTE_SECONDS,
-                        time.perf_counter() - execute_started,
-                    )
-                    duplicate_ignored += self._duplicate_ignored_count(cursor, rows)
-            commit_started = time.perf_counter()
+            commit_started: float | None = None
             try:
+                self._prepare_connection_sync(connection)
+                with connection.cursor() as cursor:
+                    if self.config.staging.enabled:
+                        duplicate_ignored += self._write_staging_rows_sync(cursor, rows_by_table)
+                    else:
+                        duplicate_ignored += self._write_direct_rows_sync(cursor, rows_by_table)
+                commit_started = time.perf_counter()
                 connection.commit()
             except Exception as exc:
+                if commit_started is not None:
+                    observe_metric(
+                        self.metrics,
+                        MetricNames.ORACLE_COMMIT_SECONDS,
+                        time.perf_counter() - commit_started,
+                    )
+                    self._rollback_connection_sync(connection)
+                    raise DestinationUnavailableError("Oracle commit failed") from exc
+                self._rollback_connection_sync(connection)
+                raise
+            else:
                 observe_metric(
                     self.metrics,
                     MetricNames.ORACLE_COMMIT_SECONDS,
                     time.perf_counter() - commit_started,
                 )
-                raise DestinationUnavailableError("Oracle commit failed") from exc
-            observe_metric(
-                self.metrics,
-                MetricNames.ORACLE_COMMIT_SECONDS,
-                time.perf_counter() - commit_started,
-            )
         return _OracleWriteStats(
             duplicates=duplicate_ignored,
             duplicate_ignored=duplicate_ignored,
         )
+
+    def _write_direct_rows_sync(
+        self,
+        cursor: Any,
+        rows_by_table: dict[str, list[dict[str, Any]]],
+    ) -> int:
+        duplicate_ignored = 0
+        for table, rows in rows_by_table.items():
+            if not rows:
+                continue
+            sql = self._write_sql_cache.get(table)
+            if sql is None:
+                sql = self._write_sql_for_table(table)
+            execute_started = time.perf_counter()
+            cursor.executemany(sql.sql, rows)
+            observe_metric(
+                self.metrics,
+                MetricNames.ORACLE_EXECUTE_SECONDS,
+                time.perf_counter() - execute_started,
+            )
+            duplicate_ignored += self._duplicate_ignored_count(cursor, rows)
+        return duplicate_ignored
+
+    def _write_staging_rows_sync(
+        self,
+        cursor: Any,
+        rows_by_table: dict[str, list[dict[str, Any]]],
+    ) -> int:
+        duplicate_ignored = 0
+        for table, rows in rows_by_table.items():
+            if not rows:
+                continue
+            sql = self._staging_sql_cache.get(table)
+            if sql is None:
+                sql = self._staging_sql_for_table(table)
+            batch_id = uuid.uuid4().hex
+            staging_rows = [{sql.batch_bind_name: batch_id, **row} for row in rows]
+            execute_started = time.perf_counter()
+            cursor.executemany(sql.insert_sql, staging_rows)
+            cursor.execute(sql.merge_sql, {sql.batch_bind_name: batch_id})
+            duplicate_ignored += self._duplicate_ignored_count(cursor, rows)
+            if sql.cleanup_sql is not None:
+                cursor.execute(sql.cleanup_sql, {sql.batch_bind_name: batch_id})
+            observe_metric(
+                self.metrics,
+                MetricNames.ORACLE_EXECUTE_SECONDS,
+                time.perf_counter() - execute_started,
+            )
+        return duplicate_ignored
 
     def _duplicate_ignored_count(self, cursor: Any, rows: Sequence[dict[str, Any]]) -> int:
         """Estimate duplicates skipped by `insert_ignore` using Oracle rowcount.
@@ -424,6 +513,17 @@ class OracleSink:
         if rowcount < 0:
             return 0
         return max(len(rows) - min(rowcount, len(rows)), 0)
+
+    def _rollback_connection_sync(self, connection: Any) -> None:
+        """Rollback a failed Oracle transaction when the driver exposes rollback."""
+
+        rollback = getattr(connection, "rollback", None)
+        if rollback is None:
+            return
+        try:
+            rollback()
+        except Exception:  # pragma: no cover - rollback failures are logged only.
+            LOGGER.warning("Oracle rollback failed after write error", exc_info=True)
 
     def _record_write_stats(self, stats: object) -> None:
         """Record optional Oracle-specific counters after committed success."""

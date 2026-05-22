@@ -252,6 +252,14 @@ ownership separate from runtime ingestion. The sink runtime account should be
 able to insert or merge into the approved table shape, not administer the
 database or remove evidence of prior ingestion.
 
+When Oracle staging-table mode is enabled, apply the same least-privilege rule
+to both database objects. The runtime account needs only the permissions
+required to insert rows into the staging table, read the active batch from the
+staging table for the set-based merge, delete only its staged batch when
+`cleanup="delete_on_success"` is used, and insert or merge into the approved
+target table. It should not receive broad schema administration, drop-table, or
+unrelated data access permissions merely because staging is enabled.
+
 For Oracle Autonomous Database wallet/mTLS connections, treat the wallet files
 as secret runtime material. Do not commit `Wallet_*.zip`, `ewallet.pem`,
 `cwallet.sso`, `ewallet.p12`, `tnsnames.ora` from private environments, or

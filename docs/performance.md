@@ -90,7 +90,8 @@ idempotency-key headers.
 The performance shape can differ by backend, but the safety boundary must not:
 ACK is still sent only after the sink returns success. Oracle-specific write
 behavior, including `executemany`, commit behavior, Autonomous Database
-considerations, and tuning notes, is documented in [Oracle Sink](oracle-sink.md).
+considerations, optional staging-table merge mode, and tuning notes, is
+documented in [Oracle Sink](oracle-sink.md).
 File-specific throughput notes, including compact JSON, subject partitioning,
 gzip compression, and `fsync` tradeoffs, are documented in
 [File Sink](file-sink.md).
@@ -213,6 +214,16 @@ Use `--stream auto` when the subject is already owned by an existing JetStream
 stream and you want the benchmark to discover that stream rather than create a
 new one. The script still fails closed if the resolved stream cannot be used
 for the configured subject.
+
+When Oracle write execution is the bottleneck, compare the normal `executemany`
+path with the Oracle staging-table merge path in a controlled environment.
+Staging mode can reduce per-row merge overhead by array-loading a batch into a
+staging table and running one set-based merge into the target table. It also
+adds operational responsibility for the staging object and cleanup policy, so
+benchmark it with the real table indexes, Oracle service class, payload size,
+and idempotency key strategy before enabling it for mission traffic. The
+configuration and transaction behavior are documented in
+[Oracle Sink: High-Throughput Staging Mode](oracle-sink.md#high-throughput-staging-mode).
 
 ## Synthetic Load Profiles
 
