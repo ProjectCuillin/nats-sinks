@@ -34,10 +34,14 @@ jobs:
         run: twine check dist/*.whl dist/*.tar.gz
       - uses: actions/upload-artifact@v7
         with:
-          name: dist
+          name: distributions
           path: |
             dist/*.whl
             dist/*.tar.gz
+      - uses: actions/upload-artifact@v7
+        with:
+          name: checksum-manifest
+          path: |
             dist/SHA256SUMS
       - uses: actions/upload-artifact@v7
         with:
@@ -55,7 +59,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v8
         with:
-          name: dist
+          name: distributions
           path: dist
       - uses: pypa/gh-action-pypi-publish@release/v1
 
@@ -70,7 +74,11 @@ jobs:
     steps:
       - uses: actions/download-artifact@v8
         with:
-          name: dist
+          name: distributions
+          path: dist
+      - uses: actions/download-artifact@v8
+        with:
+          name: checksum-manifest
           path: dist
       - uses: actions/download-artifact@v8
         with:

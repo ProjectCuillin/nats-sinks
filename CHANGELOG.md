@@ -399,6 +399,11 @@ No unreleased changes yet.
   duplicate value.
 - Fixed metrics snapshots so non-finite metric values are rejected before
   local JSON snapshot writing or loading can produce non-standard JSON.
+- Fixed the metrics CLI description path so strict type checking and Ruff
+  validation pass under the release CI matrix.
+- Fixed the release workflow artifact layout so PyPI publishing receives only
+  wheel and source distribution files. `SHA256SUMS` remains release evidence
+  and is attached to the GitHub Release instead of being uploaded to PyPI.
 - Fixed the optional NATS server monitoring connector so endpoint responses and
   stored snapshots reject non-standard JSON constants before observability
   output is generated.

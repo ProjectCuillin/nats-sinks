@@ -1,0 +1,26 @@
+{
+  "id": "metrics-cli-ci-type-check",
+  "title": "[Bug]: Metrics CLI describe command fails strict CI type checks",
+  "area": "Metrics and observability",
+  "severity": "low",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.0",
+  "labels": ["metrics", "testing", "release"],
+  "summary": "The release CI matrix reported a strict type-checking and linting issue in the metrics CLI describe path.",
+  "observed": "The GitHub Actions CI run failed during `mypy src` with a redundant cast in `src/nats_sinks/cli/metrics.py`; after the cast was removed locally, Ruff correctly identified the now-unused import.",
+  "expected": "The metrics CLI should pass Ruff and mypy in all release-matrix Python versions without suppressing useful static-analysis feedback.",
+  "reproduction": "Run `mypy src` and `ruff check src/nats_sinks/cli/metrics.py` against the release candidate commit.",
+  "failing_test": "The release CI matrix provided the failing check. The focused local guard is `mypy src` plus `ruff check src/nats_sinks/cli/metrics.py`.",
+  "impact": "Release automation could not complete while strict type checking failed, even though runtime metrics behavior was otherwise unchanged.",
+  "delivery_semantics": "The fix is limited to CLI typing and lint hygiene. It does not change NATS delivery, sink writes, ACK ordering, or metrics values.",
+  "security": "The fix does not expose secrets, does not change payload logging, and keeps the metrics CLI dependency-free.",
+  "acceptance": [
+    "The redundant metrics CLI cast is removed.",
+    "Unused imports are removed.",
+    "The focused metrics CLI tests pass.",
+    "Ruff and mypy pass for the affected source file and source tree."
+  ],
+  "tests": "Run `ruff check src/nats_sinks/cli/metrics.py tests/unit/test_release_checksums.py`, `mypy src`, and `pytest tests/unit/test_metrics_cli.py tests/unit/test_public_api.py tests/unit/test_release_checksums.py -q`.",
+  "documentation": "Update CHANGELOG.md so release notes explain the CI repair.",
+  "closeout": "Close only after the release containing the CI fix has been published and the GitHub Release evidence is available."
+}

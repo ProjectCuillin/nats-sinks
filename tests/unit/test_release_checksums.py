@@ -45,3 +45,14 @@ def test_artifact_paths_and_checksum_manifest_use_release_asset_names(tmp_path: 
     assert f"{hashlib.sha256(b'sdist').hexdigest()}  {sdist.name}" in rendered
     assert f"{hashlib.sha256(b'sbom').hexdigest()}  {sbom_json.name}" in rendered
     assert "sbom/" not in rendered
+
+
+def test_release_workflow_keeps_checksum_manifest_out_of_pypi_upload_artifact() -> None:
+    """PyPI publishing should receive only distributions, not release evidence files."""
+
+    workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+
+    assert "name: distributions" in workflow
+    assert "name: checksum-manifest" in workflow
+    assert "\n          name: dist\n" not in workflow
+    assert "name: distributions\n          path: dist" in workflow

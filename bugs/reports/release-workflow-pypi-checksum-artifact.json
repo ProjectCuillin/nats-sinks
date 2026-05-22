@@ -1,0 +1,27 @@
+{
+  "id": "release-workflow-pypi-checksum-artifact",
+  "title": "[Bug]: Release workflow passes SHA256SUMS to PyPI publisher",
+  "area": "Packaging and release",
+  "severity": "high",
+  "priority": "P1 - release blocker",
+  "target_release": "v0.4.0",
+  "labels": ["release", "packaging", "security"],
+  "summary": "The release workflow grouped the checksum manifest with package distributions, causing the PyPI publisher to treat `SHA256SUMS` as an uploadable distribution.",
+  "observed": "The v0.4.0 release workflow failed in the PyPI publish job with an invalid distribution format error for `SHA256SUMS`.",
+  "expected": "PyPI publishing should receive only `.whl` and `.tar.gz` package distributions. Checksum manifests and SBOMs should remain GitHub Release evidence assets.",
+  "reproduction": "Run the release workflow against a tag that uploads one artifact containing `dist/*.whl`, `dist/*.tar.gz`, and `dist/SHA256SUMS`, then inspect the PyPI publish job.",
+  "failing_test": "Add a focused release-workflow regression test that proves the checksum manifest is uploaded as a separate artifact from the PyPI distribution artifact.",
+  "impact": "The release could not publish to PyPI, blocking the public v0.4.0 package even after local package build and Twine checks passed.",
+  "delivery_semantics": "The fix affects release automation only and does not change runtime delivery behavior, sink writes, idempotency, DLQ handling, or ACK ordering.",
+  "security": "The checksum manifest remains public release evidence. It is not a secret, but it must not be sent to PyPI as package content.",
+  "acceptance": [
+    "The release workflow uploads wheel and source distributions as a package-only artifact.",
+    "The release workflow uploads `SHA256SUMS` as a separate checksum evidence artifact.",
+    "The PyPI publish job downloads only the package distribution artifact.",
+    "The GitHub Release job still attaches distributions, `SHA256SUMS`, and SBOM files.",
+    "A focused unit test guards the workflow artifact separation."
+  ],
+  "tests": "Run `pytest tests/unit/test_release_checksums.py -q`, `ruff check tests/unit/test_release_checksums.py`, `python -m build`, and `twine check dist/*.whl dist/*.tar.gz`.",
+  "documentation": "Update CHANGELOG.md and keep release documentation aligned with the rule that checksums and SBOMs are release evidence, not PyPI distributions.",
+  "closeout": "Close only after the release containing the workflow fix has been published and the GitHub Release contains the package, checksum, and SBOM assets."
+}

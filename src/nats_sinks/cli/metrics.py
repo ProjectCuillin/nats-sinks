@@ -15,7 +15,7 @@ import fnmatch
 import json
 import time
 from pathlib import Path
-from typing import Annotated, Literal, cast
+from typing import Annotated, Literal
 
 import typer
 
@@ -24,7 +24,6 @@ from nats_sinks.core.metrics import (
     METRIC_SPEC_BY_NAME,
     METRIC_SPECS,
     MetricRow,
-    MetricRowKind,
     load_metrics_snapshot,
     metric_rows_from_snapshot,
     qualified_metric_name,
@@ -353,7 +352,7 @@ def describe(
         return
     rows = [
         MetricRow(
-            kind=cast(MetricRowKind, spec.kind if spec.kind != "histogram" else "observation"),
+            kind=spec.kind if spec.kind != "histogram" else "observation",
             name=spec.name,
             value=0.0,
             description=spec.description,
