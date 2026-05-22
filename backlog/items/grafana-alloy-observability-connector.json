@@ -1,0 +1,26 @@
+{
+  "id": "grafana-alloy-observability-connector",
+  "title": "[Feature]: Add a Grafana Alloy observability connector profile",
+  "area": "Metrics and observability",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["observability", "deployment", "testing"],
+  "problem": "Grafana Alloy is an OpenTelemetry Collector distribution used to collect and forward telemetry into Grafana and other destinations. nats-sinks currently has Prometheus outputs but no Alloy-specific connector profile or deployment guidance, which can make operators choose between duplicating OTLP work or hand-writing local scrape and forwarding glue.",
+  "proposal": "Evaluate and implement a Grafana Alloy connector profile that follows the shared observability connector contract. It must be disabled by default, read approved metrics from the local metrics snapshot or shared read-only provider, apply the same observability policy allow and deny lists, use the same stale snapshot, dry-run, timeout, retry, and redaction behavior, and export only policy-approved metric names. The preferred shape should reuse OTLP or Prometheus-compatible handoff and provide Alloy configuration examples rather than inventing a bespoke Grafana API connector.",
+  "users": "Operators using Grafana Alloy, Grafana Cloud, Mimir, Loki, Tempo, or LGTM-style observability stacks, and maintainers who need a reusable profile model for collector-based deployments.",
+  "delivery_semantics": "Alloy profile export must remain observational only. Collector restarts, scrape failures, configuration errors, network failures, or rejected exports must not affect ACK, NAK, DLQ, retry, sink writes, or idempotency.",
+  "security": "The profile must keep sharing disabled until policy review, avoid high-cardinality labels, avoid subjects and mission metadata by default, and document how Alloy service permissions differ from the main nats-sink worker. It must not require access to NATS, Oracle, file-sink output directories, or payload data.",
+  "acceptance": [
+    "Grafana Alloy support is optional and disabled by default.",
+    "The profile reuses OTLP or Prometheus-compatible connector behavior where practical.",
+    "The profile uses the shared observability policy model and safe metric mapping.",
+    "Systemd and Kubernetes guidance keeps Alloy separate from the delivery worker.",
+    "Documentation is added as a sub-page under the Observability documentation section."
+  ],
+  "tests": "Add unit tests for generated Alloy profile configuration, disabled policy, allow and deny filtering, stale snapshot handling, dry-run output, safe metric names, and sanitized logging. Add optional integration guidance for a local Alloy process or configuration validation behind markers.",
+  "documentation": "Add a Grafana Alloy sub-page under the Observability documentation section. The page must include collector architecture, configuration examples, service separation, security defaults, sample output, testing, and limitations.",
+  "closeout": "Close after the release containing Grafana Alloy profile support is published. Include the release tag, chosen handoff mode, tests run, documentation links, and any follow-up collector deployment issues.",
+  "relationships": {
+    "related": ["#10"]
+  }
+}

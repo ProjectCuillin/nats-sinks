@@ -211,6 +211,10 @@ operations without hunting through a long flat list.
   textfile connector or optional native HTTP endpoint.
 - [NATS Server Monitoring](nats-server-monitoring.md): understand why endpoints
   such as `/jsz` and `/healthz` stay outside the delivery worker.
+- [Future Observability Connectors](observability-connectors.md): review the
+  shared connector contract and the staged connector backlog for OTLP, StatsD,
+  Datadog, Splunk HEC, Elastic, Grafana Alloy, OCI Monitoring, CloudWatch,
+  Azure Monitor, and syslog.
 
 ### Deployment, Security, And Quality
 

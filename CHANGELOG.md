@@ -46,6 +46,10 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   acknowledging originals when DLQ publication fails.
 - Added pre-sink policy metrics, public policy helper exports, configuration
   validation, commit-then-ACK contract coverage, and operator documentation.
+- Added an observability connector evaluation matrix and shared connector
+  contract, then split the broad additional-observability roadmap item into
+  individual connector backlog items for StatsD, Datadog, Splunk HEC, Elastic,
+  Grafana Alloy, OCI Monitoring, Amazon CloudWatch, Azure Monitor, and syslog.
 
 ### Changed
 

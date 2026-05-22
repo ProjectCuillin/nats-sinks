@@ -43,6 +43,7 @@ nav:
       - Metrics Snapshot And CLI: metrics.md
       - Prometheus Integration: prometheus.md
       - NATS Server Monitoring: nats-server-monitoring.md
+      - Future Connectors: observability-connectors.md
   - Deployment:
       - Operations: operations.md
       - Service Deployment: service-deployment.md

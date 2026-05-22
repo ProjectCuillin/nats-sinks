@@ -1,0 +1,26 @@
+{
+  "id": "elastic-observability-connector",
+  "title": "[Feature]: Add an Elastic Observability connector profile",
+  "area": "Metrics and observability",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["observability", "security", "testing"],
+  "problem": "Elastic Observability is a common platform for metrics, logs, traces, and search-backed operations. nats-sinks currently does not provide an Elastic-specific connector or profile, which may lead teams to write custom Elasticsearch, APM, or OpenTelemetry forwarding scripts that do not follow the nats-sinks observability policy model.",
+  "proposal": "Evaluate and implement an Elastic Observability connector profile that follows the shared observability connector contract. It must be disabled by default, read approved metrics from the local metrics snapshot or shared read-only provider, apply the same observability policy allow and deny lists, use the same stale snapshot, dry-run, timeout, retry, and redaction behavior, and export only policy-approved metric names. The preferred first implementation should reuse OpenTelemetry-compatible ingestion when practical instead of creating a direct Elasticsearch writer, unless research proves a direct API path is safer and better supported.",
+  "users": "Operators using Elastic Observability, Elasticsearch-backed operations teams, and maintainers who need a safe pattern for platform profiles that can reuse the shared OTLP connector core.",
+  "delivery_semantics": "Elastic export must remain outside the sink delivery path. Collector, endpoint, index, authentication, or mapping failures must not affect ACK, NAK, DLQ, retry, sink writes, or idempotency.",
+  "security": "Elastic fields can become searchable operational records. The connector must avoid payload bodies, subjects, classification values, labels, mission metadata values, table names, file paths, usernames, hostnames, message IDs, and high-cardinality dimensions by default. Any API key or endpoint credential must be sourced from protected runtime configuration and redacted in logs.",
+  "acceptance": [
+    "Elastic support is optional and disabled by default.",
+    "The implementation chooses an Elastic-supported ingestion path, preferably through the shared OTLP connector when appropriate.",
+    "The connector uses the shared observability policy model and safe field mapping.",
+    "Direct Elasticsearch writing is documented as a non-goal unless separately justified.",
+    "Documentation is added as a sub-page under the Observability documentation section."
+  ],
+  "tests": "Add unit tests for disabled policy, allow and deny filtering, Elastic field mapping or OTLP profile mapping, credential redaction, timeout handling, retry limits, stale snapshots, dry-run behavior, and sanitized logging. Add optional integration guidance using a collector or local Elastic test deployment behind markers.",
+  "documentation": "Add an Elastic Observability sub-page under the Observability documentation section. The page must describe the selected ingestion path, configuration, security defaults, field limitations, examples, service deployment, and test guidance.",
+  "closeout": "Close after the release containing Elastic connector support is published. Include the release tag, chosen ingestion path, tests run, documentation links, and any follow-up direct API or collector-profile issues.",
+  "relationships": {
+    "related": ["#10"]
+  }
+}

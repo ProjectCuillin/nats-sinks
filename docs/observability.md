@@ -578,3 +578,9 @@ may include:
 
 Each connector should remain policy-driven, disabled by default, and isolated
 from message delivery semantics.
+
+The connector evaluation matrix and shared certification checklist are now
+tracked in [Future Observability Connectors](observability-connectors.md). Each
+future connector must use that shared contract and must add its detailed
+configuration and operator guidance as a sub-page under this Observability
+section.

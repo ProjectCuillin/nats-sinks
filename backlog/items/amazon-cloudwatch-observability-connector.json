@@ -1,0 +1,26 @@
+{
+  "id": "amazon-cloudwatch-observability-connector",
+  "title": "[Feature]: Add an Amazon CloudWatch observability connector",
+  "area": "Metrics and observability",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["observability", "security", "deployment", "testing"],
+  "problem": "AWS deployments often use Amazon CloudWatch as the operational metrics and alarm platform. nats-sinks currently has no CloudWatch custom metric connector, so operators may build local scripts that bypass the nats-sinks observability policy model, overuse dimensions, or grant excessive AWS permissions.",
+  "proposal": "Design and implement an optional Amazon CloudWatch connector that follows the shared observability connector contract. It must be disabled by default, read approved metrics from the local metrics snapshot or shared read-only provider, apply the same observability policy allow and deny lists, use the same stale snapshot, dry-run, timeout, retry, and redaction behavior, and export only policy-approved metric names. It should use AWS SDK authentication patterns, support namespace configuration, bound metric batches, suppress sensitive dimensions by default, and document API cost and throttling considerations.",
+  "users": "AWS operators, platform teams using CloudWatch alarms, and maintainers who need a cloud-specific connector that does not compromise delivery semantics or confidentiality.",
+  "delivery_semantics": "CloudWatch export must remain observational only. AWS credential errors, API throttling, rejected metric data, network failures, or region misconfiguration must not affect ACK, NAK, DLQ, retry, sink writes, or idempotency.",
+  "security": "The connector must use least-privilege IAM, avoid command-line secrets, redact credential and account details, verify TLS by default, and avoid sensitive dimensions such as subjects, classification values, labels, mission metadata, table names, file paths, usernames, hostnames, and message identifiers by default.",
+  "acceptance": [
+    "CloudWatch support is optional and disabled by default.",
+    "The connector uses the shared observability policy model and bounded dimension mapping.",
+    "IAM, namespace, throttling, cost, timeout, and retry behavior are documented.",
+    "CloudWatch API failures fail safely outside message delivery.",
+    "Documentation is added as a sub-page under the Observability documentation section."
+  ],
+  "tests": "Add unit tests for disabled policy, allow and deny filtering, CloudWatch payload mapping, namespace validation, dimension suppression, credential redaction, timeout and retry behavior, stale snapshots, dry-run output, and sanitized logging. Add optional integration guidance using a test AWS account behind environment-gated markers.",
+  "documentation": "Add an Amazon CloudWatch sub-page under the Observability documentation section. The page must include configuration, IAM guidance, namespace and dimension design, cost and throttling notes, examples, service deployment, and tests.",
+  "closeout": "Close after the release containing CloudWatch connector support is published. Include the release tag, authentication model, tests run, documentation links, and any follow-up alarm examples.",
+  "relationships": {
+    "related": ["#10"]
+  }
+}

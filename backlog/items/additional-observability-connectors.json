@@ -3,8 +3,8 @@
   "title": "[Feature]: Evaluate and stage additional observability connectors",
   "area": "Metrics and observability",
   "priority": "P4 - research or design needed",
-  "target_release": "unscheduled",
-  "labels": ["observability"],
+  "target_release": "v0.4.1",
+  "labels": ["observability", "completed", "release-v0.4.1"],
   "problem": "The roadmap names several possible observability destinations beyond Prometheus and OTLP. Each platform has different authentication, transport, batching, cardinality, retention, and confidentiality expectations. Implementing them ad hoc would increase dependency surface and make it harder to preserve the current policy-driven, disabled-by-default sharing model.",
   "proposal": "Create a staged connector plan for StatsD, Datadog, Splunk HEC, Elastic Observability, Grafana Alloy or Grafana Agent, Oracle Cloud Infrastructure Monitoring, Amazon CloudWatch, Azure Monitor, and syslog-style bridges. The first deliverable should define a connector certification checklist, shared policy requirements, common tests, and selection criteria. Individual connector implementation issues can then be opened when priority and user demand are clear.",
   "users": "Operators with established observability platforms, security reviewers who need predictable export controls, and maintainers who need a repeatable pattern for adding connectors without weakening the sink runtime.",
@@ -19,5 +19,5 @@
   ],
   "tests": "Add documentation checks and any unit tests for shared connector policy helpers introduced by the design. Run scripts/check.sh before close-out.",
   "documentation": "Update docs/observability.md, docs/metrics.md, ROADMAP.md, and docs/security.md with the connector matrix, certification checklist, and selection guidance.",
-  "closeout": "Close after the connector evaluation work is published in a release. Include the release tag, documented connector candidates, agreed certification criteria, and follow-up issues for any connector selected for implementation."
+  "closeout": "Closed after the connector evaluation created individual connector backlog items and documented the shared connector contract. Include the release tag, documented connector candidates, agreed certification criteria, and follow-up issues for selected connectors."
 }

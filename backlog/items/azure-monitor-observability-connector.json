@@ -1,0 +1,26 @@
+{
+  "id": "azure-monitor-observability-connector",
+  "title": "[Feature]: Add an Azure Monitor observability connector",
+  "area": "Metrics and observability",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["observability", "security", "deployment", "testing"],
+  "problem": "Microsoft cloud deployments often centralize metrics and alerting in Azure Monitor. nats-sinks currently does not provide an Azure Monitor custom metric connector, which may push operators toward local scripts that bypass observability policy, mishandle bearer tokens, or expose resource identifiers and dimensions.",
+  "proposal": "Design and implement an optional Azure Monitor connector that follows the shared observability connector contract. It must be disabled by default, read approved metrics from the local metrics snapshot or shared read-only provider, apply the same observability policy allow and deny lists, use the same stale snapshot, dry-run, timeout, retry, and redaction behavior, and export only policy-approved metric names. It should support Microsoft Entra authentication or managed identity where practical, validate namespace and resource configuration, bound request size, suppress sensitive dimensions by default, and document regional and resource-scope behavior.",
+  "users": "Azure operators, Microsoft cloud platform teams, and maintainers who need a cloud-specific connector that follows the same policy-first model as other observability connectors.",
+  "delivery_semantics": "Azure Monitor export must remain outside the delivery path. Token acquisition failures, API throttling, resource-scope errors, rejected metric payloads, or network failures must not affect ACK, NAK, DLQ, retry, sink writes, or idempotency.",
+  "security": "The connector must avoid command-line secrets, redact bearer-token and resource details, use least-privilege identity, verify TLS by default, and avoid sensitive dimensions such as subjects, classification values, labels, mission metadata, table names, file paths, usernames, hostnames, and message identifiers by default.",
+  "acceptance": [
+    "Azure Monitor support is optional and disabled by default.",
+    "The connector uses the shared observability policy model and bounded Azure dimension mapping.",
+    "Identity, resource scope, region, timeout, retry, and throttling behavior are documented.",
+    "Azure API failures fail safely outside message delivery.",
+    "Documentation is added as a sub-page under the Observability documentation section."
+  ],
+  "tests": "Add unit tests for disabled policy, allow and deny filtering, Azure metric payload mapping, resource configuration validation, dimension suppression, token reference redaction, timeout and retry behavior, stale snapshots, dry-run output, and sanitized logging. Add optional integration guidance using an Azure test subscription behind environment-gated markers.",
+  "documentation": "Add an Azure Monitor sub-page under the Observability documentation section. The page must include configuration, identity guidance, resource-scope design, dimension limitations, sample output, service deployment, and tests.",
+  "closeout": "Close after the release containing Azure Monitor connector support is published. Include the release tag, identity model, tests run, documentation links, and any follow-up alerting examples.",
+  "relationships": {
+    "related": ["#10"]
+  }
+}

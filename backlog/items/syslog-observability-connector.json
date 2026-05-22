@@ -1,0 +1,26 @@
+{
+  "id": "syslog-observability-connector",
+  "title": "[Feature]: Add a syslog observability bridge",
+  "area": "Metrics and observability",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["observability", "security", "testing"],
+  "problem": "Some restricted or legacy networks rely on syslog-style forwarding rather than Prometheus scraping, cloud APIs, or collector protocols. nats-sinks currently has no syslog observability bridge, which may lead teams to write unbounded log-forwarding scripts that mix operational metrics with sensitive payload or subject data.",
+  "proposal": "Design and implement an optional syslog observability bridge that follows the shared observability connector contract. It must be disabled by default, read approved metrics from the local metrics snapshot or shared read-only provider, apply the same observability policy allow and deny lists, use the same stale snapshot, dry-run, timeout, retry, and redaction behavior, and export only policy-approved metric names. The preferred format should be RFC 5424 structured data or a clearly documented structured-log shape, with bounded message length and explicit transport limitations.",
+  "users": "Operators in restricted networks, legacy operations centers, security monitoring teams that ingest syslog, and maintainers who need a safe bridge for environments where pull-based scraping is unavailable.",
+  "delivery_semantics": "Syslog export must remain observational only. Dropped messages, transport failures, receiver overload, malformed responses, or local forwarding errors must not affect ACK, NAK, DLQ, retry, sink writes, or idempotency. The connector must not claim durable or complete metrics delivery unless a future reliable transport mode proves it.",
+  "security": "Syslog messages are often broadly redistributed. The connector must sanitize control characters, bound message size, suppress subjects and high-cardinality metadata by default, avoid payloads and secrets, and document transport security limitations. TLS-capable syslog transport can be evaluated but must stay verified by default when used.",
+  "acceptance": [
+    "Syslog bridge support is optional and disabled by default.",
+    "The bridge uses the shared observability policy model and safe RFC 5424-style field mapping.",
+    "Message-size bounds, control-character sanitization, and transport limitations are documented.",
+    "Receiver failures fail safely outside message delivery.",
+    "Documentation is added as a sub-page under the Observability documentation section."
+  ],
+  "tests": "Add unit tests for disabled policy, allow and deny filtering, RFC 5424-style rendering, control-character sanitization, message-size bounds, stale snapshots, dry-run output, timeout handling, retry limits, and sanitized logging. Add optional integration guidance for a local syslog receiver behind an integration marker.",
+  "documentation": "Add a syslog bridge sub-page under the Observability documentation section. The page must include configuration, RFC 5424 mapping, transport limitations, security defaults, sample messages, service deployment, and tests.",
+  "closeout": "Close after the release containing syslog bridge support is published. Include the release tag, supported transport, tests run, documentation links, and any follow-up reliable transport issues.",
+  "relationships": {
+    "related": ["#10"]
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "id": "statsd-observability-connector",
+  "title": "[Feature]: Add a StatsD observability connector",
+  "area": "Metrics and observability",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["observability", "testing"],
+  "problem": "Some environments still use StatsD-compatible aggregators for lightweight counters, gauges, and timing metrics. nats-sinks currently has a local metrics snapshot, metrics CLI, Prometheus connectors, and a connector-neutral observability core, but no StatsD connector. Without a managed connector, operators may write local scripts that bypass policy review, leak unsafe metric names, or assume unreliable UDP forwarding is equivalent to durable telemetry.",
+  "proposal": "Design and implement an optional StatsD connector that follows the shared observability connector contract. It must be disabled by default, read approved metrics from the local metrics snapshot or shared read-only provider, apply the same observability policy allow and deny lists, use the same stale snapshot, dry-run, timeout, retry, and redaction behavior, and export only policy-approved metric names. The connector should support UDP and, where practical, Unix-domain socket output, metric prefix configuration, safe name normalization, and an explicit warning that StatsD transport is best-effort and observational only.",
+  "users": "Operators with existing StatsD aggregation infrastructure, restricted-network deployments that need very small telemetry forwarding, and maintainers who need a simple connector to validate the shared observability connector contract.",
+  "delivery_semantics": "StatsD export must remain outside the delivery path. Lost, delayed, refused, or malformed StatsD exports must not affect ACK, NAK, DLQ, retry, sink writes, or idempotency. The connector must never claim reliable delivery of metrics over best-effort transports.",
+  "security": "The connector must not export subjects, classification values, labels, mission metadata, payload fields, table names, file paths, usernames, hostnames, or message identifiers by default. Metric names must be normalized through an allow list, output payloads must be bounded, and logs must not include raw datagrams when they could reveal operational naming.",
+  "acceptance": [
+    "StatsD support is optional and disabled by default.",
+    "The connector follows the shared observability connector configuration and policy model.",
+    "The connector exports only approved counters, gauges, and observation summaries.",
+    "Best-effort transport limitations are documented clearly.",
+    "Documentation is added as a sub-page under the Observability documentation section."
+  ],
+  "tests": "Add unit tests for disabled policy, allow and deny filtering, metric name normalization, datagram rendering, payload bounds, dry-run output, timeout and retry handling, stale snapshot behavior, and sanitized logging. Add optional local integration guidance for a StatsD-compatible test server behind an integration marker.",
+  "documentation": "Add a StatsD sub-page under the Observability documentation section. The page must explain configuration, safe metric naming, supported metric types, transport limitations, security defaults, example commands, sample output, service deployment, and tests.",
+  "closeout": "Close after the release containing StatsD connector support is published. Include the release tag, exported metric examples, tests run, documentation links, and any follow-up reliability or transport issues.",
+  "relationships": {
+    "related": ["#10"]
+  }
+}

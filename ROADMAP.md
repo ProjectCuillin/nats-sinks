@@ -87,9 +87,11 @@ release, and closed only after the containing release is published.
 ## Phase 2
 
 - OpenTelemetry OTLP metrics connector for deployments using collectors.
-- Additional observability connectors for StatsD, Datadog, Splunk HEC, Elastic
-  Observability, Grafana Alloy or Grafana Agent, Oracle Cloud Infrastructure
-  Monitoring, Amazon CloudWatch, Azure Monitor, and syslog bridges.
+- Individual observability connector backlog items for StatsD, Datadog,
+  Splunk HEC, Elastic Observability, Grafana Alloy, Oracle Cloud
+  Infrastructure Monitoring, Amazon CloudWatch, Azure Monitor, and syslog
+  bridges, all following the shared disabled-by-default observability connector
+  contract.
 - Additional mission-support documentation examples for future operator
   runbooks, deeper replay drills, and sink-specific certification evidence.
 - Documented sink certification contract for idempotency, including required
