@@ -65,6 +65,13 @@ want the same explicit durable-consumer startup behavior as JSON
 configuration. It only controls startup binding, creation, and drift checks;
 the runner still owns every ACK decision after messages are fetched.
 
+The same object also carries richer JetStream consumer policy settings:
+`filter_subjects`, `backoff_seconds`, `max_deliver`, `max_ack_pending`,
+`max_waiting`, `headers_only`, `num_replicas`, `memory_storage`, and bounded
+consumer `metadata`. Invalid combinations, such as `backoff_seconds` without
+`max_deliver`, fail during configuration validation before the runner can
+fetch messages.
+
 ## Enabling Payload Encryption
 
 Applications can enable the same core payload encryption that the JSON CLI

@@ -63,10 +63,24 @@ Set `consumer_management.mode` deliberately for each environment:
 - use `reconcile` only when the worker is intentionally allowed to update
   compatible durable pull-consumer settings.
 
-If the existing consumer has a different filter subject, a non-explicit ACK
-policy, push delivery settings, or configured delivery drift, the worker fails
-at startup before fetching any messages. Treat that as a deployment mismatch to
-fix in the NATS control plane, not as a reason to widen runtime permissions.
+If the existing consumer has a different single or plural filter-subject set, a
+non-explicit ACK policy, push delivery settings, or configured delivery drift,
+the worker fails at startup before fetching any messages. Treat that as a
+deployment mismatch to fix in the NATS control plane, not as a reason to widen
+runtime permissions.
+
+When richer policy fields are configured, review them as part of operational
+change control:
+
+- `backoff_seconds` is a JetStream server-side timeout redelivery sequence; it
+  requires `max_deliver` and cannot be combined with `ack_wait_seconds`.
+- `filter_subjects` lets one durable consumer receive several subject families,
+  but every filter must remain inside `nats.subject`.
+- `num_replicas` and `memory_storage` affect consumer-state durability and I/O
+  behavior; production changes should be coordinated with the NATS operations
+  team.
+- `metadata` is for low-sensitivity operational labels only. It must not carry
+  secrets, payloads, connection details, or classified mission content.
 
 The certified production connection path is still direct NATS TCP with
 `nats://` for controlled local use or `tls://` for encrypted production

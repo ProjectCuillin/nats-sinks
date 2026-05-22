@@ -70,6 +70,7 @@ def _consumer_info(**overrides: object) -> SimpleNamespace:
         "name": "orders-sink",
         "durable_name": "orders-sink",
         "filter_subject": "orders.*",
+        "filter_subjects": None,
         "ack_policy": "explicit",
         "deliver_policy": "all",
         "replay_policy": "instant",
@@ -77,8 +78,12 @@ def _consumer_info(**overrides: object) -> SimpleNamespace:
         "headers_only": None,
         "ack_wait": None,
         "max_deliver": None,
+        "backoff": None,
         "max_ack_pending": None,
         "max_waiting": None,
+        "num_replicas": None,
+        "mem_storage": None,
+        "metadata": None,
     }
     config.update(overrides)
     return SimpleNamespace(config=SimpleNamespace(**config))
@@ -268,7 +273,11 @@ def test_detect_consumer_drift_reports_delivery_sensitive_fields() -> None:
             deliver_policy="new",
             replay_policy="original",
             headers_only=True,
+            backoff=[1.0, 2.0],
             max_ack_pending=10,
+            num_replicas=1,
+            mem_storage=False,
+            metadata={"component": "old"},
         ),
         stream="ORDERS",
         durable_name="orders-sink",
@@ -278,6 +287,11 @@ def test_detect_consumer_drift_reports_delivery_sensitive_fields() -> None:
             replay_policy="instant",
             headers_only=False,
             max_ack_pending=100,
+            max_deliver=3,
+            backoff_seconds=[1, 5],
+            num_replicas=3,
+            memory_storage=True,
+            metadata={"component": "nats-sinks"},
         ),
     )
 
@@ -286,7 +300,12 @@ def test_detect_consumer_drift_reports_delivery_sensitive_fields() -> None:
         "deliver_policy",
         "replay_policy",
         "headers_only",
+        "backoff",
+        "max_deliver",
         "max_ack_pending",
+        "num_replicas",
+        "mem_storage",
+        "metadata",
     }
 
 
@@ -305,6 +324,57 @@ def test_build_consumer_config_uses_explicit_ack_policy() -> None:
     assert config.deliver_policy.value == "all"
     assert config.replay_policy.value == "instant"
     assert config.max_waiting == 64
+
+
+def test_build_consumer_config_supports_richer_policy_fields() -> None:
+    config = build_consumer_config(
+        stream="ORDERS",
+        durable_name="orders-sink",
+        subject="orders.>",
+        config=ConsumerManagementConfig(
+            filter_subjects=["orders.created", "orders.updated"],
+            max_deliver=5,
+            backoff_seconds=[1, 5, 30],
+            headers_only=True,
+            num_replicas=3,
+            memory_storage=True,
+            metadata={"component": "nats-sinks", "purpose": "sink-worker"},
+        ),
+    )
+
+    assert config.filter_subject is None
+    assert config.filter_subjects == ["orders.created", "orders.updated"]
+    assert config.backoff == [1.0, 5.0, 30.0]
+    assert config.max_deliver == 5
+    assert config.headers_only is True
+    assert config.num_replicas == 3
+    assert config.mem_storage is True
+    assert config.metadata == {"component": "nats-sinks", "purpose": "sink-worker"}
+
+
+def test_filter_subjects_must_not_exceed_primary_subject_scope() -> None:
+    with pytest.raises(ConfigurationError, match="not contained"):
+        build_consumer_config(
+            stream="ORDERS",
+            durable_name="orders-sink",
+            subject="orders.created",
+            config=ConsumerManagementConfig(filter_subjects=["orders.>"]),
+        )
+
+
+def test_detect_consumer_drift_accepts_filter_subject_order_differences() -> None:
+    drift = detect_consumer_drift(
+        _consumer_info(
+            filter_subject=None,
+            filter_subjects=["orders.updated", "orders.created"],
+        ),
+        stream="ORDERS",
+        durable_name="orders-sink",
+        subject="orders.>",
+        config=ConsumerManagementConfig(filter_subjects=["orders.created", "orders.updated"]),
+    )
+
+    assert drift == ()
 
 
 @pytest.mark.asyncio

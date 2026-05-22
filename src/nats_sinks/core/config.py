@@ -79,6 +79,13 @@ AES_256_KEY_BYTES = 32
 MAX_ENCRYPTION_KEY_ID_LENGTH = 128
 MAX_CONFIG_BYTES = 1_048_576
 NATS_ALLOWED_URL_SCHEMES = frozenset({"nats", "tls", "ws", "wss"})
+MAX_CONSUMER_FILTER_SUBJECTS = 64
+MAX_CONSUMER_BACKOFF_ENTRIES = 128
+MAX_CONSUMER_BACKOFF_SECONDS = 604_800
+MAX_CONSUMER_METADATA_KEYS = 32
+MAX_CONSUMER_METADATA_KEY_LENGTH = 128
+MAX_CONSUMER_METADATA_VALUE_LENGTH = 512
+CONSUMER_METADATA_KEY_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.:/-]{0,127}$")
 PRIORITY_LANE_NAME_RE = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
 PRE_SINK_POLICY_MISSION_KEY_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.:-]{0,127}$")
 ASCII_CONTROL_MAX = 31
@@ -259,13 +266,146 @@ class ConsumerManagementConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     mode: Literal["bind_only", "create_if_missing", "reconcile"] = "create_if_missing"
+    filter_subjects: tuple[str, ...] = Field(default_factory=tuple)
     deliver_policy: Literal["all", "last", "new", "last_per_subject"] = "all"
     replay_policy: Literal["instant", "original"] = "instant"
     ack_wait_seconds: float | None = Field(default=None, gt=0, le=86_400)
     max_deliver: int | None = Field(default=None, ge=1, le=1_000_000)
+    backoff_seconds: tuple[float, ...] | None = None
     max_ack_pending: int | None = Field(default=None, ge=1, le=1_000_000)
     max_waiting: int | None = Field(default=None, ge=1, le=1_000_000)
     headers_only: bool | None = None
+    num_replicas: int | None = Field(default=None, ge=0, le=5)
+    memory_storage: bool | None = None
+    metadata: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("filter_subjects", mode="before")
+    @classmethod
+    def normalize_filter_subjects(cls, value: object) -> tuple[str, ...]:
+        """Validate optional multi-filter subject lists before startup."""
+
+        if value is None:
+            return ()
+        if not isinstance(value, (list, tuple)):
+            raise ValueError("consumer_management.filter_subjects must be a list of NATS subjects")
+        if len(value) > MAX_CONSUMER_FILTER_SUBJECTS:
+            raise ValueError(
+                "consumer_management.filter_subjects supports at most "
+                f"{MAX_CONSUMER_FILTER_SUBJECTS} entries"
+            )
+        rendered: list[str] = []
+        seen: set[str] = set()
+        for item in value:
+            subject = validate_subject_pattern(item)
+            if subject in seen:
+                raise ValueError(f"duplicate consumer_management.filter_subjects entry {subject!r}")
+            rendered.append(subject)
+            seen.add(subject)
+        return tuple(rendered)
+
+    @field_validator("backoff_seconds", mode="before")
+    @classmethod
+    def normalize_backoff_seconds(cls, value: object) -> tuple[float, ...] | None:
+        """Validate server-side BackOff values as bounded positive seconds."""
+
+        if value is None:
+            return None
+        if not isinstance(value, (list, tuple)):
+            raise ValueError(
+                "consumer_management.backoff_seconds must be a list of positive seconds"
+            )
+        if not value:
+            raise ValueError(
+                "consumer_management.backoff_seconds must not be empty when configured"
+            )
+        if len(value) > MAX_CONSUMER_BACKOFF_ENTRIES:
+            raise ValueError(
+                "consumer_management.backoff_seconds supports at most "
+                f"{MAX_CONSUMER_BACKOFF_ENTRIES} entries"
+            )
+        rendered: list[float] = []
+        for item in value:
+            if isinstance(item, bool) or not isinstance(item, (int, float)):
+                raise ValueError("consumer_management.backoff_seconds entries must be numeric")
+            seconds = float(item)
+            if seconds <= 0 or seconds > MAX_CONSUMER_BACKOFF_SECONDS:
+                raise ValueError(
+                    "consumer_management.backoff_seconds entries must be greater than 0 "
+                    f"and at most {MAX_CONSUMER_BACKOFF_SECONDS}"
+                )
+            rendered.append(seconds)
+        return tuple(rendered)
+
+    @field_validator("metadata", mode="before")
+    @classmethod
+    def validate_metadata(cls, value: object) -> dict[str, str]:
+        """Validate optional consumer metadata before it reaches JetStream."""
+
+        if value is None:
+            return {}
+        if not isinstance(value, dict):
+            raise ValueError(
+                "consumer_management.metadata must be an object with string keys and values"
+            )
+        if len(value) > MAX_CONSUMER_METADATA_KEYS:
+            raise ValueError(
+                "consumer_management.metadata supports at most "
+                f"{MAX_CONSUMER_METADATA_KEYS} entries"
+            )
+        rendered: dict[str, str] = {}
+        for raw_key, raw_value in value.items():
+            if not isinstance(raw_key, str) or not isinstance(raw_value, str):
+                raise ValueError("consumer_management.metadata keys and values must be strings")
+            key = raw_key.strip()
+            if key != raw_key or not CONSUMER_METADATA_KEY_RE.fullmatch(key):
+                raise ValueError(
+                    "consumer_management.metadata keys must start with a letter and contain "
+                    "only letters, digits, '.', '_', ':', '/', or '-'"
+                )
+            lowered_key = key.lower()
+            if any(secret_part in lowered_key for secret_part in SENSITIVE_KEY_PARTS):
+                raise ValueError(
+                    "consumer_management.metadata keys must not describe secret material"
+                )
+            if raw_value.strip() != raw_value:
+                raise ValueError(
+                    "consumer_management.metadata values must not have surrounding whitespace"
+                )
+            if len(raw_value) > MAX_CONSUMER_METADATA_VALUE_LENGTH:
+                raise ValueError(
+                    "consumer_management.metadata values must be at most "
+                    f"{MAX_CONSUMER_METADATA_VALUE_LENGTH} characters"
+                )
+            if any(
+                ord(character) <= ASCII_CONTROL_MAX or ord(character) == ASCII_DELETE
+                for character in raw_value
+            ):
+                raise ValueError(
+                    "consumer_management.metadata values must not contain control characters"
+                )
+            rendered[key] = raw_value
+        return rendered
+
+    @model_validator(mode="after")
+    def validate_policy_combinations(self) -> ConsumerManagementConfig:
+        """Reject JetStream policy combinations that are ambiguous for sinks."""
+
+        if self.backoff_seconds is not None:
+            if self.ack_wait_seconds is not None:
+                raise ValueError(
+                    "consumer_management.backoff_seconds overrides AckWait; "
+                    "configure backoff_seconds or ack_wait_seconds, not both"
+                )
+            if self.max_deliver is None:
+                raise ValueError(
+                    "consumer_management.max_deliver is required when backoff_seconds is set"
+                )
+            if len(self.backoff_seconds) > self.max_deliver:
+                raise ValueError(
+                    "consumer_management.backoff_seconds length must be less than or equal "
+                    "to max_deliver"
+                )
+        return self
 
 
 class PriorityLaneConfig(BaseModel):

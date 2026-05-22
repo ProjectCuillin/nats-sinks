@@ -37,7 +37,8 @@ The tests also cover:
   `attach_custody_metadata`, and `canonical_json_bytes`,
 - durable consumer-management helpers such as `ConsumerManagementConfig`,
   `ensure_jetstream_consumer`, `detect_consumer_drift`, and
-  `build_consumer_config`,
+  `build_consumer_config`, including the richer durable pull-consumer policy
+  fields for filter subjects, BackOff, replicas, memory storage, and metadata,
 - JetStream advisory helpers such as `JetStreamAdvisoryConfig`,
   `JetStreamAdvisoryMonitor`, `parse_jetstream_advisory`, and
   `observe_jetstream_advisory_message`,

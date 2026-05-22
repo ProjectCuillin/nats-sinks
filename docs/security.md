@@ -351,6 +351,15 @@ consumer-management permissions required for the configured stream and durable
 consumer. Do not give the sink worker account broad stream-management or
 account-management authority.
 
+Richer consumer policy fields are also security-relevant. Multiple
+`filter_subjects` can widen what the worker receives, so nats-sinks requires
+each configured filter to stay within `nats.subject` and documents the NATS
+permission tradeoff for plural filters. Consumer `metadata` is bounded and
+rejects secret-looking keys, but it is still visible to operators with
+JetStream management access. Use it only for low-sensitivity labels such as
+component ownership or deployment purpose, never for credentials, payload
+fragments, mission details, private endpoints, or compartment names.
+
 ```mermaid
 flowchart LR
     Env[Secret environment variable] --> CLI[nats-sink]

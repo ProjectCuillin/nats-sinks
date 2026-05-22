@@ -148,10 +148,13 @@ platform deployments can use `reconcile` to submit the configured durable
 pull-consumer settings when the existing consumer is already compatible.
 
 Consumer management is part of the startup boundary, not the message-processing
-boundary. The runner validates the durable name, filter subject, explicit ACK
-policy, pull-consumer shape, and configured delivery-sensitive fields before
-calling `pull_subscribe`. If drift is unsafe, startup fails closed before any
-message can be fetched or ACKed.
+boundary. The runner validates the durable name, single or plural filter
+subjects, explicit ACK policy, pull-consumer shape, deliver and replay policy,
+and configured delivery-sensitive fields before calling `pull_subscribe`.
+Managed fields can include `AckWait`, server-side `BackOff`, `MaxDeliver`,
+`MaxAckPending`, `MaxWaiting`, `HeadersOnly`, consumer replicas,
+memory-storage state, and bounded consumer metadata. If drift is unsafe,
+startup fails closed before any message can be fetched or ACKed.
 
 ```mermaid
 flowchart LR

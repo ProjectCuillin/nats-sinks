@@ -91,6 +91,11 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   validation for filter subject, explicit ACK policy, pull-consumer shape,
   AckWait, MaxDeliver, MaxAckPending, MaxWaiting, headers-only state, tests,
   and least-privilege permission documentation.
+- Added richer durable pull-consumer policy configuration for multiple
+  `FilterSubjects`, server-side `BackOff`, consumer replicas, memory-storage
+  state, and bounded low-sensitivity JetStream consumer metadata, with
+  fail-closed validation for unsafe combinations before message processing
+  starts.
 
 ### Changed
 

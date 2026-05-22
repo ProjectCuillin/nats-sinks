@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
@@ -1107,9 +1108,12 @@ def test_consumer_management_defaults_to_create_if_missing(tmp_path: Path) -> No
     config = load_config(path, env_overrides=False)
 
     assert config.consumer_management.mode == "create_if_missing"
+    assert config.consumer_management.filter_subjects == ()
     assert config.consumer_management.deliver_policy == "all"
     assert config.consumer_management.replay_policy == "instant"
+    assert config.consumer_management.backoff_seconds is None
     assert config.consumer_management.headers_only is None
+    assert config.consumer_management.metadata == {}
 
 
 def test_consumer_management_rejects_unknown_mode(tmp_path: Path) -> None:
@@ -1163,3 +1167,96 @@ def test_consumer_management_env_override(monkeypatch: pytest.MonkeyPatch, tmp_p
     config = load_config(path)
 
     assert config.consumer_management.mode == "bind_only"
+
+
+def test_consumer_management_loads_richer_policy_fields(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.>"
+  },
+  "consumer_management": {
+    "mode": "create_if_missing",
+    "filter_subjects": ["orders.created", "orders.updated"],
+    "max_deliver": 5,
+    "backoff_seconds": [1, 5, 30],
+    "max_ack_pending": 500,
+    "max_waiting": 64,
+    "headers_only": true,
+    "num_replicas": 3,
+    "memory_storage": true,
+    "metadata": {
+      "component": "nats-sinks",
+      "purpose": "sink-worker"
+    }
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/var/lib/nats-sinks/events"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(path, env_overrides=False)
+
+    assert config.consumer_management.filter_subjects == ("orders.created", "orders.updated")
+    assert config.consumer_management.backoff_seconds == (1.0, 5.0, 30.0)
+    assert config.consumer_management.max_deliver == 5
+    assert config.consumer_management.max_ack_pending == 500
+    assert config.consumer_management.max_waiting == 64
+    assert config.consumer_management.headers_only is True
+    assert config.consumer_management.num_replicas == 3
+    assert config.consumer_management.memory_storage is True
+    assert config.consumer_management.metadata == {
+        "component": "nats-sinks",
+        "purpose": "sink-worker",
+    }
+
+
+@pytest.mark.parametrize(
+    ("consumer_management", "expected"),
+    [
+        ({"filter_subjects": ["orders.*", "orders.*"]}, "duplicate"),
+        ({"backoff_seconds": [1, 5, 30]}, "max_deliver"),
+        (
+            {"max_deliver": 5, "ack_wait_seconds": 30, "backoff_seconds": [1, 5]},
+            "overrides AckWait",
+        ),
+        ({"max_deliver": 2, "backoff_seconds": [1, 5, 30]}, "length"),
+        ({"metadata": {"secret_token": "value"}}, "secret"),
+    ],
+)
+def test_consumer_management_rejects_unsafe_policy_values(
+    consumer_management: dict[str, object],
+    expected: str,
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        json.dumps(
+            {
+                "nats": {
+                    "url": "nats://localhost:4222",
+                    "stream": "ORDERS",
+                    "consumer": "file-orders-sink",
+                    "subject": "orders.*",
+                },
+                "consumer_management": consumer_management,
+                "sink": {
+                    "type": "file",
+                    "directory": "/var/lib/nats-sinks/events",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError, match=expected):
+        load_config(path, env_overrides=False)

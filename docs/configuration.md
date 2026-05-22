@@ -57,13 +57,18 @@ Oracle-specific fields inside the `sink` object.
   },
   "consumer_management": {
     "mode": "create_if_missing",
+    "filter_subjects": [],
     "deliver_policy": "all",
     "replay_policy": "instant",
     "ack_wait_seconds": null,
     "max_deliver": null,
+    "backoff_seconds": null,
     "max_ack_pending": null,
     "max_waiting": null,
-    "headers_only": null
+    "headers_only": null,
+    "num_replicas": null,
+    "memory_storage": null,
+    "metadata": {}
   },
   "delivery": {
     "batch_size": 100,
@@ -382,13 +387,18 @@ sequenceDiagram
 | Field | Required | Default | Valid values | Description |
 | --- | --- | --- | --- | --- |
 | `mode` | no | `create_if_missing` | `bind_only`, `create_if_missing`, or `reconcile`. | `bind_only` requires the durable consumer to exist and match the configured delivery contract. `create_if_missing` creates it when absent and validates it when present. `reconcile` creates it when absent and asks JetStream to update a compatible existing consumer to the configured values. |
+| `filter_subjects` | no | `[]` | List of up to `64` valid NATS subject filters. | Optional plural JetStream `FilterSubjects` list. When omitted, the runner uses `nats.subject` as the single `FilterSubject`. Each configured filter must be contained by `nats.subject` so a local configuration mistake cannot widen the worker's intended subject family. |
 | `deliver_policy` | no | `all` | `all`, `last`, `new`, or `last_per_subject`. | Desired consumer deliver policy for managed consumers. Sequence-based and time-based policies are intentionally not exposed yet because they require extra replay controls. |
 | `replay_policy` | no | `instant` | `instant` or `original`. | Desired replay policy. Most sink workers should use `instant`; `original` can slow replay to the original publish cadence. |
 | `ack_wait_seconds` | no | `null` | Number greater than `0` and at most `86400`, or `null`. | Optional server-side ACK wait expectation. When set, incompatible existing values fail startup. |
 | `max_deliver` | no | `null` | Integer `1` to `1000000`, or `null`. | Optional server-side maximum delivery count. Use with DLQ/advisory planning so poison messages do not cycle forever. |
+| `backoff_seconds` | no | `null` | List of positive numbers, each at most `604800`, or `null`. | Optional server-side JetStream `BackOff` sequence. When set, `max_deliver` is required, the list length must be less than or equal to `max_deliver`, and `ack_wait_seconds` must remain `null` because JetStream BackOff overrides AckWait. |
 | `max_ack_pending` | no | `null` | Integer `1` to `1000000`, or `null`. | Optional server-side outstanding ACK limit. This complements, but does not replace, `delivery.batch_size`. |
 | `max_waiting` | no | `null` | Integer `1` to `1000000`, or `null`. | Optional pull-request wait limit on the server-side consumer. |
-| `headers_only` | no | `null` | `true`, `false`, or `null`. | Optional compatibility check for JetStream headers-only delivery. Explicit headers-only production support is still tracked separately; setting this field only validates or creates the server-side setting. |
+| `headers_only` | no | `null` | `true`, `false`, or `null`. | Optional JetStream headers-only delivery setting. The server-side consumer policy is supported here; payload-presence metadata and sink/DLQ certification for metadata-only workflows remain tracked separately. |
+| `num_replicas` | no | `null` | Integer `0` to `5`, or `null`. | Optional consumer-state replica count. `0` means inherit from the stream when sent to JetStream. `null` leaves the field unmanaged by nats-sinks. |
+| `memory_storage` | no | `null` | `true`, `false`, or `null`. | Optional JetStream `MemoryStorage` flag for consumer state. Use cautiously for durable sink workers because consumer state participates in redelivery behavior. |
+| `metadata` | no | `{}` | Object with up to `32` safe string keys and values. | Optional JetStream consumer metadata. Keys and values are bounded, values reject control characters, and secret-looking keys are rejected. Do not place credentials, payloads, private hostnames, or sensitive operational details in consumer metadata. |
 
 Examples:
 
@@ -409,8 +419,8 @@ does not need consumer creation permissions.
 {
   "consumer_management": {
     "mode": "create_if_missing",
-    "ack_wait_seconds": 60,
     "max_deliver": 10,
+    "backoff_seconds": [5, 30, 300],
     "max_ack_pending": 500
   }
 }
@@ -421,6 +431,38 @@ or platform teams that intentionally allow the worker to create its own durable
 consumer. If a consumer already exists but has a different filter subject,
 non-explicit ACK policy, push `deliver_subject`, or configured delivery drift,
 startup fails before any message is fetched.
+
+The `backoff_seconds` list is a server-side redelivery schedule for ACK timeout
+redeliveries. It is separate from `delivery.retry_backoff_*`, which controls
+client-side delayed NAK behavior after a retryable sink failure. JetStream
+BackOff overrides `AckWait`, so the configuration rejects both fields together
+to keep the operational meaning clear.
+
+```json
+{
+  "nats": {
+    "subject": "orders.>"
+  },
+  "consumer_management": {
+    "filter_subjects": ["orders.created", "orders.updated"],
+    "max_deliver": 8,
+    "backoff_seconds": [2, 10, 60],
+    "num_replicas": 3,
+    "memory_storage": false,
+    "metadata": {
+      "component": "nats-sinks",
+      "purpose": "orders-durable-sink"
+    }
+  }
+}
+```
+
+Use `filter_subjects` when one durable pull consumer should receive several
+explicit source subject families from the same stream. Every filter must stay
+within `nats.subject`. For example, `orders.created` and `orders.updated` are
+allowed under `orders.>`, but `orders.>` is not allowed under
+`orders.created`. This conservative containment check avoids accidental access
+expansion at the sink-worker boundary.
 
 ```json
 {

@@ -5,11 +5,12 @@ This is called headers-only delivery. It is useful when a workflow needs to
 inspect metadata, route an event, or prove that a message existed without
 exposing the full payload to the consumer.
 
-This page records the nats-sinks evaluation of that capability. It is a design
-decision, not an implementation guide for a completed feature. The current
-runtime safely handles empty message bodies, but it does not yet provide an
-explicit headers-only mode that distinguishes a genuinely empty payload from a
-payload that the NATS server intentionally omitted.
+This page records the nats-sinks evaluation of that capability. Current
+releases can create, reconcile, or validate the JetStream `headers_only`
+consumer setting through `consumer_management.headers_only`. The remaining
+gap is payload-presence semantics: the runtime safely handles empty message
+bodies, but it does not yet distinguish a genuinely empty producer payload
+from a payload that the NATS server intentionally omitted.
 
 ## What NATS Provides
 
@@ -21,9 +22,8 @@ NATS Server 2.6.2.
 
 The `nats-py` client also exposes `headers_only` on `ConsumerConfig`, which
 means Python applications can request this behavior when they create or update
-a JetStream consumer. nats-sinks currently binds through `pull_subscribe`; it
-does not yet expose a validated consumer-management block that reconciles
-`headers_only` with an existing durable consumer.
+a JetStream consumer. nats-sinks exposes that setting through the validated
+`consumer_management` startup block for durable pull consumers.
 
 ## Current nats-sinks Behavior
 
@@ -60,7 +60,7 @@ an accidental side effect of seeing an empty byte string.
 
 The recommended design is:
 
-1. Add validated consumer configuration that can request or verify
+1. Keep validated consumer configuration for requesting or verifying
    `headers_only`.
 2. Add a destination-neutral payload-presence contract to `NatsEnvelope`.
 3. Persist the payload-presence state in sink metadata so operators can see

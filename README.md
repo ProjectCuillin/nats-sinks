@@ -105,6 +105,10 @@ used immediately:
   `create_if_missing`, and `reconcile` modes so operators can choose whether
   the worker only binds to a pre-created consumer, creates a missing consumer,
   or reconciles compatible delivery settings before fetching messages.
+- Richer durable consumer policy configuration for pull consumers, including
+  plural filter subjects, server-side BackOff sequences, MaxDeliver,
+  MaxAckPending, MaxWaiting, headers-only state, consumer replicas,
+  memory-storage selection, and bounded low-sensitivity consumer metadata.
 - NATS reconnect tuning for clustered or controlled-network deployments,
   including multiple seed URLs, reconnect wait, maximum reconnect attempts,
   ping behavior, pending buffer size, drain timeout, and connection event
@@ -900,10 +904,9 @@ Phase 2:
 - Certified TLS certificate authentication guidance.
 - Certified NKEY with challenge authentication support.
 - Certified decentralized JWT authentication/authorization support.
-- Explicit JetStream consumer creation and reconciliation.
-- Configurable consumer `AckWait`, `MaxDeliver`, `BackOff`, and `MaxAckPending`.
-- Optional `AckSync` / double-ACK and `InProgress` support.
-- JetStream advisory consumption for operational events.
+- Deeper sequence-based and timestamp-based JetStream replay-start controls.
+- Optional confirmed ACK and `InProgress` support.
+- Payload-presence metadata and sink certification for headers-only delivery.
 
 Phase 3:
 

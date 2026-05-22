@@ -163,6 +163,13 @@ than the pre-created-consumer model. Use it only when
 `consumer_management.mode` is `create_if_missing` or `reconcile` and the
 operational process accepts that tradeoff. For `bind_only`, prefer Template A.
 
+When `consumer_management.filter_subjects` contains multiple filters, NATS uses
+the general durable consumer create subject rather than the single-filter API
+subject that embeds `{filter}`. That means the permission boundary is less
+granular. If subject-level authorization is critical, prefer pre-creating the
+consumer with an administrative identity and running the worker in `bind_only`
+mode.
+
 ```text
 permissions: {
   publish: {

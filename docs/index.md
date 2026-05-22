@@ -96,6 +96,9 @@ The current release provides the following production-ready foundation:
 - Explicit durable pull-consumer management with safe startup drift detection,
   including `bind_only`, `create_if_missing`, and `reconcile` modes for
   controlled NATS operations.
+- Rich durable pull-consumer policy controls for plural filter subjects,
+  server-side BackOff, MaxDeliver, MaxAckPending, MaxWaiting, headers-only
+  state, replicas, memory-storage state, and bounded consumer metadata.
 - Exponential retry backoff with configurable caps and jitter for retryable
   failures, preserving redelivery safety without creating synchronized retry
   storms during shared outages.

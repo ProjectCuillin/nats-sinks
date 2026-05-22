@@ -149,8 +149,8 @@ occasionally be higher than ordinary message-processing latency.
 
 - the sink may be stuck rather than slow,
 - the consumer `AckWait` is unknown,
-- `BackOff` overrides the effective acknowledgement window and the runner does
-  not understand that policy,
+- `BackOff` overrides the effective acknowledgement window and the policy is
+  not configured or verified through `consumer_management`,
 - the interval is configured too close to the wait window,
 - the maximum heartbeat count is unbounded,
 - logs or metrics would expose sensitive subjects or payloads,

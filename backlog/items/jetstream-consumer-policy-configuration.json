@@ -3,10 +3,10 @@
   "title": "[Feature]: Add richer JetStream consumer policy configuration",
   "area": "Core runtime and delivery semantics",
   "priority": "P2 - next minor release candidate",
-  "target_release": "unscheduled",
-  "labels": ["nats"],
+  "target_release": "v0.4.1",
+  "labels": ["nats", "completed"],
   "problem": "The roadmap includes configurable consumer AckWait, MaxDeliver, BackOff, MaxAckPending, deliver policies, multiple filter subjects, headers-only delivery, consumer metadata, replicas, and memory-storage options. These settings are powerful because they affect redelivery, backpressure, availability, stream compatibility, and whether message bodies are delivered to sinks. They need one coherent configuration design rather than piecemeal fields.",
-  "proposal": "Design and implement a validated consumer policy configuration block that maps supported fields to JetStream consumer settings. The feature should document defaults, compatibility with existing consumers, reconciliation behavior, which settings are safe for production sink workers, and how headers-only delivery interacts with payload-presence metadata.",
+  "proposal": "Implement the richer consumer policy configuration as part of the existing consumer_management startup block. Supported fields include plural FilterSubjects, server-side BackOff, MaxDeliver, MaxAckPending, MaxWaiting, headers-only state, consumer replicas, memory-storage state, and bounded low-sensitivity JetStream consumer metadata. The runner must map these settings to nats-py ConsumerConfig, validate unsafe combinations before message fetching, and detect drift against existing durable pull consumers.",
   "users": "NATS operators tuning redelivery and backpressure, maintainers improving NATS compatibility, and users deploying nats-sinks in clustered JetStream environments.",
   "delivery_semantics": "These settings directly affect redelivery and ACK timing. Validation must reject values that conflict with commit-then-ACK, unbounded memory use, or documented retry behavior. Tests must prove partial batches and retry exhaustion remain safe under configured policies.",
   "security": "Configuration must be bounded and fail closed. Metadata must not contain secrets. Multiple filter subjects must be validated with the shared subject matcher and must not accidentally expand access beyond intended subject families.",
@@ -17,7 +17,7 @@
     "Invalid or unsupported combinations fail before message processing starts.",
     "Runtime permissions and reconciliation implications are documented."
   ],
-  "tests": "Add config validation tests, mocked consumer creation tests, subject matching tests, and delivery-contract tests. Run scripts/check.sh and optional local NATS integration tests.",
+  "tests": "Add config validation tests, mocked consumer creation tests, subject containment tests, drift detection tests, and delivery-contract tests. Run scripts/check.sh and optional local NATS integration tests.",
   "documentation": "Update docs/configuration.md, docs/architecture.md, docs/operations.md, docs/security.md, docs/nats-feature-gap-analysis.md, ROADMAP.md, and CHANGELOG.md.",
   "closeout": "Close after the release with consumer policy configuration is published. Include release tag, supported settings, headers-only behavior, tests run, documentation updates, and unsupported settings.",
   "relationships": {

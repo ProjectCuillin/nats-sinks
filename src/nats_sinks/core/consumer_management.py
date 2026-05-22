@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from typing import Any, Literal, Protocol, cast
 
 from nats_sinks.core.errors import ConfigurationError
+from nats_sinks.core.subjects import subject_pattern_is_subset
 
 _DELIVER_POLICY_NAMES = {
     "all": "ALL",
@@ -44,13 +45,18 @@ class ConsumerManagementConfigProtocol(Protocol):
     """Runtime shape needed from the Pydantic consumer-management config."""
 
     mode: ConsumerManagementMode
+    filter_subjects: tuple[str, ...]
     deliver_policy: ConsumerDeliverPolicy
     replay_policy: ConsumerReplayPolicy
     ack_wait_seconds: float | None
     max_deliver: int | None
+    backoff_seconds: tuple[float, ...] | None
     max_ack_pending: int | None
     max_waiting: int | None
     headers_only: bool | None
+    num_replicas: int | None
+    memory_storage: bool | None
+    metadata: dict[str, str]
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,6 +146,52 @@ def _float_equal(expected: float | None, actual: object) -> bool:
     return abs(actual_float - expected) <= FLOAT_COMPARISON_TOLERANCE
 
 
+def _float_sequence_equal(expected: tuple[float, ...] | None, actual: object) -> bool:
+    """Compare optional server-side duration sequences with tolerance."""
+
+    if expected is None:
+        return True
+    if not isinstance(actual, (list, tuple)) or len(actual) != len(expected):
+        return False
+    for expected_item, actual_item in zip(expected, actual, strict=True):
+        try:
+            actual_float = float(cast(Any, actual_item))
+        except (TypeError, ValueError):
+            return False
+        if abs(actual_float - expected_item) > FLOAT_COMPARISON_TOLERANCE:
+            return False
+    return True
+
+
+def _managed_filter_subjects(
+    subject: str,
+    config: ConsumerManagementConfigProtocol,
+) -> tuple[str, ...]:
+    """Return the server-side filter subjects that the runner should manage."""
+
+    if not config.filter_subjects:
+        return (subject,)
+    for filter_subject in config.filter_subjects:
+        if not subject_pattern_is_subset(filter_subject, subject):
+            raise ConfigurationError(
+                "consumer_management.filter_subjects must not be broader than nats.subject; "
+                f"{filter_subject!r} is not contained by {subject!r}"
+            )
+    return config.filter_subjects
+
+
+def _existing_filter_subjects(existing_config: object) -> tuple[str, ...]:
+    """Normalize single and plural server-side filter fields for comparison."""
+
+    filter_subjects = _field(existing_config, "filter_subjects")
+    if isinstance(filter_subjects, (list, tuple)) and filter_subjects:
+        return tuple(str(item) for item in filter_subjects)
+    filter_subject = _field(existing_config, "filter_subject")
+    if isinstance(filter_subject, str) and filter_subject:
+        return (filter_subject,)
+    return ()
+
+
 def build_consumer_config(
     *,
     stream: str,
@@ -151,24 +203,36 @@ def build_consumer_config(
 
     del stream
     consumer_config_class, ack_policy, deliver_policy, replay_policy = _consumer_config_class()
+    filter_subjects = _managed_filter_subjects(subject, config)
     kwargs: dict[str, object] = {
         "name": durable_name,
         "durable_name": durable_name,
         "ack_policy": ack_policy.EXPLICIT,
-        "filter_subject": subject,
         "deliver_policy": getattr(deliver_policy, _DELIVER_POLICY_NAMES[config.deliver_policy]),
         "replay_policy": getattr(replay_policy, _REPLAY_POLICY_NAMES[config.replay_policy]),
     }
+    if len(filter_subjects) == 1:
+        kwargs["filter_subject"] = filter_subjects[0]
+    else:
+        kwargs["filter_subjects"] = list(filter_subjects)
     if config.ack_wait_seconds is not None:
         kwargs["ack_wait"] = float(config.ack_wait_seconds)
     if config.max_deliver is not None:
         kwargs["max_deliver"] = config.max_deliver
+    if config.backoff_seconds is not None:
+        kwargs["backoff"] = list(config.backoff_seconds)
     if config.max_ack_pending is not None:
         kwargs["max_ack_pending"] = config.max_ack_pending
     if config.max_waiting is not None:
         kwargs["max_waiting"] = config.max_waiting
     if config.headers_only is not None:
         kwargs["headers_only"] = config.headers_only
+    if config.num_replicas is not None:
+        kwargs["num_replicas"] = config.num_replicas
+    if config.memory_storage is not None:
+        kwargs["mem_storage"] = config.memory_storage
+    if config.metadata:
+        kwargs["metadata"] = dict(config.metadata)
     return consumer_config_class(**kwargs)
 
 
@@ -191,6 +255,103 @@ def _consumer_name_matches(existing: object, consumer: str) -> bool:
     return consumer in {name, durable_name}
 
 
+def _detect_identity_and_filter_drift(
+    drift: list[ConsumerDrift],
+    existing_config: object,
+    *,
+    durable_name: str,
+    expected_filter_subjects: tuple[str, ...],
+) -> None:
+    """Append durable identity, pull shape, and filter-subject drift."""
+
+    if not _consumer_name_matches(existing_config, durable_name):
+        _append_drift(
+            drift,
+            "durable_name",
+            durable_name,
+            _field(existing_config, "durable_name") or _field(existing_config, "name"),
+        )
+
+    deliver_subject = _field(existing_config, "deliver_subject")
+    if deliver_subject:
+        _append_drift(drift, "deliver_subject", None, deliver_subject)
+
+    actual_filter_subjects = _existing_filter_subjects(existing_config)
+    if set(actual_filter_subjects) != set(expected_filter_subjects):
+        _append_drift(
+            drift,
+            "filter_subjects",
+            sorted(expected_filter_subjects),
+            sorted(actual_filter_subjects),
+        )
+
+
+def _detect_required_policy_drift(
+    drift: list[ConsumerDrift],
+    existing_config: object,
+    config: ConsumerManagementConfigProtocol,
+) -> None:
+    """Append drift for always-managed delivery policies."""
+
+    ack_policy = _enum_value(_field(existing_config, "ack_policy"))
+    if ack_policy != "explicit":
+        _append_drift(drift, "ack_policy", "explicit", ack_policy)
+
+    deliver_policy = _enum_value(_field(existing_config, "deliver_policy"))
+    if deliver_policy != config.deliver_policy:
+        _append_drift(drift, "deliver_policy", config.deliver_policy, deliver_policy)
+
+    replay_policy = _enum_value(_field(existing_config, "replay_policy"))
+    if replay_policy != config.replay_policy:
+        _append_drift(drift, "replay_policy", config.replay_policy, replay_policy)
+
+
+def _detect_optional_policy_drift(
+    drift: list[ConsumerDrift],
+    existing_config: object,
+    config: ConsumerManagementConfigProtocol,
+) -> None:
+    """Append drift for explicitly configured optional policy fields."""
+
+    existing_headers_only = _field(existing_config, "headers_only")
+    if config.headers_only is not None and existing_headers_only != config.headers_only:
+        _append_drift(drift, "headers_only", config.headers_only, existing_headers_only)
+
+    if not _float_equal(config.ack_wait_seconds, _field(existing_config, "ack_wait")):
+        _append_drift(
+            drift, "ack_wait", config.ack_wait_seconds, _field(existing_config, "ack_wait")
+        )
+
+    if not _float_sequence_equal(config.backoff_seconds, _field(existing_config, "backoff")):
+        _append_drift(
+            drift, "backoff", list(config.backoff_seconds or ()), _field(existing_config, "backoff")
+        )
+
+    for field_name in ("max_deliver", "max_ack_pending", "max_waiting"):
+        expected = _field(config, field_name)
+        if expected is None:
+            continue
+        actual = _field(existing_config, field_name)
+        if actual != expected:
+            _append_drift(drift, field_name, expected, actual)
+
+    for config_field, consumer_field in (
+        ("num_replicas", "num_replicas"),
+        ("memory_storage", "mem_storage"),
+    ):
+        expected = _field(config, config_field)
+        if expected is None:
+            continue
+        actual = _field(existing_config, consumer_field)
+        if actual != expected:
+            _append_drift(drift, consumer_field, expected, actual)
+
+    if config.metadata:
+        actual_metadata = _field(existing_config, "metadata") or {}
+        if dict(cast(Any, actual_metadata)) != config.metadata:
+            _append_drift(drift, "metadata", config.metadata, actual_metadata)
+
+
 def detect_consumer_drift(
     existing: object,
     *,
@@ -205,59 +366,15 @@ def detect_consumer_drift(
     drift: list[ConsumerDrift] = []
     existing_config = _existing_config(existing)
 
-    if not _consumer_name_matches(existing_config, durable_name):
-        _append_drift(
-            drift,
-            "durable_name",
-            durable_name,
-            _field(existing_config, "durable_name") or _field(existing_config, "name"),
-        )
-
-    deliver_subject = _field(existing_config, "deliver_subject")
-    if deliver_subject:
-        _append_drift(drift, "deliver_subject", None, deliver_subject)
-
-    filter_subject = _field(existing_config, "filter_subject")
-    filter_subjects = _field(existing_config, "filter_subjects")
-    if filter_subject != subject and filter_subjects != [subject]:
-        _append_drift(drift, "filter_subject", subject, filter_subject or filter_subjects)
-
-    ack_policy = _enum_value(_field(existing_config, "ack_policy"))
-    if ack_policy != "explicit":
-        _append_drift(drift, "ack_policy", "explicit", ack_policy)
-
-    deliver_policy = _enum_value(_field(existing_config, "deliver_policy"))
-    if deliver_policy != config.deliver_policy:
-        _append_drift(drift, "deliver_policy", config.deliver_policy, deliver_policy)
-
-    replay_policy = _enum_value(_field(existing_config, "replay_policy"))
-    if replay_policy != config.replay_policy:
-        _append_drift(drift, "replay_policy", config.replay_policy, replay_policy)
-
-    existing_headers_only = _field(existing_config, "headers_only")
-    if config.headers_only is not None and existing_headers_only != config.headers_only:
-        _append_drift(
-            drift,
-            "headers_only",
-            config.headers_only,
-            existing_headers_only,
-        )
-
-    if not _float_equal(config.ack_wait_seconds, _field(existing_config, "ack_wait")):
-        _append_drift(
-            drift,
-            "ack_wait",
-            config.ack_wait_seconds,
-            _field(existing_config, "ack_wait"),
-        )
-
-    for field_name in ("max_deliver", "max_ack_pending", "max_waiting"):
-        expected = _field(config, field_name)
-        if expected is None:
-            continue
-        actual = _field(existing_config, field_name)
-        if actual != expected:
-            _append_drift(drift, field_name, expected, actual)
+    expected_filter_subjects = _managed_filter_subjects(subject, config)
+    _detect_identity_and_filter_drift(
+        drift,
+        existing_config,
+        durable_name=durable_name,
+        expected_filter_subjects=expected_filter_subjects,
+    )
+    _detect_required_policy_drift(drift, existing_config, config)
+    _detect_optional_policy_drift(drift, existing_config, config)
 
     return tuple(drift)
 

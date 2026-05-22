@@ -51,6 +51,9 @@
   `create_if_missing`, and `reconcile` modes, plus safe drift validation for
   delivery-sensitive settings such as filter subject, ACK policy, AckWait,
   MaxDeliver, MaxAckPending, and headers-only state.
+- Richer durable pull-consumer policy configuration for plural filter subjects,
+  server-side BackOff, MaxWaiting, consumer replicas, memory-storage state, and
+  bounded low-sensitivity consumer metadata.
 - Least-privilege NATS permissions templates for runtime workers, DLQ publish
   rights, optional consumer management, and advisory readers.
 - Advanced JetStream topology guidance for mirrors, sources, subject
@@ -128,9 +131,8 @@
 - Certified NKEY with challenge authentication support.
 - Certified decentralized JWT authentication/authorization support.
 - Certified NATS credentials-file workflows.
-- Server-side consumer `BackOff` sequence management and deeper replay-start
-  options for sequence or timestamp-based delivery policies.
-- Multiple JetStream filter subjects.
+- Deeper replay-start options for sequence or timestamp-based delivery
+  policies.
 - Optional confirmed ACK support after durable sink success.
 - Optional confirmed ACK or terminal acknowledgement handling after successful
   DLQ publication.
@@ -168,8 +170,8 @@
   durable sink processing.
 - Durable replay-to-sinks guidance and tooling design based on durable pull
   consumers rather than ordered inspection consumers.
-- Consumer metadata, replicas, and memory-storage options.
-- Headers-only delivery mode for metadata-only workflows.
+- Payload-presence metadata and sink certification for headers-only
+  metadata-only workflows.
 - Stream management helpers for retention, discard, storage, replicas, and
   duplicate-window documentation.
 - Stream mirror, source, subject transform, republish, compression, placement,
