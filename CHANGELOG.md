@@ -15,6 +15,8 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 - Fixed the high-confidence secret scanner so it prefers `rg` when available
   but falls back to `grep` in minimal CI environments where ripgrep is not
   installed.
+- Updated the PyPI version badge URL to use a shorter Shields.io cache period
+  so README and documentation badges refresh more quickly after releases.
 
 ## [0.4.0] - 2026-05-22
 

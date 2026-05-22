@@ -134,8 +134,14 @@ https://pypi.org/project/nats-sinks/
 The badge image uses:
 
 ```text
-https://img.shields.io/pypi/v/nats-sinks.svg
+https://img.shields.io/pypi/v/nats-sinks?cacheSeconds=300
 ```
+
+The short cache period helps the badge catch up quickly after a release. PyPI
+and Shields.io can still cache responses briefly, so a just-published release
+may need a few minutes before every browser or CDN edge shows the new version.
+Do not replace the PyPI badge with a static version string because that creates
+manual release drift.
 
 When adding more badges, prefer stable public endpoints and avoid badges that
 require private tokens or expose internal infrastructure details.
