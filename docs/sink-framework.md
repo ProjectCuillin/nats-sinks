@@ -385,6 +385,11 @@ protocol.” A sink can satisfy Python typing while still returning success too
 early, logging sensitive payloads, or lacking duplicate controls. Certification
 is the human and automated evidence that those risks have been addressed.
 
+The full release gate is documented in [Sink Certification](sink-certification.md).
+Future connectors should link to that page from their own sink documentation and
+must not set `production_ready=True` in their `SinkConnector` descriptor until
+the required evidence exists.
+
 ## Extension Checklist
 
 Future destination modules should follow this checklist before being described

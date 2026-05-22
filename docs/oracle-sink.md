@@ -8,6 +8,29 @@ least-privilege runtime accounts, idempotent writes, and metadata columns that
 help operators retain operational context such as priority, classification,
 labels, timestamps, subjects, and JetStream sequence numbers.
 
+## Certification Status
+
+`OracleSink` is part of the first-party production sink surface and is covered
+by the shared [Sink Certification](sink-certification.md) process. Its
+certification evidence includes:
+
+- reusable helper coverage with a fake Oracle connection pool proving
+  `write_batch(...)` returns only after `commit()`,
+- rollback and commit-failure tests,
+- duplicate-safe `merge` and `insert_ignore` behavior tests,
+- SQL identifier allow-list validation and bind-variable SQL generation tests,
+- JSON, non-JSON text, bytes, empty payload, and encrypted payload envelope
+  mapping tests,
+- priority, classification, labels, mission metadata, and custody metadata
+  mapping tests,
+- live Oracle integration and NATS-to-Oracle e2e scripts behind explicit
+  environment flags and ignored local configuration files.
+
+The certification evidence does not claim exactly-once delivery. Oracle
+certification means the sink follows the nats-sinks at-least-once,
+commit-then-acknowledge contract and provides documented idempotent production
+write modes.
+
 ## Installation
 
 ```bash

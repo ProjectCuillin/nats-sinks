@@ -256,9 +256,10 @@ operations without hunting through a long flat list.
   [Dependency Management](dependency-management.md),
   [Hash-Verified Installs](hash-verified-installs.md), and [SBOM](sbom.md):
   prepare high-trust deployment and supply-chain workflows.
-- [Testing](testing.md), [Latest Test Report](test-report.md), and
-  [Public API Compatibility](public-api.md): verify behavior and protect the
-  supported import surface.
+- [Testing](testing.md), [Sink Certification](sink-certification.md),
+  [Latest Test Report](test-report.md), and
+  [Public API Compatibility](public-api.md): verify behavior, certify sink
+  readiness, and protect the supported import surface.
 
 ### Use Cases
 

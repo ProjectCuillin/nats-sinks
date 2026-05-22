@@ -64,6 +64,10 @@
   `SinkRegistry` resolution, first-party Oracle and FileSink descriptors, and
   disabled-by-default allow-listed entry-point discovery for reviewed external
   connectors.
+- Documented sink certification contract with reusable test helpers for
+  lifecycle, durable write success, duplicate redelivery, ACK-boundary
+  protection, and log-redaction checks across current and future production
+  sinks.
 - Optional JetStream advisory observation for selected `$JS.EVENT.ADVISORY...`
   subjects with disabled-by-default configuration and aggregate metrics only.
 - Explicit durable pull-consumer management with `bind_only`,
@@ -118,8 +122,6 @@
   configuration, payload-presence metadata, and sink or DLQ certification.
 - Additional mission-support documentation examples for future operator
   runbooks, deeper replay drills, and sink-specific certification evidence.
-- Documented sink certification contract for idempotency, including required
-  duplicate-redelivery tests for every new production sink.
 - Deeper certification evidence and runbooks for complex multi-route Oracle
   idempotency deployments.
 - Deeper Oracle merge insert-versus-match visibility if future Oracle driver

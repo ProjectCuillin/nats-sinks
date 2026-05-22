@@ -225,6 +225,16 @@ PUBLIC_API_CONTRACT: dict[str, tuple[str, ...]] = {
         "load_entry_point_connectors",
         "normalize_connector_name",
     ),
+    "nats_sinks.testing": (
+        "SinkCertificationCase",
+        "assert_envelope_has_no_ack_primitives",
+        "assert_log_records_exclude_sensitive_values",
+        "assert_sink_protocol_boundary",
+        "certification_envelope",
+        "certify_sink_duplicate_redelivery",
+        "certify_sink_lifecycle",
+        "certify_sink_write_success",
+    ),
 }
 
 DOCUMENTED_IMPORT_CONTRACT: dict[str, tuple[str, ...]] = {

@@ -452,6 +452,13 @@ The deterministic sink release matrix can be run with:
 scripts/check-sinks.sh
 ```
 
+`scripts/check-sinks.sh` includes the reusable sink certification helpers from
+[Sink Certification](sink-certification.md). Those helpers are not a
+replacement for destination-specific tests; they are the shared baseline that
+proves a sink respects the framework boundary, receives only `NatsEnvelope`
+objects, does not own JetStream ACK behavior, and returns success only after
+the sink-specific durable assertion has passed.
+
 To include live Oracle checks, source the ignored local integration environment
 files first and set:
 

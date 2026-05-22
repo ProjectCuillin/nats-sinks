@@ -50,6 +50,26 @@ For operational evidence handling, this matters: the final file path is the
 durable artifact, and the JetStream ACK is sent only after that artifact has
 been placed according to the configured durability settings.
 
+## Certification Status
+
+`FileSink` is part of the first-party production sink surface and is covered by
+the shared [Sink Certification](sink-certification.md) process. Its
+certification evidence includes:
+
+- lifecycle and write certification using the reusable helper module,
+- duplicate-redelivery certification with deterministic file names and
+  `skip_existing`,
+- atomic temporary-file-to-final-file placement tests,
+- gzip and uncompressed output tests,
+- encrypted payload envelope storage and decrypt verification,
+- JSON, text, bytes, and empty payload handling,
+- path traversal and unsafe filename sanitization tests,
+- local file e2e tests proving ACK happens after file success.
+
+Live external services are not required for the file sink certification path.
+All deterministic tests write under pytest-managed temporary directories or
+ignored `.local/` paths.
+
 ## Installation
 
 The file sink has no extra runtime dependencies. It is available with the base

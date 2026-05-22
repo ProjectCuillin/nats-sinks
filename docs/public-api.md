@@ -148,6 +148,21 @@ is part of the public extension surface, but plugin discovery remains disabled
 by default and allow-list based. See [Sink Framework](sink-framework.md) for
 the connector descriptor and certification requirements.
 
+Sink certification helpers are also documented public imports for maintainers
+and connector authors:
+
+```python
+from nats_sinks.testing import (
+    SinkCertificationCase,
+    certification_envelope,
+    certify_sink_write_success,
+)
+```
+
+These helpers are release-tested so future sink packages can share the same
+baseline evidence without copying internal test code. See
+[Sink Certification](sink-certification.md).
+
 ## Breaking Changes
 
 A breaking change is any change that removes, renames, or changes the meaning

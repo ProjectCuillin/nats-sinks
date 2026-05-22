@@ -14,7 +14,7 @@ logs from live systems.
 | Field | Value |
 | --- | --- |
 | Overall result | Pass |
-| Report generated | 2026-05-22 19:57:19 CEST |
+| Report generated | 2026-05-22 20:24:10 CEST |
 | Project version | `0.4.0` post-release development |
 | Python version | 3.12.4 |
 | Git revision checked | Active `release-v0.4.1` branch-first workflow workspace |
@@ -154,6 +154,15 @@ published `0.4.0` release and has passed local validation. It includes:
   250-message partial-final-batch delivery with `batch_size=64`, and
   128-message AES-256-CCM encrypted delivery with decrypt verification. No new
   product bugs were identified during this run,
+- sink certification contract work for issue `#41`, including a documented
+  release gate, reusable `nats_sinks.testing` certification helpers, FileSink
+  lifecycle/write/duplicate certification coverage, Oracle durable-success
+  certification with a fake committed connection, public API coverage, and
+  `scripts/check-sinks.sh` enforcement. Full local validation after this work
+  passed with `622 passed, 8 skipped` in the main pytest run, `120 passed` in
+  the encryption and sink contract suite, and `104 passed` in the
+  sink-focused suite; Ruff, mypy, documentation builds, security scan, package
+  build, SBOM generation, checksum generation, and Twine checks also passed,
 - safe sink connector framework work for issue `#35`, including
   `SinkConnector` metadata, explicit `SinkRegistry` connector registration,
   built-in first-party Oracle and FileSink descriptors, optional

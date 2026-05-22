@@ -33,6 +33,10 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   registration, disabled-by-default allow-listed Python entry-point discovery
   for reviewed external connectors, plugin configuration validation, and public
   API compatibility coverage.
+- Added a documented sink certification contract and reusable
+  `nats_sinks.testing` helpers for lifecycle, durable write success,
+  duplicate redelivery, ACK-boundary protection, and log-redaction checks, with
+  Oracle and file sink coverage included in the deterministic sink check suite.
 - Added researched backlog items for first-party Oracle-family sink candidates:
   OCI Object Storage, Oracle MySQL, Oracle Berkeley DB, Oracle NoSQL Database,
   and OCI Streaming.

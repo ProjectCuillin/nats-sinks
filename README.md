@@ -713,9 +713,13 @@ Destination-specific details are split into dedicated pages:
   guidance.
 
 The generic sink framework is documented separately in
-[Sink Framework](https://nats-sinks.readthedocs.io/en/latest/sink-framework/). That boundary is deliberate:
-Oracle and file sinks use the same core delivery semantics, the same envelope
-contract, and the same commit-then-acknowledge rule.
+[Sink Framework](https://nats-sinks.readthedocs.io/en/latest/sink-framework/)
+and the reusable release gate is documented in
+[Sink Certification](https://nats-sinks.readthedocs.io/en/latest/sink-certification/).
+That boundary is deliberate: Oracle and file sinks use the same core delivery
+semantics, the same envelope contract, and the same commit-then-acknowledge
+rule. Future sinks must provide comparable certification evidence before they
+are described as production-ready.
 
 Generic data-handling features such as
 [payload encryption](https://nats-sinks.readthedocs.io/en/latest/payload-encryption/),

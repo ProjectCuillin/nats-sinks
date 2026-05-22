@@ -65,6 +65,7 @@ nav:
       - SBOM: sbom.md
   - Testing And Quality:
       - Testing: testing.md
+      - Sink Certification: sink-certification.md
       - Latest Test Report: test-report.md
       - Public API Compatibility: public-api.md
   - Use Cases:
