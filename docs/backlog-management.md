@@ -557,13 +557,17 @@ Before a release:
 4. Confirm open issues still represent future work and are not already done.
 5. Confirm release notes link to the relevant issues or pull requests.
 
-All implementation work for backlog and bug issues must happen on a work
-branch. The normal branch names are `release-*`, `feature-*`, `bugfix-*`, and
-`hotfix-*`. Ordinary branch pushes are quiet: they should not start GitHub
-Actions. Pull requests should target `main`, pass manually dispatched release
-validation checks when the branch is ready, and receive maintainer review
-before merge. See
-[Branch-First Development And Release Workflow](branch-workflow.md).
+All implementation work for backlog and bug issues must happen inside the
+hierarchical release branch model. The active release branch is named
+`release-vX.Y.Z`. Feature and issue branches are created from that release
+branch using names such as `issue-123-short-name` or
+`feature-123-short-name`. Bugs found while developing a feature branch are
+created from that feature branch using names such as `bug-456-short-name`.
+Ordinary branch pushes are quiet: they should not start GitHub Actions. Pull
+requests target the next branch in the hierarchy: bug branch to feature branch,
+feature branch to release branch, and release branch to `main` only when the
+maintainer explicitly decides to release. See
+[Hierarchical Branch Development And Release Workflow](branch-workflow.md).
 
 ## Working With AI Agents
 
@@ -571,7 +575,8 @@ AI agents can help draft, refine, and close issues, but they must not treat
 chat history as the backlog. When an agent implements a feature, it should:
 
 - check whether a matching GitHub issue exists,
-- create or switch to an approved work branch before editing files,
+- create or switch to the approved release, issue, feature, or bug branch
+  before editing files,
 - create or update a local `backlog/items/*.json` file when a new backlog item
   is discovered and live GitHub access is not available,
 - use `scripts/sync-backlog-issues.py --dry-run` to validate generated backlog
@@ -579,10 +584,11 @@ chat history as the backlog. When an agent implements a feature, it should:
 - use `scripts/comment-backlog-issue.py --dry-run` before posting progress or
   close-out comments,
 - mention the issue number in its implementation summary when known,
-- push small commits to the work branch without triggering GitHub Actions on
+- push small commits to the active branch without triggering GitHub Actions on
   every push,
-- run `scripts/run-release-validation.sh` only when the branch is ready for
-  merge or release validation,
+- run `scripts/run-release-validation.sh` only when the release branch is ready
+  for merge or a maintainer explicitly requests validation for a feature
+  branch,
 - update `CHANGELOG.md` and documentation,
 - explain tests and known limitations in the final response,
 - help draft a detailed issue close-out comment.

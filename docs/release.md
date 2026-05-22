@@ -8,13 +8,13 @@ package metadata, security scanning, and command-line smoke tests.
 For the full push-tag and PyPI publication runbook, see
 [Publishing Releases](publishing.md).
 
-All release preparation must happen on a work branch. Do not prepare releases
-by committing directly to `main`. Use a branch such as `release-v0.4.1`, push
-changes to that branch, keep GitHub Actions quiet during ordinary branch work,
-create or update a draft pull request with `scripts/open-release-pr.sh`, and
-merge to `main` only after manually dispatched release validation checks and
-maintainer review are complete. See [Branch-First Development And Release
-Workflow](branch-workflow.md).
+All release preparation must happen on a release development branch. Do not
+prepare releases by committing directly to `main`. Use a branch such as
+`release-v0.4.1`, merge completed issue branches into it, keep GitHub Actions
+quiet during ordinary branch work, create or update a draft pull request with
+`scripts/open-release-pr.sh --base main`, and merge to `main` only after
+manually dispatched release validation checks and maintainer review are
+complete. See [Hierarchical Branch Development And Release Workflow](branch-workflow.md).
 
 ## Versioning
 

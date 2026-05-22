@@ -1,102 +1,176 @@
-# Branch-First Development And Release Workflow
+# Hierarchical Branch Development And Release Workflow
 
-`nats-sinks` uses a branch-first workflow. All implementation work, issue
-work, release preparation, documentation updates, and release-note changes must
-be done on a work branch. The `main` branch is the public release integration
-branch and should only change through reviewed pull requests.
+`nats-sinks` uses a hierarchical branch workflow. The `main` branch is the
+public release integration branch. It should only change when maintainers
+explicitly decide to release and merge the current release development branch.
 
-This workflow protects users who install from PyPI, GitHub Releases,
-Read the Docs, or GitHub Pages. It also gives maintainers a clear audit trail:
-every released change can be traced to a branch, a pull request, automated
-checks, review approval, release notes, and any related GitHub issues.
+Ordinary development happens below the release branch:
 
-Ordinary work-branch pushes are intentionally quiet. GitHub Actions should not
-start after every small commit. Validation is started deliberately when the
-branch is ready for merge or release.
+- one `release-vX.Y.Z` branch exists for the upcoming release,
+- each feature or managed issue gets its own issue branch from that release
+  branch,
+- each bug found while developing a feature gets its own bug branch from the
+  feature branch,
+- solved bug branches merge back into their feature branch,
+- completed feature branches merge back into the release branch,
+- the release branch merges into `main` only for an explicit release.
+
+This workflow protects users who install from PyPI, GitHub Releases, Read the
+Docs, or GitHub Pages. It also gives maintainers a clear audit trail: every
+released change can be traced to an issue, a branch, a pull request, local test
+evidence, documentation updates, release notes, and, when relevant, GitHub
+Actions release validation.
+
+Ordinary branch pushes are intentionally quiet. GitHub Actions should not start
+after every small commit. Validation is started deliberately when a maintainer
+is ready to merge a feature branch into the release branch or when the release
+branch is ready to merge into `main`.
 
 ## Required Flow
 
 ```mermaid
-flowchart LR
-    Issue[GitHub issue or maintainer task]
-    Branch[release, feature, bugfix, or hotfix branch]
-    Push[Push quiet small commits to branch]
-    PR[Draft pull request to main]
-    Ready[Mark PR ready for release validation]
-    Checks[Manually dispatch CI, CodeQL, and docs]
-    Review[Maintainer or CODEOWNER review]
-    Merge[Merge PR into main]
-    Tag[Tag main for release]
-    Release[Release workflow publishes artifacts]
+flowchart TD
+    Main[main]
+    Release[release-vX.Y.Z]
+    Issue[GitHub issue]
+    Feature[issue-N-short-name]
+    BugIssue[GitHub bug issue]
+    Bug[bug-N-short-name]
+    LocalChecks[Local checks and evidence]
+    FeaturePR[PR: issue branch to release branch]
+    ReleasePR[PR: release branch to main]
+    ReleaseChecks[Manual release validation]
+    Tag[Tag main]
+    Publish[GitHub Release, PyPI, docs]
 
-    Issue --> Branch --> Push --> PR --> Ready --> Checks --> Review --> Merge --> Tag --> Release
+    Main --> Release
+    Issue --> Feature
+    Release --> Feature
+    Feature --> BugIssue
+    BugIssue --> Bug
+    Feature --> Bug
+    Bug --> Feature
+    Feature --> LocalChecks
+    LocalChecks --> FeaturePR
+    FeaturePR --> Release
+    Release --> ReleasePR
+    ReleasePR --> ReleaseChecks
+    ReleaseChecks --> Main
+    Main --> Tag
+    Tag --> Publish
 ```
 
 The release boundary is intentionally conservative:
 
-1. Create or switch to a work branch before editing files.
-2. Commit and push small changes to that branch as work progresses.
-3. Keep branch pushes quiet; do not run GitHub Actions after every small
-   branch update.
-4. Open or refresh a draft pull request with `scripts/open-release-pr.sh`.
-5. Keep managed issue comments, acceptance criteria, and evidence up to date.
-6. When the branch is ready for merge or release, mark the pull request ready
-   and run `scripts/run-release-validation.sh`.
-7. Wait for CI, CodeQL, documentation checks, dependency review, and sink
-   checks to pass.
-8. Require maintainer approval through CODEOWNERS and branch protection.
-9. Merge the pull request into `main`.
-10. Create the release tag from `main`, not from the work branch.
+1. Start every release from `main` with a branch named `release-vX.Y.Z`.
+2. Start every feature or managed issue from the release branch with a branch
+   named `issue-N-short-description` or `feature-N-short-description`.
+3. If a defect is found during feature development, create a bug report and a
+   branch named `bug-N-short-description` from the active feature branch.
+4. Add the smallest focused regression test before fixing a bug.
+5. Merge the bug branch back into the feature branch after the test evidence
+   proves the fix.
+6. Close branch-local development bug issues after their bug branch has merged
+   into the feature branch and the issue contains sanitized evidence.
+7. Merge completed feature branches into the release branch after local checks,
+   documentation, changelog updates, and issue evidence are complete.
+8. Keep ordinary branch pushes quiet; do not run GitHub Actions after every
+   small branch update.
+9. Run manual release validation only when the release branch is ready to merge
+   into `main`, or when a maintainer explicitly requests validation for an
+   important feature merge.
+10. Merge the release branch into `main` only when the maintainer explicitly
+    decides to release.
+11. Create the release tag from `main`, not from any release, feature, or bug
+    branch.
 
 ## Branch Names
 
-Use clear branch prefixes so automation can decide what kind of work is being
-reviewed:
+Use clear branch prefixes so humans and automation can understand the merge
+target:
 
-| Prefix | Use |
-| --- | --- |
-| `release-vX.Y.Z` | Release preparation for a specific version, for example `release-v0.4.1`. |
-| `feature-short-name` | New non-release feature work. |
-| `bugfix-short-name` | Bug fixes and regression work. |
-| `hotfix-short-name` | Urgent fixes that should move quickly but still require review. |
+| Prefix | Base Branch | Merge Target | Use |
+| --- | --- | --- | --- |
+| `release-vX.Y.Z` | `main` | `main` | Release integration for a specific version, for example `release-v0.4.1`. |
+| `issue-N-short-name` | `release-vX.Y.Z` | `release-vX.Y.Z` | Normal issue implementation work. |
+| `feature-N-short-name` | `release-vX.Y.Z` | `release-vX.Y.Z` | Feature work when the `feature` wording is clearer than `issue`. |
+| `bug-N-short-name` | Active issue or feature branch | Active issue or feature branch | Defects found during development of that feature. |
+| `hotfix-N-short-name` | `main` or a release branch | `main` or release branch | Urgent release-bound fixes that still require review. |
 
-The pull request governance workflow rejects pull requests into `main` from
-unexpected branch names. Dependabot branches are allowed separately.
+Avoid branch names that reveal private customer names, IP addresses, internal
+systems, sensitive subjects, or operational details. Use public-safe issue
+numbers and short neutral descriptions.
 
-## Pull Requests Without Per-Push Actions
+## Pull Request Targets
+
+Pull request bases must follow the branch hierarchy:
+
+| Current Branch | Pull Request Base | When To Open |
+| --- | --- | --- |
+| `bug-N-*` | the active `issue-N-*` or `feature-N-*` branch | After the failing regression test and fix are ready for review. |
+| `issue-N-*` or `feature-N-*` | `release-vX.Y.Z` | After local checks, documentation, changelog, and issue evidence are complete. |
+| `release-vX.Y.Z` | `main` | Only when the maintainer explicitly decides to release. |
+
+Use `Related #123` in pull request descriptions for managed release-bound
+issues. Avoid `Closes #123`, `Fixes #123`, or `Resolves #123` unless the issue
+is intentionally closed before release. Release automation closes eligible
+release-bound feature and bug issues after the associated GitHub Release exists
+and the required evidence is present.
+
+Development-only bug reports created while working on a feature may be closed
+when the bug branch has merged back into the feature branch. These bugs never
+reached a released artifact, so their closure boundary is the feature branch
+that contains the fix. The bug report must still include the failing test, the
+fix approach, the successful test evidence, and a sanitized close-out comment.
+
+## Local Pull Request Helper
 
 Pull requests are normally created from a maintainer workstation:
 
 ```bash
 scripts/check-gh-auth.sh
-scripts/open-release-pr.sh --repo ProjectCuillin/nats-sinks
+scripts/open-release-pr.sh --repo ProjectCuillin/nats-sinks --base release-v0.4.1
 ```
 
-The local helper refuses to run from `main`. It pushes the current branch,
-creates or updates a draft pull request, and uses a release-control checklist
-in the pull request body. Draft pull requests keep review intent visible while
-avoiding validation churn on every small branch push.
+The helper refuses to run from `main`. It pushes the current branch, creates or
+updates a draft pull request, and uses a release-control checklist in the pull
+request body. Draft pull requests keep review intent visible while avoiding
+validation churn on every small branch push.
 
-When the branch is ready, mark the pull request ready in GitHub and dispatch
-release validation:
+Use an explicit `--base` whenever the current branch is not a release branch.
+For example:
+
+```bash
+# Bug branch back into the feature branch.
+scripts/open-release-pr.sh \
+  --repo ProjectCuillin/nats-sinks \
+  --base issue-129-websocket-transport
+
+# Feature branch back into the release branch.
+scripts/open-release-pr.sh \
+  --repo ProjectCuillin/nats-sinks \
+  --base release-v0.4.1
+
+# Release branch into main when the release is explicitly approved.
+scripts/open-release-pr.sh --repo ProjectCuillin/nats-sinks --base main
+```
+
+When a branch is ready for release-bound validation, mark the pull request
+ready in GitHub and dispatch validation deliberately:
 
 ```bash
 scripts/run-release-validation.sh --repo ProjectCuillin/nats-sinks
 ```
 
 That helper starts the manual `CI`, `Docs`, and `CodeQL` workflows for the
-current branch. Use it only when the branch is ready for merge or release.
+current branch. Use it only when the branch is ready for merge or release
+validation.
 
 The repository also includes a manual `.github/workflows/auto-pr.yml` workflow
 for token-gated pull request creation. It is not triggered by branch pushes.
-
-The workflow requires a repository secret named `NATS_SINKS_PR_BOT_TOKEN`.
-GitHub intentionally prevents the default repository `GITHUB_TOKEN` from
-creating or approving pull requests in some repository configurations. Use a
-least-privileged fine-grained personal access token or GitHub App token that
-can create pull requests in this repository. If the secret is not configured,
-the workflow exits successfully with a notice and does not create a pull
-request.
+The workflow requires a repository secret named `NATS_SINKS_PR_BOT_TOKEN`. If
+the secret is not configured, the workflow exits successfully with a notice and
+does not create a pull request.
 
 ## Main Branch Protection
 
@@ -132,32 +206,22 @@ before merging it, the release workflow fails before publishing to PyPI.
 ```mermaid
 sequenceDiagram
     participant Maintainer
-    participant Branch as release-vX.Y.Z
-    participant PR as Pull Request
-    participant Checks as Manual Validation
+    participant Feature as issue-N branch
+    participant ReleaseBranch as release-vX.Y.Z
     participant Main as main
+    participant Checks as Manual Validation
     participant Release as Release Workflow
 
-    Maintainer->>Branch: Commit and push small changes
-    Maintainer->>PR: Open draft PR
-    Maintainer->>PR: Mark ready for validation
+    Maintainer->>Feature: Commit small quiet changes
+    Maintainer->>Feature: Run local tests and collect evidence
+    Feature->>ReleaseBranch: Merge feature PR
+    Maintainer->>ReleaseBranch: Prepare release notes and final checks
     Maintainer->>Checks: Dispatch CI, Docs, and CodeQL
-    Checks->>PR: Report release-validation checks
-    Maintainer->>PR: Approve after review
-    PR->>Main: Merge
+    Checks->>ReleaseBranch: Report release-validation checks
+    ReleaseBranch->>Main: Merge approved release PR
     Maintainer->>Main: Tag vX.Y.Z
-    Main->>Release: Publish package, SBOM, checksums, and GitHub Release
+    Main->>Release: Publish package, SBOM, checksums, docs, and GitHub Release
 ```
-
-## Managed Issue References
-
-Managed backlog and bug issues should remain open until the release containing
-the fix is actually published. Pull requests should normally use `Related
-#123`, not `Closes #123`, `Fixes #123`, or `Resolves #123`.
-
-The pull request governance workflow rejects auto-closing keywords in pull
-requests into `main`. Release automation closes eligible managed issues after
-the GitHub Release exists and the required evidence has been posted.
 
 ## What To Do If Main Is Changed Directly
 
@@ -168,7 +232,7 @@ technically correct. The maintainer should:
 2. verify branch protection is still enabled,
 3. document the exception in the relevant GitHub issue or release notes,
 4. create follow-up work if automation or permissions allowed the bypass,
-5. continue future work from a branch.
+5. continue future work from the release branch hierarchy.
 
 The goal is not bureaucracy. The goal is a public, reviewable release trail for
 a package that is intended for operational and mission-support environments.

@@ -3,24 +3,31 @@
 # SPDX-License-Identifier: Apache-2.0
 
 #
-# Push the current release/work branch and open or update a pull request into
-# main. The GitHub workflow also creates pull requests for pushed release
-# branches, but this local helper is useful when a maintainer wants immediate
-# feedback from their own GitHub identity and token.
+# Push the current branch and open or update a pull request into the next
+# branch in the hierarchy. Release branches target main, issue branches target
+# the active release branch, and bug branches target their parent issue branch.
+# This local helper is useful when a maintainer wants immediate feedback from
+# their own GitHub identity and token while ordinary branch pushes stay quiet.
 
 set -euo pipefail
 
 REPO=""
-BASE="main"
+BASE="${NATS_SINKS_PR_BASE:-}"
 DRAFT=true
 
 usage() {
   cat <<'USAGE'
-Usage: scripts/open-release-pr.sh [--repo OWNER/REPO] [--ready]
+Usage: scripts/open-release-pr.sh [--repo OWNER/REPO] [--base BRANCH] [--ready]
 
-Run from a branch named release-*, feature-*, bugfix-*, or hotfix-*.
-The script pushes the branch to origin and opens or updates a pull request
-against main. It refuses to operate from main.
+Run from a branch named release-*, issue-*, feature-*, bug-*, bugfix-*, or
+hotfix-*. The script pushes the branch to origin and opens or updates a pull
+request against the selected base branch. It refuses to operate from main.
+
+Use --base release-vX.Y.Z for issue or feature branches, --base issue-N-name
+for bug branches created during feature development, and --base main for the
+final release pull request. If --base is omitted for a release-vX.Y.Z branch,
+the script defaults to main. For non-release branches, provide --base or set
+NATS_SINKS_PR_BASE.
 
 By default the pull request is created as a draft so GitHub Actions stay quiet
 while the branch is still receiving small commits. Pass --ready only when the
@@ -32,6 +39,10 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --repo)
       REPO="${2:?--repo requires OWNER/REPO}"
+      shift 2
+      ;;
+    --base)
+      BASE="${2:?--base requires a branch name}"
       shift 2
       ;;
     --ready)
@@ -65,38 +76,61 @@ if [[ -z "$BRANCH" ]]; then
   exit 1
 fi
 
-if [[ "$BRANCH" == "$BASE" ]]; then
-  echo "Refusing to open a release pull request from main." >&2
+if [[ "$BRANCH" == "main" ]]; then
+  echo "Refusing to open a pull request from main." >&2
   exit 1
 fi
 
 case "$BRANCH" in
-  release-*|feature-*|bugfix-*|hotfix-*)
+  release-*|issue-*|feature-*|bug-*|bugfix-*|hotfix-*)
     ;;
   *)
-    echo "Branch '$BRANCH' must start with release-, feature-, bugfix-, or hotfix-." >&2
+    echo "Branch '$BRANCH' must start with release-, issue-, feature-, bug-, bugfix-, or hotfix-." >&2
     exit 1
     ;;
 esac
 
+if [[ -z "$BASE" ]]; then
+  if [[ "$BRANCH" =~ ^release-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    BASE="main"
+  else
+    echo "A pull request base is required for non-release branches." >&2
+    echo "Use --base release-vX.Y.Z for issue branches or --base issue-N-name for bug branches." >&2
+    exit 2
+  fi
+fi
+
+if [[ "$BRANCH" == "$BASE" ]]; then
+  echo "Refusing to open a pull request from a branch into itself: $BRANCH." >&2
+  exit 1
+fi
+
 title="Work branch: $BRANCH"
 if [[ "$BRANCH" =~ ^release-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   title="Release ${BRANCH#release-v}"
+elif [[ "$BRANCH" =~ ^issue-[0-9]+- ]]; then
+  title="Issue branch: $BRANCH"
+elif [[ "$BRANCH" =~ ^feature-[0-9]+- ]]; then
+  title="Feature branch: $BRANCH"
+elif [[ "$BRANCH" =~ ^bug-[0-9]+- ]]; then
+  title="Bug branch: $BRANCH"
 fi
 
 body_file="$(mktemp)"
 trap 'rm -f "$body_file"' EXIT
 
 cat >"$body_file" <<'PR_BODY'
-## Branch-First Release Workflow
+## Hierarchical Branch Workflow
 
-This pull request is the release boundary for work that must not be committed
-directly to `main`.
+This pull request moves work to the next branch in the release hierarchy. Bug
+branches should target their parent issue or feature branch. Issue and feature
+branches should target the active release branch. Release branches should
+target `main` only when the maintainer has explicitly decided to release.
 
-## Required Release Controls
+## Required Controls
 
-- [ ] CI is green for all supported Python versions.
-- [ ] CodeQL, dependency review, documentation, and sink checks are green when applicable.
+- [ ] Local checks have been run for the scope of this branch.
+- [ ] Manual CI, CodeQL, dependency review, documentation, and sink checks are green when this is release-bound validation.
 - [ ] Changelog and documentation are updated for user-visible changes.
 - [ ] Managed issues have implementation, test evidence, and close-out comments.
 - [ ] No secrets, credentials, private endpoints, payload dumps, or local paths are included.

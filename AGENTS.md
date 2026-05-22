@@ -72,13 +72,21 @@ silent loss after an early ACK is not.
 - Keep formatting, linting, typing, tests, packaging, and documentation checks
   green before considering work complete.
 - Never make ordinary code, documentation, release-note, or automation changes
-  directly on `main`. Start from a `release-*`, `feature-*`, `bugfix-*`, or
-  `hotfix-*` branch, push small commits to that branch, and use a reviewed
-  pull request as the only path back to `main`.
+  directly on `main`. Use the hierarchical branch model: `release-vX.Y.Z`
+  from `main`, issue or feature branches from the release branch, and bug
+  branches from the active issue or feature branch when defects are found
+  during development.
+- Merge bug branches back into their issue or feature branch after the failing
+  test, fix, and sanitized evidence are complete. Merge issue or feature
+  branches back into the release branch after implementation evidence,
+  documentation, changelog updates, and local checks are complete. Merge the
+  release branch into `main` only when the maintainer explicitly decides to
+  release.
 - Keep ordinary branch pushes quiet. Do not trigger GitHub Actions after every
-  small branch commit. Use `scripts/open-release-pr.sh` to open or refresh a
-  draft pull request, then run `scripts/run-release-validation.sh` only when
-  the branch is ready for merge or release validation.
+  small branch commit. Use `scripts/open-release-pr.sh --base <target-branch>`
+  to open or refresh a draft pull request against the correct hierarchy
+  target, then run `scripts/run-release-validation.sh` only when the branch is
+  ready for merge or release validation.
 - The `Branch Pull Request` workflow is manual and token-gated. Do not
   re-enable push-triggered pull request creation unless the maintainer
   explicitly changes the release policy. Do not create release tags from
@@ -126,6 +134,11 @@ silent loss after an early ACK is not.
   work, apply a concrete release label, and post a sanitized `started`
   lifecycle note with `Planned Work`, `Test Plan`, and
   `Documentation And Release Notes` sections.
+- Before editing code for a managed issue, create or switch to the issue branch
+  from the active release branch. If a bug is discovered inside that feature
+  branch, create a separate bug report, branch from the feature branch, add the
+  failing test first, and merge the bug branch back into the feature branch
+  after verification.
 - When implementation is complete locally, post a sanitized `completed` or
   `closeout` lifecycle note with `Completed Work`, `Acceptance Criteria`,
   `Test Plan Evidence`, and `Close-Out Evidence` sections. Use

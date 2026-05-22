@@ -106,15 +106,18 @@ quality-of-life check so commands such as `gh run list`, `gh run view`, and
 invalid and a terminal is available, the helper asks whether it should start
 browser-based `gh auth login`. It never prints token values.
 
-Push the release branch and open or refresh the pull request:
+Push the release branch and open or refresh the release pull request:
 
 ```bash
-scripts/open-release-pr.sh --repo ProjectCuillin/nats-sinks
+scripts/open-release-pr.sh --repo ProjectCuillin/nats-sinks --base main
 ```
 
-The helper creates a draft pull request by default. Ordinary branch pushes do
-not start GitHub Actions. When the branch is ready for merge and release
-validation, mark the pull request ready and dispatch the validation workflows:
+For issue branches, use the active release branch as the pull request base, for
+example `--base release-v0.4.1`. For bug branches created during feature
+development, use the feature branch as the base. The helper creates a draft
+pull request by default. Ordinary branch pushes do not start GitHub Actions.
+When the release branch is ready for merge and release validation, mark the
+pull request ready and dispatch the validation workflows:
 
 ```bash
 scripts/run-release-validation.sh --repo ProjectCuillin/nats-sinks

@@ -39,31 +39,45 @@ dependency manifests stay unchanged. Add new generator cases when a validator
 accepts external input, especially around configuration, NATS subject patterns,
 payload handling, metadata handling, or filesystem paths.
 
-## Branch-First Work
+## Hierarchical Branch Work
 
-Do not work directly on `main`. Create a branch before editing:
+Do not work directly on `main`. `main` is only for released code. Start normal
+work from the active release development branch, then create an issue branch
+for the specific feature or bug you are working on:
 
 ```bash
 git switch main
 git pull --ff-only
-git switch -c feature-short-description
+git switch -c release-v0.4.1
+git switch -c issue-123-short-description
 ```
 
-Use `release-vX.Y.Z` for release preparation, `feature-*` for planned
-enhancements, `bugfix-*` for regression fixes, and `hotfix-*` for urgent
-fixes. Push small commits to the branch. Branch pushes intentionally do not
-start the CI, docs, CodeQL, dependency-review, backlog-sync, or bug-sync
-workflows.
+If a defect is found while working on that issue, create a bug report and then
+create a bug branch from the active issue branch:
+
+```bash
+git switch issue-123-short-description
+git switch -c bug-456-short-description
+```
+
+Merge bug branches back into their issue branch after the regression test and
+fix are complete. Merge issue branches back into the release branch after local
+checks, documentation, changelog updates, and GitHub issue evidence are
+complete. Merge the release branch into `main` only when the maintainer
+explicitly decides to release. Branch pushes intentionally do not start the CI,
+docs, CodeQL, dependency-review, backlog-sync, or bug-sync workflows.
 
 Create or refresh the pull request locally when the branch is ready for review:
 
 ```bash
-scripts/open-release-pr.sh --repo ProjectCuillin/nats-sinks
+scripts/open-release-pr.sh --repo ProjectCuillin/nats-sinks --base release-v0.4.1
 ```
 
-The helper creates a draft pull request by default. When the branch is ready
-for merge/release validation, mark the pull request ready and dispatch the
-validation workflows:
+Use `--base issue-123-short-description` for a bug branch, `--base
+release-v0.4.1` for an issue branch, and `--base main` only for the final
+release pull request. The helper creates a draft pull request by default. When
+the release branch is ready for merge and release validation, mark the pull
+request ready and dispatch the validation workflows:
 
 ```bash
 scripts/run-release-validation.sh --repo ProjectCuillin/nats-sinks
@@ -71,7 +85,7 @@ scripts/run-release-validation.sh --repo ProjectCuillin/nats-sinks
 
 The pull request is the review boundary before `main`. Branch protection should
 require CI, CODEOWNER review, resolved conversations, and no direct pushes. See
-[Branch-First Development And Release Workflow](branch-workflow.md).
+[Hierarchical Branch Development And Release Workflow](branch-workflow.md).
 
 ## Synthetic Test Harness
 

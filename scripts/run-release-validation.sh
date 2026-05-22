@@ -17,11 +17,12 @@ usage() {
   cat <<'USAGE'
 Usage: scripts/run-release-validation.sh [--repo OWNER/REPO] [--ref BRANCH]
 
-Dispatches the manual validation workflows used before merging a release,
-feature, bugfix, or hotfix branch into main.
+Dispatches the manual validation workflows used before merging a release
+branch into main, or before an important issue branch is merged into the
+release branch when a maintainer explicitly requests hosted validation.
 
 This script intentionally starts GitHub Actions. Use it only when the branch is
-ready for merge/release validation, not after every small branch commit.
+ready for merge or release validation, not after every small branch commit.
 USAGE
 }
 

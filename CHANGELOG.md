@@ -12,8 +12,9 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Added
 
-- Added a quiet branch-first development and release workflow with draft pull
-  request creation helpers, manual release-validation dispatch, pull request
+- Added a quiet hierarchical branch development and release workflow with
+  release development branches, issue branches, bug sub-branches, configurable
+  pull request bases, manual release-validation dispatch, pull request
   governance checks, CODEOWNERS review, branch protection tooling, and release
   workflow validation that tags are cut only from commits already merged into
   `main`.
