@@ -121,6 +121,7 @@ A metrics snapshot is UTF-8 JSON with a small, versioned schema:
     "messages_prepared_total": 256,
     "messages_written_total": 256,
     "messages_acked_total": 256,
+    "messages_terminated_total": 0,
     "sink_batches_written_total": 4
   },
   "gauges": {
@@ -225,6 +226,7 @@ MESSAGES_FAILED_TOTAL=0
 MESSAGES_FETCHED_TOTAL=256
 MESSAGES_NACKED_TOTAL=0
 MESSAGES_PREPARED_TOTAL=256
+MESSAGES_TERMINATED_TOTAL=0
 MESSAGES_WRITTEN_TOTAL=256
 ```
 
@@ -242,6 +244,30 @@ fi
 
 `get` exits with code `4` when the metric is missing and no `--default` value
 is supplied. This makes missing metrics visible in strict scripts.
+
+## Terminal Acknowledgement Metrics
+
+Terminal acknowledgement metrics are emitted only when a permanent failure is
+published to DLQ and `dead_letter.ack_term_after_publish` is enabled. They are
+separate from normal ACK metrics because `AckTerm` means "stop redelivery after
+terminal failure handling", not "the sink successfully wrote the message".
+
+```bash
+nats-sink-metrics show .local/nats-sinks/metrics.json --metric "*term*"
+```
+
+Example output:
+
+```text
+KIND         METRIC                       VALUE  DESCRIPTION
+counter      messages_terminated_total       3  Messages terminally acknowledged to JetStream after successful DLQ publication.
+counter      term_errors_total               0  Messages whose terminal acknowledgement failed after successful DLQ publication.
+observation  message_term_seconds.count      1  Elapsed seconds spent sending terminal acknowledgements after DLQ publication.
+```
+
+Use these metrics together with `messages_dlq_total`. A terminal
+acknowledgement without a corresponding DLQ publication would indicate a bug or
+an unsafe custom integration.
 
 ## Priority Lane Metrics
 
@@ -480,6 +506,7 @@ messages_fetched_total
 messages_prepared_total
 messages_written_total
 messages_acked_total
+messages_terminated_total
 messages_nacked_total
 messages_failed_total
 messages_dlq_total
@@ -491,12 +518,14 @@ sink_batch_write_seconds
 oracle_execute_seconds
 oracle_commit_seconds
 message_ack_seconds
+message_term_seconds
 retry_backoff_delay_seconds
 sink_write_errors_total
 message_normalization_errors_total
 payload_encryption_errors_total
 dlq_publish_errors_total
 ack_errors_total
+term_errors_total
 nats_connection_disconnected_total
 nats_connection_reconnected_total
 nats_connection_closed_total
@@ -674,6 +703,7 @@ The preferred metric suffixes are:
 | `messages_prepared_total` | counter | Messages converted into envelopes and transformed by core policies. |
 | `messages_written_total` | counter | Messages reported durable by the destination sink. |
 | `messages_acked_total` | counter | Messages acknowledged to JetStream after durable success or DLQ success. |
+| `messages_terminated_total` | counter | Messages terminally acknowledged to JetStream after successful DLQ publication. |
 | `messages_nacked_total` | counter | Messages negatively acknowledged after retryable failures. |
 | `messages_failed_total` | counter | Messages that entered a failure path before ACK. |
 | `messages_dlq_total` | counter | Messages published to a configured dead-letter subject. |
@@ -685,12 +715,14 @@ The preferred metric suffixes are:
 | `oracle_execute_seconds` | observation | Seconds spent executing Oracle batch write statements before commit. |
 | `oracle_commit_seconds` | observation | Seconds spent committing Oracle transactions. |
 | `message_ack_seconds` | observation | Seconds spent ACKing JetStream messages after durable success. |
+| `message_term_seconds` | observation | Seconds spent sending terminal acknowledgements after DLQ publication. |
 | `retry_backoff_delay_seconds` | observation | Retry delay seconds selected before delayed NAK on retryable failures. |
 | `sink_write_errors_total` | counter | Sink write failures raised before durable success. |
 | `message_normalization_errors_total` | counter | Raw NATS messages that failed envelope normalization. |
 | `payload_encryption_errors_total` | counter | Messages that failed core payload encryption before sink delivery. |
 | `dlq_publish_errors_total` | counter | Messages whose DLQ publication failed before original ACK. |
 | `ack_errors_total` | counter | Messages whose JetStream ACK failed after durable success. |
+| `term_errors_total` | counter | Messages whose terminal acknowledgement failed after successful DLQ publication. |
 | `nats_connection_disconnected_total` | counter | NATS client disconnect events observed by the runner. |
 | `nats_connection_reconnected_total` | counter | NATS client reconnect events observed by the runner. |
 | `nats_connection_closed_total` | counter | NATS client closed events observed by the runner. |

@@ -72,6 +72,7 @@ class MetricNames:
     MESSAGES_PREPARED_TOTAL = "messages_prepared_total"
     MESSAGES_WRITTEN_TOTAL = "messages_written_total"
     MESSAGES_ACKED_TOTAL = "messages_acked_total"
+    MESSAGES_TERMINATED_TOTAL = "messages_terminated_total"
     MESSAGES_NACKED_TOTAL = "messages_nacked_total"
     MESSAGES_FAILED_TOTAL = "messages_failed_total"
     MESSAGES_DLQ_TOTAL = "messages_dlq_total"
@@ -83,12 +84,14 @@ class MetricNames:
     ORACLE_EXECUTE_SECONDS = "oracle_execute_seconds"
     ORACLE_COMMIT_SECONDS = "oracle_commit_seconds"
     MESSAGE_ACK_SECONDS = "message_ack_seconds"
+    MESSAGE_TERM_SECONDS = "message_term_seconds"
     RETRY_BACKOFF_DELAY_SECONDS = "retry_backoff_delay_seconds"
     SINK_WRITE_ERRORS_TOTAL = "sink_write_errors_total"
     MESSAGE_NORMALIZATION_ERRORS_TOTAL = "message_normalization_errors_total"
     PAYLOAD_ENCRYPTION_ERRORS_TOTAL = "payload_encryption_errors_total"
     DLQ_PUBLISH_ERRORS_TOTAL = "dlq_publish_errors_total"
     ACK_ERRORS_TOTAL = "ack_errors_total"
+    TERM_ERRORS_TOTAL = "term_errors_total"
     NATS_CONNECTION_DISCONNECTED_TOTAL = "nats_connection_disconnected_total"
     NATS_CONNECTION_RECONNECTED_TOTAL = "nats_connection_reconnected_total"
     NATS_CONNECTION_CLOSED_TOTAL = "nats_connection_closed_total"
@@ -135,6 +138,11 @@ METRIC_SPECS: tuple[MetricSpec, ...] = (
         MetricNames.MESSAGES_ACKED_TOTAL,
         "counter",
         "Messages acknowledged to JetStream after durable success or DLQ success.",
+    ),
+    MetricSpec(
+        MetricNames.MESSAGES_TERMINATED_TOTAL,
+        "counter",
+        "Messages terminally acknowledged to JetStream after successful DLQ publication.",
     ),
     MetricSpec(
         MetricNames.MESSAGES_NACKED_TOTAL,
@@ -192,6 +200,11 @@ METRIC_SPECS: tuple[MetricSpec, ...] = (
         "Elapsed seconds spent ACKing JetStream messages after durable success.",
     ),
     MetricSpec(
+        MetricNames.MESSAGE_TERM_SECONDS,
+        "histogram",
+        "Elapsed seconds spent sending terminal acknowledgements after DLQ publication.",
+    ),
+    MetricSpec(
         MetricNames.RETRY_BACKOFF_DELAY_SECONDS,
         "histogram",
         "Retry delay seconds selected for retryable failures before delayed NAK.",
@@ -220,6 +233,11 @@ METRIC_SPECS: tuple[MetricSpec, ...] = (
         MetricNames.ACK_ERRORS_TOTAL,
         "counter",
         "Messages whose JetStream ACK failed after durable success.",
+    ),
+    MetricSpec(
+        MetricNames.TERM_ERRORS_TOTAL,
+        "counter",
+        "Messages whose terminal acknowledgement failed after successful DLQ publication.",
     ),
     MetricSpec(
         MetricNames.NATS_CONNECTION_DISCONNECTED_TOTAL,

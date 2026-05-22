@@ -41,9 +41,9 @@ failure behavior harder to review without improving the commit-then-ACK safety
 model. It also lacks double-ACK support in the NATS acknowledgement model, and
 the Python client does not expose a high-level API for it.
 
-`AckTerm` may be useful, but only as a future optional terminal-failure policy
-after nats-sinks has already completed the required failure handling. The only
-production path worth considering is:
+`AckTerm` is useful only as an optional terminal-failure policy after
+nats-sinks has already completed the required failure handling. The supported
+production path is:
 
 1. A message fails with a permanent framework error.
 2. DLQ is configured.
@@ -80,18 +80,19 @@ flowchart TD
     DLQ -->|yes| Publish[Publish DLQ record]
     Publish -->|fails| Redeliver
     Publish -->|succeeds, default| Ack
-    Publish -->|succeeds, future opt-in| Term[AckTerm]
+    Publish -->|succeeds, opt-in| Term[AckTerm]
 ```
 
 ## Consequences
 
-- No runtime behavior changes are introduced by this evaluation.
+- Runtime behavior remains unchanged by default.
+- `dead_letter.ack_term_after_publish` implements the optional `AckTerm` path
+  described in this ADR. It is disabled by default and only applies after
+  successful DLQ publication.
 - `AckNext` is moved to not planned unless scope changes.
-- A follow-up feature request tracks optional `AckTerm` after successful DLQ
-  publication.
-- The follow-up feature must be implemented through explicit configuration,
-  delivery-contract tests, documentation, and release evidence before it can be
-  considered production-ready.
+- Any future expansion of terminal acknowledgement behavior must use explicit
+  configuration, delivery-contract tests, documentation, and release evidence
+  before it can be considered production-ready.
 
 ## Non-Goals
 

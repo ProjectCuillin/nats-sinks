@@ -22,7 +22,7 @@ from nats_sinks.core.config import (
     PriorityLaneConfig,
     PriorityLanesConfig,
 )
-from nats_sinks.core.errors import DeadLetterError
+from nats_sinks.core.errors import AckError, DeadLetterError
 from nats_sinks.core.metrics import InMemoryMetrics, MetricNames
 from nats_sinks.core.runner import JetStreamSinkRunner
 
@@ -51,6 +51,7 @@ class FakeMessage:
         self.events = events
         self.acked = False
         self.nacked = False
+        self.termed = False
         self.nak_delays: list[float | None] = []
 
     async def ack(self) -> None:
@@ -62,11 +63,21 @@ class FakeMessage:
         self.nacked = True
         self.nak_delays.append(delay)
 
+    async def term(self) -> None:
+        self.events.append("term")
+        self.termed = True
+
 
 class AckFailingMessage(FakeMessage):
     async def ack(self) -> None:
         self.events.append("ack_failed")
         raise RuntimeError("ack connection closed")
+
+
+class TermFailingMessage(FakeMessage):
+    async def term(self) -> None:
+        self.events.append("term_failed")
+        raise RuntimeError("term connection closed")
 
 
 class RecordingSink:
@@ -643,6 +654,7 @@ async def test_permanent_failure_publishes_dlq_before_ack() -> None:
 
     assert events == ["write", "dlq", "ack"]
     assert message.acked
+    assert not message.termed
     assert js.published[0][0] == "orders.dlq"
 
 
@@ -669,6 +681,67 @@ async def test_permanent_failure_records_dlq_and_ack_metrics() -> None:
     assert metrics.counters[MetricNames.SINK_WRITE_ERRORS_TOTAL] == 1
     assert metrics.counters[MetricNames.MESSAGES_DLQ_TOTAL] == 1
     assert metrics.counters[MetricNames.MESSAGES_ACKED_TOTAL] == 1
+    assert metrics.counters[MetricNames.MESSAGES_TERMINATED_TOTAL] == 0
+
+
+@pytest.mark.asyncio
+async def test_ackterm_after_dlq_publish_is_explicit_opt_in() -> None:
+    events: list[str] = []
+    message = FakeMessage(events)
+    metrics = InMemoryMetrics()
+    js = FakeJetStream(events)
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=RecordingSink(events, PermanentSinkError("bad input")),
+        dead_letter=DeadLetterConfig(
+            enabled=True,
+            subject="orders.dlq",
+            ack_term_after_publish=True,
+        ),
+        jetstream=js,
+        metrics=metrics,
+    )
+
+    await runner.process_raw_batch([message])
+
+    assert events == ["write", "dlq", "term"]
+    assert not message.acked
+    assert message.termed
+    assert js.published[0][0] == "orders.dlq"
+    assert metrics.counters[MetricNames.MESSAGES_DLQ_TOTAL] == 1
+    assert metrics.counters[MetricNames.MESSAGES_ACKED_TOTAL] == 0
+    assert metrics.counters[MetricNames.MESSAGES_TERMINATED_TOTAL] == 1
+
+
+@pytest.mark.asyncio
+async def test_successful_sink_write_never_uses_ackterm() -> None:
+    events: list[str] = []
+    message = FakeMessage(events)
+    metrics = InMemoryMetrics()
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=RecordingSink(events),
+        dead_letter=DeadLetterConfig(
+            enabled=True,
+            subject="orders.dlq",
+            ack_term_after_publish=True,
+        ),
+        metrics=metrics,
+    )
+
+    await runner.process_raw_batch([message])
+
+    assert events == ["write", "commit", "ack"]
+    assert message.acked
+    assert not message.termed
+    assert metrics.counters[MetricNames.MESSAGES_ACKED_TOTAL] == 1
+    assert metrics.counters[MetricNames.MESSAGES_TERMINATED_TOTAL] == 0
 
 
 @pytest.mark.asyncio
@@ -739,6 +812,38 @@ async def test_dlq_publish_failure_does_not_ack_original() -> None:
 
     assert events == ["write", "dlq"]
     assert not message.acked
+    assert not message.termed
+
+
+@pytest.mark.asyncio
+async def test_dlq_publish_failure_does_not_ackterm_original() -> None:
+    events: list[str] = []
+    message = FakeMessage(events)
+    metrics = InMemoryMetrics()
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=RecordingSink(events, PermanentSinkError("bad input")),
+        dead_letter=DeadLetterConfig(
+            enabled=True,
+            subject="orders.dlq",
+            ack_term_after_publish=True,
+        ),
+        jetstream=FakeJetStream(events, fail_publish=True),
+        metrics=metrics,
+    )
+
+    with pytest.raises(DeadLetterError):
+        await runner.process_raw_batch([message])
+
+    assert events == ["write", "dlq"]
+    assert not message.acked
+    assert not message.termed
+    assert metrics.counters[MetricNames.DLQ_PUBLISH_ERRORS_TOTAL] == 1
+    assert metrics.counters[MetricNames.MESSAGES_DLQ_TOTAL] == 0
+    assert metrics.counters[MetricNames.MESSAGES_TERMINATED_TOTAL] == 0
 
 
 @pytest.mark.asyncio
@@ -764,6 +869,37 @@ async def test_dlq_publish_failure_records_metric_without_ack() -> None:
     assert metrics.counters[MetricNames.DLQ_PUBLISH_ERRORS_TOTAL] == 1
     assert metrics.counters[MetricNames.MESSAGES_DLQ_TOTAL] == 0
     assert metrics.counters[MetricNames.MESSAGES_ACKED_TOTAL] == 0
+
+
+@pytest.mark.asyncio
+async def test_ackterm_failure_records_metric_after_dlq_success() -> None:
+    events: list[str] = []
+    message = TermFailingMessage(events)
+    metrics = InMemoryMetrics()
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=RecordingSink(events, PermanentSinkError("bad input")),
+        dead_letter=DeadLetterConfig(
+            enabled=True,
+            subject="orders.dlq",
+            ack_term_after_publish=True,
+        ),
+        jetstream=FakeJetStream(events),
+        metrics=metrics,
+    )
+
+    with pytest.raises(AckError, match="AckTerm"):
+        await runner.process_raw_batch([message])
+
+    assert events == ["write", "dlq", "term_failed"]
+    assert not message.acked
+    assert metrics.counters[MetricNames.MESSAGES_DLQ_TOTAL] == 1
+    assert metrics.counters[MetricNames.MESSAGES_ACKED_TOTAL] == 0
+    assert metrics.counters[MetricNames.MESSAGES_TERMINATED_TOTAL] == 0
+    assert metrics.counters[MetricNames.TERM_ERRORS_TOTAL] == 1
 
 
 @pytest.mark.asyncio

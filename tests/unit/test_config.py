@@ -344,6 +344,36 @@ def test_delivery_retry_backoff_cap_must_cover_base_delay(tmp_path: Path) -> Non
         load_config(path, env_overrides=False)
 
 
+def test_dead_letter_ackterm_after_publish_is_explicit_config(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*"
+  },
+  "dead_letter": {
+    "enabled": true,
+    "subject": "orders.dlq",
+    "ack_term_after_publish": true
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/var/lib/nats-sinks/events"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(path, env_overrides=False)
+
+    assert config.dead_letter.ack_term_after_publish is True
+
+
 def test_delivery_priority_lanes_are_validated_and_normalized(tmp_path: Path) -> None:
     path = tmp_path / "config.json"
     path.write_text(

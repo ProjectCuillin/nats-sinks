@@ -38,6 +38,8 @@ def test_metric_specs_have_unique_names_and_kinds() -> None:
     assert len(names) == len(set(names))
     assert MetricNames.MESSAGES_FETCHED_TOTAL in names
     assert MetricNames.SINK_BATCH_WRITE_SECONDS in names
+    assert MetricNames.MESSAGES_TERMINATED_TOTAL in names
+    assert MetricNames.TERM_ERRORS_TOTAL in names
     assert MetricNames.PRIORITY_LANE_MESSAGES_TOTAL in names
     assert MetricNames.CURRENT_PRIORITY_LANES_ACTIVE in names
     assert MetricNames.ORACLE_DUPLICATES_TOTAL in names

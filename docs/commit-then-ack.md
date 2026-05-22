@@ -86,14 +86,16 @@ If DLQ publish fails, the original message is not ACKed.
 ## Terminal Acknowledgements
 
 NATS also supports terminal acknowledgements (`AckTerm`) and next-message
-acknowledgements (`AckNext`). These are intentionally not part of the current
-runtime behavior.
+acknowledgements (`AckNext`). They have different safety properties and must
+not be treated as ordinary sink-success ACKs.
 
 `AckTerm` stops redelivery without marking the message as successfully
-processed. That can be useful for a future operator-controlled terminal failure
-policy, but only after the failure record has already been durably published to
-a DLQ. It must never be sent before sink success, before DLQ publication
-success, or for temporary failures.
+processed. `nats-sinks` supports it only as an explicit opt-in DLQ policy:
+when `dead_letter.ack_term_after_publish` is true, the runner publishes the DLQ
+record first and sends `AckTerm` only after that publication succeeds. The
+default remains DLQ publication followed by normal ACK. `AckTerm` must never be
+sent before sink success, before DLQ publication success, or for temporary
+failures.
 
 `AckNext` acknowledges a pull-consumer message and requests more messages in
 one protocol operation. That is not a good fit for `nats-sinks` production sink

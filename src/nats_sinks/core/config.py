@@ -388,7 +388,13 @@ class DeliveryConfig(BaseModel):
 
 
 class DeadLetterConfig(BaseModel):
-    """Dead-letter queue publication settings."""
+    """Dead-letter queue publication settings.
+
+    `ack_term_after_publish` is deliberately disabled by default.  When it is
+    enabled, the runner sends JetStream `AckTerm` only after the DLQ publish has
+    succeeded.  It is never a sink-success acknowledgement and must not be used
+    as a shortcut around commit-then-acknowledge processing.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -397,6 +403,7 @@ class DeadLetterConfig(BaseModel):
     include_payload: bool = True
     include_headers: bool = True
     include_error: bool = True
+    ack_term_after_publish: bool = False
 
 
 class LoggingConfig(BaseModel):

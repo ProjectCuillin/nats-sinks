@@ -136,9 +136,6 @@
   duplicate-window documentation.
 - Stream mirror, source, subject transform, republish, compression, placement,
   and metadata management helpers beyond the current documentation guidance.
-- Optional `AckTerm` after successful DLQ publication for deployments that need
-  a terminal-delivery advisory, disabled by default and never used before DLQ
-  success.
 - Optional no-echo connection setting.
 - Sink certification tests for future HTTP, S3, Kafka, and other active sink
   proposals.

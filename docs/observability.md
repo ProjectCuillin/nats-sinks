@@ -392,6 +392,7 @@ messages_fetched_total
 messages_prepared_total
 messages_written_total
 messages_acked_total
+messages_terminated_total
 messages_nacked_total
 messages_failed_total
 messages_dlq_total

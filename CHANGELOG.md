@@ -25,8 +25,14 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   key-rotation windows, replay tooling, migration checks, and incident-response
   verification without adding cloud secret-manager SDKs to the core package.
 - Added ADR 0005 documenting the AckTerm and AckNext evaluation, including the
-  decision to keep AckNext out of production sink processing and to track
-  optional AckTerm only after successful DLQ publication as future opt-in work.
+  decision to keep AckNext out of production sink processing and to allow
+  optional AckTerm only after successful DLQ publication.
+- Added `dead_letter.ack_term_after_publish`, a disabled-by-default terminal
+  acknowledgement policy that sends JetStream `AckTerm` only after successful
+  DLQ publication for permanent failures.
+- Added terminal acknowledgement metrics for opt-in DLQ terminal handling:
+  `messages_terminated_total`, `message_term_seconds`, and
+  `term_errors_total`.
 
 ### Changed
 

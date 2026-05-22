@@ -3,7 +3,7 @@
   "title": "[Feature]: Add optional AckTerm after successful DLQ publication",
   "area": "Core runtime and delivery semantics",
   "priority": "P4 - research or design needed",
-  "target_release": "unscheduled",
+  "target_release": "v0.4.1",
   "labels": ["nats"],
   "problem": "NATS JetStream supports Term acknowledgements that stop redelivery without marking a message as successfully processed. nats-sinks currently publishes permanent failures to a configured DLQ and then ACKs the original only after DLQ publication succeeds. Some operators may prefer an optional terminal acknowledgement after successful DLQ publication so JetStream emits terminal-delivery advisories while nats-sinks still preserves DLQ-before-terminal safety.",
   "proposal": "Design and implement an optional terminal failure policy that calls JetStream Term only after the framework has successfully published the permanent failure to DLQ, or in a future explicitly documented terminal policy. The default behavior must remain the current DLQ-then-ACK flow. The option must be disabled by default, visibly configured, bounded by tests, and documented as a terminal failure path rather than successful processing.",

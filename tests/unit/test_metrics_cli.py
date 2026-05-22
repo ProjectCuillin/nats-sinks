@@ -26,6 +26,7 @@ def _snapshot(path: Path) -> Path:
     increment_metric(metrics, MetricNames.MESSAGES_FETCHED_TOTAL, 5)
     increment_metric(metrics, MetricNames.MESSAGES_PREPARED_TOTAL, 4)
     increment_metric(metrics, MetricNames.MESSAGES_ACKED_TOTAL, 4)
+    increment_metric(metrics, MetricNames.MESSAGES_TERMINATED_TOTAL, 1)
     increment_metric(metrics, MetricNames.ORACLE_DUPLICATES_TOTAL, 2)
     increment_metric(metrics, MetricNames.ORACLE_DUPLICATE_IGNORED_TOTAL, 2)
     observe_metric(metrics, MetricNames.SINK_BATCH_WRITE_SECONDS, 0.25)
@@ -63,6 +64,7 @@ def test_metrics_cli_show_shell_and_include_legacy(tmp_path: Path) -> None:
 
     assert result.exit_code == 0
     assert "MESSAGES_FETCHED_TOTAL=5" in result.stdout
+    assert "MESSAGES_TERMINATED_TOTAL=1" in result.stdout
     assert "MESSAGES_RECEIVED_TOTAL=4" in result.stdout
 
 
@@ -91,6 +93,18 @@ def test_metrics_cli_filters_oracle_duplicate_metrics(tmp_path: Path) -> None:
     assert "ORACLE_DUPLICATES_TOTAL=2" in result.stdout
     assert "ORACLE_DUPLICATE_IGNORED_TOTAL=2" in result.stdout
     assert "MESSAGES_FETCHED_TOTAL" not in result.stdout
+
+
+def test_metrics_cli_filters_terminal_ack_metrics(tmp_path: Path) -> None:
+    path = _snapshot(tmp_path / "metrics.json")
+
+    result = runner.invoke(
+        app,
+        ["show", str(path), "--format", "shell", "--metric", "*term*"],
+    )
+
+    assert result.exit_code == 0
+    assert "MESSAGES_TERMINATED_TOTAL=1" in result.stdout
 
 
 def test_metrics_cli_show_prometheus(tmp_path: Path) -> None:

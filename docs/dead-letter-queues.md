@@ -30,15 +30,19 @@ discarding a message that still needs operator attention.
 
 ## Terminal Acknowledgements
 
-The current runtime uses the conservative DLQ flow: publish the DLQ record, wait
-for publication success, and then ACK the original message. It does not use
-`AckTerm` today.
+The default runtime uses the conservative DLQ flow: publish the DLQ record, wait
+for publication success, and then ACK the original message.
 
-A future optional feature may allow `AckTerm` after successful DLQ publication
-for deployments that want the server-side advisory and terminal-delivery signal.
-That future behavior must remain disabled by default and must preserve the same
-DLQ-before-terminal rule. If DLQ publication fails, the runner must send neither
-ACK nor `AckTerm`; the original message remains eligible for redelivery.
+Deployments that consume JetStream terminal-delivery advisories can explicitly
+enable `dead_letter.ack_term_after_publish`. When enabled, the runner still
+publishes the DLQ record first, but sends `AckTerm` instead of normal ACK after
+that publication succeeds. This is a terminal failure path, not a successful
+sink-write path.
+
+If DLQ publication fails, the runner sends neither ACK nor `AckTerm`; the
+original message remains eligible for redelivery. If `AckTerm` fails after DLQ
+publication, the failure is counted and raised. Redelivery may occur, and DLQ
+handling must remain safe for duplicate publication attempts.
 
 See [ADR 0005: AckTerm And AckNext Evaluation](adr/0005-ackterm-acknext-evaluation.md)
 for the design decision and safety limits.
@@ -57,7 +61,11 @@ sequenceDiagram
     S-->>R: PermanentSinkError
     R->>Q: Publish DLQ JSON
     Q-->>R: Publish success
-    R->>JS: ACK original
+    alt Default policy
+        R->>JS: ACK original
+    else ack_term_after_publish
+        R->>JS: AckTerm original
+    end
 ```
 
 ## Payload Shape

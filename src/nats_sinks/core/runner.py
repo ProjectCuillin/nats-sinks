@@ -11,10 +11,10 @@ durably complete.
 
 The central ordering is non-negotiable: receive, validate, write, commit, ACK.
 If sink writing fails, the runner does not ACK.  If a permanent failure is sent
-to DLQ, the runner ACKs the original message only after DLQ publication
-succeeds.  If durable commit succeeds but ACK fails or the process crashes
-before ACK, redelivery may occur and must be handled through idempotent sink
-behavior.
+to DLQ, the runner ACKs or terminally acknowledges the original message only
+after DLQ publication succeeds.  If durable commit succeeds but ACK fails or
+the process crashes before ACK, redelivery may occur and must be handled
+through idempotent sink behavior.
 """
 
 from __future__ import annotations
@@ -489,8 +489,23 @@ class JetStreamSinkRunner:
 
         await self._publish_dlq(envelopes, error)
         increment_metric(self.metrics, MetricNames.MESSAGES_DLQ_TOTAL, len(envelopes))
+        if self.dead_letter.ack_term_after_publish:
+            LOGGER.info(
+                "permanent failure published to DLQ; sending terminal acknowledgement "
+                "for %s original JetStream message(s)",
+                len(raw_messages),
+            )
+            term_started = time.perf_counter()
+            await self._term_all(raw_messages)
+            observe_metric(
+                self.metrics,
+                MetricNames.MESSAGE_TERM_SECONDS,
+                time.perf_counter() - term_started,
+            )
+            return
+
         ack_started = time.perf_counter()
-        await self._ack_all(raw_messages)
+        await self._ack_all(raw_messages, context="after successful DLQ publication")
         observe_metric(
             self.metrics,
             MetricNames.MESSAGE_ACK_SECONDS,
@@ -527,7 +542,12 @@ class JetStreamSinkRunner:
             msg = "failed to publish permanent failure to DLQ; original message was not ACKed"
             raise DeadLetterError(msg) from exc
 
-    async def _ack_all(self, raw_messages: Sequence[Any]) -> None:
+    async def _ack_all(
+        self,
+        raw_messages: Sequence[Any],
+        *,
+        context: str = "after durable sink success",
+    ) -> None:
         acknowledged = 0
         try:
             for raw_message in raw_messages:
@@ -536,7 +556,33 @@ class JetStreamSinkRunner:
         except Exception as exc:
             failed_or_unknown = max(len(raw_messages) - acknowledged, 1)
             increment_metric(self.metrics, MetricNames.ACK_ERRORS_TOTAL, failed_or_unknown)
-            raise AckError("failed to ACK JetStream message after durable sink success") from exc
+            raise AckError(f"failed to ACK JetStream message {context}") from exc
+
+    async def _term_all(self, raw_messages: Sequence[Any]) -> None:
+        """Send JetStream terminal acknowledgements after DLQ success only.
+
+        `AckTerm` is intentionally separate from `_ack_all` because it does not
+        mean "the message was successfully processed".  It means the permanent
+        failure was already preserved in DLQ and this opt-in runtime should stop
+        further redelivery.  If Term fails, redelivery is safer than silently
+        pretending the terminal acknowledgement completed.
+        """
+
+        terminated = 0
+        try:
+            for raw_message in raw_messages:
+                term = getattr(raw_message, "term", None)
+                if term is None:
+                    raise AttributeError("raw JetStream message does not expose term()")
+                await _maybe_await(term())
+                terminated += 1
+                increment_metric(self.metrics, MetricNames.MESSAGES_TERMINATED_TOTAL)
+        except Exception as exc:
+            failed_or_unknown = max(len(raw_messages) - terminated, 1)
+            increment_metric(self.metrics, MetricNames.TERM_ERRORS_TOTAL, failed_or_unknown)
+            raise AckError(
+                "failed to AckTerm JetStream message after successful DLQ publication"
+            ) from exc
 
     async def _nak_all(self, raw_messages: Sequence[Any], *, delay: float) -> None:
         for raw_message in raw_messages:

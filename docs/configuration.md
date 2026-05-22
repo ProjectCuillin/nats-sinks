@@ -74,7 +74,8 @@ Oracle-specific fields inside the `sink` object.
     "subject": "orders.dlq",
     "include_payload": true,
     "include_headers": true,
-    "include_error": true
+    "include_error": true,
+    "ack_term_after_publish": false
   },
   "logging": {
     "level": "INFO",
@@ -164,13 +165,13 @@ The top-level sections are:
 | `encryption` | no | Optional core payload encryption before messages are passed to any sink. |
 | `sink` | yes | Destination-specific sink configuration. `sink.type` chooses the sink implementation. |
 
-The runtime does not expose `AckTerm` or `AckNext` configuration fields today.
 The only supported `delivery.ack_policy` value is `after_sink_commit`, which
 means the runner ACKs only after durable sink success or after successful DLQ
 publication for permanent failures. `AckNext` is intentionally not planned for
 production sink processing because it combines acknowledgement and fetching.
-Optional `AckTerm` after successful DLQ publication is tracked as future,
-disabled-by-default work.
+`AckTerm` is available only through the explicit
+`dead_letter.ack_term_after_publish` option and only after DLQ publication
+succeeds.
 
 ```mermaid
 flowchart TD
@@ -377,6 +378,7 @@ ACKed only after DLQ publication succeeds.
 | `include_payload` | no | `true` | `true` or `false`. | Includes the original message body in the DLQ payload. Disable when payload privacy is more important than DLQ replay convenience. |
 | `include_headers` | no | `true` | `true` or `false`. | Includes original message headers in the DLQ payload. Disable if headers may contain sensitive values. |
 | `include_error` | no | `true` | `true` or `false`. | Includes framework error type and message in the DLQ payload. |
+| `ack_term_after_publish` | no | `false` | `true` or `false`. | When true, sends JetStream `AckTerm` after DLQ publication succeeds instead of normal ACK. This is disabled by default, applies only to permanent failures with successful DLQ publication, and must not be used to signal successful sink writes. |
 
 ### `logging`
 

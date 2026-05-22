@@ -178,6 +178,7 @@ The preferred basic metric set is:
 | `messages_prepared_total` | counter | Messages converted into `NatsEnvelope` objects and transformed by core policies such as payload encryption and metadata resolution. |
 | `messages_written_total` | counter | Messages for which `sink.write_batch(...)` returned durable success. |
 | `messages_acked_total` | counter | Messages ACKed to JetStream after durable sink success or successful DLQ publication. |
+| `messages_terminated_total` | counter | Messages terminally acknowledged to JetStream after successful DLQ publication when the opt-in DLQ policy is enabled. |
 | `messages_nacked_total` | counter | Messages negatively acknowledged after retryable failure paths when `temporary_failure_action` is `nak`. |
 | `messages_failed_total` | counter | Messages that entered a failure path before ACK. |
 | `messages_dlq_total` | counter | Messages successfully published to a configured dead-letter subject. |
@@ -189,12 +190,14 @@ The preferred basic metric set is:
 | `oracle_execute_seconds` | histogram/observation | Elapsed time spent executing Oracle batch write statements before commit. |
 | `oracle_commit_seconds` | histogram/observation | Elapsed time spent committing Oracle transactions. |
 | `message_ack_seconds` | histogram/observation | Elapsed time spent ACKing JetStream messages after durable success. |
+| `message_term_seconds` | histogram/observation | Elapsed time spent sending terminal acknowledgements after successful DLQ publication. |
 | `retry_backoff_delay_seconds` | histogram/observation | Retry delay seconds selected before delayed NAK on retryable failures. |
 | `sink_write_errors_total` | counter | Sink write failures raised before durable success. |
 | `message_normalization_errors_total` | counter | Raw NATS messages that could not be normalized into envelopes. |
 | `payload_encryption_errors_total` | counter | Messages that failed core payload encryption before sink delivery. |
 | `dlq_publish_errors_total` | counter | Messages whose DLQ publication failed, leaving the original message unacked. |
 | `ack_errors_total` | counter | Messages whose JetStream ACK failed after durable success. |
+| `term_errors_total` | counter | Messages whose JetStream terminal acknowledgement failed after successful DLQ publication. |
 | `nats_connection_disconnected_total` | counter | NATS client disconnect events observed by the runner. |
 | `nats_connection_reconnected_total` | counter | NATS client reconnect events observed by the runner. |
 | `nats_connection_closed_total` | counter | NATS client closed events observed by the runner. |

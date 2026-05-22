@@ -306,7 +306,8 @@ contains destination-specific fields documented on each sink page.
     "subject": "orders.dlq",
     "include_payload": true,
     "include_headers": true,
-    "include_error": true
+    "include_error": true,
+    "ack_term_after_publish": false
   },
   "logging": {
     "level": "INFO",
