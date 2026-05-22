@@ -120,10 +120,10 @@ Current gap details:
 | --- | --- | --- | --- |
 | Double ACK / AckSync | Client can wait for the server to confirm receipt of the ACK. | Runner uses ordinary ACK. If ACK is lost after destination commit, redelivery is handled by idempotency. | Phase 2 |
 | In-progress ACK | Extends `AckWait` while long processing continues. | Not supported; long Oracle writes can redeliver if server `AckWait` is too short. | Phase 2 |
-| Term ACK | Stops redelivery without marking successful processing. | Not supported; permanent failures use DLQ then ACK when DLQ publish succeeds. | Phase 3 |
+| Term ACK | Stops redelivery without marking successful processing. | Follow-up proposed as disabled-by-default terminal policy only after DLQ publication succeeds. Current behavior remains DLQ publish then ACK. | Phase 3 |
 | AckAll | ACK one message and implicitly ACK earlier messages. | Intentionally unsupported because commit-then-ack requires explicit per-message safety. | Not planned |
 | AckNone | Server treats delivery as success without client ACK. | Intentionally unsupported because it violates commit-then-ack. | Not planned |
-| AckNext | ACK and request more messages in one protocol operation. | Not supported; runner fetches batches explicitly. | Phase 3 |
+| AckNext | ACK and request more messages in one protocol operation. | Not planned unless scope changes. The runner fetches batches explicitly so ACK, backpressure, timeout, and retry behavior stay separately testable. | Not planned |
 
 ## JetStream Stream Management Gaps
 

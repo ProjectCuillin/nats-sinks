@@ -28,6 +28,21 @@ If DLQ publish fails, the original message remains unacked and eligible for
 redelivery. This keeps the failure visible to JetStream rather than silently
 discarding a message that still needs operator attention.
 
+## Terminal Acknowledgements
+
+The current runtime uses the conservative DLQ flow: publish the DLQ record, wait
+for publication success, and then ACK the original message. It does not use
+`AckTerm` today.
+
+A future optional feature may allow `AckTerm` after successful DLQ publication
+for deployments that want the server-side advisory and terminal-delivery signal.
+That future behavior must remain disabled by default and must preserve the same
+DLQ-before-terminal rule. If DLQ publication fails, the runner must send neither
+ACK nor `AckTerm`; the original message remains eligible for redelivery.
+
+See [ADR 0005: AckTerm And AckNext Evaluation](adr/0005-ackterm-acknext-evaluation.md)
+for the design decision and safety limits.
+
 ## Flow
 
 ```mermaid

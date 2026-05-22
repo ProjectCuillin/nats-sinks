@@ -3,7 +3,7 @@
   "title": "[Feature]: Evaluate AckTerm and AckNext for advanced workflows",
   "area": "Core runtime and delivery semantics",
   "priority": "P4 - research or design needed",
-  "target_release": "unscheduled",
+  "target_release": "v0.4.1",
   "labels": ["nats"],
   "problem": "JetStream supports advanced acknowledgement forms such as terminating delivery or requesting the next message. These behaviors can be useful in some workflows, but they can also conflict with nats-sinks safety expectations if they obscure durable success, DLQ publication, or retry behavior.",
   "proposal": "Evaluate AckTerm and AckNext for advanced failure and fetch workflows. The evaluation should state whether either behavior belongs in production sink processing, inspection tooling, or not at all. Any implementation must be opt-in and backed by explicit delivery-contract tests.",
@@ -12,8 +12,8 @@
   "security": "Advanced ACK behavior should log only safe operational context. Misconfiguration must fail closed because wrong ACK behavior can create message loss.",
   "acceptance": [
     "A design decision documents AckTerm and AckNext suitability.",
-    "Any implementation is disabled by default and explicitly configured.",
-    "Tests prove no early ACK or terminal ACK before DLQ success.",
+    "A follow-up feature request exists for any implementation recommended by the evaluation.",
+    "The evaluation explains why AckNext is not recommended for production sink processing.",
     "Documentation explains when the feature should not be used.",
     "Roadmap reflects the decision."
   ],

@@ -83,6 +83,27 @@ sequenceDiagram
 
 If DLQ publish fails, the original message is not ACKed.
 
+## Terminal Acknowledgements
+
+NATS also supports terminal acknowledgements (`AckTerm`) and next-message
+acknowledgements (`AckNext`). These are intentionally not part of the current
+runtime behavior.
+
+`AckTerm` stops redelivery without marking the message as successfully
+processed. That can be useful for a future operator-controlled terminal failure
+policy, but only after the failure record has already been durably published to
+a DLQ. It must never be sent before sink success, before DLQ publication
+success, or for temporary failures.
+
+`AckNext` acknowledges a pull-consumer message and requests more messages in
+one protocol operation. That is not a good fit for `nats-sinks` production sink
+processing because the runner already controls fetch size, batch timeout, and
+backpressure explicitly. Keeping fetch separate from ACK makes the safety
+boundary easier to review and test.
+
+The full decision is documented in
+[ADR 0005: AckTerm And AckNext Evaluation](adr/0005-ackterm-acknext-evaluation.md).
+
 ## Non-Negotiable Invariant
 
 > A JetStream message must only be acknowledged after all required durable side effects have completed successfully. ACK is the final confirmation of successful processing, never a prerequisite for processing.

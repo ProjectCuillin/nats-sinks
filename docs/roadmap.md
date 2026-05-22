@@ -136,7 +136,9 @@
   duplicate-window documentation.
 - Stream mirror, source, subject transform, republish, compression, placement,
   and metadata management helpers beyond the current documentation guidance.
-- `AckTerm` and `AckNext` evaluation for advanced failure and fetch workflows.
+- Optional `AckTerm` after successful DLQ publication for deployments that need
+  a terminal-delivery advisory, disabled by default and never used before DLQ
+  success.
 - Optional no-echo connection setting.
 - Sink certification tests for future HTTP, S3, Kafka, and other active sink
   proposals.
@@ -147,6 +149,9 @@
   commit-then-acknowledge.
 - `AckAll`, because implicit batch ACK behavior can obscure per-message durable
   success.
+- `AckNext`, because ACK-plus-fetch behavior would couple acknowledgement,
+  backpressure, and pull timing in a way that is harder to audit than the
+  current explicit fetch loop.
 - General-purpose Core NATS pub/sub framework behavior.
 - Core NATS queue groups as a sink-scaling mechanism; pull consumers remain the
   preferred model.

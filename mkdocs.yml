@@ -89,3 +89,4 @@ nav:
       - Commit Then Acknowledge: adr/0002-commit-then-acknowledge.md
       - Oracle First Sink: adr/0003-oracle-first-sink.md
       - Single Repository Namespace: adr/0004-single-repository-single-namespace.md
+      - AckTerm And AckNext Evaluation: adr/0005-ackterm-acknext-evaluation.md

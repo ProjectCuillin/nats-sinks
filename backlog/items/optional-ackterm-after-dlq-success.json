@@ -1,0 +1,27 @@
+{
+  "id": "optional-ackterm-after-dlq-success",
+  "title": "[Feature]: Add optional AckTerm after successful DLQ publication",
+  "area": "Core runtime and delivery semantics",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["nats"],
+  "problem": "NATS JetStream supports Term acknowledgements that stop redelivery without marking a message as successfully processed. nats-sinks currently publishes permanent failures to a configured DLQ and then ACKs the original only after DLQ publication succeeds. Some operators may prefer an optional terminal acknowledgement after successful DLQ publication so JetStream emits terminal-delivery advisories while nats-sinks still preserves DLQ-before-terminal safety.",
+  "proposal": "Design and implement an optional terminal failure policy that calls JetStream Term only after the framework has successfully published the permanent failure to DLQ, or in a future explicitly documented terminal policy. The default behavior must remain the current DLQ-then-ACK flow. The option must be disabled by default, visibly configured, bounded by tests, and documented as a terminal failure path rather than successful processing.",
+  "users": "Operators who consume JetStream advisories, maintainers improving JetStream compatibility, and security reviewers protecting commit-then-acknowledge semantics.",
+  "delivery_semantics": "AckTerm must never be sent before durable sink success or before required DLQ publication succeeds. If DLQ publication fails, the original message must not be ACKed or terminated. If AckTerm fails after DLQ publication, the message may redeliver and idempotent DLQ publication must handle duplicates. AckTerm must not replace normal ACK after successful sink writes.",
+  "security": "Terminal acknowledgement logs, metrics, and DLQ records must not include payloads by default or expose sensitive headers. Misconfiguration must fail closed because terminal acknowledgement stops redelivery.",
+  "acceptance": [
+    "The feature is optional and disabled by default.",
+    "AckTerm is sent only after successful DLQ publication for permanent failures.",
+    "DLQ publish failure does not ACK or Term the original message.",
+    "Metrics and logs distinguish ACK, NAK, DLQ, and terminal acknowledgement paths without payload logging.",
+    "Unit tests prove no terminal ACK before DLQ success and no use on successful sink writes.",
+    "Documentation explains when AckTerm should not be used."
+  ],
+  "tests": "Add mocked JetStream message tests for permanent failure with DLQ success, DLQ failure, AckTerm failure after DLQ, sink success, temporary failure, and disabled default behavior. Run scripts/check.sh.",
+  "documentation": "Update docs/commit-then-ack.md, docs/configuration.md, docs/dead-letter-queues.md, docs/nats-feature-gap-analysis.md, docs/metrics.md, ROADMAP.md, and CHANGELOG.md.",
+  "closeout": "Close only after the release containing the optional AckTerm policy is published. Include release tag, tests, docs, and safety limitations.",
+  "relationships": {
+    "related": ["backlog:ackterm-acknext-evaluation"]
+  }
+}

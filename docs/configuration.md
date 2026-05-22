@@ -164,6 +164,14 @@ The top-level sections are:
 | `encryption` | no | Optional core payload encryption before messages are passed to any sink. |
 | `sink` | yes | Destination-specific sink configuration. `sink.type` chooses the sink implementation. |
 
+The runtime does not expose `AckTerm` or `AckNext` configuration fields today.
+The only supported `delivery.ack_policy` value is `after_sink_commit`, which
+means the runner ACKs only after durable sink success or after successful DLQ
+publication for permanent failures. `AckNext` is intentionally not planned for
+production sink processing because it combines acknowledgement and fetching.
+Optional `AckTerm` after successful DLQ publication is tracked as future,
+disabled-by-default work.
+
 ```mermaid
 flowchart TD
     JSON[config.json] --> Size{At most 1 MiB?}

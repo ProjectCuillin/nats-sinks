@@ -24,6 +24,9 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 - Added `PayloadKeyRegistry`, a public multi-key payload decryption helper for
   key-rotation windows, replay tooling, migration checks, and incident-response
   verification without adding cloud secret-manager SDKs to the core package.
+- Added ADR 0005 documenting the AckTerm and AckNext evaluation, including the
+  decision to keep AckNext out of production sink processing and to track
+  optional AckTerm only after successful DLQ publication as future opt-in work.
 
 ### Changed
 
@@ -40,6 +43,9 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 - Moved the Postgres sink proposal out of active roadmap phases into
   "Not Planned Unless Scope Changes" and marked its backlog item as a
   low-priority, not-planned reference.
+- Updated the NATS feature-gap analysis and roadmap so terminal
+  acknowledgement work is represented as a narrow future DLQ-after-success
+  feature instead of an open-ended AckTerm/AckNext evaluation.
 
 ### Fixed
 
