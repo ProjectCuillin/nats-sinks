@@ -200,6 +200,10 @@ operations without hunting through a long flat list.
   and reconnect behavior.
 - [NATS Least-Privilege Permissions](nats-permissions.md): prepare runtime,
   DLQ, management, and advisory-reader accounts.
+- [JetStream Stream Management Planning](stream-management.md): generate
+  offline retention, discard, storage, replica, duplicate-window, and
+  permission-review guidance without giving the sink worker stream-admin
+  authority.
 - [Advanced JetStream Topology](jetstream-topology.md): review mirrors, sources,
   transforms, republish behavior, placement, compression, metadata, and
   idempotency implications.

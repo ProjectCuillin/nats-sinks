@@ -406,6 +406,16 @@ consumer-management permissions required for the configured stream and durable
 consumer. Do not give the sink worker account broad stream-management or
 account-management authority.
 
+Stream creation and retention planning are separate administrative concerns.
+The `nats-sink stream-plan` helper is safe to run with ordinary local access
+because it is offline: it does not connect to NATS, does not resolve
+credentials, and does not mutate streams. Treat its output as a review artifact
+for a separate NATS administrator or platform automation identity. That
+administrative identity may need permissions such as
+`$JS.API.STREAM.CREATE.<STREAM>` or `$JS.API.STREAM.UPDATE.<STREAM>`, but the
+long-running sink worker should not receive those grants by default. See
+[JetStream Stream Management Planning](stream-management.md).
+
 Richer consumer policy fields are also security-relevant. Multiple
 `filter_subjects` can widen what the worker receives, so nats-sinks requires
 each configured filter to stay within `nats.subject` and documents the NATS

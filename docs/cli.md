@@ -33,6 +33,7 @@ nats-sink run config.json
 nats-sink validate config.json
 nats-sink show-effective-config config.json
 nats-sink test-sink config.json
+nats-sink stream-plan config.json
 nats-sink-metrics show .local/nats-sinks/metrics.json
 nats-sink-observe init-prometheus-policy config.json observability.prometheus.json
 nats-sink-observe prometheus-http .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
@@ -74,6 +75,60 @@ Starts the configured sink and runs a health check when the sink supports it. Th
 ```bash
 nats-sink test-sink examples/file-basic/config.json
 ```
+
+### `nats-sink stream-plan`
+
+Generates an offline JetStream stream-management plan from the runtime JSON
+configuration. This command is deliberately separate from `nats-sink run`: it
+does not connect to NATS, does not create streams, does not update consumers,
+does not resolve credentials, and does not need NATS administrator
+permissions.
+
+Use it when an operator wants to review stream retention, discard policy,
+storage type, replica count, duplicate-window settings, and runtime versus
+administration permission boundaries before applying changes with the NATS CLI,
+Terraform, Ansible, or another approved platform process.
+
+```bash
+nats-sink stream-plan examples/file-basic/config.json \
+  --retention limits \
+  --discard old \
+  --storage file \
+  --replicas 3 \
+  --duplicate-window-seconds 600
+```
+
+Use JSON output for scripts and review artifacts:
+
+```bash
+nats-sink stream-plan examples/file-basic/config.json --format json
+```
+
+Example JSON excerpt:
+
+```json
+{
+  "stream": "ORDERS",
+  "subjects": ["orders.*"],
+  "durable_consumer": "file-orders-sink",
+  "recommended_stream_settings": {
+    "retention": "limits",
+    "discard": "old",
+    "storage": "file",
+    "replicas": 3,
+    "duplicate_window_seconds": 600
+  },
+  "runtime_permissions": [
+    "$JS.API.CONSUMER.MSG.NEXT.ORDERS.file-orders-sink",
+    "$JS.API.CONSUMER.INFO.ORDERS.file-orders-sink",
+    "$JS.ACK.ORDERS.file-orders-sink.>",
+    "_INBOX.>"
+  ]
+}
+```
+
+See [JetStream Stream Management Planning](stream-management.md) for the full
+operator guide and permission discussion.
 
 ### `nats-sink run`
 

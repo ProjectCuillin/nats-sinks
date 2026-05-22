@@ -32,6 +32,11 @@ from nats_sinks.core.errors import ConfigurationError, NatsSinksError
 from nats_sinks.core.logging import configure_logging
 from nats_sinks.core.metrics import JsonFileMetrics, MetricsRecorder
 from nats_sinks.core.runner import JetStreamSinkRunner
+from nats_sinks.core.stream_management import (
+    StreamManagementOptions,
+    StreamManagementPlan,
+    build_stream_management_plan,
+)
 from nats_sinks.file import FileSink
 from nats_sinks.oracle import OracleSink
 from nats_sinks.sinks.base import HealthCheckableSink, Sink
@@ -124,6 +129,43 @@ def _attach_metrics_to_sink(sink: Sink, metrics: MetricsRecorder | None) -> None
 
 def _print_redacted(config: AppConfig) -> None:
     typer.echo(json.dumps(redacted_config(config), indent=2, sort_keys=False))
+
+
+def _print_stream_plan_text(plan: StreamManagementPlan) -> None:
+    """Render a stream management plan for human terminal review.
+
+    The text intentionally contains stream and subject names because the command
+    is an operator-facing local helper.  It never prints credentials, server
+    URLs, IP addresses, payloads, or certificate material.
+    """
+
+    typer.echo("JetStream stream management plan")
+    typer.echo(f"Stream: {plan.stream}")
+    typer.echo(f"Durable consumer: {plan.durable_consumer}")
+    typer.echo("Subjects:")
+    for subject in plan.subjects:
+        typer.echo(f"  - {subject}")
+    typer.echo("Recommended stream settings:")
+    typer.echo(f"  retention: {plan.settings.retention}")
+    typer.echo(f"  discard: {plan.settings.discard}")
+    typer.echo(f"  storage: {plan.settings.storage}")
+    typer.echo(f"  replicas: {plan.settings.replicas}")
+    typer.echo(f"  duplicate_window_seconds: {plan.settings.duplicate_window_seconds}")
+    typer.echo("Runtime permissions to keep narrow:")
+    for permission in plan.runtime_permissions:
+        typer.echo(f"  - {permission}")
+    typer.echo("Administrative permissions for a separate setup identity:")
+    for permission in plan.administration_permissions:
+        typer.echo(f"  - {permission}")
+    typer.echo("NATS CLI example:")
+    typer.echo(f"  {plan.nats_cli_example}")
+    typer.echo("Notes:")
+    for note in plan.notes:
+        typer.echo(f"  - {note}")
+    if plan.warnings:
+        typer.echo("Warnings:")
+        for warning in plan.warnings:
+            typer.echo(f"  - {warning}")
 
 
 def _nats_options(config: AppConfig) -> dict[str, Any]:
@@ -250,6 +292,73 @@ def show_effective_config(
 
     loaded = _load_or_exit(config)
     _print_redacted(loaded)
+
+
+@app.command("stream-plan")
+def stream_plan(
+    config: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    retention: Annotated[
+        str,
+        typer.Option(
+            "--retention",
+            help="Planned stream retention policy: limits, interest, or workqueue.",
+        ),
+    ] = "limits",
+    discard: Annotated[
+        str,
+        typer.Option("--discard", help="Planned stream discard policy: old or new."),
+    ] = "old",
+    storage: Annotated[
+        str,
+        typer.Option("--storage", help="Planned stream storage type: file or memory."),
+    ] = "file",
+    replicas: Annotated[
+        int,
+        typer.Option("--replicas", help="Planned stream replica count, from 1 to 5."),
+    ] = 1,
+    duplicate_window_seconds: Annotated[
+        int,
+        typer.Option(
+            "--duplicate-window-seconds",
+            help="Planned JetStream duplicate detection window in seconds.",
+        ),
+    ] = 120,
+    output_format: Annotated[
+        str,
+        typer.Option("--format", help="Output format: text or json."),
+    ] = "text",
+) -> None:
+    """Generate an offline JetStream stream-management plan.
+
+    This command is intentionally separate from `nats-sink run`. It does not
+    connect to NATS, does not create streams, does not update consumers, and
+    does not require administrative credentials. Operators can use the output as
+    a review artifact before applying changes with their approved NATS
+    administration process.
+    """
+
+    loaded = _load_or_exit(config)
+    try:
+        options = StreamManagementOptions(
+            retention=retention,
+            discard=discard,
+            storage=storage,
+            replicas=replicas,
+            duplicate_window_seconds=duplicate_window_seconds,
+        )
+        plan = build_stream_management_plan(loaded, options)
+    except NatsSinksError as exc:
+        typer.echo(f"Configuration error: {exc}", err=True)
+        raise typer.Exit(2) from exc
+
+    normalized_format = output_format.strip().casefold()
+    if normalized_format == "json":
+        typer.echo(json.dumps(plan.to_dict(), indent=2, sort_keys=False))
+    elif normalized_format == "text":
+        _print_stream_plan_text(plan)
+    else:
+        typer.echo("Configuration error: --format must be text or json", err=True)
+        raise typer.Exit(2)
 
 
 @app.command()

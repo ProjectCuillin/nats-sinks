@@ -87,6 +87,10 @@ release, and closed only after the containing release is published.
   bounded low-sensitivity consumer metadata.
 - Least-privilege NATS permissions templates for runtime workers, DLQ publish
   rights, optional consumer management, and advisory readers.
+- Offline JetStream stream-management planning helper for retention, discard,
+  storage, replicas, duplicate-window, and runtime-versus-administration
+  permission review without granting the sink worker broad stream-management
+  authority.
 - Advanced JetStream topology guidance for mirrors, sources, subject
   transforms, republish behavior, stream compression, placement, metadata, and
   idempotency review.
@@ -199,8 +203,6 @@ release, and closed only after the containing release is published.
   consumers rather than ordered inspection consumers.
 - Payload-presence metadata and sink certification for headers-only
   metadata-only workflows.
-- Stream management helpers for retention, discard, storage, replicas, and
-  duplicate-window documentation.
 - Stream mirror, source, subject transform, republish, compression, placement,
   and metadata management helpers beyond the current documentation guidance.
 - Sink certification tests for future HTTP, S3, Kafka, and other active sink
