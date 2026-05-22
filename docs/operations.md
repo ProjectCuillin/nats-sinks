@@ -309,6 +309,29 @@ contract may configure unknown values to fail closed and rely on DLQ handling.
 Read [Priority-Aware Processing Lanes](priority-lanes.md) for configuration,
 metrics, starvation controls, and security guidance.
 
+## Payload Encryption Key Rotation
+
+Payload encryption key rotation is an operational runbook, not a background
+task hidden inside the runner. The runner encrypts new messages with the active
+configured key. Existing destination records keep the `key_id` that was written
+into their encrypted payload envelope at the time of storage.
+
+A safe rotation window normally looks like this:
+
+1. Generate new AES-256 key material through the approved key-management
+   process.
+2. Store it in the platform secret manager or protected service environment.
+3. Deploy nats-sinks configuration with a new non-secret `key_id`.
+4. Keep the previous key available to authorized replay, migration, audit, or
+   incident-response tooling.
+5. Retire the previous key only after all records encrypted with it are outside
+   the required retention and replay window.
+
+Use `PayloadKeyRegistry` in authorized tooling when records may have been
+written by more than one key generation. The registry reads the stored `key_id`
+and selects the matching decryptor. Unknown key identifiers fail closed rather
+than falling back to another key.
+
 ## Graceful Shutdown
 
 The runner should stop fetching new messages before shutdown and let the active

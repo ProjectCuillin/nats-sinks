@@ -195,6 +195,12 @@ silent loss after an early ACK is not.
   native-library inputs.
 - Never log payload encryption keys, generated key material, plaintext payloads,
   or decrypted payloads by default.
+- For payload encryption key rotation work, preserve the encrypted envelope
+  schema, keep `key_id` values non-secret and bland, and test old/new key
+  decryption through `PayloadKeyRegistry`.
+- Keep provider-specific secret-manager SDKs out of the core package unless a
+  future optional extra and connector are explicitly designed, documented, and
+  tested.
 - Validate external input, especially SQL identifiers, NATS subject routing
   patterns, file paths, and configuration fields.
 - Use bind variables for values and strict allow-list validation for SQL

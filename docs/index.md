@@ -60,6 +60,8 @@ The current release provides the following production-ready foundation:
   output for secrets.
 - Optional core payload encryption with AES-256-GCM and AES-256-CCM before
   messages are written by any sink.
+- A public multi-key payload decryption helper for controlled key-rotation,
+  replay, migration, and verification workflows.
 - A CLI command named `nats-sink` for validation, redacted effective config,
   sink health checks, and running sink processes.
 - A companion CLI command named `nats-sink-metrics` for inspecting local JSON

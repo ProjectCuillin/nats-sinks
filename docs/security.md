@@ -189,6 +189,16 @@ disabled rule intentionally leaves matching payloads unchanged. See
 [Payload Encryption](payload-encryption.md) for the full design and
 configuration reference.
 
+Key rotation should use explicit `key_id` values. New runtime configuration
+encrypts with the active key, while authorized verification, replay, or
+migration tooling can use `PayloadKeyRegistry` to decrypt records written with
+old and new keys during the same retention window. nats-sinks does not import
+cloud secret-manager SDKs in the core package; retrieve key material through
+your approved platform mechanism and pass only the resolved base64 key or
+environment-variable reference into the configuration. Treat key identifiers as
+clear operational metadata and avoid names that disclose sensitive missions,
+networks, or customer details.
+
 ```mermaid
 flowchart LR
     Plain[Payload bytes] --> Encrypt[Core payload encryption]

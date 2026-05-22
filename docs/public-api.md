@@ -32,7 +32,7 @@ The tests also cover:
 - framework error classes such as `TemporarySinkError`, `PermanentSinkError`,
   `ConfigurationError`, `AckError`, and `DeadLetterError`,
 - payload encryption helpers such as `EncryptionConfig`, `PayloadEncryptor`,
-  `SubjectPayloadEncryptor`, and `decrypt_payload`,
+  `SubjectPayloadEncryptor`, `PayloadKeyRegistry`, and `decrypt_payload`,
 - message metadata configuration classes,
 - payload normalization helpers,
 - metrics classes and helpers such as `MetricNames`, `InMemoryMetrics`,

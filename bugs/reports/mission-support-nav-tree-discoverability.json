@@ -1,0 +1,27 @@
+{
+  "id": "mission-support-nav-tree-discoverability",
+  "title": "[Bug]: Mission-support documentation discoverability test expects old MkDocs nav shape",
+  "area": "Documentation",
+  "severity": "low",
+  "priority": "P1 - release blocker",
+  "target_release": "v0.4.1",
+  "labels": ["documentation", "testing"],
+  "summary": "The mission-support documentation discoverability regression test still expects a flat MkDocs navigation entry even though the documentation has moved to a tree-like navigation structure.",
+  "observed": "The full repository check fails because the test looks for `Mission-Support Operational Examples: use-cases/mission-support/index.md` in `mkdocs.yml`. The current MkDocs navigation correctly uses `Mission-Support Operational Examples` as a section with an `Overview` child page.",
+  "expected": "The regression test should validate the current tree navigation contract: the section heading must remain visible, the overview child page must point to `use-cases/mission-support/index.md`, and all scenario pages must remain listed.",
+  "reproduction": "Run `scripts/check.sh` or `pytest tests/unit/test_mission_support_examples.py` and observe the mission-support documentation discoverability assertion failure.",
+  "failing_test": "The existing `tests/unit/test_mission_support_examples.py::test_mission_support_scenarios_are_discoverable` test proves the mismatch before the fix by expecting the previous flat navigation string.",
+  "impact": "This does not affect runtime NATS delivery, ACK ordering, Oracle writes, file sink writes, encryption, or metrics. It does block the full release validation command and could hide documentation navigation regressions if the test is loosened incorrectly.",
+  "delivery_semantics": "No delivery semantics are affected. The fix must not change JetStream ACK, DLQ, retry, idempotency, encryption, Oracle, file sink, or observability behavior.",
+  "security": "No secrets, credentials, locators, payloads, or operational network details are involved. The fix must keep documentation tests deterministic and must not weaken public documentation discoverability checks.",
+  "acceptance": [
+    "The mission-support discoverability test validates the current tree-shaped MkDocs navigation.",
+    "The mission-support overview page remains listed in MkDocs navigation.",
+    "All mission-support scenario pages remain listed in MkDocs navigation.",
+    "`pytest tests/unit/test_mission_support_examples.py` passes.",
+    "`scripts/check.sh` passes."
+  ],
+  "tests": "Run `pytest tests/unit/test_mission_support_examples.py`, then run the full `scripts/check.sh` release validation command.",
+  "documentation": "Update CHANGELOG.md to mention the fixed documentation navigation regression test. No user-facing runtime documentation changes are required.",
+  "closeout": "Close only after the release containing the fix is published. Include focused test evidence and full release validation evidence in the GitHub issue."
+}

@@ -108,9 +108,8 @@ release, and closed only after the containing release is published.
 - Postgres sink.
 - HTTP sink.
 - Docker image.
-- Payload encryption key rotation guidance and multi-key decryption helper
-  support.
-- Secret-manager integration patterns for encryption keys.
+- Optional dedicated secret-manager connectors for encryption keys when a
+  future release can keep provider dependencies isolated behind extras.
 - Expanded property-based or dedicated fuzz tooling if the deterministic
   bounded generator suite reaches its limits or future parsers become more
   complex.

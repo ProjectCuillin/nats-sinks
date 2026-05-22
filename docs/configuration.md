@@ -729,6 +729,14 @@ Subject rules use NATS wildcard syntax. `*` matches exactly one token and `>`
 matches one or more remaining tokens only when it is the final token. Rule order
 is significant and the first matching rule wins.
 
+For key rotation, change the active `key_id` and key source for new messages,
+then keep previous key material available to authorized decryption tooling for
+the full replay and retention window. The runtime encrypts with the configured
+active key only; operational tools can use the public `PayloadKeyRegistry`
+helper to decrypt records written across multiple key generations. See
+[Payload Encryption](payload-encryption.md) for the full rotation pattern and
+secret-manager bootstrap guidance.
+
 | Rule field | Required | Default | Valid values | Description |
 | --- | --- | --- | --- | --- |
 | `subject` | yes | none | NATS subject pattern, for example `orders.*` or `secure.>`. | Pattern matched against the normalized envelope subject. |

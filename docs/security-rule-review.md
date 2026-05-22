@@ -175,7 +175,7 @@ is merged.
 | SD-113 | Use authenticated encryption modes for application data. | Already covered | AES-256-GCM and AES-256-CCM |
 | SD-114 | Never reuse nonces/IVs/salts/one-time keys where uniqueness is required. | Already covered | Crypto library random nonce generation |
 | SD-115 | Keep cryptographic keys separate from encrypted data. | Already covered | `key_b64_env`, docs; direct keys test-only |
-| SD-116 | Rotate keys with versioning. | Roadmap | Key rotation/multi-key decryption in roadmap |
+| SD-116 | Rotate keys with versioning. | Applied | Payload envelopes include `key_id`; `PayloadKeyRegistry` supports multi-key decryption during rotation windows; provider-managed automatic rotation remains future optional connector work |
 | SD-117 | Use TLS for network communication. | Already covered | NATS TLS options and docs |
 | SD-118 | Do not disable certificate or hostname validation for convenience. | Already covered | TLS verify true by default, docs warn |
 | SD-119 | Use modern hashes for integrity/signatures and password hashes for passwords. | Already covered | SHA-256 for diagnostics only; no password hashes |

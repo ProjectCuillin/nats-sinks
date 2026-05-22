@@ -148,6 +148,8 @@ Included today:
 - File sink with atomic local JSON file writes and deterministic duplicate
   handling.
 - Optional AES-256-GCM and AES-256-CCM payload encryption in the core runner.
+- Multi-key payload decryption helper for controlled key-rotation, replay, and
+  verification workflows.
 - JSON configuration and redacted effective-config output.
 - CLI command named `nats-sink`.
 - Metrics inspection command named `nats-sink-metrics`.

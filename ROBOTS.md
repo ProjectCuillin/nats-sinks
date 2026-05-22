@@ -240,6 +240,12 @@ code:
 - Prefer `encryption.key_b64_env` for payload encryption key material. Direct
   `encryption.key_b64` values are for disposable local tests only and must be
   redacted from output.
+- When payload encryption key rotation is touched, preserve the encrypted
+  payload envelope schema, keep `key_id` non-secret but operationally bland,
+  and test old-key plus new-key decryption through `PayloadKeyRegistry`.
+- Do not add cloud secret-manager SDKs to the core package for encryption
+  unless the dependency is isolated behind a deliberate optional extra and a
+  documented provider-specific connector.
 - When adding or changing `encryption.rules`, document whether rules inherit
   global key material, override key material, or disable encryption for matching
   subjects. Rule order is security-sensitive and must be clear in examples.

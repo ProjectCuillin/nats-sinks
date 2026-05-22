@@ -21,6 +21,9 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   and `insert_ignore` writes, including validated staging configuration,
   staging-table DDL helpers, rollback-safe transaction handling, duplicate
   metrics support, unit coverage, and operator documentation.
+- Added `PayloadKeyRegistry`, a public multi-key payload decryption helper for
+  key-rotation windows, replay tooling, migration checks, and incident-response
+  verification without adding cloud secret-manager SDKs to the core package.
 
 ### Changed
 
@@ -31,6 +34,9 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   start-here material, core concepts, NATS, sinks, data handling,
   observability, deployment, security and supply chain, testing and quality,
   use cases, project workflow, and ADRs.
+- Documented payload encryption key rotation, multi-key decryption, and
+  secret-manager bootstrap patterns while keeping automated key rotation and
+  provider-specific secret-manager integrations as future optional extensions.
 
 ### Fixed
 
@@ -39,6 +45,9 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   installed.
 - Updated the PyPI version badge URL to use a shorter Shields.io cache period
   so README and documentation badges refresh more quickly after releases.
+- Fixed the mission-support documentation discoverability regression test so it
+  validates the current tree-shaped MkDocs navigation instead of the previous
+  flat navigation entry.
 
 ## [0.4.0] - 2026-05-22
 

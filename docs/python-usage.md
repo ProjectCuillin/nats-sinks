@@ -84,6 +84,30 @@ The sink receives encrypted payload bytes in a standard
 sequence, and headers remains clear. See [Payload Encryption](payload-encryption.md)
 for decryption helpers and operational guidance.
 
+Authorized replay or verification tools can register more than one key
+generation with `PayloadKeyRegistry`:
+
+```python
+from nats_sinks import EncryptionConfig, PayloadKeyRegistry
+
+registry = PayloadKeyRegistry(
+    [
+        EncryptionConfig(
+            enabled=True,
+            key_id="orders-prod-2026-05",
+            key_b64_env="NATS_SINKS_PAYLOAD_KEY_2026_05_B64",
+        ),
+        EncryptionConfig(
+            enabled=True,
+            key_id="orders-prod-2026-06",
+            key_b64_env="NATS_SINKS_PAYLOAD_KEY_2026_06_B64",
+        ),
+    ]
+)
+
+plaintext = registry.decrypt_payload(stored_payload)
+```
+
 ## Capturing Metrics In Embedded Code
 
 The CLI keeps metrics no-op by default unless `metrics.snapshot_file` is set in

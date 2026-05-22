@@ -33,6 +33,7 @@ from nats_sinks.core.config import (
 from nats_sinks.core.encryption import (
     ENCRYPTED_PAYLOAD_KEY,
     PayloadEncryptor,
+    PayloadKeyRegistry,
     SubjectPayloadEncryptor,
     decrypt_payload,
 )
@@ -121,6 +122,7 @@ __all__ = [
     "NoopMetrics",
     "NormalizedPayload",
     "PayloadEncryptor",
+    "PayloadKeyRegistry",
     "PayloadOriginalFormat",
     "PayloadStorageMode",
     "PermanentSinkError",

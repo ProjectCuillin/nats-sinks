@@ -39,9 +39,8 @@ def test_mission_support_scenarios_are_discoverable() -> None:
 
     assert "(use-cases/mission-support/index.md)" in docs_home
     assert "docs/use-cases/mission-support/index.md" in readme
-    assert "Mission-Support Operational Examples: use-cases/mission-support/index.md" in (
-        mkdocs_config
-    )
+    assert "- Mission-Support Operational Examples:" in mkdocs_config
+    assert "- Overview: use-cases/mission-support/index.md" in mkdocs_config
 
     for filename, title in SCENARIOS.items():
         assert (MISSION_SUPPORT_DIR / filename).is_file()
