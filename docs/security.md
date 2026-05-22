@@ -233,6 +233,13 @@ tracked separately in
 [Headers-Only Delivery Evaluation](headers-only-delivery.md) so future support
 does not silently store omitted bodies as if producers sent empty payloads.
 
+Ordered-consumer inspection and replay planning can also expose sensitive
+stream content. Ordered inspection should be read-only, bounded, redacted by
+default, and separated from durable sink writes. Production replay into sinks
+should use durable pull consumers and commit-then-acknowledge rather than
+ordered inspection consumers. See
+[Ordered Consumer Evaluation](ordered-consumer-evaluation.md).
+
 Key rotation should use explicit `key_id` values. New runtime configuration
 encrypts with the active key, while authorized verification, replay, or
 migration tooling can use `PayloadKeyRegistry` to decrypt records written with

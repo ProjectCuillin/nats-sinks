@@ -145,8 +145,11 @@
 - Advanced observability.
 - WebSocket connection support and documentation.
 - Push-consumer support where it can preserve commit-then-acknowledge semantics.
-- Ordered-consumer support for inspection or replay workflows, clearly separated
-  from production durable sink processing.
+- Ordered-consumer client compatibility checks.
+- Read-only ordered-consumer inspection CLI, clearly separated from production
+  durable sink processing.
+- Durable replay-to-sinks guidance and tooling design based on durable pull
+  consumers rather than ordered inspection consumers.
 - Consumer metadata, replicas, and memory-storage options.
 - Headers-only delivery mode for metadata-only workflows.
 - Stream management helpers for retention, discard, storage, replicas, and

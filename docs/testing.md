@@ -49,6 +49,13 @@ Unit tests cover:
 - no ACK on sink failure,
 - no payload logging by default.
 
+Ordered-consumer support is currently documentation and backlog only. Future
+ordered-inspection tests should prove that inspection tooling is read-only,
+bounded, redacted by default, and unable to call sink writes. Future durable
+replay-to-sinks tests should stay on the normal commit-then-acknowledge
+contract and prove that replay never ACKs before durable sink success. See
+[Ordered Consumer Evaluation](ordered-consumer-evaluation.md).
+
 ## Bounded Property-Style Tests
 
 The repository uses deterministic bounded generator tests for security-sensitive

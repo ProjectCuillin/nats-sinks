@@ -104,7 +104,7 @@ Current gap details:
 | HeadersOnly delivery | Consumers can deliver only headers and expose the omitted body size through a NATS header. | Evaluated in [Headers-Only Delivery Evaluation](headers-only-delivery.md). Current code safely handles empty payloads, but explicit headers-only support is split into consumer configuration, payload-presence metadata, and sink or DLQ certification backlog items. | Phase 2 |
 | Consumer metadata | Consumers support user metadata. | Not exposed. | Phase 3 |
 | Push consumers | NATS supports push delivery to a subject. | Not supported by the runner by design today. | Phase 3 |
-| Ordered consumers | NATS supports ordered push and pull consumers for inspection/replay. | Not supported; not suitable for durable sink writes by default because ordered consumers do not use the same ACK semantics. | Phase 3 |
+| Ordered consumers | NATS supports ordered consumers for inspection and analysis workflows. | Evaluated in [Ordered Consumer Evaluation](ordered-consumer-evaluation.md). Not enabled in runtime; follow-up work is split into client compatibility checks, a read-only inspection CLI, and durable replay-to-sinks guidance that keeps production writes on durable pull consumers. | Phase 3 |
 | Queue-style push subscriptions | Push delivery can use queue groups. | Not supported. Pull consumers are preferred for sink work. | Phase 3 |
 | Consumer replicas and memory storage | Consumer state can have replica and memory options. | Not exposed. | Phase 3 |
 
@@ -202,6 +202,8 @@ Other gaps are good candidates for future work:
 - explicit consumer configuration and reconciliation,
 - optional confirmed ACK support, ACK confirmation metrics, optional
   `InProgress` heartbeat support, and InProgress guardrails,
+- read-only ordered-consumer inspection tooling and durable replay-to-sinks
+  guidance,
 - multi-subject filters,
 - JetStream advisory consumption beyond the documented read-only advisory
   permission template.

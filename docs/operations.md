@@ -140,6 +140,12 @@ sink writes. It is not enabled today. If implemented, it should be treated as a
 bounded heartbeat around active work, not as a success signal. See
 [InProgress Evaluation](in-progress-evaluation.md).
 
+Ordered-consumer support has been evaluated for future inspection and analysis
+tooling. It is not enabled today and should not be used as a replacement for
+durable pull-consumer sink workers. Replay into sinks should use durable
+pull-consumer semantics with commit-then-acknowledge. See
+[Ordered Consumer Evaluation](ordered-consumer-evaluation.md).
+
 Prometheus sharing should use the policy-controlled observability layer rather
 than an ad hoc shell redirection. The separate `nats-sink-observe` CLI can
 generate a disabled policy from runtime config, write a filtered textfile for

@@ -141,6 +141,12 @@ the NATS server intentionally omitted. See
 [Headers-Only Delivery Evaluation](headers-only-delivery.md) for the staged
 design.
 
+Ordered consumers are also intentionally separate from the production sink
+runner. They are useful for inspection and analysis, but they are not a
+replacement for durable pull consumers when writing to Oracle, files, or
+future sinks. See [Ordered Consumer Evaluation](ordered-consumer-evaluation.md)
+for the evaluation and follow-up tooling split.
+
 ## Extension Model
 
 Future sinks should implement:
