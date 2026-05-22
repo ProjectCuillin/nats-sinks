@@ -37,6 +37,9 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 - Documented payload encryption key rotation, multi-key decryption, and
   secret-manager bootstrap patterns while keeping automated key rotation and
   provider-specific secret-manager integrations as future optional extensions.
+- Moved the Postgres sink proposal out of active roadmap phases into
+  "Not Planned Unless Scope Changes" and marked its backlog item as a
+  low-priority, not-planned reference.
 
 ### Fixed
 

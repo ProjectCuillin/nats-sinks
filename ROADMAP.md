@@ -96,8 +96,6 @@ release, and closed only after the containing release is published.
 - More Oracle duplicate handling controls, such as clearer `merge`
   update-column controls and deeper merge insert-versus-match visibility where
   Oracle execution metadata can support it reliably.
-- Postgres sink with `ON CONFLICT`-based idempotent `merge` and `insert_ignore`
-  behavior.
 - HTTP sink idempotency-key support, retry safety guidance, and clear warnings
   for endpoints that cannot provide idempotent semantics.
 - S3 sink design with atomic object keys and safe duplicate overwrite/skip
@@ -105,7 +103,6 @@ release, and closed only after the containing release is published.
 - Native Oracle Cloud Infrastructure Object Storage sink design with
   deterministic object keys, OCI identity support, checksums, multipart upload,
   and least-privilege bucket guidance.
-- Postgres sink.
 - HTTP sink.
 - Docker image.
 - Optional dedicated secret-manager connectors for encryption keys when a
@@ -149,7 +146,8 @@ release, and closed only after the containing release is published.
   and metadata management helpers beyond the current documentation guidance.
 - `AckTerm` and `AckNext` evaluation for advanced failure and fetch workflows.
 - Optional no-echo connection setting.
-- Sink certification tests for future Postgres, HTTP, S3, and Kafka sinks.
+- Sink certification tests for future HTTP, S3, Kafka, and other active sink
+  proposals.
 
 ## Not Planned Unless Scope Changes
 
@@ -163,3 +161,6 @@ release, and closed only after the containing release is published.
 - Request/reply and NATS services framework support.
 - JetStream Key/Value and Object Store APIs, unless a future sink or operational
   workflow requires them.
+- Postgres sink implementation. This can be reconsidered if a maintainer,
+  contributor, customer deployment, certification need, or funding source
+  changes the scope and commits to the required production-quality sink work.

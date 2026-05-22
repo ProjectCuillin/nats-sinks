@@ -126,7 +126,6 @@ adding more strategy names. Planned areas include:
 - per-route or per-table Oracle idempotency overrides,
 - duplicate counters and metrics for Oracle duplicate handling,
 - configurable Oracle `merge` update columns,
-- Postgres `ON CONFLICT`-based duplicate handling,
 - HTTP idempotency-key support and explicit warnings for unsafe endpoints,
 - S3 sinks with deterministic object keys and atomic overwrite-or-skip
   behavior,

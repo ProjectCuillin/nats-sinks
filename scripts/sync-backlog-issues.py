@@ -122,6 +122,10 @@ KNOWN_LABELS = {
         "0e8a16",
         "Implementation is complete in development and waiting for release-gated closure.",
     ),
+    "not-planned": (
+        "eeeeee",
+        "Not planned unless project scope, demand, ownership, or funding changes.",
+    ),
     "release-unscheduled": ("ededed", "Work has not yet been assigned to a release tag."),
     "severity-critical": ("b60205", "Critical defect with severe reliability or security impact."),
     "severity-high": ("d93f0b", "High-impact defect affecting important behavior."),
