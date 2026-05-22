@@ -290,6 +290,7 @@ def run(
             dead_letter=loaded.dead_letter,
             message_metadata=loaded.message_metadata,
             mission_metadata=loaded.mission_metadata,
+            security_labels=loaded.security_labels,
             encryption=loaded.encryption,
             custody=loaded.custody,
             advisories=loaded.advisories,

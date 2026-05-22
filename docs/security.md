@@ -207,6 +207,15 @@ file, and future sinks all receive the same protection. Rejections are
 permanent validation failures and follow the same DLQ-before-ACK rule as other
 pre-sink failures.
 
+Use `security_labels` when deployments need a structured data-centric security
+label profile with releasability, handling caveats, owner, originator, policy
+identifier, and retention category. The profile is validated before sink
+delivery and stored as JSON in Oracle and file outputs. It can inform policy
+decisions, but it is not an access-control mechanism by itself. Keep
+authorization in Oracle, the application, IAM, compartment policies, database
+views, VPD policies, or the destination platform that actually controls access.
+See [Data-Centric Security Label Profile](security-label-profile.md).
+
 Use `size_policy` for broad resource and abuse-case controls, then use
 `pre_sink_policy` for semantic requirements such as classification, required
 labels, encryption, or approved mission metadata keys. Detailed configuration

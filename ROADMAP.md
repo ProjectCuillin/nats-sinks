@@ -32,6 +32,10 @@ release, and closed only after the containing release is published.
 - Generic mission metadata support for one validated JSON context object across
   the core runtime, Oracle `MISSION_METADATA_JSON`, file-sink output, and future
   sink contracts.
+- Optional data-centric security label profile support for structured
+  releasability, handling caveats, owner, originator, policy identifiers, and
+  retention categories across the core runtime, Oracle `SECURITY_LABELS_JSON`,
+  file-sink output, and future sink contracts.
 - Optional tamper-evident custody metadata with deterministic payload,
   metadata, and record hashes computed by the core before sink writes and
   persisted by Oracle, file, and future sinks.

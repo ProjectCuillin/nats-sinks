@@ -60,6 +60,11 @@ used immediately:
   subject-specific rules shared by every sink. These fields are useful for
   separating routine traffic from urgent, restricted, coalition, exercise, or
   audit-relevant event streams without changing sink code.
+- Optional data-centric security label profiles for structured releasability,
+  handling caveats, owner, originator, policy identifier, and retention
+  category metadata. Oracle stores the profile in `SECURITY_LABELS_JSON`, the
+  file sink writes it as `security_labels`, and future sinks can use the same
+  core-normalized profile.
 - `nats-sink`, the CLI for validating JSON configuration, showing redacted
   effective config, testing sinks, and running sink processes.
 - `nats-sink-metrics`, a separate CLI for reading a local JSON metrics snapshot
@@ -160,6 +165,10 @@ used immediately:
   Oracle `MISSION_METADATA_JSON`, file-sink output records, and future sinks
   without adding fixed columns for every use case. See
   [Mission Metadata](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/mission-metadata.md).
+- A data-centric security label profile for structured policy metadata such as
+  releasability, handling caveats, owner, originator, policy ID, and retention
+  category. See
+  [Data-Centric Security Label Profile](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/security-label-profile.md).
 - F2T2EA event phase tagging guidance built on mission metadata as
   metadata-only context, with explicit non-goals around targeting,
   fire-control, weapons-release, and autonomous decision behavior. See
@@ -584,6 +593,40 @@ With the file sink, these values appear as top-level JSON fields such as
 ["mission-report", "coalition", "watch-floor"]`. With Oracle, the same values
 are stored in `PRIORITY`, `CLASSIFICATION`, and `LABELS` columns and repeated
 inside `METADATA_JSON.message_metadata`.
+
+For richer data-centric policy context, enable `security_labels`. The profile
+is optional and metadata-only. It can help downstream systems reason about
+releasability, handling caveats, owner, originator, policy identifiers, and
+retention categories, but it does not replace authorization in Oracle, IAM, or
+the destination platform.
+
+```json
+{
+  "security_labels": {
+    "enabled": true,
+    "allowed_classifications": [
+      "NATO UNCLASSIFIED",
+      "NATO RESTRICTED",
+      "NATO CONFIDENTIAL",
+      "NATO SECRET"
+    ],
+    "default": {
+      "profile": "nats-sinks.security-label.v1",
+      "classification": "NATO RESTRICTED",
+      "releasability": ["NATO"],
+      "handling_caveats": ["MISSION"],
+      "owner": "example-owner",
+      "originator": "example-originator",
+      "policy_id": "example-policy",
+      "retention_category": "mission-log-30d"
+    }
+  }
+}
+```
+
+With the file sink, the profile appears as top-level `security_labels` and
+inside `metadata.security_labels`. With Oracle, the profile is stored in
+`SECURITY_LABELS_JSON` and repeated inside `METADATA_JSON.security_labels`.
 
 ## NATS Connections
 

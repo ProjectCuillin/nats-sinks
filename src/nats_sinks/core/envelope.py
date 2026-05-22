@@ -41,6 +41,10 @@ from nats_sinks.core.payload import (
     load_standard_json,
     normalize_payload_for_json_storage,
 )
+from nats_sinks.core.security_labels import (
+    freeze_security_label_profile,
+    thaw_security_label_profile,
+)
 
 
 def _safe_text(value: object) -> str | None:
@@ -98,6 +102,7 @@ class NatsEnvelope:
     classification: str | None = None
     labels: tuple[str, ...] = field(default_factory=tuple)
     mission_metadata: Mapping[str, Any] | None = None
+    security_labels: Mapping[str, Any] | None = None
     custody: Mapping[str, Any] | None = None
     reply: str | None = None
     domain: str | None = None
@@ -127,6 +132,11 @@ class NatsEnvelope:
             self,
             "mission_metadata",
             freeze_mission_metadata(self.mission_metadata),
+        )
+        object.__setattr__(
+            self,
+            "security_labels",
+            freeze_security_label_profile(self.security_labels),
         )
         object.__setattr__(self, "custody", freeze_custody_metadata(self.custody))
 
@@ -197,6 +207,18 @@ class NatsEnvelope:
         """
 
         return thaw_mission_metadata(self.mission_metadata)
+
+    def security_labels_for_json_storage(self) -> dict[str, Any] | None:
+        """Return the optional data-centric security label profile.
+
+        Security labels are normalized by the core and then frozen on the
+        envelope.  Sinks call this helper when serializing the structured
+        profile to Oracle JSON columns, file JSON records, or future backends.
+        The profile is metadata only; it does not replace authorization in the
+        destination system.
+        """
+
+        return thaw_security_label_profile(self.security_labels)
 
     def custody_for_json_storage(self) -> dict[str, Any] | None:
         """Return optional tamper-evident custody metadata for sink storage.

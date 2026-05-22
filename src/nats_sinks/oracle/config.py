@@ -91,6 +91,7 @@ class OracleColumnMapping(BaseModel):
     headers: str = "HEADERS_JSON"
     metadata: str = "METADATA_JSON"
     mission_metadata: str = "MISSION_METADATA_JSON"
+    security_labels: str = "SECURITY_LABELS_JSON"
 
 
 class OracleTableRoute(BaseModel):

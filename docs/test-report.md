@@ -14,11 +14,11 @@ logs from live systems.
 | Field | Value |
 | --- | --- |
 | Overall result | Pass |
-| Report generated | 2026-05-22 20:24:10 CEST |
+| Report generated | 2026-05-22 21:16:52 CEST |
 | Project version | `0.4.0` post-release development |
 | Python version | 3.12.4 |
-| Git revision checked | Active `release-v0.4.1` hierarchical branch workflow workspace |
-| Worktree state | Active workspace with safe sink connector framework implementation for issue `#35`, new Oracle-family, Palantir, and common sink connector backlog items synced to GitHub Issues, quiet hierarchical release and issue branch workflow automation, WebSocket transport guardrails for issues `#129`, `#130`, and `#132`, completed WebSocket test-isolation bugs `#139` and `#140`, GitHub `main` branch protection, draft pull request helpers, manual release-validation dispatch, CODEOWNERS review ownership, pull request governance checks, release tag validation against `main`, updated release/backlog/contributor documentation, Oracle high-throughput staging-table merge mode for issue `#31`, tamper-evident custody metadata for issue `#60`, optional JetStream advisory observation for issue `#18`, explicit durable pull-consumer management for issue `#19`, richer JetStream consumer policy configuration for issue `#20`, optional NATS no-echo connection configuration for issue `#25`, OpenTelemetry OTLP metrics export for issue `#26`, and the previously validated `0.4.0` capability set covering secure-development hardening, strict JSON config loading, log-injection sanitization, secret-scan automation, the 316-control security rule review, project-specific security controls, expanded public API compatibility tests and documentation, release-version consistency checks, generated GitHub Dependency Graph manifests, detailed local backlog JSON items synced to GitHub Issues, release-target backlog labels, sanitized backlog comment tooling, completed-label workflow support for fixed or implemented issues awaiting release, stricter backlog lifecycle enforcement, release-gated backlog close automation, OCI Object Storage sink backlog tracking, standardized SPDX source headers, metrics snapshots and CLI, observability policy core, Prometheus and NATS monitoring connectors, Kubernetes examples, unified Debian/Oracle Linux systemd installer, NATS reconnect tuning, least-privilege NATS permission templates, JetStream topology guidance, retry backoff with jitter, priority-aware lanes, synthetic mission testing, mission-support examples, CycloneDX SBOM generation, release checksums, hash-verified installation guidance, property-style tests, defence and mission-support blueprints, generic mission metadata, payload encryption, and Oracle/file sink support |
+| Git revision checked | Active `issue-49-data-centric-security-label-profile` branch based on `release-v0.4.1` |
+| Worktree state | Active workspace with issue `#49` data-centric security label profile implementation, including core `NatsEnvelope.security_labels` support, strict profile validation, file-sink and Oracle JSON storage, documentation, tests, and the previously validated `release-v0.4.1` capability set covering the quiet hierarchical branch workflow, safe sink connector framework, Oracle staging-table merge mode, tamper-evident custody metadata, JetStream advisory observation, durable pull-consumer management, richer consumer policy controls, NATS no-echo, OpenTelemetry OTLP metrics export, WebSocket guardrails, observability policy core, Prometheus and NATS monitoring connectors, Kubernetes examples, systemd installer, NATS reconnect tuning, least-privilege permissions, retry backoff with jitter, priority-aware lanes, synthetic mission testing, mission-support examples, SBOM/checksum generation, strict JSON configuration loading, security hardening, generic mission metadata, payload encryption, and Oracle/file sink support |
 | Live NATS details | Redacted |
 | Live Oracle details | Redacted |
 
@@ -34,7 +34,8 @@ that it was a sandbox reachability condition rather than sink behavior.
 
 This validation refresh covered the core framework, strict JSON configuration
 loading, safe log formatting, high-confidence secret scanning, the 316-control
-security rule review, additional project-specific controls, expanded public API
+security rule review, data-centric security label profile validation and
+storage, additional project-specific controls, expanded public API
 compatibility checks and documentation, release-version consistency automation, clearer basic
 metrics counters, WebSocket transport guardrails, optional WebSocket connection
 headers, a collision-safe local WebSocket certification harness, local JSON metrics snapshots, the `nats-sink-metrics`
@@ -114,6 +115,7 @@ flowchart LR
     Synthetic[Synthetic mission harness] --> Report
     F2T2EA[F2T2EA blueprint examples] --> Report
     MissionMeta[Generic mission metadata] --> Report
+    SecurityLabels[Data-centric security label profile] --> Report
     Custody[Tamper-evident custody metadata] --> Report
     Crypto[Payload encryption] --> Report
     MessageMeta[Priority / classification / labels metadata] --> Report
@@ -154,6 +156,16 @@ published `0.4.0` release and has passed local validation. It includes:
   250-message partial-final-batch delivery with `batch_size=64`, and
   128-message AES-256-CCM encrypted delivery with decrypt verification. No new
   product bugs were identified during this run,
+- data-centric security label profile work for issue `#49`, including strict
+  JSON parsing, duplicate-key rejection, root-field allow-list validation,
+  optional controlled vocabularies, subject/global defaults, file sink
+  `security_labels` records, Oracle `SECURITY_LABELS_JSON` mapping and DDL,
+  DLQ-before-ACK behavior for invalid profile headers, and public API coverage.
+  Full local validation after this work passed with `639 passed, 8 skipped` in
+  the main pytest run, `121 passed` in the encryption and sink contract suite,
+  and `104 passed` in the sink-focused suite; Ruff, mypy, documentation builds,
+  secret scan, Bandit, package build, SBOM generation, checksum generation, and
+  Twine checks also passed,
 - sink certification contract work for issue `#41`, including a documented
   release gate, reusable `nats_sinks.testing` certification helpers, FileSink
   lifecycle/write/duplicate certification coverage, Oracle durable-success

@@ -87,6 +87,12 @@ def envelope_to_row(
             separators=(",", ":"),
             allow_nan=False,
         ),
+        "security_labels_json": json.dumps(
+            envelope.security_labels_for_json_storage(),
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ),
     }
 
 

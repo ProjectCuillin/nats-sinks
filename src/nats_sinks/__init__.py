@@ -43,6 +43,8 @@ from nats_sinks.core.config import (
     PreSinkPolicyRuleConfig,
     PriorityLaneConfig,
     PriorityLanesConfig,
+    SecurityLabelProfileConfig,
+    SecurityLabelRuleConfig,
     SinkPluginConfig,
     SizePolicyConfig,
 )
@@ -119,6 +121,11 @@ from nats_sinks.core.payload import (
 )
 from nats_sinks.core.policy import PolicyEvaluation, PolicyViolation, evaluate_pre_sink_policy
 from nats_sinks.core.runner import JetStreamSinkRunner
+from nats_sinks.core.security_labels import (
+    DEFAULT_SECURITY_LABELS_HEADER,
+    SECURITY_LABEL_PROFILE_NAME,
+    parse_security_label_header,
+)
 from nats_sinks.core.size_policy import (
     SizePolicyEvaluation,
     SizePolicyViolation,
@@ -144,10 +151,12 @@ __all__ = [
     "DEFAULT_METRIC_NAMESPACE",
     "DEFAULT_MISSION_METADATA_HEADER",
     "DEFAULT_PRIORITY_HEADER",
+    "DEFAULT_SECURITY_LABELS_HEADER",
     "ENCRYPTED_PAYLOAD_KEY",
     "METRIC_SPECS",
     "MISSION_METADATA_PROFILE_VERSION",
     "NATS_RESERVED_HEADER_NAMES",
+    "SECURITY_LABEL_PROFILE_NAME",
     "SINK_CONNECTOR_API_VERSION",
     "SINK_CONNECTOR_ENTRY_POINT_GROUP",
     "AckError",
@@ -194,6 +203,8 @@ __all__ = [
     "PriorityLanesConfig",
     "RetryExhaustedError",
     "SchemaAwareSink",
+    "SecurityLabelProfileConfig",
+    "SecurityLabelRuleConfig",
     "SerializationError",
     "Sink",
     "SinkConnector",
@@ -228,6 +239,7 @@ __all__ = [
     "observe_jetstream_advisory_message",
     "parse_jetstream_advisory",
     "parse_mission_metadata_header",
+    "parse_security_label_header",
     "qualified_metric_name",
     "validate_advisory_subject",
     "write_metrics_snapshot",

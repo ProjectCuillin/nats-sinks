@@ -990,6 +990,92 @@ See [Mission Metadata](mission-metadata.md) for the full storage contract and
 [F2T2EA Event Phase Tagging](use-cases/defence/f2t2ea-event-phase-tagging.md)
 for a defence-oriented use-case blueprint built on the generic feature.
 
+### `security_labels`
+
+The `security_labels` section is disabled by default. Enable it when messages
+need a structured data-centric security label profile next to the normal
+`priority`, `classification`, and `labels` fields. The profile is useful for
+policy context such as releasability, handling caveats, owner, originator,
+policy identifier, and retention category.
+
+The profile is metadata only. It can inform routing, retention, audit, and
+downstream authorization policy, but it does not enforce authorization by
+itself.
+
+```json
+{
+  "security_labels": {
+    "enabled": true,
+    "header": "Nats-Sinks-Security-Labels",
+    "max_bytes": 8192,
+    "allowed_priorities": ["routine", "priority", "immediate", "flash"],
+    "allowed_classifications": [
+      "NATO UNCLASSIFIED",
+      "NATO RESTRICTED",
+      "NATO CONFIDENTIAL",
+      "NATO SECRET"
+    ],
+    "allowed_releasability": ["NATO", "FVEY", "EU"],
+    "allowed_handling_caveats": ["MISSION", "TRAINING", "EXERCISE"],
+    "allowed_retention_categories": ["mission-log-30d", "mission-log-1y"],
+    "default": {
+      "profile": "nats-sinks.security-label.v1",
+      "classification": "NATO RESTRICTED",
+      "releasability": ["NATO"],
+      "handling_caveats": ["MISSION"],
+      "owner": "example-owner",
+      "originator": "example-originator",
+      "policy_id": "example-policy",
+      "retention_category": "mission-log-30d"
+    },
+    "rules": [
+      {
+        "subject": "mission.sensor.>",
+        "profile": {
+          "profile": "nats-sinks.security-label.v1",
+          "classification": "NATO SECRET",
+          "releasability": ["NATO", "FVEY"],
+          "handling_caveats": ["MISSION"],
+          "owner": "example-sensor-domain",
+          "originator": "example-originator",
+          "policy_id": "example-mission-policy",
+          "retention_category": "mission-log-1y"
+        }
+      }
+    ]
+  }
+}
+```
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `enabled` | no | `false` | `true` or `false`. | Enables parsing, validation, and sink delivery of the data-centric security label profile. |
+| `header` | no | `Nats-Sinks-Security-Labels` | Non-empty header name without control characters. | Header containing a JSON profile supplied by a publisher. |
+| `max_bytes` | no | `8192` | Integer from `1` to `262144`. | Maximum canonical JSON size for one profile. |
+| `allowed_priorities` | no | `[]` | List of non-empty strings. | Optional fail-closed vocabulary for profile `priority`. |
+| `allowed_classifications` | no | `[]` | List of non-empty strings. | Optional fail-closed vocabulary for profile `classification`. |
+| `allowed_releasability` | no | `[]` | List of non-empty strings. | Optional fail-closed vocabulary for every `releasability` value. |
+| `allowed_handling_caveats` | no | `[]` | List of non-empty strings. | Optional fail-closed vocabulary for every `handling_caveats` value. |
+| `allowed_retention_categories` | no | `[]` | List of non-empty strings. | Optional fail-closed vocabulary for `retention_category`. |
+| `default` | no | `null` | JSON object or `null`. | Global default profile used when the header is absent and no subject rule matches. |
+| `rules` | no | `[]` | List of subject-rule objects. | Ordered subject-specific defaults evaluated before the global default. |
+
+Rule fields:
+
+| Rule field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `subject` | yes | none | NATS subject pattern. | Subject pattern matched against `NatsEnvelope.subject`. |
+| `profile` | yes | none | JSON object or `null`. | Default profile for matching subjects. `null` explicitly clears the global default. |
+
+Valid profile root fields are `profile`, `priority`, `classification`,
+`labels`, `releasability`, `handling_caveats`, `owner`, `originator`,
+`policy_id`, `retention_category`, and `extensions`. Unknown root fields are
+rejected. Missing `priority`, `classification`, and `labels` values are filled
+from the already-normalized message metadata values.
+
+See [Data-Centric Security Label Profile](security-label-profile.md) for the
+complete profile shape, storage examples, Mermaid diagrams, and security notes.
+
 ### `encryption`
 
 The `encryption` section is a generic core runtime feature. When enabled, the
