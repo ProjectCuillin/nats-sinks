@@ -10,6 +10,14 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ## [Unreleased]
 
+### Added
+
+- Added a quiet branch-first development and release workflow with draft pull
+  request creation helpers, manual release-validation dispatch, pull request
+  governance checks, CODEOWNERS review, branch protection tooling, and release
+  workflow validation that tags are cut only from commits already merged into
+  `main`.
+
 ### Fixed
 
 - Fixed the high-confidence secret scanner so it prefers `rg` when available

@@ -42,6 +42,7 @@ nav:
   - Idempotency: idempotency.md
   - Dead Letter Queues: dead-letter-queues.md
   - Backlog Management: backlog-management.md
+  - Branch Workflow: branch-workflow.md
   - Security: security.md
   - Security Rule Review: security-rule-review.md
   - Operations: operations.md

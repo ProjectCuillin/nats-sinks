@@ -39,6 +39,40 @@ dependency manifests stay unchanged. Add new generator cases when a validator
 accepts external input, especially around configuration, NATS subject patterns,
 payload handling, metadata handling, or filesystem paths.
 
+## Branch-First Work
+
+Do not work directly on `main`. Create a branch before editing:
+
+```bash
+git switch main
+git pull --ff-only
+git switch -c feature-short-description
+```
+
+Use `release-vX.Y.Z` for release preparation, `feature-*` for planned
+enhancements, `bugfix-*` for regression fixes, and `hotfix-*` for urgent
+fixes. Push small commits to the branch. Branch pushes intentionally do not
+start the CI, docs, CodeQL, dependency-review, backlog-sync, or bug-sync
+workflows.
+
+Create or refresh the pull request locally when the branch is ready for review:
+
+```bash
+scripts/open-release-pr.sh --repo ProjectCuillin/nats-sinks
+```
+
+The helper creates a draft pull request by default. When the branch is ready
+for merge/release validation, mark the pull request ready and dispatch the
+validation workflows:
+
+```bash
+scripts/run-release-validation.sh --repo ProjectCuillin/nats-sinks
+```
+
+The pull request is the review boundary before `main`. Branch protection should
+require CI, CODEOWNER review, resolved conversations, and no direct pushes. See
+[Branch-First Development And Release Workflow](branch-workflow.md).
+
 ## Synthetic Test Harness
 
 For day-to-day development, use the synthetic harness when you need mission-like

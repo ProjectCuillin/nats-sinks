@@ -8,6 +8,14 @@ package metadata, security scanning, and command-line smoke tests.
 For the full push-tag and PyPI publication runbook, see
 [Publishing Releases](publishing.md).
 
+All release preparation must happen on a work branch. Do not prepare releases
+by committing directly to `main`. Use a branch such as `release-v0.4.1`, push
+changes to that branch, keep GitHub Actions quiet during ordinary branch work,
+create or update a draft pull request with `scripts/open-release-pr.sh`, and
+merge to `main` only after manually dispatched release validation checks and
+maintainer review are complete. See [Branch-First Development And Release
+Workflow](branch-workflow.md).
+
 ## Versioning
 
 `nats-sinks` uses semantic versioning. The `0.x` line may still adjust APIs,
@@ -42,7 +50,11 @@ twine check dist/*.whl dist/*.tar.gz
 
 ```mermaid
 flowchart TD
-    Change[Merge release changes] --> Checks[Run CI checks]
+    Branch[Prepare release branch] --> PR[Open release pull request]
+    PR --> Validate[Manually dispatch release validation]
+    Validate --> Review[CI, CodeQL, docs, dependency review, approval]
+    Review --> Main[Merge reviewed PR into main]
+    Main --> Checks[Run release checks]
     Checks --> Build[Build sdist and wheel]
     Build --> SBOM[Generate CycloneDX SBOM]
     SBOM --> Checksums[Generate SHA256SUMS]
@@ -58,12 +70,16 @@ flowchart TD
 ```
 
 The release workflow does not create the git tag. Maintainers create and push
-an annotated tag such as `v0.1.0`. The tag push starts
+an annotated tag such as `v0.1.0` from a commit already merged into `main`.
+The tag push starts
 `.github/workflows/release.yml`; after the package is published to PyPI, the
 workflow creates the GitHub Release page from that tag and uploads the built
 source distribution, wheel, `SHA256SUMS`, and CycloneDX SBOM files as release
 assets. SBOM files and checksums are release evidence and are not uploaded to
 PyPI.
+
+The release workflow validates that the tag commit is contained in `main`.
+This prevents accidental publication from an unmerged release branch.
 
 After the GitHub Release exists, release automation closes open managed backlog
 issues labeled for the release tag. For example, an open issue labeled
@@ -137,6 +153,11 @@ relying on the stored GitHub CLI login.
 
 ## Checklist
 
+- Confirm the release branch has an open pull request into `main`.
+- Confirm `main` branch protection requires pull request review and CI.
+- Confirm `scripts/run-release-validation.sh` has dispatched release validation
+  for the release branch.
+- Confirm the release pull request has maintainer approval before merge.
 - Confirm all user-visible changes are represented in Markdown documentation.
 - Confirm every user-visible feature has a linked GitHub issue or a documented
   reason why no issue was needed.
@@ -169,7 +190,8 @@ relying on the stored GitHub CLI login.
 - Run Oracle live integration and NATS-to-Oracle e2e when the required ignored
   `.local` environment files are available; otherwise document that they were
   not run in `docs/test-report.md`.
-- Create and push an annotated `v*` tag.
+- Merge the reviewed release pull request into `main`.
+- Create and push an annotated `v*` tag from `main`.
 - Confirm the GitHub Release exists and includes the built wheel, source
   distribution, `SHA256SUMS`, and `dist/sbom/*.cyclonedx.*` assets.
 - Confirm release-labeled backlog issues were closed only after the GitHub

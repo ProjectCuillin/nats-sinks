@@ -59,6 +59,14 @@ flowchart TD
 
 ## Step 1: Prepare The Release
 
+Start from a release branch, not from `main`:
+
+```bash
+git switch main
+git pull --ff-only
+git switch -c release-v0.4.1
+```
+
 Update:
 
 - `pyproject.toml` version,
@@ -97,6 +105,28 @@ quality-of-life check so commands such as `gh run list`, `gh run view`, and
 `gh release view` work immediately after the tag push. If authentication is
 invalid and a terminal is available, the helper asks whether it should start
 browser-based `gh auth login`. It never prints token values.
+
+Push the release branch and open or refresh the pull request:
+
+```bash
+scripts/open-release-pr.sh --repo ProjectCuillin/nats-sinks
+```
+
+The helper creates a draft pull request by default. Ordinary branch pushes do
+not start GitHub Actions. When the branch is ready for merge and release
+validation, mark the pull request ready and dispatch the validation workflows:
+
+```bash
+scripts/run-release-validation.sh --repo ProjectCuillin/nats-sinks
+```
+
+The repository also includes a manual `Branch Pull Request` workflow for
+token-gated pull request creation. It requires `NATS_SINKS_PR_BOT_TOKEN` and is
+not triggered by branch pushes.
+
+The pull request must pass CI and receive maintainer approval before it is
+merged into `main`. The release tag must be created from `main`; the release
+workflow rejects tags that point to unmerged branch commits.
 
 ## PyPI README Link Hygiene
 
@@ -213,6 +243,8 @@ limitations, and security notes.
 Use annotated tags:
 
 ```bash
+git switch main
+git pull --ff-only
 git tag -a v0.1.0 -m "Release v0.1.0"
 git push origin v0.1.0
 ```

@@ -12,7 +12,8 @@ on:
           - "false"
           - "true"
   push:
-    branches: [main]
+    branches:
+      - main
     paths:
       - "bugs/reports/**/*.json"
       - "scripts/sync-bug-reports.py"

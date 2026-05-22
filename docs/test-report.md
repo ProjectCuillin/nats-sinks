@@ -14,11 +14,11 @@ logs from live systems.
 | Field | Value |
 | --- | --- |
 | Overall result | Pass |
-| Report generated | 2026-05-22 09:03:25 CEST |
-| Project version | `0.4.0` release candidate |
+| Report generated | 2026-05-22 09:53:45 CEST |
+| Project version | `0.4.0` post-release development |
 | Python version | 3.12.4 |
-| Git revision checked | Active release-candidate workspace for `v0.4.0` |
-| Worktree state | Active workspace with unreleased secure-development hardening, strict JSON config loading, log-injection sanitization, secret-scan automation, the 316-control security rule review, project-specific security controls, expanded public API compatibility tests and documentation, release-version consistency checks, generated GitHub Dependency Graph manifests, detailed local backlog JSON items synced to GitHub Issues, release-target backlog labels, sanitized backlog comment tooling, completed-label workflow support for fixed or implemented issues awaiting release, stricter backlog lifecycle enforcement, release-gated backlog close automation, a new OCI Object Storage sink backlog item synced to GitHub issue `#47`, standardized SPDX source headers across Python and shell files, clearer basic metrics counters, local JSON metrics snapshots, the standalone metrics inspection CLI, observability policy core, the `nats-sink-observe` CLI, policy-controlled Prometheus textfile export, optional native Prometheus HTTP endpoint support, a disabled-by-default NATS server monitoring connector with explicit endpoint and field allow lists, Kubernetes deployment examples with worker/observability separation, unified Debian/Oracle Linux systemd installer with compatibility wrappers, one-command GitHub installer documentation, remote standalone installer asset fetching, package-spec-aware tagged systemd installs, Debian and Oracle Linux observability service assets, Oracle duplicate/conflict metrics, clearer Oracle schema/privilege error guidance, NATS reconnect tuning with connection event metrics, least-privilege NATS permission templates, advanced JetStream topology guidance, exponential retry backoff with jitter controls, priority-aware processing lanes for already-fetched bounded batches, Oracle benchmark scripts with sanitized phase timing, sanitized synthetic load-test profiles for normal/retry/DLQ/shutdown behavior, mission-support operational examples for restricted event storage, disconnected file handoff, DLQ triage, and destination outage recovery, CycloneDX SBOM release-evidence generation, release checksum manifests, hash-verified installation guidance, the deterministic synthetic mission scenario harness for core and file-sink smoke testing, deterministic bounded property-style generator tests for validators and normalizers, file sink path sanitizer hardening tracked as bug issue `#62`, synthetic load-profile phase-rate correction tracked as bug issue `#63`, Oracle benchmark non-message phase-rate correction tracked as bug issue `#64`, finite metrics snapshot hardening tracked as bug issue `#65`, strict NATS monitoring JSON handling tracked as bug issue `#66`, strict payload JSON constant handling tracked as bug issue `#67`, collision-safe MkDocs release validation tracked as bug issue `#94`, metrics CLI CI type-check repair tracked as bug issue `#95`, release workflow PyPI artifact separation tracked as bug issue `#96`, the F2T2EA event phase tagging documentation blueprint with validated example JSON, expanded defence and mission-support blueprint pages for sensor event custody, classification and labels, chain of custody, cross-domain handoff preparation, edge operation, and audit-oriented persistence, and generic mission metadata support across core, Oracle, and file sink output |
+| Git revision checked | Active `release-v0.4.1` branch-first workflow workspace |
+| Worktree state | Active workspace with quiet branch-first release workflow automation, GitHub `main` branch protection, draft pull request helpers, manual release-validation dispatch, CODEOWNERS review ownership, pull request governance checks, release tag validation against `main`, updated release/backlog/contributor documentation, and the previously validated `0.4.0` capability set covering secure-development hardening, strict JSON config loading, log-injection sanitization, secret-scan automation, the 316-control security rule review, project-specific security controls, expanded public API compatibility tests and documentation, release-version consistency checks, generated GitHub Dependency Graph manifests, detailed local backlog JSON items synced to GitHub Issues, release-target backlog labels, sanitized backlog comment tooling, completed-label workflow support for fixed or implemented issues awaiting release, stricter backlog lifecycle enforcement, release-gated backlog close automation, OCI Object Storage sink backlog tracking, standardized SPDX source headers, metrics snapshots and CLI, observability policy core, Prometheus and NATS monitoring connectors, Kubernetes examples, unified Debian/Oracle Linux systemd installer, NATS reconnect tuning, least-privilege NATS permission templates, JetStream topology guidance, retry backoff with jitter, priority-aware lanes, synthetic mission testing, mission-support examples, CycloneDX SBOM generation, release checksums, hash-verified installation guidance, property-style tests, defence and mission-support blueprints, generic mission metadata, payload encryption, and Oracle/file sink support |
 | Live NATS details | Redacted |
 | Live Oracle details | Redacted |
 
@@ -121,9 +121,24 @@ When refreshing this report:
 
 ## Current Workspace Validation
 
-The current workspace is prepared as the `0.4.0` release candidate and has
-passed local validation. It includes:
+The current workspace is prepared on the `release-v0.4.1` branch after the
+published `0.4.0` release and has passed local validation. It includes:
 
+- quiet branch-first release workflow enforcement prepared on `release-v0.4.1`,
+  including active GitHub branch protection for `main`, quiet branch pushes,
+  draft pull request helpers, manual release-validation dispatch, pull request
+  governance checks, CODEOWNERS review ownership, release workflow validation
+  that tags are already merged to `main`, and documentation for maintainers
+  and agents,
+- full local validation after the branch-first workflow update:
+  `scripts/check.sh` passed with `454 passed, 8 skipped` in the main pytest
+  run, `86 passed` in the encryption and runner-ordering suite, and
+  `72 passed` in the sink suite; documentation build, secret scan, package
+  build, SBOM/checksum generation, and Twine metadata checks also passed,
+- focused local validation after quieting work-branch GitHub Actions:
+  workflow YAML parsed successfully, shell syntax passed for the updated
+  release helpers, PyPI-facing Markdown links passed, `git diff --check`
+  passed, and `scripts/check-docs.sh` rebuilt both documentation variants,
 - the non-JSON boundary hardening bug hunt tracked through GitHub issues `#81`
   through `#93`, covering NATS URL scheme validation, NATS authentication
   mutual exclusivity, username/password pairing, TLS context creation for TLS

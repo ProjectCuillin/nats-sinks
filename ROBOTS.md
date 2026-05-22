@@ -28,6 +28,24 @@ This repository is safety-sensitive infrastructure code. Follow these rules:
 - Treat malformed payloads, invalid commands, invalid configuration, network failures, database failures, and DLQ failures as first-class production paths.
 - Add deterministic unhappy-path and fuzz-style tests for validators, parsers, normalizers, and delivery decisions.
 - Prefer small, reviewable changes.
+- Never commit ordinary work directly to `main`. Create or switch to a
+  `release-*`, `feature-*`, `bugfix-*`, or `hotfix-*` branch before editing,
+  push small commits to that branch, and merge to `main` only through a
+  reviewed pull request.
+- Keep ordinary branch pushes quiet. Do not start GitHub Actions after every
+  small branch commit. Use `scripts/open-release-pr.sh` to create or refresh a
+  draft pull request, then run `scripts/run-release-validation.sh` only when
+  the branch is ready for merge or release validation.
+- The `Branch Pull Request` workflow is manual and token-gated. Do not
+  re-enable push-triggered pull request creation unless the maintainer
+  explicitly changes the release policy.
+- Release tags must point at commits already merged into `main`; do not tag
+  unmerged work branches.
+- Keep `main` protected through GitHub branch protection. Require pull
+  requests, CODEOWNER review, stale-review dismissal, resolved conversations,
+  and the supported Python CI matrix before merge. Use
+  `scripts/apply-branch-protection.sh` when the repository policy needs to be
+  applied or repaired.
 - Treat GitHub Issues as the live backlog and `CHANGELOG.md` as the shipped
   history. User-visible feature work should have a detailed GitHub feature
   request before implementation unless the change is a small typo or

@@ -1,6 +1,7 @@
 name: Docs
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -13,17 +14,6 @@ on:
       - "README.md"
       - "pyproject.toml"
       - "scripts/check-markdown-links.py"
-  pull_request:
-    paths:
-      - ".github/workflows/docs.yml"
-      - ".github/workflows/pages.yml"
-      - ".readthedocs.yaml"
-      - "docs/**"
-      - "mkdocs.yml"
-      - "README.md"
-      - "pyproject.toml"
-      - "scripts/check-markdown-links.py"
-
 jobs:
   build:
     runs-on: ubuntu-latest

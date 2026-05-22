@@ -1,0 +1,54 @@
+name: Pull Request Governance
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - ready_for_review
+      - reopened
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  branch-first-policy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate branch-first policy
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -eu
+
+          if [ "$BASE_REF" != "main" ]; then
+            echo "This repository only merges release-reviewed pull requests into main." >&2
+            exit 1
+          fi
+
+          if [ "$HEAD_REF" = "main" ]; then
+            echo "Pull requests from main to main are not allowed." >&2
+            exit 1
+          fi
+
+          case "$HEAD_REF" in
+            release-*|feature-*|bugfix-*|hotfix-*|dependabot/*)
+              ;;
+            *)
+              echo "Branch '$HEAD_REF' does not follow the expected branch prefixes." >&2
+              echo "Use release-*, feature-*, bugfix-*, hotfix-*, or a Dependabot branch." >&2
+              exit 1
+              ;;
+          esac
+
+          if printf '%s\n%s\n' "$PR_TITLE" "$PR_BODY" | grep -Eiq '(close[sd]?|fix(e[sd])?|resolve[sd]?) #[0-9]+'; then
+            echo "Do not use GitHub auto-closing keywords for managed release issues." >&2
+            echo "Use 'Related #123' and allow release automation to close issues after publication." >&2
+            exit 1
+          fi
+
+          echo "Pull request follows branch-first governance policy."

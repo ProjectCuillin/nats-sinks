@@ -71,6 +71,22 @@ silent loss after an early ACK is not.
   behavior.
 - Keep formatting, linting, typing, tests, packaging, and documentation checks
   green before considering work complete.
+- Never make ordinary code, documentation, release-note, or automation changes
+  directly on `main`. Start from a `release-*`, `feature-*`, `bugfix-*`, or
+  `hotfix-*` branch, push small commits to that branch, and use a reviewed
+  pull request as the only path back to `main`.
+- Keep ordinary branch pushes quiet. Do not trigger GitHub Actions after every
+  small branch commit. Use `scripts/open-release-pr.sh` to open or refresh a
+  draft pull request, then run `scripts/run-release-validation.sh` only when
+  the branch is ready for merge or release validation.
+- The `Branch Pull Request` workflow is manual and token-gated. Do not
+  re-enable push-triggered pull request creation unless the maintainer
+  explicitly changes the release policy. Do not create release tags from
+  unmerged work branches; the release workflow rejects tags that are not
+  already contained in `main`.
+- Treat `main` branch protection as part of the safety model. CODEOWNER review,
+  required CI, stale-review dismissal, resolved conversations, and no force
+  pushes are expected for every release-boundary merge.
 - Treat GitHub Issues as the live backlog and `CHANGELOG.md` as the shipped
   release history. Before implementing user-visible work, look for a matching
   GitHub issue or prepare a detailed feature request unless the change is a

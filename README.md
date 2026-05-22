@@ -761,6 +761,14 @@ Release and PyPI publishing instructions are documented in
 tag pushes, GitHub release workflows, TestPyPI, PyPI trusted publishing, and
 manual fallback commands.
 
+Development now follows a branch-first release workflow. Maintainers should
+create `release-*`, `feature-*`, `bugfix-*`, or `hotfix-*` branches, push
+small changes to those branches, and merge to `main` only through reviewed
+pull requests. See
+[Branch-First Development And Release Workflow](https://nats-sinks.readthedocs.io/en/latest/branch-workflow/)
+for the quiet-branch policy, manual release validation, branch protection,
+pull request, and release-tag rules.
+
 Backlog and feature-request workflow is documented in
 [Backlog Management](https://nats-sinks.readthedocs.io/en/latest/backlog-management/).
 GitHub Issues are the live backlog; `CHANGELOG.md` records work that has
