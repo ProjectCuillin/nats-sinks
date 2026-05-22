@@ -33,6 +33,9 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 - Added terminal acknowledgement metrics for opt-in DLQ terminal handling:
   `messages_terminated_total`, `message_term_seconds`, and
   `term_errors_total`.
+- Added a researched backlog item for a future Oracle MySQL sink, including
+  initial design direction for MySQL Connector/Python, idempotent upserts,
+  TLS, least-privilege access, test planning, and documentation scope.
 
 ### Changed
 

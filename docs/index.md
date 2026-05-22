@@ -250,7 +250,7 @@ Planned areas include:
 
 - OpenTelemetry metrics connector,
 - additional idempotency strategies,
-- HTTP, S3, Kafka, OCI Object Storage, and other sink modules,
+- HTTP, S3, Kafka, OCI Object Storage, Oracle MySQL, and other sink modules,
 - Docker and Kubernetes deployment assets,
 - more certified NATS authentication options,
 - more JetStream consumer tuning options,

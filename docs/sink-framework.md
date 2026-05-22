@@ -337,14 +337,14 @@ publish DLQ records, parse CLI arguments, or own process signal handling. Those
 jobs belong to the core runner and CLI.
 
 Keeping those responsibilities outside destination modules makes it possible to
-add future sinks such as Postgres, HTTP, S3, or Kafka without copying ACK
+add future sinks such as Oracle MySQL, HTTP, S3, or Kafka without copying ACK
 logic into every backend.
 
 ## Future Destinations
 
 Future sinks should live in destination modules such as:
 
-- `nats_sinks.postgres`
+- `nats_sinks.mysql`
 - `nats_sinks.http`
 - `nats_sinks.s3`
 

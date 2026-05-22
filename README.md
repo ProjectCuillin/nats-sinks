@@ -848,7 +848,7 @@ Phase 2:
 
 - OpenTelemetry metrics connector.
 - More idempotency strategies.
-- Postgres sink.
+- Oracle MySQL sink design for MySQL and MySQL HeatWave deployments.
 - HTTP sink.
 - S3 sink design with deterministic object keys.
 - Native OCI Object Storage sink design with deterministic object keys,

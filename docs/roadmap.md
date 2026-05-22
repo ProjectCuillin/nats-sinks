@@ -95,6 +95,9 @@
 - Native Oracle Cloud Infrastructure Object Storage sink design with
   deterministic object keys, OCI identity support, checksums, multipart upload,
   and least-privilege bucket guidance.
+- Oracle MySQL sink design for MySQL and MySQL HeatWave deployments, including
+  Connector/Python evaluation, transaction commit timing, idempotent upserts,
+  TLS verification, and least-privilege account guidance.
 - HTTP sink.
 - Docker image.
 - Optional dedicated secret-manager connectors for encryption keys when a
