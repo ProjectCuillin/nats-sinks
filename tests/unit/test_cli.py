@@ -174,3 +174,81 @@ def test_cli_registry_rejects_missing_allow_listed_plugin() -> None:
         assert "allowed sink connector(s) not installed: missing" in str(exc)
     else:  # pragma: no cover - defensive guard for a fail-closed path
         raise AssertionError("missing plugin connector should fail closed")
+
+
+def test_cli_stream_plan_outputs_json_without_network(tmp_path: Path) -> None:
+    config = tmp_path / "file-config.json"
+    config.write_text(
+        json.dumps(
+            {
+                "nats": {
+                    "url": "nats://localhost:4222",
+                    "stream": "ORDERS",
+                    "consumer": "file-orders-sink",
+                    "subject": "orders.*",
+                },
+                "sink": {
+                    "type": "file",
+                    "directory": str(tmp_path / "events"),
+                    "fsync": False,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "stream-plan",
+            str(config),
+            "--retention",
+            "limits",
+            "--discard",
+            "old",
+            "--storage",
+            "file",
+            "--replicas",
+            "3",
+            "--duplicate-window-seconds",
+            "300",
+            "--format",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["stream"] == "ORDERS"
+    assert payload["recommended_stream_settings"]["replicas"] == 3
+    assert payload["recommended_stream_settings"]["duplicate_window_seconds"] == 300
+    assert "$JS.API.STREAM.CREATE.ORDERS" in payload["administration_permissions"]
+    assert "nats stream add ORDERS" in payload["nats_cli_example"]
+
+
+def test_cli_stream_plan_rejects_invalid_options_without_traceback(tmp_path: Path) -> None:
+    config = tmp_path / "file-config.json"
+    config.write_text(
+        json.dumps(
+            {
+                "nats": {
+                    "url": "nats://localhost:4222",
+                    "stream": "ORDERS",
+                    "consumer": "file-orders-sink",
+                    "subject": "orders.*",
+                },
+                "sink": {
+                    "type": "file",
+                    "directory": str(tmp_path / "events"),
+                    "fsync": False,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(app, ["stream-plan", str(config), "--retention", "forever"])
+
+    assert result.exit_code == 2
+    assert "retention must be one of" in result.output
+    assert "Traceback" not in result.output

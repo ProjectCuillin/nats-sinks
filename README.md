@@ -610,6 +610,12 @@ success, and publish to the configured DLQ subject only when DLQ is enabled.
 See [NATS Least-Privilege Permissions](https://nats-sinks.readthedocs.io/en/latest/nats-permissions/) for
 templates and validation checklists.
 
+For stream setup review, `nats-sink stream-plan` can generate an offline
+JetStream planning report for retention, discard policy, storage, replicas,
+duplicate-window settings, and runtime versus administration permissions. It
+does not connect to NATS or modify stream state. See
+[JetStream Stream Management Planning](https://nats-sinks.readthedocs.io/en/latest/stream-management/).
+
 ## CLI
 
 ```bash
@@ -618,6 +624,7 @@ nats-sink validate examples/file-basic/config.json
 nats-sink test-sink examples/file-basic/config.json
 nats-sink validate examples/oracle-jetstream/config.json
 nats-sink show-effective-config examples/oracle-jetstream/config.json
+nats-sink stream-plan examples/oracle-jetstream/config.json
 nats-sink test-sink examples/oracle-jetstream/config.json
 nats-sink run examples/oracle-jetstream/config.json
 nats-sink-metrics show .local/nats-sinks/metrics.json --format table
@@ -912,6 +919,8 @@ Phase 1:
   references.
 - Least-privilege NATS permissions templates for runtime workers, DLQ publish
   rights, optional consumer management, and advisory readers.
+- Offline JetStream stream-management planning helper for retention, discard,
+  storage, replicas, duplicate-window, and permission review.
 - Advanced JetStream topology guidance for mirrors, sources, subject
   transforms, republish behavior, stream compression, placement, metadata, and
   idempotency review.

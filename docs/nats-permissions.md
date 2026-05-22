@@ -202,7 +202,47 @@ wildcard consumer-management grant for the sink worker unless the account is a
 separate deployment automation identity rather than the long-running runtime
 identity.
 
-## Template D: Separate Advisory Reader
+## Template D: Separate Stream Management Identity
+
+Stream management is a separate operational role. The ordinary sink runtime
+account should not need to create, update, purge, delete, restore, or snapshot
+streams. Use a separate administrative account, Terraform identity, release
+pipeline identity, or controlled platform service to apply stream settings.
+
+The offline helper can prepare a reviewable plan:
+
+```bash
+nats-sink stream-plan /etc/nats-sinks/config.json --format json
+```
+
+That command does not need the following permissions because it never connects
+to NATS. The permissions below are for the separate identity that applies the
+plan through normal NATS administration tooling.
+
+```text
+permissions: {
+  publish: {
+    allow: [
+      "$JS.API.STREAM.CREATE.<STREAM>",
+      "$JS.API.STREAM.UPDATE.<STREAM>",
+      "$JS.API.STREAM.INFO.<STREAM>",
+      "$JS.API.STREAM.NAMES",
+      "$JS.API.CONSUMER.DURABLE.CREATE.<STREAM>.<CONSUMER>"
+    ]
+  }
+  subscribe: {
+    allow: [
+      "_INBOX.>"
+    ]
+  }
+}
+```
+
+Only grant delete, purge, restore, snapshot, or broader stream-management
+subjects when an operational runbook explicitly requires them. Those actions
+can affect retention, audit history, replay readiness, and evidence custody.
+
+## Template E: Separate Advisory Reader
 
 JetStream advisories are useful for operations teams, but they are not required
 for the sink worker to preserve commit-then-acknowledge semantics. `nats-sinks`

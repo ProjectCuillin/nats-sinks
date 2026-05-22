@@ -29,6 +29,7 @@ nav:
   - NATS:
       - Connections: nats-connections.md
       - Permissions: nats-permissions.md
+      - Stream Management Planning: stream-management.md
       - JetStream Topology: jetstream-topology.md
       - WebSocket Connection Evaluation: websocket-connection-evaluation.md
       - Acknowledgement Confirmation Evaluation: acknowledgement-confirmation.md

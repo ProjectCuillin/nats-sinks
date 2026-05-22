@@ -107,6 +107,37 @@ features are managed outside `nats-sinks`, but they can change the subject,
 stream sequence, replay path, and operator context that the worker observes.
 See [Advanced JetStream Topology](jetstream-topology.md).
 
+## Stream Management Planning
+
+`nats-sinks` includes an offline stream-planning helper for operators who need
+to prepare JetStream streams before a worker starts:
+
+```bash
+nats-sink stream-plan /etc/nats-sinks/config.json \
+  --retention limits \
+  --discard old \
+  --storage file \
+  --replicas 3 \
+  --duplicate-window-seconds 600
+```
+
+The command reads the same JSON configuration as the runtime, but it does not
+connect to NATS and does not mutate stream or consumer state. It prints the
+configured stream, subject set, durable consumer, recommended stream settings,
+runtime permission subjects, administration permission subjects, warnings, and
+a NATS CLI example for review.
+
+Use this helper during deployment preparation, not inside the long-running sink
+service. Stream creation and updates should be handled by a separate
+administrative identity or platform automation. The runtime identity should
+keep only the permissions needed to fetch from its durable pull consumer, ACK
+messages after durable success, receive inbox responses, and publish to the
+configured DLQ subject when enabled.
+
+See [JetStream Stream Management Planning](stream-management.md) for detailed
+guidance on retention policies, discard behavior, storage, replicas,
+duplicate-window sizing, and permission separation.
+
 ## Runtime Lifecycle
 
 ```mermaid

@@ -34,6 +34,8 @@ certified support in the sink framework.
 - TLS server verification with a local CA file,
 - multiple NATS seed URLs,
 - reconnect tuning and NATS connection event metrics,
+- offline JetStream stream-management planning for retention, discard,
+  storage, replicas, duplicate-window, and permission review,
 - pass-through fields for NATS credentials and NKEY seed files, not yet
   certified as production auth modes.
 
@@ -49,9 +51,10 @@ mindmap
       User password auth
       TLS local CA
       DLQ publishing
+      Stream planning helper
     Not yet supported
       Rich consumer config
-      Stream management
+      Stream mutation
       Push and ordered consumers
       AckSync and InProgress
       NKEY and JWT certification
@@ -138,9 +141,9 @@ Current gap details:
 
 | NATS capability | NATS support | Current `nats-sinks` status | Suggested priority |
 | --- | --- | --- | --- |
-| Stream creation and reconciliation | Streams have rich configuration. | Not managed by `nats-sinks`; users create streams externally. | Phase 2 |
-| Retention and discard policies | Limits, interest, and work-queue retention are server-side stream options. | Not managed or validated. | Phase 2 |
-| Duplicate window | Streams can deduplicate publisher writes by `Nats-Msg-Id`. | Consumed `Nats-Msg-Id` can be used for sink idempotency, but publisher dedupe windows are not managed. | Phase 2 |
+| Stream creation and reconciliation | Streams have rich configuration. | `nats-sink stream-plan` provides offline planning guidance and permission separation. It does not mutate NATS; users still create or update streams externally. | Guidance helper implemented; mutation remains outside runtime scope |
+| Retention and discard policies | Limits, interest, and work-queue retention are server-side stream options. | `nats-sink stream-plan` validates allow-listed planning values and documents operational tradeoffs. It does not enforce server state. | Guidance helper implemented |
+| Duplicate window | Streams can deduplicate publisher writes by `Nats-Msg-Id`. | `nats-sink stream-plan` includes duplicate-window guidance. Consumed `Nats-Msg-Id` can still be used for sink idempotency; publisher dedupe remains complementary, not a replacement. | Guidance helper implemented |
 | Mirrors and sources | Streams can replicate from other streams. | Not managed by the runner; topology considerations and idempotency impacts are documented. | Guidance implemented; management remains Phase 3 |
 | Subject transforms | NATS can transform subjects at stream ingress, source, mirror, or republish boundaries. | Not managed by the runner; documentation explains that sink routing sees the delivered subject. | Guidance implemented; management remains Phase 3 |
 | RePublish | Streams can republish stored messages to another subject. | Not managed. Documentation separates server-side RePublish from sink DLQ publishing. | Guidance implemented; management remains Phase 3 |
