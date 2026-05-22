@@ -57,6 +57,10 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   work into separate backlog items for confirmed ACK after sink success,
   confirmed DLQ acknowledgement behavior, and ACK confirmation metrics with an
   operator runbook.
+- Added an optional InProgress evaluation and split future implementation work
+  into separate backlog items for AckWait or BackOff guardrails, runtime
+  InProgress heartbeats during long sink writes, and InProgress metrics with
+  an operator runbook.
 
 ### Changed
 

@@ -196,6 +196,11 @@ will be disabled by default and will run only after durable sink success. See
 [Acknowledgement Confirmation Evaluation](acknowledgement-confirmation.md) for
 the current design direction and limitations.
 
+JetStream `InProgress` handling has also been evaluated but is not yet a
+runtime configuration option. Any future option will be disabled by default,
+bounded, advisory only, and tied to verifiable consumer `AckWait` or `BackOff`
+timing. See [InProgress Evaluation](in-progress-evaluation.md).
+
 ```mermaid
 flowchart TD
     JSON[config.json] --> Size{At most 1 MiB?}

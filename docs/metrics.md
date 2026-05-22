@@ -258,6 +258,12 @@ expose a confirmed ACK option. The evaluated future metrics are documented in
 Those future metrics should remain separate from ordinary ACK counters so an
 operator can distinguish "ACK sent" from "ACK confirmation received".
 
+InProgress metrics are also not emitted yet because the runtime does not yet
+send progress signals. The evaluated future metrics are documented in
+[InProgress Evaluation](in-progress-evaluation.md). Those future metrics should
+distinguish "work is still active" from "work is successful" so dashboards do
+not accidentally treat progress as durable completion.
+
 ```bash
 nats-sink-metrics show .local/nats-sinks/metrics.json --metric "*term*"
 ```

@@ -135,6 +135,11 @@ while still allowing redelivery if confirmation fails after durable sink
 success. See
 [Acknowledgement Confirmation Evaluation](acknowledgement-confirmation.md).
 
+JetStream `InProgress` support has also been evaluated for future long-running
+sink writes. It is not enabled today. If implemented, it should be treated as a
+bounded heartbeat around active work, not as a success signal. See
+[InProgress Evaluation](in-progress-evaluation.md).
+
 Prometheus sharing should use the policy-controlled observability layer rather
 than an ad hoc shell redirection. The separate `nats-sink-observe` CLI can
 generate a disabled policy from runtime config, write a filtered textfile for

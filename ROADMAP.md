@@ -136,7 +136,10 @@ release, and closed only after the containing release is published.
   DLQ publication.
 - ACK confirmation metrics and an operator runbook for interpreting durable
   success followed by ACK confirmation failure.
-- Optional `InProgress` handling for long-running sink writes.
+- AckWait and BackOff guardrails for optional `InProgress` handling.
+- Optional `InProgress` heartbeat during long-running sink writes.
+- InProgress metrics and an operator runbook for distinguishing slow active
+  work from durable success.
 - JetStream advisory consumption for operational events and max-deliver signals.
 - Richer observability policies for bounded subject-aware metrics, if future
   operators need per-subject insight and can approve the information-sharing

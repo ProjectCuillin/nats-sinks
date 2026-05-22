@@ -119,7 +119,7 @@ Current gap details:
 | NATS capability | NATS support | Current `nats-sinks` status | Suggested priority |
 | --- | --- | --- | --- |
 | Double ACK / AckSync | Client can wait for the server to confirm receipt of the ACK. | Evaluated in [Acknowledgement Confirmation Evaluation](acknowledgement-confirmation.md). Runner still uses ordinary ACK by default; implementation work is split into optional confirmed ACK, DLQ confirmation, and metrics or runbook backlog items. | Phase 2 |
-| In-progress ACK | Extends `AckWait` while long processing continues. | Not supported; long Oracle writes can redeliver if server `AckWait` is too short. | Phase 2 |
+| In-progress ACK | Extends `AckWait` while long processing continues. | Evaluated in [InProgress Evaluation](in-progress-evaluation.md). Runner does not send progress signals today; implementation work is split into AckWait guardrails, optional runtime heartbeat, and metrics or runbook backlog items. | Phase 2 |
 | Term ACK | Stops redelivery without marking successful processing. | Supported as explicit `dead_letter.ack_term_after_publish` policy only after DLQ publication succeeds. Disabled by default. | Implemented |
 | AckAll | ACK one message and implicitly ACK earlier messages. | Intentionally unsupported because commit-then-ack requires explicit per-message safety. | Not planned |
 | AckNone | Server treats delivery as success without client ACK. | Intentionally unsupported because it violates commit-then-ack. | Not planned |
@@ -200,8 +200,8 @@ Other gaps are good candidates for future work:
 
 - certified credentials-file, NKEY, and JWT workflows,
 - explicit consumer configuration and reconciliation,
-- optional confirmed ACK support, ACK confirmation metrics, and `InProgress`
-  support,
+- optional confirmed ACK support, ACK confirmation metrics, optional
+  `InProgress` heartbeat support, and InProgress guardrails,
 - multi-subject filters,
 - JetStream advisory consumption beyond the documented read-only advisory
   permission template.

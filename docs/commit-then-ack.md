@@ -123,6 +123,22 @@ duplicate.
 The evaluation and future implementation split are documented in
 [Acknowledgement Confirmation Evaluation](acknowledgement-confirmation.md).
 
+## InProgress Signals
+
+JetStream `InProgress` signals tell the server that a delivered message is
+still being worked on and that the acknowledgement wait window should be
+extended. They are not success acknowledgements. They must never replace final
+ACK, NAK, Term, retry, or DLQ behavior.
+
+For `nats-sinks`, any future `InProgress` feature must remain optional,
+disabled by default, bounded, and owned by the core runner. The sink still only
+returns durable success or raises an error. If the sink fails after one or more
+progress signals, the message remains eligible for redelivery or DLQ according
+to policy.
+
+The evaluation and recommended implementation split are documented in
+[InProgress Evaluation](in-progress-evaluation.md).
+
 ## Non-Negotiable Invariant
 
 > A JetStream message must only be acknowledged after all required durable side effects have completed successfully. ACK is the final confirmation of successful processing, never a prerequisite for processing.
