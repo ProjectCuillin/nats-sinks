@@ -10,7 +10,11 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ## [Unreleased]
 
-No unreleased changes yet.
+### Fixed
+
+- Fixed the high-confidence secret scanner so it prefers `rg` when available
+  but falls back to `grep` in minimal CI environments where ripgrep is not
+  installed.
 
 ## [0.4.0] - 2026-05-22
 
