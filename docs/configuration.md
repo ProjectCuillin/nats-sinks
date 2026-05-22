@@ -86,6 +86,16 @@ Oracle-specific fields inside the `sink` object.
     "namespace": "nats_sinks",
     "snapshot_file": null
   },
+  "advisories": {
+    "enabled": false,
+    "subjects": [
+      "$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES.*.*",
+      "$JS.EVENT.ADVISORY.CONSUMER.MSG_NAKED.*.*",
+      "$JS.EVENT.ADVISORY.CONSUMER.MSG_TERMINATED.*.*"
+    ],
+    "max_payload_bytes": 65536,
+    "log_events": false
+  },
   "message_metadata": {
     "priority": {
       "header": "Nats-Sinks-Priority",
@@ -187,6 +197,7 @@ The top-level sections are:
 | `dead_letter` | no | Optional DLQ publication for permanently invalid messages. |
 | `logging` | no | Standard Python logging level and payload logging switch. |
 | `metrics` | no | Metrics namespace, enablement flag, and optional local JSON snapshot path. |
+| `advisories` | no | Optional observation-only JetStream advisory subscription settings. Disabled by default and isolated from source-message ACK behavior. |
 | `message_metadata` | no | Optional priority, classification, and labels extraction defaults applied to every message before sink delivery. |
 | `custody` | no | Optional tamper-evident payload and metadata hashes computed by the core before sink delivery. Disabled by default. |
 | `encryption` | no | Optional core payload encryption before messages are passed to any sink. |
@@ -500,6 +511,86 @@ Inspect the snapshot:
 nats-sink-metrics show .local/nats-sinks/metrics.json --format table
 nats-sink-metrics get .local/nats-sinks/metrics.json messages_failed_total --default 0
 ```
+
+### `advisories`
+
+The `advisories` section enables optional observation of selected JetStream
+server advisories. JetStream publishes advisories as normal NATS messages below
+`$JS.EVENT.ADVISORY.>`. The official
+[NATS JetStream monitoring documentation](https://docs.nats.io/running-a-nats-service/nats_admin/monitoring/monitoring_jetstream#advisories)
+lists these advisories as operational events covering API interactions, stream
+and consumer actions, maximum-delivery signals, NAKs, terminal
+acknowledgements, and clustered leadership or quorum changes.
+
+This feature is disabled by default. When enabled, the runner creates separate
+Core NATS subscriptions for the configured advisory subjects. Advisory messages
+are parsed only to classify them into fixed, low-cardinality metric counters.
+The runner does not store advisory payloads, does not export stream or consumer
+names as metric labels, does not write advisories to a sink, and does not use
+advisories to decide whether a source message should be ACKed.
+
+```mermaid
+sequenceDiagram
+    participant NATS as NATS JetStream Server
+    participant Adv as Advisory Observer
+    participant Metrics as MetricsRecorder
+    participant Runner as Sink Runner
+    participant Sink as Destination Sink
+
+    NATS-->>Adv: $JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES...
+    Adv->>Adv: validate subject and bounded JSON payload
+    Adv->>Metrics: increment aggregate advisory counter
+    Runner->>Sink: normal message batch
+    Sink-->>Runner: durable success
+    Runner-->>NATS: ACK original message after sink success
+```
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `enabled` | no | `false` | `true` or `false`. | Enables the observation-only advisory subscriber. Keep disabled unless the NATS account has explicit advisory-read permissions and operators need the counters. |
+| `subjects` | no | Supported advisory subjects. | List of NATS subject patterns starting with `$JS.EVENT.ADVISORY.`. Up to 32 entries. | Advisory subjects to subscribe to. Duplicate subjects, non-advisory subjects, padded strings, control characters, and invalid wildcard patterns fail validation. |
+| `max_payload_bytes` | no | `65536` | Integer `0` to `1048576`. | Maximum advisory JSON payload size accepted by the observer before it increments the parse-error counter. |
+| `log_events` | no | `false` | `true` or `false`. | Emits sanitized one-line advisory-kind logs. Payload bodies, stream names, consumer names, and sequence numbers are still not logged by this observer. |
+
+The built-in default subject list covers:
+
+- `$JS.EVENT.ADVISORY.API`
+- `$JS.EVENT.ADVISORY.API.>`
+- `$JS.EVENT.ADVISORY.STREAM.CREATED.*`
+- `$JS.EVENT.ADVISORY.STREAM.DELETED.*`
+- `$JS.EVENT.ADVISORY.STREAM.MODIFIED.*`
+- `$JS.EVENT.ADVISORY.STREAM.LEADER_ELECTED.*`
+- `$JS.EVENT.ADVISORY.STREAM.QUORUM_LOST.*`
+- `$JS.EVENT.ADVISORY.CONSUMER.CREATED.*.*`
+- `$JS.EVENT.ADVISORY.CONSUMER.DELETED.*.*`
+- `$JS.EVENT.ADVISORY.CONSUMER.MODIFIED.*.*`
+- `$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES.*.*`
+- `$JS.EVENT.ADVISORY.CONSUMER.MSG_NAKED.*.*`
+- `$JS.EVENT.ADVISORY.CONSUMER.MSG_TERMINATED.*.*`
+- `$JS.EVENT.ADVISORY.CONSUMER.LEADER_ELECTED.*.*`
+- `$JS.EVENT.ADVISORY.CONSUMER.QUORUM_LOST.*.*`
+
+Example:
+
+```json
+{
+  "advisories": {
+    "enabled": true,
+    "subjects": [
+      "$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES.*.*",
+      "$JS.EVENT.ADVISORY.CONSUMER.MSG_TERMINATED.*.*"
+    ],
+    "max_payload_bytes": 32768,
+    "log_events": false
+  }
+}
+```
+
+Required NATS permissions are separate from the normal sink permissions. The
+runtime account needs subscribe rights for the configured advisory subjects
+only. It does not need JetStream management rights merely to observe
+advisories. See [NATS Least-Privilege Permissions](nats-permissions.md) for a
+permission template.
 
 ### `message_metadata`
 
@@ -1083,6 +1174,7 @@ Supported environment overrides:
 - `NATS_SINKS_CUSTODY_ENABLED`
 - `NATS_SINKS_CUSTODY_ALGORITHM`
 - `NATS_SINKS_CUSTODY_KEY_ID`
+- `NATS_SINKS_ADVISORIES_ENABLED`
 - `NATS_SINKS_SINK_TYPE`
 
 Destination passwords should normally be supplied through environment variables

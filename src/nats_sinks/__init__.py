@@ -18,10 +18,20 @@ framework users may construct sinks, but ACK decisions remain in the core
 runner and are never delegated to destination code.
 """
 
+from nats_sinks.core.advisory import (
+    DEFAULT_ADVISORY_SUBJECTS,
+    JetStreamAdvisory,
+    JetStreamAdvisoryMonitor,
+    advisory_kind_from_subject,
+    observe_jetstream_advisory_message,
+    parse_jetstream_advisory,
+    validate_advisory_subject,
+)
 from nats_sinks.core.config import (
     CustodyConfig,
     EncryptionConfig,
     EncryptionRuleConfig,
+    JetStreamAdvisoryConfig,
     MessageMetadataConfig,
     MessageMetadataFieldConfig,
     MessageMetadataLabelsConfig,
@@ -104,6 +114,7 @@ from nats_sinks.sinks.base import FlushableSink, HealthCheckableSink, SchemaAwar
 __all__ = [
     "CUSTODY_SCHEMA",
     "CUSTODY_SUPPORTED_ALGORITHMS",
+    "DEFAULT_ADVISORY_SUBJECTS",
     "DEFAULT_CLASSIFICATION_HEADER",
     "DEFAULT_LABELS_HEADER",
     "DEFAULT_METRIC_NAMESPACE",
@@ -124,6 +135,9 @@ __all__ = [
     "FlushableSink",
     "HealthCheckableSink",
     "InMemoryMetrics",
+    "JetStreamAdvisory",
+    "JetStreamAdvisoryConfig",
+    "JetStreamAdvisoryMonitor",
     "JetStreamSinkRunner",
     "JsonFileMetrics",
     "MessageMetadataConfig",
@@ -157,6 +171,7 @@ __all__ = [
     "SubjectPayloadEncryptor",
     "TemporarySinkError",
     "ValidationError",
+    "advisory_kind_from_subject",
     "attach_custody_metadata",
     "build_nats_metadata_snapshot",
     "canonical_json_bytes",
@@ -168,8 +183,11 @@ __all__ = [
     "load_metrics_snapshot",
     "metric_rows_from_snapshot",
     "normalize_payload_for_json_storage",
+    "observe_jetstream_advisory_message",
+    "parse_jetstream_advisory",
     "parse_mission_metadata_header",
     "qualified_metric_name",
+    "validate_advisory_subject",
     "write_metrics_snapshot",
 ]
 

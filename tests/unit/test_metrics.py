@@ -46,6 +46,8 @@ def test_metric_specs_have_unique_names_and_kinds() -> None:
     assert MetricNames.POLICY_MESSAGES_REJECTED_TOTAL in names
     assert MetricNames.POLICY_EVALUATION_ERRORS_TOTAL in names
     assert MetricNames.ORACLE_DUPLICATES_TOTAL in names
+    assert MetricNames.JETSTREAM_ADVISORIES_RECEIVED_TOTAL in names
+    assert MetricNames.JETSTREAM_ADVISORY_MAX_DELIVER_TOTAL in names
     assert {spec.kind for spec in METRIC_SPECS} == {"counter", "histogram", "gauge"}
 
 

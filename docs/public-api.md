@@ -35,6 +35,9 @@ The tests also cover:
   `SubjectPayloadEncryptor`, `PayloadKeyRegistry`, and `decrypt_payload`,
 - custody helpers such as `CustodyConfig`, `compute_custody_metadata`,
   `attach_custody_metadata`, and `canonical_json_bytes`,
+- JetStream advisory helpers such as `JetStreamAdvisoryConfig`,
+  `JetStreamAdvisoryMonitor`, `parse_jetstream_advisory`, and
+  `observe_jetstream_advisory_message`,
 - message metadata configuration classes,
 - pre-sink policy configuration and evaluation helpers such as
   `PreSinkPolicyConfig`, `PreSinkPolicyRuleConfig`,

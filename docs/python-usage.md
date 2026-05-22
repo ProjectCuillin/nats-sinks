@@ -18,7 +18,14 @@ contract as the CLI.
 ## Recommended Imports
 
 ```python
-from nats_sinks import CustodyConfig, EncryptionConfig, JetStreamSinkRunner, NatsEnvelope, Sink
+from nats_sinks import (
+    CustodyConfig,
+    EncryptionConfig,
+    JetStreamAdvisoryConfig,
+    JetStreamSinkRunner,
+    NatsEnvelope,
+    Sink,
+)
 from nats_sinks.file import FileSink
 from nats_sinks.oracle import OracleSink
 ```
@@ -237,6 +244,36 @@ Metrics are observational only. A metrics recorder must not ACK, NAK, mutate
 messages, inspect plaintext payloads, or block durable sink completion. See
 [Metrics](metrics.md) for the snapshot CLI, Python helpers, supported names,
 output formats, and compatibility aliases.
+
+## Observing JetStream Advisories
+
+Embedded services can enable the optional advisory observer in the same way the
+JSON config does. The observer subscribes to selected
+`$JS.EVENT.ADVISORY...` subjects and records aggregate counters through the
+configured metrics recorder. It does not write advisories to a sink and does
+not influence ACK decisions.
+
+```python
+from nats_sinks import InMemoryMetrics, JetStreamAdvisoryConfig, JetStreamSinkRunner
+
+metrics = InMemoryMetrics()
+
+runner = JetStreamSinkRunner(
+    nats_url="nats://localhost:4222",
+    stream="ORDERS",
+    consumer="orders-file-sink",
+    subject="orders.*",
+    sink=sink,
+    metrics=metrics,
+    advisories=JetStreamAdvisoryConfig(
+        enabled=True,
+        subjects=("$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES.*.*",),
+    ),
+)
+```
+
+Use [Configuration](configuration.md#advisories) for the full option reference
+and [Metrics](metrics.md#jetstream-advisory-metrics) for the counter names.
 
 ## Embedding In An Async Service
 

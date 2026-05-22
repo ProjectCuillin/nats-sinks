@@ -82,6 +82,10 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   hash capture, runner fail-closed behavior before sink writes, file sink
   record output, Oracle `METADATA_JSON.custody` persistence, public API
   exports, tests, and documentation.
+- Added disabled-by-default JetStream advisory observation for selected
+  `$JS.EVENT.ADVISORY...` subjects, including validated advisory configuration,
+  bounded JSON parsing, low-cardinality advisory counters, runner lifecycle
+  isolation from sink ACK behavior, tests, and operator documentation.
 
 ### Changed
 

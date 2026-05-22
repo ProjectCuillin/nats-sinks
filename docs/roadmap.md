@@ -45,6 +45,8 @@
   through the same metrics snapshot and `nats-sink-metrics` CLI.
 - Multiple NATS seed URLs, reconnect tuning, and connection event metrics for
   clustered or controlled-network deployments.
+- Optional JetStream advisory observation for selected `$JS.EVENT.ADVISORY...`
+  subjects with disabled-by-default configuration and aggregate metrics only.
 - Least-privilege NATS permissions templates for runtime workers, DLQ publish
   rights, optional consumer management, and advisory readers.
 - Advanced JetStream topology guidance for mirrors, sources, subject
@@ -135,7 +137,6 @@
 - Optional `InProgress` heartbeat during long-running sink writes.
 - InProgress metrics and an operator runbook for distinguishing slow active
   work from durable success.
-- JetStream advisory consumption for operational events and max-deliver signals.
 - Subject-aware observability policy model with disabled-by-default,
   default-deny, bounded subject-family rules.
 - Bounded subject-family metric aggregation without raw subject export by

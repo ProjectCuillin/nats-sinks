@@ -102,7 +102,11 @@ Use this baseline for code review and future releases:
   observability policies and allow lists before publishing to Prometheus or
   any future monitoring platform. NATS server monitoring endpoint values must
   also be selected with explicit endpoint and field allow lists before they are
-  stored locally or rendered for Prometheus.
+  stored locally or rendered for Prometheus. JetStream advisories are also
+  treated as sensitive operational signals: the optional advisory observer is
+  disabled by default, subscribes only to configured advisory subjects, parses
+  bounded JSON payloads, and emits aggregate counters without exporting stream
+  names, consumer names, sequence numbers, or advisory payload bodies.
 - Prefer least privilege for NATS accounts, Oracle users, service accounts,
   CI jobs, containers, cloud identities, filesystems, and documentation
   examples.
@@ -136,6 +140,11 @@ kept in the [Prometheus Integration](prometheus.md) sub-page.
 The NATS server monitoring connector and delivery-boundary decision, including
 `/jsz` and `/healthz` handling, are documented in
 [NATS Server Monitoring Integration](nats-server-monitoring.md).
+JetStream advisory observation is documented in
+[Configuration](configuration.md#advisories) and
+[Metrics](metrics.md#jetstream-advisory-metrics). It is observational only and
+must not be granted broader NATS permissions than the configured advisory
+subjects require.
 NATS runtime account authorization templates are documented in
 [NATS Least-Privilege Permissions](nats-permissions.md).
 Kubernetes-specific deployment examples, including service accounts,

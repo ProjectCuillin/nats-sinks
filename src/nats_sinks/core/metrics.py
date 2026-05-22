@@ -97,6 +97,24 @@ class MetricNames:
     NATS_CONNECTION_CLOSED_TOTAL = "nats_connection_closed_total"
     NATS_DISCOVERED_SERVERS_TOTAL = "nats_discovered_servers_total"
     NATS_ASYNC_ERRORS_TOTAL = "nats_async_errors_total"
+    JETSTREAM_ADVISORIES_RECEIVED_TOTAL = "jetstream_advisories_received_total"
+    JETSTREAM_ADVISORIES_FILTERED_TOTAL = "jetstream_advisories_filtered_total"
+    JETSTREAM_ADVISORY_PARSE_ERRORS_TOTAL = "jetstream_advisory_parse_errors_total"
+    JETSTREAM_ADVISORY_UNSUPPORTED_TOTAL = "jetstream_advisory_unsupported_total"
+    JETSTREAM_ADVISORY_MAX_DELIVER_TOTAL = "jetstream_advisory_max_deliver_total"
+    JETSTREAM_ADVISORY_NAK_TOTAL = "jetstream_advisory_nak_total"
+    JETSTREAM_ADVISORY_TERMINATED_TOTAL = "jetstream_advisory_terminated_total"
+    JETSTREAM_ADVISORY_STREAM_QUORUM_LOST_TOTAL = "jetstream_advisory_stream_quorum_lost_total"
+    JETSTREAM_ADVISORY_CONSUMER_QUORUM_LOST_TOTAL = "jetstream_advisory_consumer_quorum_lost_total"
+    JETSTREAM_ADVISORY_STREAM_LEADER_ELECTED_TOTAL = (
+        "jetstream_advisory_stream_leader_elected_total"
+    )
+    JETSTREAM_ADVISORY_CONSUMER_LEADER_ELECTED_TOTAL = (
+        "jetstream_advisory_consumer_leader_elected_total"
+    )
+    JETSTREAM_ADVISORY_STREAM_ACTION_TOTAL = "jetstream_advisory_stream_action_total"
+    JETSTREAM_ADVISORY_CONSUMER_ACTION_TOTAL = "jetstream_advisory_consumer_action_total"
+    JETSTREAM_ADVISORY_API_AUDIT_TOTAL = "jetstream_advisory_api_audit_total"
     PRIORITY_LANE_BATCHES_TOTAL = "priority_lane_batches_total"
     PRIORITY_LANE_MESSAGES_TOTAL = "priority_lane_messages_total"
     PRIORITY_LANE_DEFAULTED_TOTAL = "priority_lane_defaulted_total"
@@ -268,6 +286,76 @@ METRIC_SPECS: tuple[MetricSpec, ...] = (
         MetricNames.NATS_ASYNC_ERRORS_TOTAL,
         "counter",
         "NATS asynchronous error callback events observed by the runner.",
+    ),
+    MetricSpec(
+        MetricNames.JETSTREAM_ADVISORIES_RECEIVED_TOTAL,
+        "counter",
+        "JetStream advisory messages accepted by the optional advisory monitor.",
+    ),
+    MetricSpec(
+        MetricNames.JETSTREAM_ADVISORIES_FILTERED_TOTAL,
+        "counter",
+        "JetStream advisory messages ignored because they did not match allowed subjects.",
+    ),
+    MetricSpec(
+        MetricNames.JETSTREAM_ADVISORY_PARSE_ERRORS_TOTAL,
+        "counter",
+        "JetStream advisory messages rejected by safe JSON parsing and validation.",
+    ),
+    MetricSpec(
+        MetricNames.JETSTREAM_ADVISORY_UNSUPPORTED_TOTAL,
+        "counter",
+        "JetStream advisory messages observed with unsupported advisory kinds.",
+    ),
+    MetricSpec(
+        MetricNames.JETSTREAM_ADVISORY_MAX_DELIVER_TOTAL,
+        "counter",
+        "JetStream max-deliver advisories observed without exposing stream or consumer names.",
+    ),
+    MetricSpec(
+        MetricNames.JETSTREAM_ADVISORY_NAK_TOTAL,
+        "counter",
+        "JetStream NAK advisories observed without exposing stream or consumer names.",
+    ),
+    MetricSpec(
+        MetricNames.JETSTREAM_ADVISORY_TERMINATED_TOTAL,
+        "counter",
+        "JetStream terminal-ack advisories observed without exposing stream or consumer names.",
+    ),
+    MetricSpec(
+        MetricNames.JETSTREAM_ADVISORY_STREAM_QUORUM_LOST_TOTAL,
+        "counter",
+        "JetStream stream quorum-lost advisories observed as aggregate events.",
+    ),
+    MetricSpec(
+        MetricNames.JETSTREAM_ADVISORY_CONSUMER_QUORUM_LOST_TOTAL,
+        "counter",
+        "JetStream consumer quorum-lost advisories observed as aggregate events.",
+    ),
+    MetricSpec(
+        MetricNames.JETSTREAM_ADVISORY_STREAM_LEADER_ELECTED_TOTAL,
+        "counter",
+        "JetStream stream leader-election advisories observed as aggregate events.",
+    ),
+    MetricSpec(
+        MetricNames.JETSTREAM_ADVISORY_CONSUMER_LEADER_ELECTED_TOTAL,
+        "counter",
+        "JetStream consumer leader-election advisories observed as aggregate events.",
+    ),
+    MetricSpec(
+        MetricNames.JETSTREAM_ADVISORY_STREAM_ACTION_TOTAL,
+        "counter",
+        "JetStream stream action advisories observed as aggregate events.",
+    ),
+    MetricSpec(
+        MetricNames.JETSTREAM_ADVISORY_CONSUMER_ACTION_TOTAL,
+        "counter",
+        "JetStream consumer action advisories observed as aggregate events.",
+    ),
+    MetricSpec(
+        MetricNames.JETSTREAM_ADVISORY_API_AUDIT_TOTAL,
+        "counter",
+        "JetStream API audit advisories observed as aggregate events.",
     ),
     MetricSpec(
         MetricNames.PRIORITY_LANE_BATCHES_TOTAL,

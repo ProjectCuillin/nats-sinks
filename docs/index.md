@@ -90,6 +90,9 @@ The current release provides the following production-ready foundation:
   snapshot and CLI, and external observability sharing is controlled by a
   separate policy that is disabled by default for both textfile and native
   HTTP connectors.
+- Optional JetStream advisory observation for selected advisory subjects, with
+  aggregate counters for delivery and cluster signals while keeping advisory
+  payloads and subject details out of exported metrics by default.
 - Exponential retry backoff with configurable caps and jitter for retryable
   failures, preserving redelivery safety without creating synchronized retry
   storms during shared outages.

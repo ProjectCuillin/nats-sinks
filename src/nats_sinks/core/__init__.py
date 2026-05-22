@@ -14,6 +14,15 @@ as Postgres, HTTP, file, S3, and Kafka easier to certify against the same
 contract.
 """
 
+from nats_sinks.core.advisory import (
+    DEFAULT_ADVISORY_SUBJECTS,
+    JetStreamAdvisory,
+    JetStreamAdvisoryMonitor,
+    advisory_kind_from_subject,
+    observe_jetstream_advisory_message,
+    parse_jetstream_advisory,
+    validate_advisory_subject,
+)
 from nats_sinks.core.custody import (
     CUSTODY_SCHEMA,
     CUSTODY_SUPPORTED_ALGORITHMS,
@@ -72,6 +81,7 @@ from nats_sinks.core.runner import JetStreamSinkRunner
 __all__ = [
     "CUSTODY_SCHEMA",
     "CUSTODY_SUPPORTED_ALGORITHMS",
+    "DEFAULT_ADVISORY_SUBJECTS",
     "DEFAULT_CLASSIFICATION_HEADER",
     "DEFAULT_LABELS_HEADER",
     "DEFAULT_METRIC_NAMESPACE",
@@ -83,6 +93,8 @@ __all__ = [
     "MISSION_METADATA_PROFILE_VERSION",
     "NATS_RESERVED_HEADER_NAMES",
     "InMemoryMetrics",
+    "JetStreamAdvisory",
+    "JetStreamAdvisoryMonitor",
     "JetStreamSinkRunner",
     "JsonFileMetrics",
     "MetricNames",
@@ -97,6 +109,7 @@ __all__ = [
     "PolicyViolation",
     "PriorityLaneAssignment",
     "SubjectPayloadEncryptor",
+    "advisory_kind_from_subject",
     "attach_custody_metadata",
     "build_nats_metadata_snapshot",
     "canonical_json_bytes",
@@ -108,9 +121,12 @@ __all__ = [
     "load_metrics_snapshot",
     "metric_rows_from_snapshot",
     "normalize_payload_for_json_storage",
+    "observe_jetstream_advisory_message",
     "order_by_priority_lanes",
+    "parse_jetstream_advisory",
     "parse_mission_metadata_header",
     "qualified_metric_name",
+    "validate_advisory_subject",
     "validate_metric_namespace",
     "write_metrics_snapshot",
 ]

@@ -18,6 +18,7 @@ from nats_sinks.core.config import (
     CustodyConfig,
     DeadLetterConfig,
     DeliveryConfig,
+    JetStreamAdvisoryConfig,
     MessageMetadataConfig,
     MissionMetadataConfig,
     PreSinkPolicyConfig,
@@ -194,6 +195,29 @@ class FakeJetStream:
         self.published.append((subject, payload))
 
 
+class FakeAdvisorySubscription:
+    def __init__(self, events: list[str]) -> None:
+        self.events = events
+
+    async def unsubscribe(self) -> None:
+        self.events.append("advisory_unsubscribe")
+
+
+class FakeNatsConnection:
+    def __init__(self, events: list[str]) -> None:
+        self.events = events
+        self.subscribed_subjects: list[str] = []
+
+    async def subscribe(self, subject: str, *, cb: object) -> FakeAdvisorySubscription:
+        del cb
+        self.events.append("advisory_subscribe")
+        self.subscribed_subjects.append(subject)
+        return FakeAdvisorySubscription(self.events)
+
+    async def close(self) -> None:
+        self.events.append("nats_close")
+
+
 class PartialFetchSubscription:
     """Fake pull subscription that returns fewer messages than requested.
 
@@ -244,6 +268,41 @@ async def test_sink_success_triggers_ack_after_commit() -> None:
     await runner.process_raw_batch([message])
 
     assert events == ["write", "commit", "ack"]
+    assert message.acked
+
+
+@pytest.mark.asyncio
+async def test_advisory_monitor_isolated_from_sink_ack_order() -> None:
+    events: list[str] = []
+    message = FakeMessage(events)
+    nats_connection = FakeNatsConnection(events)
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=RecordingSink(events),
+        jetstream=FakeJetStream(events),
+        nats_connection=nats_connection,
+        advisories=JetStreamAdvisoryConfig(
+            enabled=True,
+            subjects=("$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES.*.*",),
+        ),
+    )
+
+    await runner.start()
+    await runner.process_raw_batch([message])
+    await runner.stop()
+
+    assert events == [
+        "advisory_subscribe",
+        "write",
+        "commit",
+        "ack",
+        "advisory_unsubscribe",
+        "nats_close",
+    ]
+    assert nats_connection.subscribed_subjects == ["$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES.*.*"]
     assert message.acked
 
 

@@ -97,6 +97,10 @@ used immediately:
   recorder or exporter. External observability sharing is controlled by a
   separate policy and is disabled by default, whether operators choose the
   recommended textfile connector or the optional native HTTP endpoint.
+- Optional JetStream advisory observation for selected
+  `$JS.EVENT.ADVISORY...` subjects. Advisory support is disabled by default,
+  produces aggregate metrics only, and never changes sink writes, retries,
+  DLQ decisions, or JetStream ACK behavior.
 - NATS reconnect tuning for clustered or controlled-network deployments,
   including multiple seed URLs, reconnect wait, maximum reconnect attempts,
   ping behavior, pending buffer size, drain timeout, and connection event
@@ -399,6 +403,10 @@ sub-page for connector details.
 The NATS server monitoring connector and delivery-boundary decision for
 endpoints such as `/jsz` and `/healthz` are documented in
 [NATS Server Monitoring](https://nats-sinks.readthedocs.io/en/latest/nats-server-monitoring/).
+Optional JetStream advisory counters are configured through
+[Configuration](https://nats-sinks.readthedocs.io/en/latest/configuration/#advisories)
+and documented in
+[Metrics](https://nats-sinks.readthedocs.io/en/latest/metrics/#jetstream-advisory-metrics).
 
 ## Payload Bodies
 

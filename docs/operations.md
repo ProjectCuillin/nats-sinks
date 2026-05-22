@@ -149,6 +149,35 @@ sink writes. It is not enabled today. If implemented, it should be treated as a
 bounded heartbeat around active work, not as a success signal. See
 [InProgress Evaluation](in-progress-evaluation.md).
 
+Optional JetStream advisory observation is available for deployments that need
+server-side delivery signals such as maximum-delivery, NAK, terminal
+acknowledgement, stream action, consumer action, leader-election, or
+quorum-loss events. It is disabled by default and must be configured with
+explicit advisory subjects. Advisory observation produces aggregate counters
+only; it does not retrieve source messages, publish to DLQ, write to a sink, or
+change ACK behavior.
+
+```json
+{
+  "advisories": {
+    "enabled": true,
+    "subjects": [
+      "$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES.*.*",
+      "$JS.EVENT.ADVISORY.CONSUMER.MSG_TERMINATED.*.*"
+    ],
+    "max_payload_bytes": 65536,
+    "log_events": false
+  }
+}
+```
+
+Use advisory counters beside sink-side counters. For example, a rise in
+`jetstream_advisory_max_deliver_total` without a corresponding rise in
+`messages_dlq_total` means the server has observed maximum delivery attempts,
+but the sink runner did not necessarily classify those messages as permanent
+sink failures. That distinction matters: advisories are server-side operational
+signals, while DLQ publication remains a deliberate sink-runner action.
+
 Ordered-consumer support has been evaluated for future inspection and analysis
 tooling. It is not enabled today and should not be used as a replacement for
 durable pull-consumer sink workers. Replay into sinks should use durable

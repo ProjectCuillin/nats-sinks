@@ -287,6 +287,38 @@ Use these metrics together with `messages_dlq_total`. A terminal
 acknowledgement without a corresponding DLQ publication would indicate a bug or
 an unsafe custom integration.
 
+## JetStream Advisory Metrics
+
+JetStream advisory metrics are emitted only when `advisories.enabled` is true.
+The observer subscribes to selected `$JS.EVENT.ADVISORY...` subjects and turns
+supported advisory types into aggregate counters. It does not expose stream
+names, consumer names, subjects, sequence numbers, message IDs, or advisory
+payload fields as metric labels.
+
+```bash
+nats-sink-metrics show .local/nats-sinks/metrics.json --metric "jetstream_advisory*"
+```
+
+Example table output:
+
+```text
+KIND     METRIC                                             VALUE  DESCRIPTION
+counter  jetstream_advisories_received_total                    4  JetStream advisory messages accepted by the optional advisory monitor.
+counter  jetstream_advisory_max_deliver_total                   2  JetStream max-deliver advisories observed without exposing stream or consumer names.
+counter  jetstream_advisory_terminated_total                    1  JetStream terminal-ack advisories observed without exposing stream or consumer names.
+counter  jetstream_advisory_parse_errors_total                  0  JetStream advisory messages rejected by safe JSON parsing and validation.
+```
+
+These counters are operational signals only. They do not cause DLQ
+publication, ACK, NAK, terminal acknowledgement, retry, or sink writes. Use
+them to correlate server-side delivery conditions with sink-side counters such
+as `messages_failed_total`, `messages_dlq_total`, and
+`messages_nacked_total`.
+
+For configuration and permission guidance, read
+[Configuration](configuration.md#advisories) and
+[NATS Least-Privilege Permissions](nats-permissions.md).
+
 ## Pre-Sink Policy Metrics
 
 Pre-sink policy metrics are emitted only when `pre_sink_policy.enabled` is
@@ -781,6 +813,20 @@ The preferred metric suffixes are:
 | `nats_connection_closed_total` | counter | NATS client closed events observed by the runner. |
 | `nats_discovered_servers_total` | counter | NATS discovered-server events observed by the runner. |
 | `nats_async_errors_total` | counter | NATS asynchronous error callback events observed by the runner. |
+| `jetstream_advisories_received_total` | counter | JetStream advisory messages accepted by the optional advisory monitor. |
+| `jetstream_advisories_filtered_total` | counter | JetStream advisory messages ignored because they did not match allowed subjects. |
+| `jetstream_advisory_parse_errors_total` | counter | JetStream advisory messages rejected by safe JSON parsing and validation. |
+| `jetstream_advisory_unsupported_total` | counter | JetStream advisory messages observed with unsupported advisory kinds. |
+| `jetstream_advisory_max_deliver_total` | counter | JetStream max-deliver advisories observed without exposing stream or consumer names. |
+| `jetstream_advisory_nak_total` | counter | JetStream NAK advisories observed without exposing stream or consumer names. |
+| `jetstream_advisory_terminated_total` | counter | JetStream terminal-ack advisories observed without exposing stream or consumer names. |
+| `jetstream_advisory_stream_quorum_lost_total` | counter | JetStream stream quorum-lost advisories observed as aggregate events. |
+| `jetstream_advisory_consumer_quorum_lost_total` | counter | JetStream consumer quorum-lost advisories observed as aggregate events. |
+| `jetstream_advisory_stream_leader_elected_total` | counter | JetStream stream leader-election advisories observed as aggregate events. |
+| `jetstream_advisory_consumer_leader_elected_total` | counter | JetStream consumer leader-election advisories observed as aggregate events. |
+| `jetstream_advisory_stream_action_total` | counter | JetStream stream action advisories observed as aggregate events. |
+| `jetstream_advisory_consumer_action_total` | counter | JetStream consumer action advisories observed as aggregate events. |
+| `jetstream_advisory_api_audit_total` | counter | JetStream API audit advisories observed as aggregate events. |
 | `priority_lane_batches_total` | counter | Batches ordered by enabled priority-lane scheduling. |
 | `priority_lane_messages_total` | counter | Messages evaluated by priority-lane scheduling without exposing subjects. |
 | `priority_lane_defaulted_total` | counter | Messages routed to the default priority lane because priority was missing or unknown. |

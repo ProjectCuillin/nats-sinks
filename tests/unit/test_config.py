@@ -338,6 +338,120 @@ def test_enabled_custody_requires_at_least_one_hash(tmp_path: Path) -> None:
         load_config(path, env_overrides=False)
 
 
+def test_advisory_config_is_disabled_by_default(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*"
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/tmp/nats-sinks-test"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(path, env_overrides=False)
+
+    assert config.advisories.enabled is False
+    assert "$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES.*.*" in config.advisories.subjects
+
+
+def test_advisory_config_can_be_enabled_with_env_override(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*"
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/tmp/nats-sinks-test"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("NATS_SINKS_ADVISORIES_ENABLED", "true")
+
+    config = load_config(path)
+
+    assert config.advisories.enabled is True
+
+
+def test_advisory_config_rejects_non_advisory_subjects(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*"
+  },
+  "advisories": {
+    "enabled": true,
+    "subjects": ["orders.*"]
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/tmp/nats-sinks-test"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError, match="advisory subject"):
+        load_config(path, env_overrides=False)
+
+
+def test_advisory_config_rejects_duplicate_subjects(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*"
+  },
+  "advisories": {
+    "enabled": true,
+    "subjects": [
+      "$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES.*.*",
+      "$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES.*.*"
+    ]
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/tmp/nats-sinks-test"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError, match="duplicate"):
+        load_config(path, env_overrides=False)
+
+
 def test_pre_sink_policy_config_validates_subject_rules(tmp_path: Path) -> None:
     path = tmp_path / "config.json"
     path.write_text(

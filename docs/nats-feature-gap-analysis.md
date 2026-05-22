@@ -177,8 +177,8 @@ events, API activity, stream changes, and consumer changes.
 
 | NATS capability | NATS support | Current `nats-sinks` status | Suggested priority |
 | --- | --- | --- | --- |
-| JetStream advisories | `$JS.EVENT.ADVISORY.>` publishes operational events such as stream and consumer actions. | Not consumed or surfaced by `nats-sinks`. | Phase 2 |
-| MaxDeliver advisory handling | NATS emits advisories when messages hit maximum delivery attempts. | Not integrated; DLQ is driven by sink exceptions, not server advisories. | Phase 2 |
+| JetStream advisories | `$JS.EVENT.ADVISORY.>` publishes operational events such as stream and consumer actions. | Optional observation is supported through the disabled-by-default `advisories` config. The observer emits aggregate counters only and remains separate from sink ACK decisions. | Implemented for selected advisory counters |
+| MaxDeliver advisory handling | NATS emits advisories when messages hit maximum delivery attempts. | Optional observation records `jetstream_advisory_max_deliver_total`. DLQ is still driven by sink exceptions and pre-sink policy, not by advisories. | Implemented as observation only |
 | Server monitoring endpoints | NATS exposes monitoring such as `/jsz` and `/healthz`. | Implemented as a separate disabled-by-default `nats-sink-observe` connector with explicit endpoint and field allow lists. The delivery worker still does not poll server monitoring endpoints. | Implemented for selected fields |
 | Reconnect/disconnect metrics | Client libraries expose connection event callbacks. | Runner records disconnect, reconnect, close, discovered-server, and async-error callback metrics. | Implemented |
 | Prometheus/OpenTelemetry export | NATS and application metrics can be exported externally. | Basic counters, gauges, timing observations, a local JSON snapshot, `nats-sink-metrics`, policy-controlled Prometheus textfile export, and an optional native Prometheus HTTP endpoint exist. OpenTelemetry is not shipped yet. | Phase 2 for OpenTelemetry |

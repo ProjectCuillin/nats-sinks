@@ -35,6 +35,13 @@ from urllib.parse import urlsplit
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic import ValidationError as PydanticValidationError
 
+from nats_sinks.core.advisory import (
+    DEFAULT_ADVISORY_MAX_PAYLOAD_BYTES,
+    DEFAULT_ADVISORY_SUBJECTS,
+    MAX_ADVISORY_PAYLOAD_BYTES,
+    MAX_ADVISORY_SUBJECTS,
+    validate_advisory_subject,
+)
 from nats_sinks.core.custody import (
     CUSTODY_SUPPORTED_ALGORITHMS,
     MAX_CUSTODY_KEY_ID_LENGTH,
@@ -606,6 +613,64 @@ class MetricsConfig(BaseModel):
         if "\x00" in rendered or "\n" in rendered or "\r" in rendered:
             raise ValueError("metrics.snapshot_file must not contain control characters")
         return rendered
+
+
+class JetStreamAdvisoryConfig(BaseModel):
+    """Optional observation of selected JetStream server advisories.
+
+    NATS publishes JetStream advisories as ordinary NATS messages below
+    ``$JS.EVENT.ADVISORY.>``.  This configuration controls a separate,
+    disabled-by-default observer that can subscribe to selected advisory
+    subjects and increment sanitized, low-cardinality counters.  It does not
+    read sink payloads, does not write to any destination, and does not make
+    ACK/NAK decisions for source messages.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    subjects: tuple[str, ...] = Field(default_factory=lambda: DEFAULT_ADVISORY_SUBJECTS)
+    max_payload_bytes: int = Field(
+        default=DEFAULT_ADVISORY_MAX_PAYLOAD_BYTES,
+        ge=0,
+        le=MAX_ADVISORY_PAYLOAD_BYTES,
+    )
+    log_events: bool = False
+
+    @field_validator("subjects", mode="before")
+    @classmethod
+    def normalize_subjects(cls, value: object) -> object:
+        """Validate advisory subscription subjects before runtime startup."""
+
+        if value is None:
+            return DEFAULT_ADVISORY_SUBJECTS
+        if isinstance(value, str):
+            raise ValueError("advisories.subjects must be a list of advisory subject patterns")
+        if not isinstance(value, list | tuple):
+            raise ValueError("advisories.subjects must be a list of advisory subject patterns")
+        if not value:
+            raise ValueError("advisories.subjects must contain at least one subject")
+        if len(value) > MAX_ADVISORY_SUBJECTS:
+            raise ValueError(
+                f"advisories.subjects must not contain more than {MAX_ADVISORY_SUBJECTS} entries"
+            )
+        rendered: list[str] = []
+        for subject in value:
+            try:
+                rendered.append(validate_advisory_subject(subject))
+            except FrameworkValidationError as exc:
+                raise ValueError(str(exc)) from exc
+        if len(rendered) != len(set(rendered)):
+            raise ValueError("advisories.subjects must not contain duplicate subjects")
+        return tuple(rendered)
+
+    @model_validator(mode="after")
+    def validate_enabled_subjects(self) -> JetStreamAdvisoryConfig:
+        """Fail closed when advisory observation is enabled without subjects."""
+
+        if self.enabled and not self.subjects:
+            raise ValueError("advisories.enabled requires at least one advisory subject")
+        return self
 
 
 class MessageMetadataFieldConfig(BaseModel):
@@ -1274,6 +1339,7 @@ class AppConfig(BaseModel):
     dead_letter: DeadLetterConfig = Field(default_factory=DeadLetterConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     metrics: MetricsConfig = Field(default_factory=MetricsConfig)
+    advisories: JetStreamAdvisoryConfig = Field(default_factory=JetStreamAdvisoryConfig)
     message_metadata: MessageMetadataConfig = Field(default_factory=MessageMetadataConfig)
     mission_metadata: MissionMetadataConfig = Field(default_factory=MissionMetadataConfig)
     encryption: EncryptionConfig = Field(default_factory=EncryptionConfig)
@@ -1311,6 +1377,7 @@ ENV_OVERRIDES: dict[str, tuple[str, ...]] = {
     "NATS_SINKS_CUSTODY_ENABLED": ("custody", "enabled"),
     "NATS_SINKS_CUSTODY_ALGORITHM": ("custody", "algorithm"),
     "NATS_SINKS_CUSTODY_KEY_ID": ("custody", "key_id"),
+    "NATS_SINKS_ADVISORIES_ENABLED": ("advisories", "enabled"),
     "NATS_SINKS_SINK_TYPE": ("sink", "type"),
 }
 

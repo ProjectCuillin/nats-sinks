@@ -25,11 +25,13 @@ import time
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from nats_sinks.core.advisory import JetStreamAdvisoryMonitor
 from nats_sinks.core.config import (
     CustodyConfig,
     DeadLetterConfig,
     DeliveryConfig,
     EncryptionConfig,
+    JetStreamAdvisoryConfig,
     MessageMetadataConfig,
     MissionMetadataConfig,
     PreSinkPolicyConfig,
@@ -94,6 +96,7 @@ class JetStreamSinkRunner:
         mission_metadata: MissionMetadataConfig | None = None,
         encryption: EncryptionConfig | None = None,
         custody: CustodyConfig | None = None,
+        advisories: JetStreamAdvisoryConfig | None = None,
         pre_sink_policy: PreSinkPolicyConfig | None = None,
         metrics: MetricsRecorder | None = None,
         nats_options: Mapping[str, Any] | None = None,
@@ -121,6 +124,7 @@ class JetStreamSinkRunner:
         self.mission_metadata = mission_metadata or MissionMetadataConfig()
         self.encryption = encryption or EncryptionConfig()
         self.custody = custody or CustodyConfig()
+        self.advisories = advisories or JetStreamAdvisoryConfig()
         self.pre_sink_policy = pre_sink_policy or PreSinkPolicyConfig()
         self.metrics = metrics or NoopMetrics()
         self.nats_options = dict(nats_options or {})
@@ -132,6 +136,7 @@ class JetStreamSinkRunner:
         self._js = jetstream
         self._nc = nats_connection
         self._subscription: Any | None = None
+        self._advisory_monitor: JetStreamAdvisoryMonitor | None = None
         self._stop_requested = False
 
         if self.delivery.ack_policy != "after_sink_commit":
@@ -143,18 +148,21 @@ class JetStreamSinkRunner:
         """Start sink and connect to NATS if a JetStream context was not injected."""
 
         await self.sink.start()
-        if self._js is not None:
-            return
+        if self._js is None:
+            import nats  # noqa: PLC0415 - keep client import lazy for import-safe package usage.
 
-        import nats  # noqa: PLC0415 - keep client import lazy for import-safe package usage.
+            self._nc = await nats.connect(**self._nats_connect_options())
+            self._js = self._nc.jetstream()
 
-        self._nc = await nats.connect(**self._nats_connect_options())
-        self._js = self._nc.jetstream()
+        await self._start_advisory_monitor()
 
     async def stop(self) -> None:
         """Stop the runner and release resources."""
 
         self._stop_requested = True
+        if self._advisory_monitor is not None:
+            await self._advisory_monitor.stop()
+            self._advisory_monitor = None
         await self.sink.stop()
         if self._nc is not None:
             close = getattr(self._nc, "close", None)
@@ -165,6 +173,23 @@ class JetStreamSinkRunner:
         """Request cooperative shutdown."""
 
         self._stop_requested = True
+
+    async def _start_advisory_monitor(self) -> None:
+        """Start the optional observational JetStream advisory monitor."""
+
+        if not self.advisories.enabled:
+            return
+        if self._nc is None:
+            raise ConfigurationError(
+                "advisories.enabled requires a NATS connection; provide nats_connection "
+                "when injecting a JetStream context"
+            )
+        self._advisory_monitor = JetStreamAdvisoryMonitor(
+            self._nc,
+            config=self.advisories,
+            metrics=self.metrics,
+        )
+        await self._advisory_monitor.start()
 
     def _nats_connect_options(self) -> dict[str, Any]:
         """Build NATS connection options and attach connection-event metrics.

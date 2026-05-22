@@ -14,11 +14,11 @@ logs from live systems.
 | Field | Value |
 | --- | --- |
 | Overall result | Pass |
-| Report generated | 2026-05-22 13:40:48 CEST |
+| Report generated | 2026-05-22 14:01:34 CEST |
 | Project version | `0.4.0` post-release development |
 | Python version | 3.12.4 |
 | Git revision checked | Active `release-v0.4.1` branch-first workflow workspace |
-| Worktree state | Active workspace with quiet branch-first release workflow automation, GitHub `main` branch protection, draft pull request helpers, manual release-validation dispatch, CODEOWNERS review ownership, pull request governance checks, release tag validation against `main`, updated release/backlog/contributor documentation, Oracle high-throughput staging-table merge mode for issue `#31`, tamper-evident custody metadata for issue `#60`, and the previously validated `0.4.0` capability set covering secure-development hardening, strict JSON config loading, log-injection sanitization, secret-scan automation, the 316-control security rule review, project-specific security controls, expanded public API compatibility tests and documentation, release-version consistency checks, generated GitHub Dependency Graph manifests, detailed local backlog JSON items synced to GitHub Issues, release-target backlog labels, sanitized backlog comment tooling, completed-label workflow support for fixed or implemented issues awaiting release, stricter backlog lifecycle enforcement, release-gated backlog close automation, OCI Object Storage sink backlog tracking, standardized SPDX source headers, metrics snapshots and CLI, observability policy core, Prometheus and NATS monitoring connectors, Kubernetes examples, unified Debian/Oracle Linux systemd installer, NATS reconnect tuning, least-privilege NATS permission templates, JetStream topology guidance, retry backoff with jitter, priority-aware lanes, synthetic mission testing, mission-support examples, CycloneDX SBOM generation, release checksums, hash-verified installation guidance, property-style tests, defence and mission-support blueprints, generic mission metadata, payload encryption, and Oracle/file sink support |
+| Worktree state | Active workspace with quiet branch-first release workflow automation, GitHub `main` branch protection, draft pull request helpers, manual release-validation dispatch, CODEOWNERS review ownership, pull request governance checks, release tag validation against `main`, updated release/backlog/contributor documentation, Oracle high-throughput staging-table merge mode for issue `#31`, tamper-evident custody metadata for issue `#60`, optional JetStream advisory observation for issue `#18`, and the previously validated `0.4.0` capability set covering secure-development hardening, strict JSON config loading, log-injection sanitization, secret-scan automation, the 316-control security rule review, project-specific security controls, expanded public API compatibility tests and documentation, release-version consistency checks, generated GitHub Dependency Graph manifests, detailed local backlog JSON items synced to GitHub Issues, release-target backlog labels, sanitized backlog comment tooling, completed-label workflow support for fixed or implemented issues awaiting release, stricter backlog lifecycle enforcement, release-gated backlog close automation, OCI Object Storage sink backlog tracking, standardized SPDX source headers, metrics snapshots and CLI, observability policy core, Prometheus and NATS monitoring connectors, Kubernetes examples, unified Debian/Oracle Linux systemd installer, NATS reconnect tuning, least-privilege NATS permission templates, JetStream topology guidance, retry backoff with jitter, priority-aware lanes, synthetic mission testing, mission-support examples, CycloneDX SBOM generation, release checksums, hash-verified installation guidance, property-style tests, defence and mission-support blueprints, generic mission metadata, payload encryption, and Oracle/file sink support |
 | Live NATS details | Redacted |
 | Live Oracle details | Redacted |
 
@@ -30,6 +30,8 @@ metrics counters, local JSON metrics snapshots, the `nats-sink-metrics`
 inspection CLI, the `nats-sink-observe` observability policy CLI,
 policy-controlled Prometheus textfile export, optional native Prometheus HTTP
 endpoint support, the disabled-by-default NATS server monitoring connector,
+optional disabled-by-default JetStream advisory observation with sanitized
+low-cardinality counters,
 Kubernetes deployment examples with JSON ConfigMaps, Secret references,
 mounted trust material, resource limits, security contexts, graceful shutdown
 settings, and optional Prometheus observability sidecars,
@@ -86,6 +88,7 @@ flowchart LR
     Metrics[Metrics counters and snapshot CLI] --> Report
     Observe[Observability policy and Prometheus connectors] --> Report
     NATSMon[NATS server monitoring connector] --> Report
+    Advisories[JetStream advisory observer] --> Report
     K8s[Kubernetes examples] --> Report
     OracleMetrics[Oracle duplicate/conflict metrics] --> Report
     OracleBenchmark[Oracle phase benchmark] --> Report
@@ -127,6 +130,16 @@ When refreshing this report:
 The current workspace is prepared on the `release-v0.4.1` branch after the
 published `0.4.0` release and has passed local validation. It includes:
 
+- optional JetStream advisory observation for issue `#18`, disabled by
+  default, isolated from sink ACK behavior, bounded by safe JSON parsing and
+  advisory-subject validation, and exposed through sanitized low-cardinality
+  metrics for selected `$JS.EVENT.ADVISORY...` subjects,
+- full local validation after the JetStream advisory implementation:
+  `scripts/check.sh` passed with `522 passed, 8 skipped` in the main pytest
+  run, `108 passed` in the encryption and runner-ordering suite, and
+  `85 passed` in the sink suite; Ruff format/check, mypy, documentation
+  builds, Markdown link checks, high-confidence secret scan, Bandit, package
+  build, SBOM/checksum generation, and Twine metadata checks also passed,
 - quiet branch-first release workflow enforcement prepared on `release-v0.4.1`,
   including active GitHub branch protection for `main`, quiet branch pushes,
   draft pull request helpers, manual release-validation dispatch, pull request
@@ -390,20 +403,21 @@ ordering, DLQ-before-ACK ordering, and deterministic unhappy-path handling.
 
 | Check | Command | Result | Sanitized outcome |
 | --- | --- | --- | --- |
-| Formatting | `ruff format --check .` | Pass | 135 files already formatted |
+| Formatting | `ruff format --check .` | Pass | 142 files already formatted |
 | Linting | `ruff check .` | Pass | All checks passed, including synthetic harness and load-profile source, scripts, and tests |
-| Type checking | `mypy src` | Pass | No type issues in 51 source files |
+| Type checking | `mypy src` | Pass | No type issues in 54 source files |
 | Version consistency | `python scripts/check-version-consistency.py` | Pass | Package metadata, runtime `__version__`, README, docs home page, and changelog all report `0.4.0` |
 | Dependency manifest consistency | `python scripts/update-dependency-manifests.py --check` | Pass | Generated `requirements*.txt` files are in sync with `pyproject.toml` for GitHub Dependency Graph and Dependabot visibility |
-| Local backlog validation | `python scripts/sync-backlog-issues.py --check` | Pass | Validated 52 local backlog item JSON files; validation rejects common public-leak patterns before issue bodies are generated |
-| Local bug report validation | `python scripts/sync-bug-reports.py --check` | Pass | Validated 36 local bug report JSON files, including the file path sanitizer, synthetic reporting, metrics, NATS monitoring, payload serialization, NATS auth, retry-policy, Oracle idempotency, MkDocs build isolation, metrics CLI CI repair, release workflow artifact separation, and other regression reports |
+| Local backlog validation | `python scripts/sync-backlog-issues.py --check` | Pass | Validated 84 local backlog item JSON files; validation rejects common public-leak patterns before issue bodies are generated |
+| Local bug report validation | `python scripts/sync-bug-reports.py --check` | Pass | Validated 39 local bug report JSON files, including the file path sanitizer, synthetic reporting, metrics, NATS monitoring, payload serialization, NATS auth, retry-policy, Oracle idempotency, MkDocs build isolation, metrics CLI CI repair, release workflow artifact separation, and other regression reports |
 | OCI Object Storage backlog sync | `python scripts/sync-backlog-issues.py --directory /private/tmp/nats-sinks-oci-backlog-sync` | Pass | Created GitHub issue `#47` from the scoped validated backlog item without publishing secrets or private service details |
 | Markdown link guard | `python scripts/check-markdown-links.py` | Pass | PyPI-facing README links use fully qualified URLs; MkDocs docs keep version-local relative links |
 | NATS permissions documentation | `scripts/check-docs.sh` through `scripts/check.sh` | Pass | Added and built least-privilege NATS permission templates for runtime, DLQ, management, and advisory-reader scenarios |
 | JetStream topology documentation | `scripts/check-docs.sh` through `scripts/check.sh` | Pass | Added and built advanced topology guidance for mirrors, sources, transforms, republish, compression, placement, metadata, and idempotency review |
 | NATS server monitoring connector | `pytest tests/unit/test_nats_monitoring.py tests/unit/test_observability_cli.py` and `scripts/check-docs.sh` through `scripts/check.sh` | Pass | Added and built the server monitoring connector docs; tests cover disabled policy behavior, endpoint validation, malformed JSON handling, sanitized snapshots, optional Prometheus rendering, and CLI behavior without live network calls |
 | Security rule review count | `rg -c "^\\| SD-" docs/security-rule-review.md` | Pass | 316 controls recorded |
-| Unit and gated test suite | `pytest` through `scripts/check.sh` | Pass | 453 passed, 8 skipped |
+| Unit and gated test suite | `pytest` through `scripts/check.sh` | Pass | 522 passed, 8 skipped |
+| JetStream advisory focused checks | `pytest tests/unit/test_advisory.py tests/unit/test_config.py tests/unit/test_commit_then_ack_contract.py tests/unit/test_metrics.py tests/unit/test_public_api.py` | Pass | 101 passed, covering advisory parsing, subject filtering, safe parse failures, metrics, monitor lifecycle, configuration validation, public exports, and isolation from sink ACK behavior |
 | MkDocs build isolation regression | `pytest tests/unit/test_docs_build_isolation.py -q` and two parallel `scripts/check-docs.sh` runs | Pass | 3 focused tests passed; two overlapping docs helper runs built isolated Read the Docs and GitHub Pages output directories without colliding in `site/` |
 | Bounded property-style generator tests | `pytest tests/unit/test_property_generators.py` | Pass | 16 deterministic generator tests passed, covering subject matching, subject pattern validation, payload normalization, message metadata normalization, mission metadata validation, and file path sanitization |
 | File path sanitizer regression | `pytest tests/unit/test_bug_62_file_path_component_str_failure.py tests/unit/test_property_generators.py tests/unit/test_file_sink.py` | Pass | 36 tests passed, including the regression proving failed string conversion produces a safe fallback path component |
@@ -412,8 +426,8 @@ ordering, DLQ-before-ACK ordering, and deterministic unhappy-path handling.
 | Release checksum and backlog close checks | `pytest tests/unit/test_release_checksums.py tests/unit/test_release_backlog_close.py` | Pass | 8 passed, covering deterministic SHA-256 manifests, release workflow package/checksum artifact separation, release close-out comment sanitization, managed-issue marker filtering, acceptance criteria checks, close-out evidence checks, and dry-run close behavior |
 | Release close live dry-run | `python scripts/close-released-backlog-issues.py --release v0.4.0 --dry-run` | Pass | The hardened close helper would close all release-labeled managed backlog issues with checked Acceptance Criteria and sanitized evidence comments after the associated release exists: issues `#59`, `#57`, `#56`, `#53`, `#50`, `#43`, `#40`, `#37`, `#29`, `#24`, `#23`, `#22`, `#21`, `#16`, and `#14` |
 | Bug close live dry-run | `python scripts/close-released-bug-issues.py --release v0.4.0 --dry-run` | Pass | The hardened bug close helper would close all completed release-labeled bug issues after the associated release exists, including issues `#96` through `#61`; issues `#95` and `#96` have the `completed` label, checked Acceptance Criteria, and sanitized release evidence comments |
-| Encryption capability suite | `scripts/check-encryption.sh` through `scripts/check.sh` | Pass | 86 encryption-focused and runner-ordering tests passed with generated temporary AES-256 key material that was deleted after the run |
-| Sink capability suite | `scripts/check-sinks.sh` | Pass | 72 sink-focused tests passed plus file, encrypted file, and Oracle CLI smoke checks |
+| Encryption capability suite | `scripts/check-encryption.sh` through `scripts/check.sh` | Pass | 108 encryption-focused and runner-ordering tests passed with generated temporary AES-256 key material that was deleted after the run |
+| Sink capability suite | `scripts/check-sinks.sh` | Pass | 85 sink-focused tests passed plus file, encrypted file, and Oracle CLI smoke checks |
 | Retry backoff focused checks | `pytest tests/unit/test_retry.py tests/unit/test_commit_then_ack_contract.py tests/unit/test_config.py` | Pass | 49 passed, covering fixed, linear, exponential, capped, jitter, no-jitter, active retry exhaustion, and config validation paths |
 | NATS connection option and event metrics checks | `pytest tests/unit/test_nats_connection_options.py tests/unit/test_nats_connection_events.py tests/unit/test_metrics.py tests/unit/test_metrics_cli.py` | Pass | 35 passed, covering seed URLs, reconnect tuning, connection callback metrics, callback preservation, and metrics CLI behavior |
 | Oracle benchmark unit checks | `pytest tests/unit/test_bug_64_oracle_benchmark_phase_rates.py tests/unit/test_oracle_benchmark.py` | Pass | 7 passed, covering option validation, public redaction, phase rendering, live opt-in protection, shell wrapper syntax, and timing-only retry/shutdown phase reporting |

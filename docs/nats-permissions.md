@@ -190,8 +190,11 @@ runtime worker only fetch and ACK permissions.
 ## Template D: Separate Advisory Reader
 
 JetStream advisories are useful for operations teams, but they are not required
-for the sink worker to preserve commit-then-acknowledge semantics. If you need
-to consume advisories, use a separate read-only observer account where possible.
+for the sink worker to preserve commit-then-acknowledge semantics. `nats-sinks`
+can observe selected advisories when `advisories.enabled` is true, but a
+separate read-only observer account is still preferred where operational policy
+allows it. If the delivery worker observes advisories itself, grant only the
+exact advisory subjects listed in `advisories.subjects`.
 
 ```text
 authorization {
@@ -207,8 +210,8 @@ authorization {
         }
         subscribe: {
           allow: [
-            "$JS.EVENT.ADVISORY.>",
-            "$JS.EVENT.METRIC.CONSUMER_ACK.<STREAM>.<CONSUMER>"
+            "$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES.<STREAM>.<CONSUMER>",
+            "$JS.EVENT.ADVISORY.CONSUMER.MSG_TERMINATED.<STREAM>.<CONSUMER>"
           ]
         }
       }

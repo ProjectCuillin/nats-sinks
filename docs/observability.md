@@ -23,6 +23,9 @@ Observability is documented as a small set of focused pages:
   Prometheus textfile connector and optional native HTTP scrape endpoint.
 - [NATS Server Monitoring Integration](nats-server-monitoring.md): explains the
   disabled-by-default connector for selected NATS monitoring endpoint fields.
+- Optional JetStream advisory observation is configured in
+  [Configuration](configuration.md#advisories) and reported through the same
+  [Metrics Snapshot And CLI](metrics.md#jetstream-advisory-metrics) page.
 
 Prometheus is therefore a sub-page of observability rather than a separate
 delivery feature. The delivery worker can run without Prometheus, and
@@ -61,6 +64,7 @@ connectors then read that snapshot and apply an operator-approved policy.
 ```mermaid
 flowchart LR
     R[JetStreamSinkRunner] --> M[MetricsRecorder]
+    A[Optional JetStream advisory observer] --> M
     M --> J[metrics.json snapshot]
     J --> P[Observability policy]
     P --> C[Observability connector]
@@ -68,6 +72,7 @@ flowchart LR
 
     subgraph Delivery Service
         R
+        A
         M
     end
 
@@ -129,6 +134,21 @@ separate observability connector. The sink worker does not poll those
 endpoints, because server monitoring is operational context rather than a
 delivery prerequisite. The connector is documented in
 [NATS Server Monitoring Integration](nats-server-monitoring.md).
+
+JetStream advisories are different from NATS HTTP monitoring endpoints: they
+are normal NATS messages published below `$JS.EVENT.ADVISORY.>`. When
+`advisories.enabled` is true, the delivery worker can create separate Core NATS
+subscriptions for a small allow-list of advisory subjects and increment
+aggregate counters. This still remains observational. Advisory messages do not
+drive ACK, NAK, DLQ, retry, or sink-write decisions.
+
+```mermaid
+flowchart LR
+    Server[NATS JetStream Server] -->|$JS.EVENT.ADVISORY...| Observer[Advisory Observer]
+    Observer -->|aggregate counters only| Metrics[MetricsRecorder]
+    Runner[Sink Runner] -->|commit then ACK| Server
+    Runner --> Sink[Oracle/File/Future Sink]
+```
 
 For Kubernetes deployments, the example manifests keep observability in a
 separate sidecar container that reads the worker's local metrics snapshot
