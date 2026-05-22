@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 
 import pytest
 
@@ -241,6 +242,25 @@ class PartialFetchSubscription:
 class PullSubscribeJetStream:
     def __init__(self, subscription: PartialFetchSubscription) -> None:
         self.subscription = subscription
+
+    async def consumer_info(self, stream: str, consumer: str) -> object:
+        return SimpleNamespace(
+            config=SimpleNamespace(
+                name=consumer,
+                durable_name=consumer,
+                filter_subject="orders.*",
+                filter_subjects=None,
+                ack_policy="explicit",
+                deliver_policy="all",
+                replay_policy="instant",
+                deliver_subject=None,
+                headers_only=None,
+                ack_wait=None,
+                max_deliver=None,
+                max_ack_pending=None,
+                max_waiting=None,
+            )
+        )
 
     async def pull_subscribe(
         self,

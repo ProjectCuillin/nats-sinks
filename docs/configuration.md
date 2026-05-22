@@ -55,6 +55,16 @@ Oracle-specific fields inside the `sink` object.
     "pending_size_bytes": 2097152,
     "drain_timeout_seconds": 30
   },
+  "consumer_management": {
+    "mode": "create_if_missing",
+    "deliver_policy": "all",
+    "replay_policy": "instant",
+    "ack_wait_seconds": null,
+    "max_deliver": null,
+    "max_ack_pending": null,
+    "max_waiting": null,
+    "headers_only": null
+  },
   "delivery": {
     "batch_size": 100,
     "batch_timeout_ms": 1000,
@@ -193,6 +203,7 @@ The top-level sections are:
 | Section | Required | Purpose |
 | --- | --- | --- |
 | `nats` | yes | NATS server connection, JetStream stream, consumer, subject, authentication, and TLS settings. |
+| `consumer_management` | no | Optional durable pull-consumer creation, binding, and safe drift validation settings. |
 | `delivery` | no | Batching, ACK policy, retry, and temporary failure behavior. Defaults are safe for local and early production deployments. |
 | `dead_letter` | no | Optional DLQ publication for permanently invalid messages. |
 | `logging` | no | Standard Python logging level and payload logging switch. |
@@ -331,6 +342,112 @@ material such as `token_env` or `password_env` separate from authorization
 design: a worker can authenticate successfully and still be denied if the NATS
 server permission map does not allow the required JetStream API, inbox, ACK, or
 DLQ subjects.
+
+### `consumer_management`
+
+The `consumer_management` section controls how the runner prepares the durable
+JetStream pull consumer before fetching messages. This is startup behavior
+only. It does not change the commit-then-acknowledge rule and it does not give
+sinks access to NATS acknowledgement methods.
+
+The default mode is `create_if_missing`, which preserves the historical
+developer experience where a missing durable consumer can be created for the
+configured stream and subject. The important change is that this behavior is
+now explicit and the runner validates compatible existing consumers before it
+starts fetching. If an existing consumer has unsafe drift, startup fails closed
+with a readable configuration error.
+
+```mermaid
+sequenceDiagram
+    participant Runner as nats-sinks runner
+    participant JS as JetStream management API
+    participant Pull as Pull consumer
+    participant Sink as Sink
+
+    Runner->>JS: consumer_info(stream, durable)
+    alt missing and mode is create_if_missing or reconcile
+        Runner->>JS: add_consumer(expected durable pull config)
+    else missing and mode is bind_only
+        JS-->>Runner: ConfigurationError
+    else existing
+        Runner->>Runner: validate durable, filter, ACK policy, pull mode
+    end
+    Runner->>Pull: pull_subscribe(...)
+    Pull-->>Runner: messages
+    Runner->>Sink: write_batch(...)
+    Sink-->>Runner: durable success
+    Runner->>Pull: ACK last
+```
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `mode` | no | `create_if_missing` | `bind_only`, `create_if_missing`, or `reconcile`. | `bind_only` requires the durable consumer to exist and match the configured delivery contract. `create_if_missing` creates it when absent and validates it when present. `reconcile` creates it when absent and asks JetStream to update a compatible existing consumer to the configured values. |
+| `deliver_policy` | no | `all` | `all`, `last`, `new`, or `last_per_subject`. | Desired consumer deliver policy for managed consumers. Sequence-based and time-based policies are intentionally not exposed yet because they require extra replay controls. |
+| `replay_policy` | no | `instant` | `instant` or `original`. | Desired replay policy. Most sink workers should use `instant`; `original` can slow replay to the original publish cadence. |
+| `ack_wait_seconds` | no | `null` | Number greater than `0` and at most `86400`, or `null`. | Optional server-side ACK wait expectation. When set, incompatible existing values fail startup. |
+| `max_deliver` | no | `null` | Integer `1` to `1000000`, or `null`. | Optional server-side maximum delivery count. Use with DLQ/advisory planning so poison messages do not cycle forever. |
+| `max_ack_pending` | no | `null` | Integer `1` to `1000000`, or `null`. | Optional server-side outstanding ACK limit. This complements, but does not replace, `delivery.batch_size`. |
+| `max_waiting` | no | `null` | Integer `1` to `1000000`, or `null`. | Optional pull-request wait limit on the server-side consumer. |
+| `headers_only` | no | `null` | `true`, `false`, or `null`. | Optional compatibility check for JetStream headers-only delivery. Explicit headers-only production support is still tracked separately; setting this field only validates or creates the server-side setting. |
+
+Examples:
+
+```json
+{
+  "consumer_management": {
+    "mode": "bind_only"
+  }
+}
+```
+
+Use `bind_only` when an operations team or infrastructure pipeline creates the
+stream and durable consumer before the sink worker starts. This is the
+preferred least-privilege production model because the runtime NATS account
+does not need consumer creation permissions.
+
+```json
+{
+  "consumer_management": {
+    "mode": "create_if_missing",
+    "ack_wait_seconds": 60,
+    "max_deliver": 10,
+    "max_ack_pending": 500
+  }
+}
+```
+
+Use `create_if_missing` for development environments, controlled test systems,
+or platform teams that intentionally allow the worker to create its own durable
+consumer. If a consumer already exists but has a different filter subject,
+non-explicit ACK policy, push `deliver_subject`, or configured delivery drift,
+startup fails before any message is fetched.
+
+```json
+{
+  "consumer_management": {
+    "mode": "reconcile",
+    "deliver_policy": "all",
+    "replay_policy": "instant",
+    "max_ack_pending": 1000
+  }
+}
+```
+
+Use `reconcile` only with an account that is allowed to update consumer
+configuration. The runner first verifies that the existing durable consumer is
+compatible with pull-based, explicit-ACK sink processing, then submits the
+configured durable pull-consumer settings through JetStream. If JetStream
+rejects the update, startup fails and no source messages are processed.
+
+Permission guidance:
+
+- `bind_only` needs runtime pull and ACK permissions for the configured
+  consumer, but does not require consumer creation permissions.
+- `create_if_missing` and `reconcile` require JetStream consumer-management
+  permissions in addition to runtime pull and ACK permissions.
+- Use separate administrative and runtime NATS accounts when possible.
+- Never broaden runtime permissions just to avoid provisioning consumers in
+  infrastructure.
 
 ### `delivery`
 
@@ -1158,6 +1275,7 @@ Supported environment overrides:
 - `NATS_SINKS_NATS_STREAM`
 - `NATS_SINKS_NATS_CONSUMER`
 - `NATS_SINKS_NATS_SUBJECT`
+- `NATS_SINKS_CONSUMER_MANAGEMENT_MODE`
 - `NATS_SINKS_LOG_LEVEL`
 - `NATS_SINKS_ENCRYPTION_ENABLED`
 - `NATS_SINKS_ENCRYPTION_ALGORITHM`

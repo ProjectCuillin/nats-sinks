@@ -343,6 +343,14 @@ publish, broad subscribe, stream administration, or source-subject publish
 rights. See [NATS Least-Privilege Permissions](nats-permissions.md) for
 templates and validation checklists.
 
+Durable consumer creation and reconciliation are explicitly controlled by
+`consumer_management.mode`. The safest production posture is `bind_only` with a
+separate administrative identity creating or updating consumers. If
+`create_if_missing` or `reconcile` is enabled, grant only the narrow JetStream
+consumer-management permissions required for the configured stream and durable
+consumer. Do not give the sink worker account broad stream-management or
+account-management authority.
+
 ```mermaid
 flowchart LR
     Env[Secret environment variable] --> CLI[nats-sink]

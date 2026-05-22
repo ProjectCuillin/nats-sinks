@@ -101,6 +101,10 @@ used immediately:
   `$JS.EVENT.ADVISORY...` subjects. Advisory support is disabled by default,
   produces aggregate metrics only, and never changes sink writes, retries,
   DLQ decisions, or JetStream ACK behavior.
+- Explicit durable pull-consumer management with `bind_only`,
+  `create_if_missing`, and `reconcile` modes so operators can choose whether
+  the worker only binds to a pre-created consumer, creates a missing consumer,
+  or reconciles compatible delivery settings before fetching messages.
 - NATS reconnect tuning for clustered or controlled-network deployments,
   including multiple seed URLs, reconnect wait, maximum reconnect attempts,
   ping behavior, pending buffer size, drain timeout, and connection event
@@ -407,6 +411,8 @@ Optional JetStream advisory counters are configured through
 [Configuration](https://nats-sinks.readthedocs.io/en/latest/configuration/#advisories)
 and documented in
 [Metrics](https://nats-sinks.readthedocs.io/en/latest/metrics/#jetstream-advisory-metrics).
+Durable consumer startup behavior is documented under
+[consumer_management](https://nats-sinks.readthedocs.io/en/latest/configuration/#consumer_management).
 
 ## Payload Bodies
 

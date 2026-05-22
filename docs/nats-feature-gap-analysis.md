@@ -94,12 +94,12 @@ Current gap details:
 
 | NATS capability | NATS support | Current `nats-sinks` status | Suggested priority |
 | --- | --- | --- | --- |
-| Explicit consumer creation/update | Consumers have a rich server-side configuration model. | Runner uses `pull_subscribe`; it does not create or reconcile consumer config. | Phase 2 |
-| AckWait | Controls when unacked messages redeliver. | Not configurable in JSON; users must manage consumer externally. | Phase 2 |
-| MaxDeliver | Controls maximum redelivery attempts before advisories. | `delivery.max_retries` bounds active delayed NAK attempts, but it is not reconciled with server `MaxDeliver`. | Phase 2 |
+| Explicit consumer creation/update | Consumers have a rich server-side configuration model. | `consumer_management.mode` supports `bind_only`, `create_if_missing`, and `reconcile` for durable pull consumers. Existing unsafe drift fails closed before messages are fetched. | Implemented for durable pull consumers |
+| AckWait | Controls when unacked messages redeliver. | `consumer_management.ack_wait_seconds` can create, reconcile, or validate the server setting for durable pull consumers. Server-side backoff sequences remain future work. | Implemented for single ACK wait value |
+| MaxDeliver | Controls maximum redelivery attempts before advisories. | `consumer_management.max_deliver` can create, reconcile, or validate the server setting. `delivery.max_retries` still controls active delayed NAK attempts before leaving messages redeliverable. | Implemented for durable pull consumers |
 | BackOff | Server-side redelivery backoff sequence. | Local delayed NAK backoff supports fixed, linear, exponential, cap, and jitter controls; server-side backoff config is not managed. | Phase 2 |
-| MaxAckPending | Server-side flow control for outstanding unacked messages. | `batch_size` bounds fetches, but consumer `MaxAckPending` is not configured. | Phase 2 |
-| DeliverPolicy | Start at all, new, last, sequence, time, or last-per-subject. | Not exposed; external consumer setup required. | Phase 2 |
+| MaxAckPending | Server-side flow control for outstanding unacked messages. | `consumer_management.max_ack_pending` can create, reconcile, or validate the server setting. `delivery.batch_size` remains the client-side fetch bound. | Implemented for durable pull consumers |
+| DeliverPolicy | Start at all, new, last, sequence, time, or last-per-subject. | `consumer_management.deliver_policy` supports `all`, `last`, `new`, and `last_per_subject`. Sequence and time starts remain future work. | Partially implemented |
 | Multiple FilterSubjects | Consumers can filter on multiple subjects. | Single `nats.subject` only. Oracle table routing happens after delivery. | Phase 2 |
 | HeadersOnly delivery | Consumers can deliver only headers and expose the omitted body size through a NATS header. | Evaluated in [Headers-Only Delivery Evaluation](headers-only-delivery.md). Current code safely handles empty payloads, but explicit headers-only support is split into consumer configuration, payload-presence metadata, and sink or DLQ certification backlog items. | Phase 2 |
 | Consumer metadata | Consumers support user metadata. | Not exposed. | Phase 3 |

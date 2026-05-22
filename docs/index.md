@@ -93,6 +93,9 @@ The current release provides the following production-ready foundation:
 - Optional JetStream advisory observation for selected advisory subjects, with
   aggregate counters for delivery and cluster signals while keeping advisory
   payloads and subject details out of exported metrics by default.
+- Explicit durable pull-consumer management with safe startup drift detection,
+  including `bind_only`, `create_if_missing`, and `reconcile` modes for
+  controlled NATS operations.
 - Exponential retry backoff with configurable caps and jitter for retryable
   failures, preserving redelivery safety without creating synchronized retry
   storms during shared outages.

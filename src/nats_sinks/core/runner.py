@@ -27,6 +27,7 @@ from typing import Any
 
 from nats_sinks.core.advisory import JetStreamAdvisoryMonitor
 from nats_sinks.core.config import (
+    ConsumerManagementConfig,
     CustodyConfig,
     DeadLetterConfig,
     DeliveryConfig,
@@ -37,6 +38,7 @@ from nats_sinks.core.config import (
     PreSinkPolicyConfig,
 )
 from nats_sinks.core.consumer import envelope_from_nats_message
+from nats_sinks.core.consumer_management import ensure_jetstream_consumer
 from nats_sinks.core.custody import attach_custody_metadata
 from nats_sinks.core.dlq import build_dead_letter_payload
 from nats_sinks.core.encryption import PayloadEncryptor, PayloadTransformer
@@ -91,6 +93,7 @@ class JetStreamSinkRunner:
         sink: Sink,
         durable: bool = True,
         delivery: DeliveryConfig | None = None,
+        consumer_management: ConsumerManagementConfig | None = None,
         dead_letter: DeadLetterConfig | None = None,
         message_metadata: MessageMetadataConfig | None = None,
         mission_metadata: MissionMetadataConfig | None = None,
@@ -111,6 +114,7 @@ class JetStreamSinkRunner:
         self.sink = sink
         self.durable = durable
         self.delivery = delivery or DeliveryConfig()
+        self.consumer_management = consumer_management or ConsumerManagementConfig()
         self.retry_policy = RetryPolicy(
             max_retries=self.delivery.max_retries,
             backoff_ms=self.delivery.retry_backoff_ms,
@@ -263,6 +267,14 @@ class JetStreamSinkRunner:
         try:
             if self._js is None:
                 raise ConfigurationError("JetStream context is not available")
+            await ensure_jetstream_consumer(
+                self._js,
+                stream=self.stream,
+                durable_name=self.consumer,
+                subject=self.subject,
+                durable=self.durable,
+                config=self.consumer_management,
+            )
             self._subscription = await self._js.pull_subscribe(
                 self.subject,
                 durable=self.consumer if self.durable else None,

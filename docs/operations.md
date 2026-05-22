@@ -54,6 +54,20 @@ messages after durable sink success, and publish to the configured DLQ subject
 only when DLQ is enabled. Templates are provided in
 [NATS Least-Privilege Permissions](nats-permissions.md).
 
+Set `consumer_management.mode` deliberately for each environment:
+
+- use `bind_only` when consumers are created by Terraform, Ansible, a platform
+  pipeline, or another controlled administrative process,
+- use `create_if_missing` for developer, test, or carefully controlled worker
+  accounts that may create the durable consumer when it is absent,
+- use `reconcile` only when the worker is intentionally allowed to update
+  compatible durable pull-consumer settings.
+
+If the existing consumer has a different filter subject, a non-explicit ACK
+policy, push delivery settings, or configured delivery drift, the worker fails
+at startup before fetching any messages. Treat that as a deployment mismatch to
+fix in the NATS control plane, not as a reason to widen runtime permissions.
+
 The certified production connection path is still direct NATS TCP with
 `nats://` for controlled local use or `tls://` for encrypted production
 connectivity. WebSocket URLs are accepted by configuration validation because
@@ -77,7 +91,8 @@ stateDiagram-v2
     [*] --> LoadConfig
     LoadConfig --> StartSink
     StartSink --> ConnectNATS
-    ConnectNATS --> FetchBatch
+    ConnectNATS --> CheckConsumer
+    CheckConsumer --> FetchBatch
     FetchBatch --> WriteBatch
     WriteBatch --> AckBatch: sink success
     WriteBatch --> TemporaryFailure: temporary error

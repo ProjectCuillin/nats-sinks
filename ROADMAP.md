@@ -55,6 +55,10 @@ release, and closed only after the containing release is published.
   clustered or controlled-network deployments.
 - Optional JetStream advisory observation for selected `$JS.EVENT.ADVISORY...`
   subjects with disabled-by-default configuration and aggregate metrics only.
+- Explicit durable pull-consumer management with `bind_only`,
+  `create_if_missing`, and `reconcile` modes, plus safe drift validation for
+  delivery-sensitive settings such as filter subject, ACK policy, AckWait,
+  MaxDeliver, MaxAckPending, and headers-only state.
 - Least-privilege NATS permissions templates for runtime workers, DLQ publish
   rights, optional consumer management, and advisory readers.
 - Advanced JetStream topology guidance for mirrors, sources, subject
@@ -132,9 +136,8 @@ release, and closed only after the containing release is published.
 - Certified NKEY with challenge authentication support.
 - Certified decentralized JWT authentication/authorization support.
 - Certified NATS credentials-file workflows.
-- Explicit JetStream consumer creation and reconciliation.
-- Configurable consumer `AckWait`, `MaxDeliver`, `BackOff`, and `MaxAckPending`.
-- Configurable consumer deliver policies.
+- Server-side consumer `BackOff` sequence management and deeper replay-start
+  options for sequence or timestamp-based delivery policies.
 - Multiple JetStream filter subjects.
 - Optional confirmed ACK support after durable sink success.
 - Optional confirmed ACK or terminal acknowledgement handling after successful

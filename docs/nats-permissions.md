@@ -159,8 +159,9 @@ flowchart LR
 
 Some early deployments allow the runtime worker to create or bind the durable
 consumer automatically. This is more convenient, but it grants more authority
-than the pre-created-consumer model. Use it only when the operational process
-accepts that tradeoff.
+than the pre-created-consumer model. Use it only when
+`consumer_management.mode` is `create_if_missing` or `reconcile` and the
+operational process accepts that tradeoff. For `bind_only`, prefer Template A.
 
 ```text
 permissions: {
@@ -186,6 +187,13 @@ subject. If a future deployment uses multiple filter subjects, the NATS API may
 not be able to encode each filter in the permission subject. In that case,
 prefer pre-creating the consumer with an administrative account and granting the
 runtime worker only fetch and ACK permissions.
+
+When `reconcile` is enabled, the worker may submit updated consumer settings
+for an already compatible durable pull consumer. Keep that permission scoped to
+the configured `<STREAM>`, `<CONSUMER>`, and `<SOURCE_SUBJECT>`. Never use a
+wildcard consumer-management grant for the sink worker unless the account is a
+separate deployment automation identity rather than the long-running runtime
+identity.
 
 ## Template D: Separate Advisory Reader
 

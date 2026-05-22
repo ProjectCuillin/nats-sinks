@@ -243,6 +243,7 @@ def run(
             durable=loaded.nats.durable,
             sink=sink,
             delivery=loaded.delivery,
+            consumer_management=loaded.consumer_management,
             dead_letter=loaded.dead_letter,
             message_metadata=loaded.message_metadata,
             mission_metadata=loaded.mission_metadata,

@@ -86,6 +86,11 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   `$JS.EVENT.ADVISORY...` subjects, including validated advisory configuration,
   bounded JSON parsing, low-cardinality advisory counters, runner lifecycle
   isolation from sink ACK behavior, tests, and operator documentation.
+- Added explicit durable pull-consumer management with `bind_only`,
+  `create_if_missing`, and `reconcile` modes, including safe startup drift
+  validation for filter subject, explicit ACK policy, pull-consumer shape,
+  AckWait, MaxDeliver, MaxAckPending, MaxWaiting, headers-only state, tests,
+  and least-privilege permission documentation.
 
 ### Changed
 

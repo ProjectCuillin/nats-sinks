@@ -246,6 +246,28 @@ class NatsConfig(BaseModel):
         return token
 
 
+class ConsumerManagementConfig(BaseModel):
+    """How the runner prepares the durable JetStream pull consumer.
+
+    Consumer configuration is part of the delivery contract.  The default mode
+    preserves the existing "create the durable consumer when it is missing"
+    behavior, but it now makes that behavior explicit and validates compatible
+    existing consumers before fetching messages.  Operators that pre-create
+    consumers with a separate administrative identity can choose `bind_only`.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Literal["bind_only", "create_if_missing", "reconcile"] = "create_if_missing"
+    deliver_policy: Literal["all", "last", "new", "last_per_subject"] = "all"
+    replay_policy: Literal["instant", "original"] = "instant"
+    ack_wait_seconds: float | None = Field(default=None, gt=0, le=86_400)
+    max_deliver: int | None = Field(default=None, ge=1, le=1_000_000)
+    max_ack_pending: int | None = Field(default=None, ge=1, le=1_000_000)
+    max_waiting: int | None = Field(default=None, ge=1, le=1_000_000)
+    headers_only: bool | None = None
+
+
 class PriorityLaneConfig(BaseModel):
     """One weighted processing lane used for in-batch priority scheduling.
 
@@ -1335,6 +1357,7 @@ class AppConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     nats: NatsConfig
+    consumer_management: ConsumerManagementConfig = Field(default_factory=ConsumerManagementConfig)
     delivery: DeliveryConfig = Field(default_factory=DeliveryConfig)
     dead_letter: DeadLetterConfig = Field(default_factory=DeadLetterConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
@@ -1353,6 +1376,7 @@ ENV_OVERRIDES: dict[str, tuple[str, ...]] = {
     "NATS_SINKS_NATS_STREAM": ("nats", "stream"),
     "NATS_SINKS_NATS_CONSUMER": ("nats", "consumer"),
     "NATS_SINKS_NATS_SUBJECT": ("nats", "subject"),
+    "NATS_SINKS_CONSUMER_MANAGEMENT_MODE": ("consumer_management", "mode"),
     "NATS_SINKS_LOG_LEVEL": ("logging", "level"),
     "NATS_SINKS_ENCRYPTION_ENABLED": ("encryption", "enabled"),
     "NATS_SINKS_ENCRYPTION_ALGORITHM": ("encryption", "algorithm"),

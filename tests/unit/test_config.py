@@ -1082,3 +1082,84 @@ def test_message_metadata_env_overrides(monkeypatch: pytest.MonkeyPatch, tmp_pat
     assert config.message_metadata.priority.default == "normal"
     assert config.message_metadata.classification.default == "internal"
     assert config.message_metadata.labels.default == ("blue", "green")
+
+
+def test_consumer_management_defaults_to_create_if_missing(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*"
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/var/lib/nats-sinks/events"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(path, env_overrides=False)
+
+    assert config.consumer_management.mode == "create_if_missing"
+    assert config.consumer_management.deliver_policy == "all"
+    assert config.consumer_management.replay_policy == "instant"
+    assert config.consumer_management.headers_only is None
+
+
+def test_consumer_management_rejects_unknown_mode(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*"
+  },
+  "consumer_management": {
+    "mode": "unsafe-update"
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/var/lib/nats-sinks/events"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError):
+        load_config(path, env_overrides=False)
+
+
+def test_consumer_management_env_override(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*"
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/var/lib/nats-sinks/events"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("NATS_SINKS_CONSUMER_MANAGEMENT_MODE", "bind_only")
+
+    config = load_config(path)
+
+    assert config.consumer_management.mode == "bind_only"

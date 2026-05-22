@@ -28,6 +28,7 @@ from nats_sinks.core.advisory import (
     validate_advisory_subject,
 )
 from nats_sinks.core.config import (
+    ConsumerManagementConfig,
     CustodyConfig,
     EncryptionConfig,
     EncryptionRuleConfig,
@@ -42,6 +43,13 @@ from nats_sinks.core.config import (
     PreSinkPolicyRuleConfig,
     PriorityLaneConfig,
     PriorityLanesConfig,
+)
+from nats_sinks.core.consumer_management import (
+    ConsumerDrift,
+    ConsumerManagementResult,
+    build_consumer_config,
+    detect_consumer_drift,
+    ensure_jetstream_consumer,
 )
 from nats_sinks.core.custody import (
     CUSTODY_SCHEMA,
@@ -126,6 +134,9 @@ __all__ = [
     "NATS_RESERVED_HEADER_NAMES",
     "AckError",
     "ConfigurationError",
+    "ConsumerDrift",
+    "ConsumerManagementConfig",
+    "ConsumerManagementResult",
     "CustodyConfig",
     "DeadLetterError",
     "DestinationUnavailableError",
@@ -173,11 +184,14 @@ __all__ = [
     "ValidationError",
     "advisory_kind_from_subject",
     "attach_custody_metadata",
+    "build_consumer_config",
     "build_nats_metadata_snapshot",
     "canonical_json_bytes",
     "compute_custody_metadata",
     "datetime_to_epoch_ns",
     "decrypt_payload",
+    "detect_consumer_drift",
+    "ensure_jetstream_consumer",
     "evaluate_pre_sink_policy",
     "is_encrypted_payload_envelope",
     "load_metrics_snapshot",

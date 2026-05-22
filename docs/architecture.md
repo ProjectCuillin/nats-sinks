@@ -136,6 +136,36 @@ architecture.
 See [Advanced JetStream Topology](jetstream-topology.md) for the detailed
 operator guidance.
 
+## Durable Consumer Management
+
+Before a runner fetches messages, it can now explicitly check the configured
+durable pull consumer. The default `consumer_management.mode` is
+`create_if_missing`, which preserves the previous developer-friendly behavior
+while making the action visible in configuration. Production environments that
+provision streams and consumers through infrastructure-as-code can switch to
+`bind_only` so the worker fails if the durable consumer is missing. Controlled
+platform deployments can use `reconcile` to submit the configured durable
+pull-consumer settings when the existing consumer is already compatible.
+
+Consumer management is part of the startup boundary, not the message-processing
+boundary. The runner validates the durable name, filter subject, explicit ACK
+policy, pull-consumer shape, and configured delivery-sensitive fields before
+calling `pull_subscribe`. If drift is unsafe, startup fails closed before any
+message can be fetched or ACKed.
+
+```mermaid
+flowchart LR
+    Config[JSON configuration] --> Desired[Desired durable pull consumer]
+    Existing[Existing JetStream consumer] --> Check{Compatible?}
+    Desired --> Check
+    Check -->|yes| Pull[Bind pull subscription]
+    Check -->|missing and allowed| Create[Create consumer]
+    Create --> Pull
+    Check -->|unsafe drift| Stop[Fail closed before fetch]
+    Pull --> Sink[Sink write and commit]
+    Sink --> Ack[ACK last]
+```
+
 ## Why Raw NATS Messages Are Not Passed To Sinks
 
 Raw `nats-py` messages expose `ack`, `nak`, and related methods. Passing raw messages into destination code would make it easy for a sink to ACK before durable success. `NatsEnvelope` prevents this by carrying payload and metadata without delivery-control methods.

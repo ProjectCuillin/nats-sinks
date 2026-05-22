@@ -19,6 +19,7 @@ contract as the CLI.
 
 ```python
 from nats_sinks import (
+    ConsumerManagementConfig,
     CustodyConfig,
     EncryptionConfig,
     JetStreamAdvisoryConfig,
@@ -37,7 +38,7 @@ Oracle follows the same runner pattern and is imported from
 The most common embedded setup is:
 
 ```python
-from nats_sinks import JetStreamSinkRunner
+from nats_sinks import ConsumerManagementConfig, JetStreamSinkRunner
 from nats_sinks.file import FileSink
 
 sink = FileSink(
@@ -53,10 +54,16 @@ runner = JetStreamSinkRunner(
     consumer="orders-file-sink",
     subject="orders.*",
     sink=sink,
+    consumer_management=ConsumerManagementConfig(mode="bind_only"),
 )
 
 await runner.run()
 ```
+
+`ConsumerManagementConfig` is optional. Embedded applications use it when they
+want the same explicit durable-consumer startup behavior as JSON
+configuration. It only controls startup binding, creation, and drift checks;
+the runner still owns every ACK decision after messages are fetched.
 
 ## Enabling Payload Encryption
 
