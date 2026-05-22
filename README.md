@@ -370,9 +370,12 @@ nats-sink-metrics get .local/nats-sinks/metrics.json messages_failed_total --def
 
 The metrics CLI is documented in
 [Metrics](https://nats-sinks.readthedocs.io/en/latest/metrics/).
-Policy-controlled Prometheus export is documented in
+Policy-controlled Prometheus export is part of the observability documentation:
+start with
 [Observability](https://nats-sinks.readthedocs.io/en/latest/observability/) and
-[Prometheus Integration](https://nats-sinks.readthedocs.io/en/latest/prometheus/).
+then use the
+[Prometheus Integration](https://nats-sinks.readthedocs.io/en/latest/prometheus/)
+sub-page for connector details.
 The NATS server monitoring connector and delivery-boundary decision for
 endpoints such as `/jsz` and `/healthz` are documented in
 [NATS Server Monitoring](https://nats-sinks.readthedocs.io/en/latest/nats-server-monitoring/).
@@ -588,7 +591,7 @@ output, and run a disabled-by-default native Prometheus HTTP endpoint. Metrics
 sharing remains off until the global policy and the selected connector are
 explicitly enabled. See
 [Prometheus Integration](https://nats-sinks.readthedocs.io/en/latest/prometheus/)
-for Linux service guidance.
+under Observability for Linux service guidance.
 
 ## Python API
 

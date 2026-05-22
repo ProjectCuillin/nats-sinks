@@ -11,6 +11,24 @@ health even when they never include payloads. For that reason, `nats-sinks`
 uses a share-nothing default for external observability connectors. Operators
 must explicitly choose which metric names may leave the host.
 
+## Documentation Map
+
+Observability is documented as a small set of focused pages:
+
+- [Observability Overview](observability.md): explains the safety model,
+  sharing policy, and connector-neutral architecture.
+- [Metrics Snapshot And CLI](metrics.md): explains the local metrics recorder,
+  `nats-sink-metrics`, metric names, snapshot files, and shell-friendly output.
+- [Prometheus Integration](prometheus.md): explains the policy-controlled
+  Prometheus textfile connector and optional native HTTP scrape endpoint.
+- [NATS Server Monitoring Integration](nats-server-monitoring.md): explains the
+  disabled-by-default connector for selected NATS monitoring endpoint fields.
+
+Prometheus is therefore a sub-page of observability rather than a separate
+delivery feature. The delivery worker can run without Prometheus, and
+Prometheus export can be reviewed, enabled, disabled, and operated separately
+from message processing.
+
 ## Design Goals
 
 The observability design follows the same conservative posture as the delivery

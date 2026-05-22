@@ -151,11 +151,12 @@ API remains intentionally small so it can stabilize before `1.0.0`.
 - Read [Mission Metadata](mission-metadata.md) when you need a validated JSON
   context object for mission, operation, platform, source-system, track,
   confidence, releasability, or lifecycle metadata.
-- Read [Metrics](metrics.md) when you want local snapshot inspection, shell
-  scripting examples, Python hooks, or Prometheus text output.
-- Read [Observability](observability.md) and [Prometheus Integration](prometheus.md)
-  when you want policy-controlled Prometheus export through node_exporter or
-  the optional native HTTP endpoint as separate Linux services.
+- Read [Observability](observability.md) for the external-sharing model and
+  its sub-pages for [Metrics](metrics.md), [Prometheus Integration](prometheus.md),
+  and [NATS Server Monitoring](nats-server-monitoring.md).
+- Read [Prometheus Integration](prometheus.md) when you want
+  policy-controlled Prometheus export through node_exporter or the optional
+  native HTTP endpoint as separate Linux services.
 - Read [NATS Server Monitoring](nats-server-monitoring.md) when you need to
   understand why server endpoints such as `/jsz` and `/healthz` stay outside
   the delivery worker.

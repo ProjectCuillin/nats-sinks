@@ -257,8 +257,9 @@ nats-sink-observe prometheus-textfile \
 ```
 
 The command writes only a comment when the policy is disabled. See
-[Observability](observability.md) and [Prometheus Integration](prometheus.md)
-for service deployment guidance.
+[Observability](observability.md) for the sharing model and its
+[Prometheus Integration](prometheus.md) sub-page for service deployment
+guidance.
 
 ### `nats-sink-observe prometheus-http`
 

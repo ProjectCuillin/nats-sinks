@@ -444,7 +444,7 @@ This is a convenience format. It is not a full Prometheus exporter and does not
 open an HTTP endpoint.
 
 For service deployments, prefer the policy-controlled connector documented in
-[Prometheus Integration](prometheus.md):
+the Observability section's [Prometheus Integration](prometheus.md) sub-page:
 
 ```bash
 nats-sink-observe prometheus-textfile \

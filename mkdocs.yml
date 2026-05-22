@@ -27,10 +27,11 @@ nav:
   - Priority Lanes: priority-lanes.md
   - Message Sizing: message-sizing.md
   - Performance: performance.md
-  - Metrics: metrics.md
-  - Observability: observability.md
-  - Prometheus Integration: prometheus.md
-  - NATS Server Monitoring: nats-server-monitoring.md
+  - Observability:
+      - Overview: observability.md
+      - Metrics Snapshot And CLI: metrics.md
+      - Prometheus Integration: prometheus.md
+      - NATS Server Monitoring: nats-server-monitoring.md
   - Dependency Management: dependency-management.md
   - Hash-Verified Installs: hash-verified-installs.md
   - SBOM: sbom.md

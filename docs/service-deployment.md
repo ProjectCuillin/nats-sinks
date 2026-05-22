@@ -267,7 +267,8 @@ The Prometheus service uses `nats-sink-observe`, not `nats-sink`. It reads the
 metrics snapshot and writes only policy-approved metrics. If the policy remains
 disabled, it writes a harmless comment and does not require the snapshot to
 exist. See [Prometheus Integration](prometheus.md) for policy examples and
-node_exporter guidance.
+node_exporter guidance; in the documentation navigation, that page lives under
+the Observability section.
 
 Enable the native Prometheus HTTP service only when the policy explicitly
 enables `prometheus.http_endpoint.enabled` and the chosen listener address is

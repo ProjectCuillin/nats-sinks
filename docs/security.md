@@ -130,7 +130,8 @@ Dependency Graph and manifest-maintenance guidance is documented in
 guidance for pinned, hash-verified installs is documented in
 [Hash-Verified Installs](hash-verified-installs.md).
 Policy-controlled metric and selected NATS monitoring export is documented in
-[Observability](observability.md) and [Prometheus Integration](prometheus.md).
+[Observability](observability.md), with Prometheus-specific connector guidance
+kept in the [Prometheus Integration](prometheus.md) sub-page.
 The NATS server monitoring connector and delivery-boundary decision, including
 `/jsz` and `/healthz` handling, are documented in
 [NATS Server Monitoring Integration](nats-server-monitoring.md).

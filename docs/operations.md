@@ -150,9 +150,10 @@ nats-sink-observe prometheus-http \
 ```
 
 The observability service should run separately from the sink worker where
-possible. See [Observability](observability.md),
-[Prometheus Integration](prometheus.md), and
-[Running nats-sink As A Service](service-deployment.md) for the service model.
+possible. See [Observability](observability.md) for the sharing model, the
+[Prometheus Integration](prometheus.md) observability sub-page for connector
+details, and [Running nats-sink As A Service](service-deployment.md) for the
+service model.
 
 NATS server monitoring endpoints such as `/jsz` and `/healthz` should be
 monitored through your NATS or platform monitoring stack, or through the

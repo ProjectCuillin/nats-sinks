@@ -22,6 +22,12 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   staging-table DDL helpers, rollback-safe transaction handling, duplicate
   metrics support, unit coverage, and operator documentation.
 
+### Changed
+
+- Grouped Prometheus integration, metrics snapshot guidance, and NATS server
+  monitoring under the Observability documentation section so external
+  monitoring connectors are presented as sub-pages of the observability model.
+
 ### Fixed
 
 - Fixed the high-confidence secret scanner so it prefers `rg` when available
