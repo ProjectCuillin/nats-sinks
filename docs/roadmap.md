@@ -35,6 +35,9 @@
 - Optional native Prometheus HTTP scrape endpoint, designed as a separate
   disabled-by-default observability service that reads policy-filtered local
   metrics snapshots.
+- OpenTelemetry OTLP metrics connector for deployments using collectors,
+  implemented as a disabled-by-default observability command that reads local
+  metrics snapshots and shares only policy-approved metric names.
 - NATS server monitoring diagnostic connector for selected endpoints such as
   `/jsz` and `/healthz`, implemented outside the delivery worker with explicit
   endpoint and field allow lists.
@@ -92,7 +95,6 @@
 
 ## Phase 2
 
-- OpenTelemetry OTLP metrics connector for deployments using collectors.
 - Individual observability connector backlog items for StatsD, Datadog,
   Splunk HEC, Elastic Observability, Grafana Alloy, Oracle Cloud
   Infrastructure Monitoring, Amazon CloudWatch, Azure Monitor, and syslog

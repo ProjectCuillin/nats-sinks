@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import tempfile
 from collections.abc import Iterable
 from contextlib import suppress
@@ -23,7 +24,7 @@ from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from nats_sinks.core.config import AppConfig, load_json
 from nats_sinks.core.errors import ConfigurationError
@@ -32,6 +33,9 @@ from nats_sinks.core.subjects import validate_subject_pattern
 
 OBSERVABILITY_POLICY_SCHEMA = "nats_sinks.observability.policy.v1"
 PROMETHEUS_HTTP_PATH_MAX_LENGTH = 128
+OTLP_ENDPOINT_MAX_LENGTH = 512
+OTLP_HEADER_NAME_MAX_LENGTH = 128
+OTLP_HEADER_ENV_MAX_LENGTH = 128
 NATS_MONITORING_ENDPOINT_MAX_LENGTH = 128
 NATS_MONITORING_FIELD_MAX_LENGTH = 256
 NATS_MONITORING_ALLOWED_ENDPOINTS = {
@@ -44,6 +48,8 @@ NATS_MONITORING_ALLOWED_ENDPOINTS = {
     "/jsz",
     "/healthz",
 }
+HTTP_HEADER_NAME_RE = re.compile(r"^[A-Za-z0-9!#$%&'*+.^_`|~-]+$")
+ENVIRONMENT_VARIABLE_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 class ObservabilitySubjectPolicy(BaseModel):
@@ -164,6 +170,100 @@ class PrometheusTextfilePolicy(BaseModel):
         if Path(rendered).name in {"", ".", ".."}:
             raise ValueError("prometheus.output_file must name a file")
         return rendered
+
+
+class OtlpMetricsPolicy(BaseModel):
+    """OpenTelemetry OTLP metrics connector settings.
+
+    The connector is disabled by default and belongs to the observability plane,
+    not the message delivery plane.  It reads only a local nats-sinks metrics
+    snapshot, applies the shared observability allow/deny policy, and sends a
+    bounded OTLP/HTTP JSON request to an explicitly configured collector
+    endpoint.  Header values are loaded from environment variables so bearer
+    tokens and other collector credentials are never stored in policy JSON.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    endpoint: str | None = None
+    protocol: Literal["http_json"] = "http_json"
+    timeout_seconds: float = Field(default=5.0, gt=0, le=60)
+    max_retries: int = Field(default=0, ge=0, le=10)
+    retry_backoff_seconds: float = Field(default=0.25, ge=0, le=60)
+    stale_after_seconds: float | None = Field(default=None, gt=0, le=86_400)
+    max_request_bytes: int = Field(default=1_048_576, ge=1024, le=10_485_760)
+    headers_env: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("endpoint")
+    @classmethod
+    def validate_endpoint(cls, value: str | None) -> str | None:
+        """Validate an OTLP/HTTP endpoint without accepting embedded secrets."""
+
+        if value is None:
+            return None
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("otlp.endpoint must not be empty")
+        if len(rendered) > OTLP_ENDPOINT_MAX_LENGTH:
+            raise ValueError(f"otlp.endpoint must be at most {OTLP_ENDPOINT_MAX_LENGTH} characters")
+        if any(character in rendered for character in "\x00\n\r\t "):
+            raise ValueError("otlp.endpoint must not contain whitespace or control characters")
+
+        parsed = urlsplit(rendered)
+        if parsed.scheme not in {"http", "https"}:
+            raise ValueError("otlp.endpoint must use http or https")
+        if not parsed.netloc:
+            raise ValueError("otlp.endpoint must include a host")
+        if parsed.username is not None or parsed.password is not None:
+            raise ValueError("otlp.endpoint must not contain credentials")
+        if parsed.query or parsed.fragment:
+            raise ValueError("otlp.endpoint must not include query strings or fragments")
+        if not parsed.path.startswith("/"):
+            raise ValueError("otlp.endpoint must include an HTTP path")
+
+        host = parsed.hostname or ""
+        if parsed.scheme == "http" and host.lower() not in {"localhost", "127.0.0.1", "::1"}:
+            raise ValueError("otlp.endpoint may use plain http only for loopback collectors")
+        return rendered
+
+    @field_validator("headers_env")
+    @classmethod
+    def validate_headers_env(cls, value: dict[str, str]) -> dict[str, str]:
+        """Validate collector header names and their environment-variable sources."""
+
+        rendered: dict[str, str] = {}
+        seen_lower: set[str] = set()
+        for header_name, env_name in value.items():
+            header = header_name.strip()
+            source = env_name.strip()
+            if not header:
+                raise ValueError("otlp.headers_env header names must not be empty")
+            if len(header) > OTLP_HEADER_NAME_MAX_LENGTH:
+                raise ValueError("otlp.headers_env header names are too long")
+            if not HTTP_HEADER_NAME_RE.fullmatch(header):
+                raise ValueError("otlp.headers_env header names are not valid HTTP field names")
+            lowered = header.lower()
+            if lowered in seen_lower:
+                raise ValueError("otlp.headers_env header names must be unique ignoring case")
+            seen_lower.add(lowered)
+
+            if not source:
+                raise ValueError("otlp.headers_env values must not be empty")
+            if len(source) > OTLP_HEADER_ENV_MAX_LENGTH:
+                raise ValueError("otlp.headers_env environment variable names are too long")
+            if not ENVIRONMENT_VARIABLE_NAME_RE.fullmatch(source):
+                raise ValueError("otlp.headers_env values must be environment variable names")
+            rendered[header] = source
+        return rendered
+
+    @model_validator(mode="after")
+    def validate_enabled_endpoint(self) -> OtlpMetricsPolicy:
+        """Require an explicit endpoint only when OTLP export is enabled."""
+
+        if self.enabled and self.endpoint is None:
+            raise ValueError("otlp.endpoint is required when otlp.enabled is true")
+        return self
 
 
 class NatsServerMonitoringPolicy(BaseModel):
@@ -319,6 +419,7 @@ class ObservabilityPolicy(BaseModel):
     include_legacy: bool = False
     subjects: list[ObservabilitySubjectPolicy] = Field(default_factory=list)
     prometheus: PrometheusTextfilePolicy = Field(default_factory=PrometheusTextfilePolicy)
+    otlp: OtlpMetricsPolicy = Field(default_factory=OtlpMetricsPolicy)
     nats_server_monitoring: NatsServerMonitoringPolicy = Field(
         default_factory=NatsServerMonitoringPolicy
     )

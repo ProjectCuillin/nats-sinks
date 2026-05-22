@@ -69,8 +69,9 @@ used immediately:
   sharing policies, validating what may be exported, and producing
   policy-filtered Prometheus textfile output for node_exporter or an optional
   native Prometheus HTTP scrape endpoint. It also provides a disabled-by-default
-  NATS server monitoring connector for explicitly approved `/healthz`, `/jsz`,
-  and related endpoint fields.
+  OpenTelemetry OTLP metrics connector and a disabled-by-default NATS server
+  monitoring connector for explicitly approved `/healthz`, `/jsz`, and related
+  endpoint fields.
 - Optional core payload encryption for AES-256-GCM and AES-256-CCM before
   envelopes are delivered to Oracle, file, or future sinks.
 - Optional tamper-evident custody metadata with deterministic payload,
@@ -96,7 +97,8 @@ used immediately:
   configured, and embedded applications can still supply their own metrics
   recorder or exporter. External observability sharing is controlled by a
   separate policy and is disabled by default, whether operators choose the
-  recommended textfile connector or the optional native HTTP endpoint.
+  recommended Prometheus textfile connector, the optional native HTTP
+  endpoint, the OTLP connector, or NATS server monitoring.
 - Optional JetStream advisory observation for selected
   `$JS.EVENT.ADVISORY...` subjects. Advisory support is disabled by default,
   produces aggregate metrics only, and never changes sink writes, retries,
@@ -403,12 +405,15 @@ nats-sink-metrics get .local/nats-sinks/metrics.json messages_failed_total --def
 
 The metrics CLI is documented in
 [Metrics](https://nats-sinks.readthedocs.io/en/latest/metrics/).
-Policy-controlled Prometheus export is part of the observability documentation:
+Policy-controlled Prometheus and OpenTelemetry export are part of the
+observability documentation:
 start with
 [Observability](https://nats-sinks.readthedocs.io/en/latest/observability/) and
 then use the
 [Prometheus Integration](https://nats-sinks.readthedocs.io/en/latest/prometheus/)
-sub-page for connector details.
+or
+[OpenTelemetry OTLP Integration](https://nats-sinks.readthedocs.io/en/latest/otlp/)
+sub-pages for connector details.
 The NATS server monitoring connector and delivery-boundary decision for
 endpoints such as `/jsz` and `/healthz` are documented in
 [NATS Server Monitoring](https://nats-sinks.readthedocs.io/en/latest/nats-server-monitoring/).
@@ -628,11 +633,15 @@ counters are visible through the same command with `--metric "oracle_*"`. See
 The observability CLI manages external sharing policy. It can generate a
 disabled Prometheus policy from runtime config, list known metric names and
 subject hints, validate the policy, write policy-filtered Prometheus textfile
-output, and run a disabled-by-default native Prometheus HTTP endpoint. Metrics
+output, run a disabled-by-default native Prometheus HTTP endpoint, and export
+approved metrics to an OpenTelemetry Collector through OTLP/HTTP JSON. Metrics
 sharing remains off until the global policy and the selected connector are
 explicitly enabled. See
-[Prometheus Integration](https://nats-sinks.readthedocs.io/en/latest/prometheus/)
-under Observability for Linux service guidance.
+[Observability](https://nats-sinks.readthedocs.io/en/latest/observability/),
+[Prometheus Integration](https://nats-sinks.readthedocs.io/en/latest/prometheus/),
+and
+[OpenTelemetry OTLP Integration](https://nats-sinks.readthedocs.io/en/latest/otlp/)
+for connector guidance.
 
 ## Python API
 
@@ -876,6 +885,8 @@ Phase 1:
 - NATS reconnect tuning and connection event metrics.
 - Policy-controlled Prometheus textfile export and optional native Prometheus
   HTTP scrape endpoint as separate observability services.
+- Policy-controlled OpenTelemetry OTLP metrics export to an OpenTelemetry
+  Collector as a separate observability command or service.
 - Disabled-by-default NATS server monitoring connector for approved endpoint
   fields, implemented outside the delivery worker.
 - Kubernetes deployment examples with worker/observability separation,
@@ -894,7 +905,6 @@ Phase 1:
 
 Phase 2:
 
-- OpenTelemetry metrics connector.
 - More idempotency strategies.
 - Oracle MySQL sink design for MySQL and MySQL HeatWave deployments.
 - HTTP sink.

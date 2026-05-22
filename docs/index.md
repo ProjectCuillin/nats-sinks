@@ -82,14 +82,15 @@ The current release provides the following production-ready foundation:
 - A companion CLI command named `nats-sink-observe` for generating disabled
   observability policies, reviewing metric and subject sharing, and writing
   policy-filtered Prometheus textfiles for node_exporter or running the
-  optional native Prometheus HTTP endpoint.
+  optional native Prometheus HTTP endpoint. It can also export approved
+  metrics to an OpenTelemetry Collector through OTLP/HTTP JSON.
 - Basic metrics counters and timing observations for fetched, prepared,
   written, ACKed, NAKed, failed, DLQ, sink write, ACK error, and active batch
   behavior. The built-in runner can write a local JSON snapshot when
   configured, Oracle duplicate/conflict counters are readable through the same
   snapshot and CLI, and external observability sharing is controlled by a
-  separate policy that is disabled by default for both textfile and native
-  HTTP connectors.
+  separate policy that is disabled by default for Prometheus textfile,
+  Prometheus HTTP, OTLP, and NATS monitoring connectors.
 - Optional JetStream advisory observation for selected advisory subjects, with
   aggregate counters for delivery and cluster signals while keeping advisory
   payloads and subject details out of exported metrics by default.
@@ -228,10 +229,12 @@ operations without hunting through a long flat list.
   shell/Python-friendly metric output.
 - [Prometheus Integration](prometheus.md): configure the policy-controlled
   textfile connector or optional native HTTP endpoint.
+- [OpenTelemetry OTLP Integration](otlp.md): export approved metrics to an
+  OpenTelemetry Collector through OTLP/HTTP JSON.
 - [NATS Server Monitoring](nats-server-monitoring.md): understand why endpoints
   such as `/jsz` and `/healthz` stay outside the delivery worker.
 - [Future Observability Connectors](observability-connectors.md): review the
-  shared connector contract and the staged connector backlog for OTLP, StatsD,
+  shared connector contract and the staged connector backlog for StatsD,
   Datadog, Splunk HEC, Elastic, Grafana Alloy, OCI Monitoring, CloudWatch,
   Azure Monitor, and syslog.
 
@@ -279,7 +282,6 @@ are implemented, tested, documented, and released.
 
 Planned areas include:
 
-- OpenTelemetry metrics connector,
 - additional idempotency strategies,
 - HTTP, S3, Kafka, OCI Object Storage, Oracle MySQL, and other sink modules,
 - Docker and Kubernetes deployment assets,

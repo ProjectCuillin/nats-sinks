@@ -52,8 +52,9 @@ The tests also cover:
   `metric_rows_from_snapshot`,
 - observability policy and connector helpers such as `ObservabilityPolicy`,
   `PrometheusTextfilePolicy`, `PrometheusHttpEndpointPolicy`,
-  `NatsServerMonitoringPolicy`, `collect_nats_monitoring_snapshot`, and
-  `render_nats_monitoring_prometheus`,
+  `OtlpMetricsPolicy`, `NatsServerMonitoringPolicy`,
+  `collect_nats_monitoring_snapshot`, `render_otlp_metrics_json`,
+  `export_otlp_metrics`, and `render_nats_monitoring_prometheus`,
 - sink extension points such as `Sink`, `HealthCheckableSink`,
   `SchemaAwareSink`, `FlushableSink`, and `SinkRegistry`,
 - production sink package exports for `nats_sinks.file` and

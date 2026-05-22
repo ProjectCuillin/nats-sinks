@@ -8,10 +8,10 @@ set -eu
 #
 # The script intentionally detects only the Linux families we document and
 # test for service deployment: Debian-family systems and Oracle Linux.  It
-# keeps Prometheus observability service assets installed but disabled by
-# default, so no external metric sharing happens until an operator reviews and
-# enables the observability policy and the selected textfile timer or native
-# HTTP endpoint service.
+# keeps observability service assets installed but disabled by default, so no
+# external metric sharing happens until an operator reviews and enables the
+# observability policy and the selected Prometheus, OTLP, or NATS monitoring
+# service.
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "Run this script as root." >&2
@@ -144,6 +144,8 @@ install_project_file examples/systemd/nats-sink.service 0644 root root /etc/syst
 install_project_file examples/systemd/nats-sink-prometheus-textfile.service 0644 root root /etc/systemd/system/nats-sink-prometheus-textfile.service
 install_project_file examples/systemd/nats-sink-prometheus-textfile.timer 0644 root root /etc/systemd/system/nats-sink-prometheus-textfile.timer
 install_project_file examples/systemd/nats-sink-prometheus-http.service 0644 root root /etc/systemd/system/nats-sink-prometheus-http.service
+install_project_file examples/systemd/nats-sink-otlp.service 0644 root root /etc/systemd/system/nats-sink-otlp.service
+install_project_file examples/systemd/nats-sink-otlp.timer 0644 root root /etc/systemd/system/nats-sink-otlp.timer
 install_project_file examples/systemd/nats-sink-nats-monitoring.service 0644 root root /etc/systemd/system/nats-sink-nats-monitoring.service
 install_project_file examples/systemd/nats-sink-nats-monitoring.timer 0644 root root /etc/systemd/system/nats-sink-nats-monitoring.timer
 systemctl daemon-reload
@@ -157,5 +159,7 @@ echo "Prometheus textfile export is installed but disabled by policy and timer."
 echo "To enable after policy review: systemctl enable --now nats-sink-prometheus-textfile.timer"
 echo "Prometheus HTTP endpoint service is installed but disabled by policy and systemd."
 echo "To enable after policy review: systemctl enable --now nats-sink-prometheus-http.service"
+echo "OTLP metrics export is installed but disabled by policy and timer."
+echo "To enable after policy review: systemctl enable --now nats-sink-otlp.timer"
 echo "NATS server monitoring snapshot service is installed but disabled by policy and timer."
 echo "To enable after policy review: systemctl enable --now nats-sink-nats-monitoring.timer"

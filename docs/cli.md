@@ -15,7 +15,8 @@ The project also ships an observability policy command named
 observability platforms. It can generate a disabled Prometheus policy from the
 core config, list metric names and subject hints, validate policy, and render
 policy-filtered Prometheus textfile output or run the optional native
-Prometheus HTTP endpoint.
+Prometheus HTTP endpoint. It can also export approved metrics to an
+OpenTelemetry Collector through OTLP/HTTP JSON.
 
 For readers new to this project, the CLI does not implement a separate
 delivery engine. It validates configuration, creates the selected sink, builds
@@ -35,6 +36,7 @@ nats-sink test-sink config.json
 nats-sink-metrics show .local/nats-sinks/metrics.json
 nats-sink-observe init-prometheus-policy config.json observability.prometheus.json
 nats-sink-observe prometheus-http .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
+nats-sink-observe otlp-export .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
 nats-sink-observe nats-monitoring-poll observability.prometheus.json --dry-run
 ```
 
@@ -199,6 +201,7 @@ schema=nats_sinks.observability.policy.v1
 enabled=false
 namespace=nats_sinks
 prometheus_enabled=false
+otlp_enabled=false
 nats_server_monitoring_enabled=false
 nats_server_monitoring_prometheus_enabled=false
 allowed_metrics=0
@@ -300,6 +303,56 @@ Use this command as a separate service, not inside the sink worker, unless an
 embedding application deliberately accepts that coupling. The endpoint never
 ACKs messages and never connects to NATS or a destination sink.
 
+### `nats-sink-observe otlp-export`
+
+Exports policy-approved metrics to an OpenTelemetry Collector through
+OTLP/HTTP JSON. The command is disabled unless both the top-level
+observability policy and `otlp.enabled` are true. It reads only the local
+metrics snapshot and policy file; it does not connect to NATS, Oracle, file
+sink directories, DLQ subjects, or future destination backends.
+
+Dry-run mode prints the OTLP JSON request body without opening a network
+connection:
+
+```bash
+nats-sink-observe otlp-export \
+  /var/lib/nats-sink/metrics.json \
+  /etc/nats-sinks/observability.prometheus.json \
+  --dry-run
+```
+
+Example dry-run output:
+
+```json
+{"resourceMetrics":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"nats-sinks"}},{"key":"nats_sinks.namespace","value":{"stringValue":"nats_sinks"}}]},"scopeMetrics":[{"metrics":[{"description":"Raw JetStream messages fetched by the pull consumer.","name":"nats_sinks_messages_fetched_total","sum":{"aggregationTemporality":2,"dataPoints":[{"asDouble":256.0,"timeUnixNano":"1790000000000000000"}],"isMonotonic":true},"unit":"1"}],"scope":{"name":"nats-sinks.observability.otlp"}}]}]}
+```
+
+Live export uses the endpoint, timeout, retry, request-size, and optional
+header environment-variable settings from the policy:
+
+```bash
+nats-sink-observe otlp-export \
+  /var/lib/nats-sink/metrics.json \
+  /etc/nats-sinks/observability.prometheus.json
+```
+
+Example success output:
+
+```text
+OTLP export: attempted=true delivered=true attempts=1 status=200 message=OTLP export delivered
+```
+
+Example bounded failure output:
+
+```text
+OTLP export: attempted=true delivered=false attempts=3 status=none message=OTLP export failed with URLError
+```
+
+The output is intentionally sanitized. It does not print the collector URL,
+header values, payload bodies, subjects, table names, file paths, labels,
+classification values, or other sensitive deployment detail. Full connector
+guidance is documented in [OpenTelemetry OTLP Integration](otlp.md).
+
 ### `nats-sink-observe nats-monitoring-poll`
 
 Polls policy-approved NATS server monitoring endpoints and writes a sanitized
@@ -390,5 +443,6 @@ cannot find a metric without a default value.
 
 `nats-sink-observe` returns `0` on success, `2` for invalid configuration,
 policy, snapshot, textfile output errors, or disabled native endpoint startup,
-and `3` when an enabled Prometheus policy rejects a stale snapshot or a native
-HTTP dry-run returns an error response.
+and `3` when an enabled Prometheus or OTLP policy rejects a stale snapshot, a
+native HTTP dry-run returns an error response, or OTLP export exhausts its
+bounded delivery attempts.

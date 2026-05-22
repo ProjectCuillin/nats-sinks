@@ -39,11 +39,14 @@ def test_unified_systemd_installer_detects_supported_linux_families() -> None:
     assert "Unsupported Linux distribution" in script
     assert "nats-sink-prometheus-textfile.timer" in script
     assert "nats-sink-prometheus-http.service" in script
+    assert "nats-sink-otlp.service" in script
+    assert "nats-sink-otlp.timer" in script
     assert "nats-sink-nats-monitoring.service" in script
     assert "nats-sink-nats-monitoring.timer" in script
     assert "systemctl enable nats-sink" in script
     assert "systemctl enable --now nats-sink-prometheus-textfile.timer" in script
     assert "systemctl enable --now nats-sink-prometheus-http.service" in script
+    assert "systemctl enable --now nats-sink-otlp.timer" in script
     assert "systemctl enable --now nats-sink-nats-monitoring.timer" in script
     assert "Installed service assets from ref" in script
 

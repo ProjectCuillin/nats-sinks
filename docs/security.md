@@ -99,10 +99,14 @@ Use this baseline for code review and future releases:
 - Treat observability output as an information-sharing boundary. Metrics,
   timestamps, failure counters, duplicate counters, and write timings can
   reveal operational tempo even without payloads. Use disabled-by-default
-  observability policies and allow lists before publishing to Prometheus or
-  any future monitoring platform. NATS server monitoring endpoint values must
-  also be selected with explicit endpoint and field allow lists before they are
-  stored locally or rendered for Prometheus. JetStream advisories are also
+  observability policies and allow lists before publishing to Prometheus,
+  OpenTelemetry Collectors, NATS monitoring snapshots, or any future
+  monitoring platform. OTLP collector endpoints must not contain credentials,
+  non-loopback endpoints must use HTTPS, and optional collector headers must
+  be sourced from environment variables rather than stored in policy JSON.
+  NATS server monitoring endpoint values must also be selected with explicit
+  endpoint and field allow lists before they are stored locally or rendered for
+  Prometheus. JetStream advisories are also
   treated as sensitive operational signals: the optional advisory observer is
   disabled by default, subscribes only to configured advisory subjects, parses
   bounded JSON payloads, and emits aggregate counters without exporting stream
@@ -136,7 +140,9 @@ guidance for pinned, hash-verified installs is documented in
 [Hash-Verified Installs](hash-verified-installs.md).
 Policy-controlled metric and selected NATS monitoring export is documented in
 [Observability](observability.md), with Prometheus-specific connector guidance
-kept in the [Prometheus Integration](prometheus.md) sub-page.
+kept in the [Prometheus Integration](prometheus.md) sub-page and
+OpenTelemetry-specific connector guidance kept in the
+[OpenTelemetry OTLP Integration](otlp.md) sub-page.
 The NATS server monitoring connector and delivery-boundary decision, including
 `/jsz` and `/healthz` handling, are documented in
 [NATS Server Monitoring Integration](nats-server-monitoring.md).

@@ -99,6 +99,12 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 - Added optional `nats.no_echo` support, passed to `nats-py` as `no_echo`,
   with default-off behavior, environment override support, tests, and
   documentation that explains when same-connection echo suppression is useful.
+- Added a disabled-by-default OpenTelemetry OTLP metrics connector under
+  `nats-sink-observe otlp-export`, including validated policy fields,
+  allow-list filtering, OTLP/HTTP JSON rendering, bounded request size,
+  timeout and retry controls, environment-sourced headers, sanitized CLI
+  output, unit coverage, public API exports, documentation, and systemd
+  service/timer examples.
 
 ### Changed
 

@@ -21,6 +21,8 @@ Observability is documented as a small set of focused pages:
   `nats-sink-metrics`, metric names, snapshot files, and shell-friendly output.
 - [Prometheus Integration](prometheus.md): explains the policy-controlled
   Prometheus textfile connector and optional native HTTP scrape endpoint.
+- [OpenTelemetry OTLP Integration](otlp.md): explains policy-controlled export
+  to an OpenTelemetry Collector using OTLP/HTTP JSON.
 - [NATS Server Monitoring Integration](nats-server-monitoring.md): explains the
   disabled-by-default connector for selected NATS monitoring endpoint fields.
 - Optional JetStream advisory observation is configured in
@@ -31,6 +33,8 @@ Prometheus is therefore a sub-page of observability rather than a separate
 delivery feature. The delivery worker can run without Prometheus, and
 Prometheus export can be reviewed, enabled, disabled, and operated separately
 from message processing.
+OTLP export follows the same separation: it is a connector under
+observability, not a delivery feature.
 
 ## Design Goals
 
@@ -102,6 +106,25 @@ sequenceDiagram
     Obs->>Text: atomically write Prometheus textfile
     Node->>Text: scrape textfile collector directory
     Prom->>Node: scrape node_exporter
+```
+
+The OpenTelemetry connector uses the same local snapshot and policy, but posts
+approved metrics to a collector:
+
+```mermaid
+sequenceDiagram
+    participant Sink as nats-sink service
+    participant Snapshot as metrics.json
+    participant Policy as observability policy
+    participant Obs as nats-sink-observe otlp-export
+    participant Collector as OpenTelemetry Collector
+
+    Sink->>Snapshot: atomically write local metrics snapshot
+    Obs->>Policy: read explicit allow-list policy
+    Obs->>Snapshot: read snapshot only if OTLP export is enabled
+    Obs->>Obs: build bounded OTLP JSON
+    Obs->>Collector: POST /v1/metrics with timeout and bounded retries
+    Collector-->>Obs: success or failure
 ```
 
 An optional native Prometheus HTTP endpoint is also available for deployments
@@ -195,6 +218,17 @@ Generated policies are disabled by default:
       "response_max_bytes": 1048576
     }
   },
+  "otlp": {
+    "enabled": false,
+    "endpoint": null,
+    "protocol": "http_json",
+    "timeout_seconds": 5,
+    "max_retries": 0,
+    "retry_backoff_seconds": 0.25,
+    "stale_after_seconds": null,
+    "max_request_bytes": 1048576,
+    "headers_env": {}
+  },
   "nats_server_monitoring": {
     "enabled": false,
     "base_url": null,
@@ -221,6 +255,11 @@ endpoint. The HTTP endpoint requires `enabled=true` and
 `prometheus.enabled=true`, because textfile writing and HTTP scraping are
 separate connectors.
 
+The `otlp` object controls OpenTelemetry OTLP metrics export. It is disabled by
+default and requires both `enabled=true` and `otlp.enabled=true`. Non-loopback
+collector endpoints must use HTTPS, credentials in endpoint URLs are rejected,
+and optional HTTP header values are sourced from environment variables.
+
 The `nats_server_monitoring` object controls the optional NATS monitoring
 connector. It is also disabled by default. When enabled, it polls only the
 approved NATS server monitoring endpoint paths and extracts only the approved
@@ -243,6 +282,7 @@ topology fields unless an operator has selected those exact fields.
 | `include_legacy` | `false` | Whether legacy metric aliases may be exported. |
 | `subjects` | `[]` | Subject patterns discovered from the core config for operator review and future subject-aware metrics. Current exporters do not share these as labels. |
 | `prometheus` | object | Prometheus connector settings. |
+| `otlp` | object | OpenTelemetry OTLP connector settings. |
 | `nats_server_monitoring` | object | Optional connector settings for selected NATS server monitoring endpoint values. |
 
 The deny list wins over the allow list. This lets a broad allow rule such as
@@ -264,6 +304,23 @@ for a particular environment.
 | `prometheus.http_endpoint.path` | `/metrics` | HTTP | Scrape path. Query strings, fragments, whitespace, and control characters are rejected. |
 | `prometheus.http_endpoint.request_timeout_seconds` | `5` | HTTP | HTTP server request timeout. |
 | `prometheus.http_endpoint.response_max_bytes` | `1048576` | HTTP | Maximum rendered response size. Oversized responses return a small service-unavailable response instead of streaming unbounded data. |
+
+## OpenTelemetry OTLP Connector Fields
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `otlp.enabled` | `false` | Enables OTLP export when the top-level policy is also enabled. |
+| `otlp.endpoint` | `null` | OTLP/HTTP metrics endpoint. Local collectors may use loopback `http`; non-loopback endpoints must use `https`. |
+| `otlp.protocol` | `http_json` | Current OTLP transport. The connector emits OTLP/HTTP JSON using the Python standard library. |
+| `otlp.timeout_seconds` | `5` | Per-request timeout, validated from greater than `0` through `60` seconds. |
+| `otlp.max_retries` | `0` | Bounded retries after the initial attempt. |
+| `otlp.retry_backoff_seconds` | `0.25` | Delay between retry attempts. |
+| `otlp.stale_after_seconds` | `null` | Optional maximum snapshot age before export fails closed unless `--allow-stale` is used. |
+| `otlp.max_request_bytes` | `1048576` | Maximum rendered OTLP JSON request body size. |
+| `otlp.headers_env` | `{}` | Mapping of HTTP header names to environment variable names. Resolved header values are not stored in policy JSON and are not printed. |
+
+See [OpenTelemetry OTLP Integration](otlp.md) for full examples, dry-run output,
+failure behavior, and service guidance.
 
 ## NATS Server Monitoring Fields
 
@@ -391,6 +448,7 @@ schema=nats_sinks.observability.policy.v1
 enabled=false
 namespace=nats_sinks
 prometheus_enabled=false
+otlp_enabled=false
 nats_server_monitoring_enabled=false
 nats_server_monitoring_prometheus_enabled=false
 allowed_metrics=0
@@ -578,6 +636,9 @@ Treat observability configuration as production policy:
   a controlled configuration-management process,
 - grant the Prometheus textfile service read access to the metrics snapshot and
   write access only to the node_exporter textfile directory,
+- grant the OTLP export service read access to the metrics snapshot, read
+  access to the policy, and only the network path required to reach the
+  approved OpenTelemetry Collector,
 - keep the main sink service and observability publishing service separate when
   practical.
 
@@ -587,11 +648,10 @@ labels, or classified mission details.
 
 ## Future Connectors
 
-The observability core is intentionally connector-neutral. Future connectors
-may include:
+The observability core is intentionally connector-neutral. Prometheus textfile,
+Prometheus HTTP, OTLP, and NATS monitoring connectors are implemented today.
+Future connectors may include:
 
-- OpenTelemetry OTLP metrics for environments that already centralize traces,
-  logs, and metrics through collectors,
 - StatsD for lightweight counter/timer forwarding,
 - Datadog for hosted operational dashboards,
 - Splunk HEC for security operations and incident-response workflows,

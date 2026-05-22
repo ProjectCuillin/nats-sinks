@@ -27,9 +27,10 @@ It never connects to NATS, Oracle, the file sink directory, or any future
 destination backend.
 
 The `nats-sink-observe` command owns external sharing. It can render a
-Prometheus textfile for node_exporter or run an optional native Prometheus HTTP
-endpoint. Both connectors are disabled by default and require an explicit
-allow-list policy before real metrics are shared.
+Prometheus textfile for node_exporter, run an optional native Prometheus HTTP
+endpoint, or export approved metrics to an OpenTelemetry Collector through
+OTLP/HTTP JSON. These connectors are disabled by default and require an
+explicit allow-list policy before real metrics are shared.
 
 ## Why Metrics Matter
 
@@ -67,6 +68,7 @@ flowchart LR
     Snapshot --> Observe[nats-sink-observe]
     Observe --> Textfile[Prometheus textfile]
     Observe --> Http[Optional Prometheus HTTP endpoint]
+    Observe --> OTLP[OpenTelemetry Collector]
 ```
 
 The runner emits metric suffixes such as `messages_fetched_total`. A recorder
@@ -174,6 +176,7 @@ The observability CLI provides policy and connector commands:
 | `nats-sink-observe list-subjects POLICY` | List subject hints discovered from config without exporting them. |
 | `nats-sink-observe prometheus-textfile SNAPSHOT POLICY` | Render policy-filtered Prometheus textfile output. |
 | `nats-sink-observe prometheus-http SNAPSHOT POLICY` | Run or dry-run the optional native Prometheus HTTP endpoint. |
+| `nats-sink-observe otlp-export SNAPSHOT POLICY` | Dry-run or send policy-approved metrics to an OpenTelemetry Collector through OTLP/HTTP JSON. |
 
 The global version flag is available too:
 
@@ -570,6 +573,30 @@ nats-sink-metrics show .local/nats-sinks/metrics.json \
   --format prometheus \
   --namespace mission_ops
 ```
+
+## OpenTelemetry OTLP Export
+
+The observability CLI can also export the same policy-approved metric rows to
+an OpenTelemetry Collector through OTLP/HTTP JSON:
+
+```bash
+nats-sink-observe otlp-export \
+  /var/lib/nats-sink/metrics.json \
+  /etc/nats-sinks/observability.prometheus.json \
+  --dry-run
+```
+
+Example dry-run output:
+
+```json
+{"resourceMetrics":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"nats-sinks"}},{"key":"nats_sinks.namespace","value":{"stringValue":"nats_sinks"}}]},"scopeMetrics":[{"metrics":[{"description":"Raw JetStream messages fetched by the pull consumer.","name":"nats_sinks_messages_fetched_total","sum":{"aggregationTemporality":2,"dataPoints":[{"asDouble":256.0,"timeUnixNano":"1790000000000000000"}],"isMonotonic":true},"unit":"1"}],"scope":{"name":"nats-sinks.observability.otlp"}}]}]}
+```
+
+Live export remains disabled until the top-level observability policy and
+`otlp.enabled` are both true. The connector uses explicit timeouts, bounded
+retries, a maximum request size, and optional HTTP headers sourced from
+environment variables. See [OpenTelemetry OTLP Integration](otlp.md) for the
+full policy reference and service examples.
 
 ## Names And Descriptions
 

@@ -266,6 +266,49 @@ def test_prometheus_http_startup_uses_policy_settings(
     assert "Serving Prometheus metrics on 127.0.0.1:9200/mission-metrics" in result.stdout
 
 
+def test_otlp_export_disabled_policy_does_not_need_snapshot(tmp_path: Path) -> None:
+    config = _config_file(tmp_path / "config.json")
+    policy = tmp_path / "observability.prometheus.json"
+    runner.invoke(app, ["init-prometheus-policy", str(config), str(policy)])
+
+    result = runner.invoke(app, ["otlp-export", str(tmp_path / "missing.json"), str(policy)])
+
+    assert result.exit_code == 0
+    assert "disabled by observability policy" in result.stdout
+
+
+def test_otlp_export_dry_run_outputs_policy_filtered_json(tmp_path: Path) -> None:
+    snapshot = _snapshot(tmp_path / "metrics.json")
+    policy = tmp_path / "observability.prometheus.json"
+    policy.write_text(
+        json.dumps(
+            {
+                "schema": "nats_sinks.observability.policy.v1",
+                "enabled": True,
+                "namespace": "mission_ops",
+                "allowed_metrics": ["messages_fetched_total"],
+                "allowed_metric_patterns": [],
+                "denied_metrics": [],
+                "denied_metric_patterns": [],
+                "include_observations": False,
+                "include_legacy": False,
+                "subjects": [],
+                "otlp": {
+                    "enabled": True,
+                    "endpoint": "http://127.0.0.1:4318/v1/metrics",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["otlp-export", str(snapshot), str(policy), "--dry-run"])
+
+    assert result.exit_code == 0
+    assert "mission_ops_messages_fetched_total" in result.stdout
+    assert "oracle_duplicates_total" not in result.stdout
+
+
 def test_nats_monitoring_poll_dry_run_outputs_sanitized_snapshot(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

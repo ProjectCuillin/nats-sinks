@@ -82,6 +82,8 @@ def test_generated_policy_is_disabled_and_copies_safe_subject_hints(tmp_path: Pa
     assert policy.enabled is False
     assert policy.prometheus.enabled is False
     assert policy.prometheus.http_endpoint.enabled is False
+    assert policy.otlp.enabled is False
+    assert policy.otlp.endpoint is None
     assert policy.prometheus.http_endpoint.host == "127.0.0.1"
     assert policy.prometheus.http_endpoint.path == "/metrics"
     assert policy.nats_server_monitoring.enabled is False
@@ -152,3 +154,20 @@ def test_policy_rejects_unsafe_nats_monitoring_settings() -> None:
 
     with pytest.raises(ValueError, match="explicit dotted JSON field paths"):
         ObservabilityPolicy(nats_server_monitoring={"allowed_fields": ["jetstream.*"]})
+
+
+def test_policy_rejects_unsafe_otlp_settings() -> None:
+    with pytest.raises(ValueError, match="endpoint is required"):
+        ObservabilityPolicy(enabled=True, otlp={"enabled": True})
+
+    with pytest.raises(ValueError, match="credentials"):
+        ObservabilityPolicy(otlp={"endpoint": "https://user:secret@example.test/v1/metrics"})
+
+    with pytest.raises(ValueError, match="plain http"):
+        ObservabilityPolicy(otlp={"endpoint": "http://collector.example.test/v1/metrics"})
+
+    with pytest.raises(ValueError, match="header names"):
+        ObservabilityPolicy(otlp={"headers_env": {"Bad Header": "OTLP_TOKEN"}})
+
+    with pytest.raises(ValueError, match="environment variable names"):
+        ObservabilityPolicy(otlp={"headers_env": {"Authorization": "bad-env-name"}})

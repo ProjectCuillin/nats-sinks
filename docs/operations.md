@@ -228,10 +228,12 @@ as production-ready. Pull consumers remain the operational default because the
 worker controls when and how many messages are fetched. See
 [Push Consumer Evaluation](push-consumer-evaluation.md).
 
-Prometheus sharing should use the policy-controlled observability layer rather
-than an ad hoc shell redirection. The separate `nats-sink-observe` CLI can
-generate a disabled policy from runtime config, write a filtered textfile for
-node_exporter, or run an optional native HTTP endpoint:
+External metrics sharing should use the policy-controlled observability layer
+rather than ad hoc shell redirection or one-off scripts. The separate
+`nats-sink-observe` CLI can generate a disabled policy from runtime config,
+write a filtered Prometheus textfile for node_exporter, run an optional native
+Prometheus HTTP endpoint, or export approved metrics to an OpenTelemetry
+Collector through OTLP/HTTP JSON:
 
 ```bash
 nats-sink-observe init-prometheus-policy \
@@ -247,13 +249,18 @@ nats-sink-observe prometheus-http \
   /var/lib/nats-sink/metrics.json \
   /etc/nats-sinks/observability.prometheus.json \
   --dry-run
+
+nats-sink-observe otlp-export \
+  /var/lib/nats-sink/metrics.json \
+  /etc/nats-sinks/observability.prometheus.json \
+  --dry-run
 ```
 
 The observability service should run separately from the sink worker where
 possible. See [Observability](observability.md) for the sharing model, the
 [Prometheus Integration](prometheus.md) observability sub-page for connector
-details, and [Running nats-sink As A Service](service-deployment.md) for the
-service model.
+details, [OpenTelemetry OTLP Integration](otlp.md) for collector export, and
+[Running nats-sink As A Service](service-deployment.md) for the service model.
 
 NATS server monitoring endpoints such as `/jsz` and `/healthz` should be
 monitored through your NATS or platform monitoring stack, or through the

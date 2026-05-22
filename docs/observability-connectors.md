@@ -1,9 +1,9 @@
-# Future Observability Connectors
+# Observability Connector Roadmap
 
-This page records the evaluation behind future observability connector work.
-It turns the broad connector roadmap into separate feature requests while
-keeping every connector aligned to the same security, configuration, testing,
-and documentation contract.
+This page records the evaluation behind observability connector work. It turns
+the broad connector roadmap into separate feature requests while keeping every
+connector aligned to the same security, configuration, testing, and
+documentation contract.
 
 `nats-sinks` already has:
 
@@ -12,12 +12,13 @@ and documentation contract.
 - `nats-sink-observe` for disabled-by-default observability policy work,
 - a Prometheus textfile connector,
 - an optional native Prometheus HTTP endpoint,
+- an OpenTelemetry OTLP/HTTP JSON metrics connector,
 - a NATS server monitoring snapshot connector.
 
-Future connectors must build on that model. They must not become independent
-ways to leak metrics, subjects, classifications, labels, file paths, table
-names, payloads, credentials, or operational tempo without an explicit policy
-review.
+Future connectors must build on that model. Existing connectors must continue
+to follow it. No connector may become an independent way to leak metrics,
+subjects, classifications, labels, file paths, table names, payloads,
+credentials, or operational tempo without an explicit policy review.
 
 ## Shared Connector Contract
 
@@ -52,7 +53,7 @@ flowchart LR
 
 | Connector | Priority | Recommended Shape | Why It Is Valuable | Main Security Concern | Feature Request |
 | --- | --- | --- | --- | --- | --- |
-| OpenTelemetry OTLP | High | Native connector or profile that exports approved metrics to an OpenTelemetry Collector. | OTLP is a stable OpenTelemetry exporter path and is a common neutral bridge to many platforms. | Collector endpoints and resource attributes must not leak sensitive deployment details. | Existing backlog item and GitHub issue. |
+| OpenTelemetry OTLP | Implemented | Native connector that exports approved metrics to an OpenTelemetry Collector through OTLP/HTTP JSON. | OTLP is a stable OpenTelemetry exporter path and is a common neutral bridge to many platforms. | Collector endpoints and resource attributes must not leak sensitive deployment details. | See [OpenTelemetry OTLP Integration](otlp.md). |
 | StatsD | Medium | Lightweight UDP or Unix-socket style connector for counters, gauges, and timings. | Useful in older or constrained environments with existing StatsD aggregation. | UDP can drop data and has limited metadata structure; avoid pretending it is reliable. | New separate feature request. |
 | Datadog | Medium | Prefer DogStatsD through the local Datadog Agent; evaluate HTTP API only when an Agent path is unavailable. | Datadog is widely used for hosted operational dashboards and alerting. | Tags and custom metrics can create cost, cardinality, and confidentiality risk. | New separate feature request. |
 | Splunk HEC | Medium | HTTPS event or metric payloads sent through Splunk HTTP Event Collector. | Valuable for security operations, incident response, and SIEM-adjacent environments. | HEC tokens are sensitive and payload shaping must avoid event-style leakage of operational metadata. | New separate feature request. |
@@ -116,16 +117,15 @@ Before any connector ships, the implementation issue must prove:
 
 ## Implementation Order Guidance
 
-The recommended order is:
+The recommended order after the implemented Prometheus, OTLP, and NATS
+monitoring connectors is:
 
 1. OCI Monitoring, because it fits the Oracle-oriented user base.
-2. OpenTelemetry OTLP, because it can satisfy several platform integrations
-   through collectors.
-3. Datadog and Splunk HEC, because they cover common hosted observability and
+2. Datadog and Splunk HEC, because they cover common hosted observability and
    security-operations workflows.
-4. CloudWatch and Azure Monitor, because they matter for cloud-specific
+3. CloudWatch and Azure Monitor, because they matter for cloud-specific
    deployments but should follow the same connector core.
-5. Elastic and Grafana Alloy, likely as profiles that reuse OTLP behavior.
-6. StatsD and syslog, because they are useful for constrained or legacy
+4. Elastic and Grafana Alloy, likely as profiles that reuse OTLP behavior.
+5. StatsD and syslog, because they are useful for constrained or legacy
    environments but have weaker reliability and structure than modern
    collector APIs.

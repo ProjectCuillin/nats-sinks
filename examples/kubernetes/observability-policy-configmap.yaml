@@ -41,5 +41,16 @@ data:
           "request_timeout_seconds": 5,
           "response_max_bytes": 1048576
         }
+      },
+      "otlp": {
+        "enabled": false,
+        "endpoint": null,
+        "protocol": "http_json",
+        "timeout_seconds": 5,
+        "max_retries": 0,
+        "retry_backoff_seconds": 0.25,
+        "stale_after_seconds": 60,
+        "max_request_bytes": 1048576,
+        "headers_env": {}
       }
     }

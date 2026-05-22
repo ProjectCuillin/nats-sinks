@@ -1,0 +1,12 @@
+[Unit]
+Description=Run nats-sinks OpenTelemetry OTLP metrics export periodically
+Documentation=https://github.com/ProjectCuillin/nats-sinks/
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=15s
+AccuracySec=5s
+Persistent=true
+
+[Install]
+WantedBy=timers.target
