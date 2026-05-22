@@ -14,9 +14,11 @@ The project repository is [ProjectCuillin/nats-sinks](https://github.com/Project
 NATS is a lightweight messaging system used to move events between services.
 JetStream is the persistence layer in NATS: it stores messages in streams and
 delivers them to consumers. A sink is a consumer whose main job is to copy those
-messages into another durable system, such as a database.
+messages into another durable system, such as Oracle Database, Oracle
+Autonomous Database on Oracle Cloud Infrastructure (OCI), or another approved
+storage backend.
 
-`nats-sinks` is a Python package for building outbound NATS JetStream sink consumers. It provides a reusable runtime that owns JetStream delivery semantics and delegates destination writes to sink implementations. The current production sinks are Oracle Database and local files.
+`nats-sinks` is a Python package for building outbound NATS JetStream sink consumers. It provides a reusable runtime that owns JetStream delivery semantics and delegates destination writes to sink implementations. The current production sinks are Oracle Database, including OCI-hosted Oracle Autonomous Database deployments, and local files.
 
 The project is intentionally suitable for mission-oriented environments such as
 defence logistics, operational reporting, secure platform telemetry, and

@@ -3,8 +3,10 @@
 This page explains how the project is divided so that delivery safety is easy
 to reason about. The most important concept is the difference between the core
 runtime and a sink. The core runtime talks to NATS JetStream and owns message
-delivery decisions. A sink talks to a destination system such as a database,
-HTTP endpoint, file store, or object store and owns only destination writes.
+delivery decisions. A sink talks to a destination system such as Oracle
+Database, Oracle Autonomous Database on Oracle Cloud Infrastructure (OCI), a
+file store, an object store, or another approved durable backend and owns only
+destination writes.
 
 The main architectural rule is:
 
@@ -20,10 +22,10 @@ processing path before it has crossed a durable boundary.
 
 ## Component Model
 
-The diagram below shows the framework boundary. Oracle and local file output
-are production destination modules, and additional destinations should fit into
-the same shape: the runner manages JetStream, and sinks receive normalized
-envelopes instead of raw NATS messages.
+The diagram below shows the framework boundary. Oracle Database and local file
+output are production destination modules, and additional destinations should
+fit into the same shape: the runner manages JetStream, and sinks receive
+normalized envelopes instead of raw NATS messages.
 
 ```mermaid
 flowchart TB

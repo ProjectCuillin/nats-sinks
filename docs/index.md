@@ -15,7 +15,10 @@ JetStream is the NATS persistence layer. It stores messages in streams and
 redelivers them when a consumer has not acknowledged successful processing.
 `nats-sinks` is the bridge between JetStream and external destinations: it
 receives JetStream messages, asks a sink to write them durably, and only then
-acknowledges the messages back to NATS.
+acknowledges the messages back to NATS. Its first production database target is
+Oracle Database, including Oracle Autonomous Database on Oracle Cloud
+Infrastructure (OCI), while the framework remains open for additional durable
+backends.
 
 The project is written for operators and developers who care about reliable
 event movement in operational environments. That includes commercial platforms,
@@ -98,8 +101,9 @@ The current release provides the following production-ready foundation:
   shutdown settings, and optional Prometheus observability sidecars.
 - `nats_sinks.oracle.OracleSink`, a production Oracle Database sink with
   connection pooling, idempotent `merge` and `insert_ignore` modes, Oracle
-  Autonomous Database connection options, subject-to-table routing, metadata
-  persistence, and transaction commit before ACK.
+  Autonomous Database connection options for OCI deployments,
+  subject-to-table routing, metadata persistence, and transaction commit before
+  ACK.
 - `nats_sinks.file.FileSink`, a production local file sink with atomic JSON
   file placement, deterministic filenames, duplicate handling, optional gzip
   compression, metadata persistence, and the same payload normalization contract

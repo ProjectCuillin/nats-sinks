@@ -76,6 +76,9 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Changed
 
+- Refined the README and introductory architecture documentation to describe
+  Oracle Database and OCI-hosted Oracle Autonomous Database as natural durable
+  destinations while keeping the framework positioned for multiple sinks.
 - Grouped Prometheus integration, metrics snapshot guidance, and NATS server
   monitoring under the Observability documentation section so external
   monitoring connectors are presented as sub-pages of the observability model.
