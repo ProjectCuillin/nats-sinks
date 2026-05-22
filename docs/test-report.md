@@ -14,13 +14,23 @@ logs from live systems.
 | Field | Value |
 | --- | --- |
 | Overall result | Pass |
-| Report generated | 2026-05-22 18:37:20 CEST |
+| Report generated | 2026-05-22 19:57:19 CEST |
 | Project version | `0.4.0` post-release development |
 | Python version | 3.12.4 |
 | Git revision checked | Active `release-v0.4.1` branch-first workflow workspace |
 | Worktree state | Active workspace with safe sink connector framework implementation for issue `#35`, new Oracle-family, Palantir, and common sink connector backlog items synced to GitHub Issues, quiet branch-first release workflow automation, WebSocket transport guardrails for issues `#129`, `#130`, and `#132`, completed WebSocket test-isolation bugs `#139` and `#140`, GitHub `main` branch protection, draft pull request helpers, manual release-validation dispatch, CODEOWNERS review ownership, pull request governance checks, release tag validation against `main`, updated release/backlog/contributor documentation, Oracle high-throughput staging-table merge mode for issue `#31`, tamper-evident custody metadata for issue `#60`, optional JetStream advisory observation for issue `#18`, explicit durable pull-consumer management for issue `#19`, richer JetStream consumer policy configuration for issue `#20`, optional NATS no-echo connection configuration for issue `#25`, OpenTelemetry OTLP metrics export for issue `#26`, and the previously validated `0.4.0` capability set covering secure-development hardening, strict JSON config loading, log-injection sanitization, secret-scan automation, the 316-control security rule review, project-specific security controls, expanded public API compatibility tests and documentation, release-version consistency checks, generated GitHub Dependency Graph manifests, detailed local backlog JSON items synced to GitHub Issues, release-target backlog labels, sanitized backlog comment tooling, completed-label workflow support for fixed or implemented issues awaiting release, stricter backlog lifecycle enforcement, release-gated backlog close automation, OCI Object Storage sink backlog tracking, standardized SPDX source headers, metrics snapshots and CLI, observability policy core, Prometheus and NATS monitoring connectors, Kubernetes examples, unified Debian/Oracle Linux systemd installer, NATS reconnect tuning, least-privilege NATS permission templates, JetStream topology guidance, retry backoff with jitter, priority-aware lanes, synthetic mission testing, mission-support examples, CycloneDX SBOM generation, release checksums, hash-verified installation guidance, property-style tests, defence and mission-support blueprints, generic mission metadata, payload encryption, and Oracle/file sink support |
 | Live NATS details | Redacted |
 | Live Oracle details | Redacted |
+
+This refresh also included live WebSocket/NATS and NATS-to-Oracle validation.
+The first Oracle e2e attempt intentionally kept the retained test table and
+failed closed because that table was stale and missing newer metadata columns.
+That was treated as an environment/schema hygiene finding rather than a product
+bug because the harness reported a clear operator-facing message and the same
+test passed after recreating the configured test table. A direct Oracle
+integration invocation also failed inside the local sandbox at DNS resolution;
+the same test passed when rerun with explicit network permission, confirming
+that it was a sandbox reachability condition rather than sink behavior.
 
 This validation refresh covered the core framework, strict JSON configuration
 loading, safe log formatting, high-confidence secret scanning, the 316-control
@@ -137,6 +147,13 @@ When refreshing this report:
 The current workspace is prepared on the `release-v0.4.1` branch after the
 published `0.4.0` release and has passed local validation. It includes:
 
+- full validation on 2026-05-22 with `scripts/check.sh`, the local WebSocket
+  e2e harness, direct Oracle integration tests, and live NATS-to-Oracle e2e
+  runs. The live Oracle checks covered 256-message non-encrypted delivery,
+  256-message AES-256-GCM encrypted delivery with decrypt verification,
+  250-message partial-final-batch delivery with `batch_size=64`, and
+  128-message AES-256-CCM encrypted delivery with decrypt verification. No new
+  product bugs were identified during this run,
 - safe sink connector framework work for issue `#35`, including
   `SinkConnector` metadata, explicit `SinkRegistry` connector registration,
   built-in first-party Oracle and FileSink descriptors, optional
