@@ -285,6 +285,11 @@ code:
   paths, priority values, classification values, labels, payload fields,
   usernames, and host-specific secrets require explicit design review before
   they can be exported anywhere.
+- Subject-aware observability must stay disabled by default until a reviewed
+  policy model, bounded subject-family aggregation, and certification tests are
+  in place. Prefer stable operator-approved family labels over raw subject
+  labels, enforce cardinality caps, and remember that hashing a subject is not
+  the same as making it non-sensitive.
 - Keep example credentials obviously fake and clearly marked for local
   development only.
 - When adding config fields, document defaults, accepted values, security

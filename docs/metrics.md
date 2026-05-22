@@ -83,6 +83,12 @@ External sharing should go through the observability policy layer described in
 from the runner and sinks so the main delivery process and any monitoring
 connector can run as different services with different permissions.
 
+The metrics snapshot is intentionally aggregate-only today. It does not include
+per-subject labels or per-subject series. Subject-aware observability has been
+evaluated for future work, but it needs explicit subject-family policy,
+cardinality caps, and certification tests before it can be enabled. See
+[Subject-Aware Observability Evaluation](subject-aware-observability-evaluation.md).
+
 ## Enabling The Snapshot Recorder
 
 Add `metrics.snapshot_file` to the same JSON config used by `nats-sink run`:

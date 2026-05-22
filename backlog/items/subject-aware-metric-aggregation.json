@@ -1,0 +1,28 @@
+{
+  "id": "subject-aware-metric-aggregation",
+  "title": "[Feature]: Add bounded subject-family metric aggregation",
+  "area": "Metrics and observability",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["observability", "security", "testing"],
+  "problem": "The current metrics snapshot stores aggregate metric values only. A future subject-aware policy needs a safe runtime representation of subject-family metrics that does not export raw subjects or create unbounded time series.",
+  "proposal": "Add bounded subject-family metric aggregation after the subject-aware policy model exists. The aggregation should map actual subjects to approved low-cardinality family labels, count only allowed metrics, keep overflow behavior deterministic, and keep the existing aggregate counters unchanged. Exporters should read the prepared subject-family series instead of deriving labels directly from raw message subjects.",
+  "users": "Operators building dashboards for approved subject families and maintainers implementing connector-neutral subject-aware metrics.",
+  "delivery_semantics": "Aggregation must be observational only. Aggregation failure, overflow, suppression, or export failure must never alter ACK timing, sink writes, retries, DLQ publication, or idempotency behavior.",
+  "security": "The runtime must not store raw subjects in exported series by default. It must cap family count, reject unapproved families, avoid message IDs or dynamic subject tokens, and avoid classification, labels, payload values, file paths, table names, or credentials in metric labels.",
+  "acceptance": [
+    "Aggregate metrics remain available and unchanged.",
+    "Subject-family metrics are emitted only for approved policy rules.",
+    "Raw subjects are not exported by default.",
+    "Overflow behavior is deterministic and low-cardinality.",
+    "Metrics snapshot size remains bounded."
+  ],
+  "tests": "Add unit tests for approved family aggregation, denied subjects, overflow aggregation, snapshot-size bounds, no raw-subject export, no payload export, no classification or labels as metric labels, and aggregate-metric non-regression. Run scripts/check.sh.",
+  "documentation": "Update subject-aware observability evaluation, metrics, observability, Prometheus, testing, roadmap, and changelog documentation.",
+  "closeout": "Close after the release containing bounded subject-family metric aggregation is published. Include release tag, tests, documentation, and limitations.",
+  "relationships": {
+    "related": ["#44"],
+    "blocked_by": ["backlog:subject-aware-observability-policy-model"],
+    "blocks": ["backlog:subject-aware-observability-certification"]
+  }
+}

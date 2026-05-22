@@ -1,0 +1,30 @@
+{
+  "id": "subject-aware-observability-certification",
+  "title": "[Feature]: Add subject-aware observability certification tests and runbook",
+  "area": "Testing",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["observability", "security", "testing", "documentation"],
+  "problem": "Subject-aware observability can leak sensitive routing structure and can create high-cardinality metric sets. A production feature needs certification tests and operator guidance before it can be enabled safely.",
+  "proposal": "Add a focused certification suite and runbook for subject-aware observability. The suite should prove disabled-by-default behavior, allow/deny handling, cardinality caps, overflow behavior, sanitized output, malformed policy rejection, connector parity, and delivery non-interference.",
+  "users": "Release engineers, security reviewers, operators approving subject-family dashboards, and maintainers validating observability connector behavior.",
+  "delivery_semantics": "Certification must prove that subject-aware observability does not alter ACK behavior, sink writes, retry handling, or DLQ publication when export is disabled, denied, capped, stale, malformed, or failing.",
+  "security": "Test fixtures and runbook examples must use fake subjects and must not include real server addresses, credentials, sensitive operational subjects, classified values, payloads, customer names, file paths, or table names.",
+  "acceptance": [
+    "Tests prove subject-aware export is disabled by default.",
+    "Tests prove allow, deny, malformed policy, and cardinality cap behavior.",
+    "Tests prove output contains approved family labels but not raw subjects by default.",
+    "Tests prove observability failures do not change delivery decisions.",
+    "Runbook explains when not to enable subject-aware export."
+  ],
+  "tests": "Add unit tests, connector tests, and failure-injection tests for the subject-aware policy and aggregation layers. Add optional integration tests only behind explicit markers. Run scripts/check.sh.",
+  "documentation": "Update subject-aware observability evaluation, observability, Prometheus, testing, operations, security, roadmap, and changelog documentation.",
+  "closeout": "Close after the release containing subject-aware observability certification tests and runbook guidance is published. Include release tag, test evidence, documentation, and limitations.",
+  "relationships": {
+    "related": ["#44"],
+    "blocked_by": [
+      "backlog:subject-aware-observability-policy-model",
+      "backlog:subject-aware-metric-aggregation"
+    ]
+  }
+}

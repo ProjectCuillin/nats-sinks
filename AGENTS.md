@@ -262,6 +262,11 @@ silent loss after an early ACK is not.
   classification, labels, payload fields, usernames, and host-specific secrets
   require explicit design review and documentation before any connector can
   publish them.
+- Subject-aware observability must remain disabled by default until a reviewed
+  policy model, bounded subject-family aggregation, and certification tests are
+  in place. Prefer stable operator-approved family labels over raw subjects,
+  enforce cardinality caps, and do not treat hashed subjects as automatically
+  non-sensitive.
 - Keep NATS server monitoring endpoint support outside the delivery runner.
   `JetStreamSinkRunner` must not poll `/jsz`, `/healthz`, or similar endpoints.
   Any `nats-sink-observe` connector must be disabled by default, validate the

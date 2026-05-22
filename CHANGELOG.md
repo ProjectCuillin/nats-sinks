@@ -69,6 +69,10 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   separate backlog items for capability and configuration guardrails, an
   opt-in bounded push runner mode, and push delivery-contract certification
   tests while keeping pull consumers as the production default.
+- Added a subject-aware observability evaluation and split future
+  implementation work into separate backlog items for a disabled-by-default
+  policy model, bounded subject-family aggregation, and certification tests
+  while keeping current metric export aggregate-only by default.
 
 ### Changed
 

@@ -133,9 +133,11 @@
 - InProgress metrics and an operator runbook for distinguishing slow active
   work from durable success.
 - JetStream advisory consumption for operational events and max-deliver signals.
-- Richer observability policies for bounded subject-aware metrics, if future
-  operators need per-subject insight and can approve the information-sharing
-  risk.
+- Subject-aware observability policy model with disabled-by-default,
+  default-deny, bounded subject-family rules.
+- Bounded subject-family metric aggregation without raw subject export by
+  default.
+- Subject-aware observability certification tests and operator runbook.
 
 ## Phase 3
 

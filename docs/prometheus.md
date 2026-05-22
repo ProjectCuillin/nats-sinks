@@ -154,6 +154,13 @@ The `subjects` section helps operators review which subject patterns the sink
 configuration knows about. Current Prometheus output does not include subject
 labels by default.
 
+Subject-aware Prometheus export has been evaluated as future work, but it is
+not enabled today. Do not add raw NATS subjects as Prometheus labels through
+local patches or ad hoc exporters. A future implementation needs explicit
+subject-family allow rules, stable low-cardinality labels, cardinality caps,
+and tests proving delivery behavior is unchanged. See
+[Subject-Aware Observability Evaluation](subject-aware-observability-evaluation.md).
+
 ## Enable A Minimal Export
 
 Edit `/etc/nats-sinks/observability.prometheus.json` and enable only the

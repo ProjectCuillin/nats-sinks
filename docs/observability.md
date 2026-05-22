@@ -45,6 +45,13 @@ runtime:
 - observability connectors are isolated from core and sink logic so new
   platforms can be added without breaking sink APIs.
 
+Subject-aware observability has been evaluated as a future opt-in capability.
+It is not enabled today. The current policy may list configured subject
+patterns as disabled review hints, but exporters do not emit subject labels.
+That separation is intentional: subjects can reveal operational structure and
+can create expensive high-cardinality metric series. See
+[Subject-Aware Observability Evaluation](subject-aware-observability-evaluation.md).
+
 ## Architecture
 
 The core runner records metrics through a small `MetricsRecorder` protocol.
@@ -214,7 +221,7 @@ topology fields unless an operator has selected those exact fields.
 | `denied_metric_patterns` | `[]` | Glob patterns to suppress even if an allow rule matches. |
 | `include_observations` | `false` | Whether timing observations such as `sink_batch_write_seconds` may be exported. |
 | `include_legacy` | `false` | Whether legacy metric aliases may be exported. |
-| `subjects` | `[]` | Subject patterns discovered from the core config for operator review and future subject-aware metrics. |
+| `subjects` | `[]` | Subject patterns discovered from the core config for operator review and future subject-aware metrics. Current exporters do not share these as labels. |
 | `prometheus` | object | Prometheus connector settings. |
 | `nats_server_monitoring` | object | Optional connector settings for selected NATS server monitoring endpoint values. |
 
