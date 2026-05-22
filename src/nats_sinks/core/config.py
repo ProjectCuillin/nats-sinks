@@ -176,6 +176,10 @@ class NatsConfig(BaseModel):
     tls_cert_file: str | None = None
     tls_key_file: str | None = None
     tls_verify: bool = True
+    # Keep server-side echo suppression opt-in so ordinary JetStream pull
+    # consumers preserve the same connection behavior unless an operator has a
+    # specific same-connection publish/subscribe reason to enable it.
+    no_echo: bool = False
     allow_reconnect: bool = True
     connect_timeout_seconds: int = Field(default=2, ge=1, le=300)
     reconnect_time_wait_seconds: int = Field(default=2, ge=0, le=3600)
@@ -1516,6 +1520,7 @@ ENV_OVERRIDES: dict[str, tuple[str, ...]] = {
     "NATS_SINKS_NATS_STREAM": ("nats", "stream"),
     "NATS_SINKS_NATS_CONSUMER": ("nats", "consumer"),
     "NATS_SINKS_NATS_SUBJECT": ("nats", "subject"),
+    "NATS_SINKS_NATS_NO_ECHO": ("nats", "no_echo"),
     "NATS_SINKS_CONSUMER_MANAGEMENT_MODE": ("consumer_management", "mode"),
     "NATS_SINKS_LOG_LEVEL": ("logging", "level"),
     "NATS_SINKS_ENCRYPTION_ENABLED": ("encryption", "enabled"),

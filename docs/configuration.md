@@ -46,6 +46,7 @@ Oracle-specific fields inside the `sink` object.
     "token_env": "NATS_TOKEN",
     "tls_ca_file": "/etc/nats/certs/ca.crt",
     "tls_verify": true,
+    "no_echo": false,
     "allow_reconnect": true,
     "connect_timeout_seconds": 2,
     "reconnect_time_wait_seconds": 2,
@@ -291,6 +292,7 @@ classification, and labels without changing producer payloads.
 | `tls_cert_file` | no | `null` | Local file path. | Optional client certificate file for mutual TLS transport. |
 | `tls_key_file` | no | `null` | Local file path. | Optional client private key file. Requires `tls_cert_file` when set. |
 | `tls_verify` | no | `true` | `true` or `false`. | Enables certificate verification and hostname checking. Keep enabled in production. |
+| `no_echo` | no | `false` | `true` or `false`. | Passes `no_echo` to `nats-py`, asking the NATS server not to echo messages published on this connection back to subscriptions on the same connection. Normal sink workers should usually leave this disabled because JetStream pull delivery and DLQ publication do not require same-connection echo suppression. |
 | `allow_reconnect` | no | `true` | `true` or `false`. | Enables `nats-py` automatic reconnect behavior after connection loss. Production deployments should normally keep this enabled. |
 | `connect_timeout_seconds` | no | `2` | Integer `1` to `300`. | Initial NATS connection timeout passed as `connect_timeout`. |
 | `reconnect_time_wait_seconds` | no | `2` | Integer `0` to `3600`. | Delay between reconnect attempts passed as `reconnect_time_wait`. |
@@ -1317,6 +1319,7 @@ Supported environment overrides:
 - `NATS_SINKS_NATS_STREAM`
 - `NATS_SINKS_NATS_CONSUMER`
 - `NATS_SINKS_NATS_SUBJECT`
+- `NATS_SINKS_NATS_NO_ECHO`
 - `NATS_SINKS_CONSUMER_MANAGEMENT_MODE`
 - `NATS_SINKS_LOG_LEVEL`
 - `NATS_SINKS_ENCRYPTION_ENABLED`

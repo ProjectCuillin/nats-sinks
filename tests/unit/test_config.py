@@ -47,6 +47,36 @@ def test_load_valid_config_with_env_override(
 
     assert config.nats.url == "tls://nats.example:4222"
     assert config.delivery.ack_policy == "after_sink_commit"
+    assert config.nats.no_echo is False
+
+
+def test_nats_no_echo_can_be_enabled_with_env_override(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*"
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/tmp/nats-sinks-test"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("NATS_SINKS_NATS_NO_ECHO", "true")
+
+    config = load_config(path)
+
+    assert config.nats.no_echo is True
 
 
 def test_invalid_json_root_raises(tmp_path: Path) -> None:

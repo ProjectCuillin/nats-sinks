@@ -113,6 +113,11 @@ def _nats_options(config: AppConfig) -> dict[str, Any]:
             "name": config.nats.name,
             "user_credentials": config.nats.creds_file,
             "nkeys_seed": config.nats.nkey_seed_file,
+            # `no_echo` asks the NATS server not to echo messages published by
+            # this same connection back to subscriptions on the same
+            # connection. nats-sinks primarily uses pull consumers and only
+            # publishes DLQ messages, so the default remains explicit and off.
+            "no_echo": config.nats.no_echo,
             "allow_reconnect": config.nats.allow_reconnect,
             "connect_timeout": config.nats.connect_timeout_seconds,
             "reconnect_time_wait": config.nats.reconnect_time_wait_seconds,

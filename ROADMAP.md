@@ -53,6 +53,8 @@ release, and closed only after the containing release is published.
   through the same metrics snapshot and `nats-sink-metrics` CLI.
 - Multiple NATS seed URLs, reconnect tuning, and connection event metrics for
   clustered or controlled-network deployments.
+- Optional NATS no-echo connection setting for specialized same-connection
+  publish/subscribe policy requirements.
 - Optional JetStream advisory observation for selected `$JS.EVENT.ADVISORY...`
   subjects with disabled-by-default configuration and aggregate metrics only.
 - Explicit durable pull-consumer management with `bind_only`,
@@ -184,7 +186,6 @@ release, and closed only after the containing release is published.
   duplicate-window documentation.
 - Stream mirror, source, subject transform, republish, compression, placement,
   and metadata management helpers beyond the current documentation guidance.
-- Optional no-echo connection setting.
 - Sink certification tests for future HTTP, S3, Kafka, and other active sink
   proposals.
 

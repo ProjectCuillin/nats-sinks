@@ -91,6 +91,14 @@ certification work are complete. See
 [WebSocket Connection Evaluation](websocket-connection-evaluation.md) before
 approving WebSocket transport in an operational deployment.
 
+The optional `nats.no_echo` setting is supported for deployments that need the
+NATS server to suppress same-connection message echo. Most production
+`nats-sinks` workers should keep it at the default `false` value because the
+runner receives through JetStream pull consumers and publishes only operational
+messages such as DLQ records when configured. Enabling no-echo does not change
+commit-then-ACK behavior, durable consumer binding, or destination write
+semantics.
+
 If the selected stream is built from mirrors, sources, subject transforms,
 republish rules, compression, placement policies, or stream metadata, review
 the topology before treating the sink's idempotency key as final. Those

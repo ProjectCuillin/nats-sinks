@@ -52,9 +52,18 @@ def test_nats_options_allows_connection_without_authentication() -> None:
     options = cli_main._nats_options(config)
 
     assert options["servers"] == ["nats://localhost:4222"]
+    assert options["no_echo"] is False
     assert "user" not in options
     assert "password" not in options
     assert "token" not in options
+
+
+def test_nats_options_passes_no_echo_when_enabled() -> None:
+    config = app_config({"no_echo": True})
+
+    options = cli_main._nats_options(config)
+
+    assert options["no_echo"] is True
 
 
 def test_nats_options_resolve_token_from_environment(

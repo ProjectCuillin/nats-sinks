@@ -96,6 +96,9 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   state, and bounded low-sensitivity JetStream consumer metadata, with
   fail-closed validation for unsafe combinations before message processing
   starts.
+- Added optional `nats.no_echo` support, passed to `nats-py` as `no_echo`,
+  with default-off behavior, environment override support, tests, and
+  documentation that explains when same-connection echo suppression is useful.
 
 ### Changed
 

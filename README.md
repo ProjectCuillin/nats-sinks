@@ -313,6 +313,7 @@ contains destination-specific fields documented on each sink page.
     "consumer": "file-orders-sink",
     "subject": "orders.*",
     "durable": true,
+    "no_echo": false,
     "allow_reconnect": true,
     "reconnect_time_wait_seconds": 2,
     "max_reconnect_attempts": 60
@@ -577,7 +578,9 @@ inside `METADATA_JSON.message_metadata`.
 - server-side bcrypted username/password credentials using the same client-side
   `user` and `password_env` settings,
 - TLS server verification with `tls_ca_file`, including private or self-signed
-  NATS server CAs.
+  NATS server CAs,
+- optional `no_echo` connection behavior for reviewed same-connection
+  publish/subscribe policies.
 
 Do not embed credentials in `nats.url`; use environment-backed fields instead.
 See [NATS Connections And Authentication](https://nats-sinks.readthedocs.io/en/latest/nats-connections/) for

@@ -284,6 +284,7 @@ anything immediately:
     "stream": "ORDERS",
     "consumer": "orders-file-sink",
     "subject": "orders.*",
+    "no_echo": false,
     "allow_reconnect": true,
     "connect_timeout_seconds": 2,
     "reconnect_time_wait_seconds": 2,
@@ -298,6 +299,7 @@ anything immediately:
 
 | Field | Passed to `nats-py` | Default | Guidance |
 | --- | --- | --- | --- |
+| `no_echo` | `no_echo` | `false` | Optional server-side echo suppression for messages published and subscribed on the same NATS connection. It is usually unnecessary for normal JetStream pull-consumer sink workers, but the explicit setting is available for specialized connection policies. |
 | `allow_reconnect` | `allow_reconnect` | `true` | Keep enabled for production unless a supervisor should fail fast and restart the process. |
 | `connect_timeout_seconds` | `connect_timeout` | `2` | Increase when connecting across slower controlled networks. |
 | `reconnect_time_wait_seconds` | `reconnect_time_wait` | `2` | Increase to reduce retry pressure during planned outages. |
@@ -433,6 +435,7 @@ flowchart TD
 | `nats.tls_verify` | Enables certificate and hostname verification. | No | Keep `true` in production. |
 | `nats.tls_cert_file` | Optional client certificate chain. | No, but sensitive operationally | Roadmap for certified cert auth. |
 | `nats.tls_key_file` | Optional client private key file. | Yes | Protect file permissions carefully. |
+| `nats.no_echo` | Optional server-side same-connection echo suppression. | No | Leave `false` unless a reviewed deployment has a same-connection publish/subscribe reason to suppress echoes. |
 
 ## WebSocket Transport Status
 

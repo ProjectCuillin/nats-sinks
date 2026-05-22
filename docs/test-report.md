@@ -14,11 +14,11 @@ logs from live systems.
 | Field | Value |
 | --- | --- |
 | Overall result | Pass |
-| Report generated | 2026-05-22 14:40:00 CEST |
+| Report generated | 2026-05-22 14:50:01 CEST |
 | Project version | `0.4.0` post-release development |
 | Python version | 3.12.4 |
 | Git revision checked | Active `release-v0.4.1` branch-first workflow workspace |
-| Worktree state | Active workspace with quiet branch-first release workflow automation, GitHub `main` branch protection, draft pull request helpers, manual release-validation dispatch, CODEOWNERS review ownership, pull request governance checks, release tag validation against `main`, updated release/backlog/contributor documentation, Oracle high-throughput staging-table merge mode for issue `#31`, tamper-evident custody metadata for issue `#60`, optional JetStream advisory observation for issue `#18`, explicit durable pull-consumer management for issue `#19`, richer JetStream consumer policy configuration for issue `#20`, and the previously validated `0.4.0` capability set covering secure-development hardening, strict JSON config loading, log-injection sanitization, secret-scan automation, the 316-control security rule review, project-specific security controls, expanded public API compatibility tests and documentation, release-version consistency checks, generated GitHub Dependency Graph manifests, detailed local backlog JSON items synced to GitHub Issues, release-target backlog labels, sanitized backlog comment tooling, completed-label workflow support for fixed or implemented issues awaiting release, stricter backlog lifecycle enforcement, release-gated backlog close automation, OCI Object Storage sink backlog tracking, standardized SPDX source headers, metrics snapshots and CLI, observability policy core, Prometheus and NATS monitoring connectors, Kubernetes examples, unified Debian/Oracle Linux systemd installer, NATS reconnect tuning, least-privilege NATS permission templates, JetStream topology guidance, retry backoff with jitter, priority-aware lanes, synthetic mission testing, mission-support examples, CycloneDX SBOM generation, release checksums, hash-verified installation guidance, property-style tests, defence and mission-support blueprints, generic mission metadata, payload encryption, and Oracle/file sink support |
+| Worktree state | Active workspace with quiet branch-first release workflow automation, GitHub `main` branch protection, draft pull request helpers, manual release-validation dispatch, CODEOWNERS review ownership, pull request governance checks, release tag validation against `main`, updated release/backlog/contributor documentation, Oracle high-throughput staging-table merge mode for issue `#31`, tamper-evident custody metadata for issue `#60`, optional JetStream advisory observation for issue `#18`, explicit durable pull-consumer management for issue `#19`, richer JetStream consumer policy configuration for issue `#20`, optional NATS no-echo connection configuration for issue `#25`, and the previously validated `0.4.0` capability set covering secure-development hardening, strict JSON config loading, log-injection sanitization, secret-scan automation, the 316-control security rule review, project-specific security controls, expanded public API compatibility tests and documentation, release-version consistency checks, generated GitHub Dependency Graph manifests, detailed local backlog JSON items synced to GitHub Issues, release-target backlog labels, sanitized backlog comment tooling, completed-label workflow support for fixed or implemented issues awaiting release, stricter backlog lifecycle enforcement, release-gated backlog close automation, OCI Object Storage sink backlog tracking, standardized SPDX source headers, metrics snapshots and CLI, observability policy core, Prometheus and NATS monitoring connectors, Kubernetes examples, unified Debian/Oracle Linux systemd installer, NATS reconnect tuning, least-privilege NATS permission templates, JetStream topology guidance, retry backoff with jitter, priority-aware lanes, synthetic mission testing, mission-support examples, CycloneDX SBOM generation, release checksums, hash-verified installation guidance, property-style tests, defence and mission-support blueprints, generic mission metadata, payload encryption, and Oracle/file sink support |
 | Live NATS details | Redacted |
 | Live Oracle details | Redacted |
 
@@ -34,7 +34,7 @@ optional disabled-by-default JetStream advisory observation with sanitized
 low-cardinality counters, explicit durable pull-consumer management with
 fail-closed drift validation, richer durable consumer policy controls for
 plural filter subjects, server-side BackOff, replicas, memory storage, and
-bounded consumer metadata,
+bounded consumer metadata, optional NATS no-echo connection configuration,
 Kubernetes deployment examples with JSON ConfigMaps, Secret references,
 mounted trust material, resource limits, security contexts, graceful shutdown
 settings, and optional Prometheus observability sidecars,
@@ -161,6 +161,17 @@ published `0.4.0` release and has passed local validation. It includes:
   validation, and drift detection for existing durable pull consumers,
 - full local validation after the richer consumer-policy implementation:
   `scripts/check.sh` passed with `543 passed, 8 skipped` in the main pytest
+  run, `108 passed` in the encryption and runner-ordering suite, and
+  `85 passed` in the sink suite; Ruff format/check, mypy, documentation
+  builds, Markdown link checks, high-confidence secret scan, Bandit, package
+  build, SBOM/checksum generation, and Twine metadata checks also passed,
+- optional NATS no-echo connection configuration for issue `#25`, including a
+  default-off `nats.no_echo` JSON field, an environment override, `nats-py`
+  option construction, and documentation explaining that no-echo is mainly for
+  reviewed same-connection publish/subscribe policies rather than normal
+  JetStream pull-consumer sink delivery,
+- full local validation after the no-echo implementation:
+  `scripts/check.sh` passed with `545 passed, 8 skipped` in the main pytest
   run, `108 passed` in the encryption and runner-ordering suite, and
   `85 passed` in the sink suite; Ruff format/check, mypy, documentation
   builds, Markdown link checks, high-confidence secret scan, Bandit, package
@@ -441,7 +452,7 @@ ordering, DLQ-before-ACK ordering, and deterministic unhappy-path handling.
 | JetStream topology documentation | `scripts/check-docs.sh` through `scripts/check.sh` | Pass | Added and built advanced topology guidance for mirrors, sources, transforms, republish, compression, placement, metadata, and idempotency review |
 | NATS server monitoring connector | `pytest tests/unit/test_nats_monitoring.py tests/unit/test_observability_cli.py` and `scripts/check-docs.sh` through `scripts/check.sh` | Pass | Added and built the server monitoring connector docs; tests cover disabled policy behavior, endpoint validation, malformed JSON handling, sanitized snapshots, optional Prometheus rendering, and CLI behavior without live network calls |
 | Security rule review count | `rg -c "^\\| SD-" docs/security-rule-review.md` | Pass | 316 controls recorded |
-| Unit and gated test suite | `pytest` through `scripts/check.sh` | Pass | 543 passed, 8 skipped |
+| Unit and gated test suite | `pytest` through `scripts/check.sh` | Pass | 545 passed, 8 skipped |
 | JetStream advisory focused checks | `pytest tests/unit/test_advisory.py tests/unit/test_config.py tests/unit/test_commit_then_ack_contract.py tests/unit/test_metrics.py tests/unit/test_public_api.py` | Pass | 101 passed, covering advisory parsing, subject filtering, safe parse failures, metrics, monitor lifecycle, configuration validation, public exports, and isolation from sink ACK behavior |
 | Consumer policy focused checks | `pytest tests/unit/test_consumer_management.py tests/unit/test_config.py tests/unit/test_commit_then_ack_contract.py tests/unit/test_public_api.py` | Pass | 93 passed, covering bind-only, create-if-missing, compatible existing consumers, incompatible drift, reconcile behavior, richer policy fields, plural filter subjects, BackOff validation, consumer metadata validation, runner startup ordering, configuration validation, and public API compatibility |
 | MkDocs build isolation regression | `pytest tests/unit/test_docs_build_isolation.py -q` and two parallel `scripts/check-docs.sh` runs | Pass | 3 focused tests passed; two overlapping docs helper runs built isolated Read the Docs and GitHub Pages output directories without colliding in `site/` |
