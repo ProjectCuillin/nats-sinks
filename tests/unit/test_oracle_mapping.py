@@ -29,6 +29,7 @@ def envelope(**overrides: object) -> NatsEnvelope:
         "priority": None,
         "classification": None,
         "labels": (),
+        "custody": None,
         "received_at": datetime(2026, 5, 16, 10, 17, tzinfo=UTC),
     }
     values.update(overrides)
@@ -57,6 +58,7 @@ def test_envelope_to_row_maps_payload_and_headers() -> None:
         "labels": [],
     }
     assert metadata["mission_metadata"] is None
+    assert metadata["custody"] is None
 
 
 def test_envelope_to_row_maps_priority_classification_and_labels() -> None:
@@ -95,6 +97,19 @@ def test_envelope_to_row_maps_mission_metadata_json_column() -> None:
     }
     metadata = json.loads(row["metadata_json"])
     assert metadata["mission_metadata"]["mission_id"] == "M-1001"
+
+
+def test_envelope_to_row_persists_custody_metadata_in_metadata_json() -> None:
+    row = envelope_to_row(
+        envelope(custody={"schema": "nats_sinks.custody.v1", "record_hash": "a" * 64}),
+        idempotency=OracleIdempotencyConfig(),
+    )
+
+    metadata = json.loads(row["metadata_json"])
+    assert metadata["custody"] == {
+        "schema": "nats_sinks.custody.v1",
+        "record_hash": "a" * 64,
+    }
 
 
 def test_payload_field_idempotency_uses_payload_value() -> None:

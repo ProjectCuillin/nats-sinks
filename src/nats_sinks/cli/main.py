@@ -247,6 +247,7 @@ def run(
             message_metadata=loaded.message_metadata,
             mission_metadata=loaded.mission_metadata,
             encryption=loaded.encryption,
+            custody=loaded.custody,
             pre_sink_policy=loaded.pre_sink_policy,
             metrics=metrics,
             nats_options=_nats_options(loaded),

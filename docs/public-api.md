@@ -33,6 +33,8 @@ The tests also cover:
   `ConfigurationError`, `AckError`, and `DeadLetterError`,
 - payload encryption helpers such as `EncryptionConfig`, `PayloadEncryptor`,
   `SubjectPayloadEncryptor`, `PayloadKeyRegistry`, and `decrypt_payload`,
+- custody helpers such as `CustodyConfig`, `compute_custody_metadata`,
+  `attach_custody_metadata`, and `canonical_json_bytes`,
 - message metadata configuration classes,
 - pre-sink policy configuration and evaluation helpers such as
   `PreSinkPolicyConfig`, `PreSinkPolicyRuleConfig`,

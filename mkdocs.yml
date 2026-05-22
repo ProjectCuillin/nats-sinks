@@ -42,6 +42,7 @@ nav:
       - File Sink: file-sink.md
   - Data Handling:
       - Payload Encryption: payload-encryption.md
+      - Tamper-Evident Custody: tamper-evident-custody.md
       - Priority Lanes: priority-lanes.md
       - Mission Metadata: mission-metadata.md
   - Observability:

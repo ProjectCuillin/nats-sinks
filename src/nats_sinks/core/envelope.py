@@ -24,6 +24,7 @@ from datetime import UTC, datetime
 from types import MappingProxyType
 from typing import Any
 
+from nats_sinks.core.custody import freeze_custody_metadata, thaw_custody_metadata
 from nats_sinks.core.errors import SerializationError
 from nats_sinks.core.message_metadata import (
     case_insensitive_header,
@@ -97,6 +98,7 @@ class NatsEnvelope:
     classification: str | None = None
     labels: tuple[str, ...] = field(default_factory=tuple)
     mission_metadata: Mapping[str, Any] | None = None
+    custody: Mapping[str, Any] | None = None
     reply: str | None = None
     domain: str | None = None
     received_at: datetime = field(default_factory=lambda: datetime.now(UTC))
@@ -126,6 +128,7 @@ class NatsEnvelope:
             "mission_metadata",
             freeze_mission_metadata(self.mission_metadata),
         )
+        object.__setattr__(self, "custody", freeze_custody_metadata(self.custody))
 
     def idempotency_key(self) -> str:
         """Return a stable best-effort idempotency key for this message."""
@@ -194,3 +197,14 @@ class NatsEnvelope:
         """
 
         return thaw_mission_metadata(self.mission_metadata)
+
+    def custody_for_json_storage(self) -> dict[str, Any] | None:
+        """Return optional tamper-evident custody metadata for sink storage.
+
+        Custody metadata is computed by the core before sink delivery and then
+        frozen on the envelope.  Sinks call this helper to serialize the
+        evidence next to the destination record without mutating the envelope or
+        recomputing hashes with destination-specific behavior.
+        """
+
+        return thaw_custody_metadata(self.custody)

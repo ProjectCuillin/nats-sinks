@@ -29,6 +29,7 @@ def _envelope(
     priority: str | None = None,
     classification: str | None = None,
     labels: object | None = None,
+    custody: dict[str, object] | None = None,
 ) -> NatsEnvelope:
     return NatsEnvelope(
         subject=subject,
@@ -45,6 +46,7 @@ def _envelope(
         priority=priority,
         classification=classification,
         labels=labels or (),
+        custody=custody,
     )
 
 
@@ -153,6 +155,7 @@ def test_file_record_preserves_json_payload_and_metadata() -> None:
     assert record["labels"] == "billing;urgent"
     assert record["labels_list"] == ["billing", "urgent"]
     assert record["mission_metadata"] is None
+    assert record["custody"] is None
     assert record["payload"] == {"order_id": "O-1001"}
     assert record["payload_info"]["original_format"] == "json"
     assert record["metadata"]["jetstream"]["stream_sequence"] == 7
@@ -160,6 +163,19 @@ def test_file_record_preserves_json_payload_and_metadata() -> None:
     assert record["metadata"]["message_metadata"]["classification"] == "restricted"
     assert record["metadata"]["message_metadata"]["labels"] == ["billing", "urgent"]
     assert record["metadata"]["mission_metadata"] is None
+
+
+def test_file_record_preserves_custody_metadata() -> None:
+    config = FileSinkConfig(directory=Path("test-output"))
+    record = file_record_for_envelope(
+        _envelope(custody={"schema": "nats_sinks.custody.v1", "record_hash": "a" * 64}),
+        config=config,
+    )
+
+    assert record["custody"] == {
+        "schema": "nats_sinks.custody.v1",
+        "record_hash": "a" * 64,
+    }
 
 
 def test_file_record_stores_missing_message_metadata_as_null() -> None:

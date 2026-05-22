@@ -35,6 +35,12 @@ from urllib.parse import urlsplit
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic import ValidationError as PydanticValidationError
 
+from nats_sinks.core.custody import (
+    CUSTODY_SUPPORTED_ALGORITHMS,
+    MAX_CUSTODY_KEY_ID_LENGTH,
+    validate_custody_algorithm,
+    validate_custody_key_id,
+)
 from nats_sinks.core.errors import ConfigurationError
 from nats_sinks.core.errors import ValidationError as FrameworkValidationError
 from nats_sinks.core.message_metadata import (
@@ -1173,6 +1179,83 @@ class EncryptionConfig(BaseModel):
         return rule.key_b64 is None and rule.key_b64_env is None
 
 
+class CustodyConfig(BaseModel):
+    """Optional tamper-evident metadata computed before sink delivery.
+
+    Custody metadata is disabled by default because hashes can reveal that two
+    messages had the same payload or metadata.  When enabled, the core computes
+    deterministic hashes over the framework-normalized payload and metadata
+    before calling the sink.  The sink then persists that evidence with the
+    record it commits.  A custody failure is a permanent pre-sink validation
+    failure, so the runner will not ACK the message unless configured DLQ
+    publication succeeds first.
+
+    The first implementation supports unkeyed SHA-256 and SHA-512 evidence.
+    The optional `key_id` is a non-secret policy/version identifier reserved
+    for deployments and future keyed-hash or signature extensions.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    algorithm: Literal["sha256", "sha512"] = "sha256"
+    hash_payload: bool = True
+    hash_metadata: bool = True
+    include_previous_hash: bool = False
+    previous_hash_header: str = "Nats-Sinks-Previous-Custody-Hash"
+    key_id: str | None = None
+    max_hash_input_bytes: int = Field(default=16_777_216, ge=1024, le=1_073_741_824)
+
+    @field_validator("algorithm", mode="before")
+    @classmethod
+    def normalize_algorithm(cls, value: object) -> object:
+        """Accept safe casing variants while keeping a canonical value."""
+
+        if isinstance(value, str):
+            try:
+                return validate_custody_algorithm(value)
+            except FrameworkValidationError as exc:
+                raise ValueError(str(exc)) from exc
+        return value
+
+    @field_validator("previous_hash_header")
+    @classmethod
+    def validate_previous_hash_header(cls, value: str) -> str:
+        """Require a safe header name for optional hash chaining."""
+
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("custody.previous_hash_header must not be empty")
+        if "\n" in rendered or "\r" in rendered or "\x00" in rendered:
+            raise ValueError("custody.previous_hash_header must not contain control characters")
+        return rendered
+
+    @field_validator("key_id", mode="before")
+    @classmethod
+    def normalize_key_id(cls, value: object) -> object:
+        """Validate optional custody key or policy identifiers."""
+
+        try:
+            return validate_custody_key_id(value)
+        except FrameworkValidationError as exc:
+            raise ValueError(str(exc)) from exc
+
+    @model_validator(mode="after")
+    def validate_hash_scope(self) -> CustodyConfig:
+        """Require at least one hash so enabled custody has meaningful evidence."""
+
+        if self.enabled and not (self.hash_payload or self.hash_metadata):
+            raise ValueError("custody.enabled requires hash_payload or hash_metadata")
+        if self.key_id is not None and len(self.key_id) > MAX_CUSTODY_KEY_ID_LENGTH:
+            raise ValueError(
+                f"custody.key_id must not exceed {MAX_CUSTODY_KEY_ID_LENGTH} characters"
+            )
+        if self.algorithm not in CUSTODY_SUPPORTED_ALGORITHMS:
+            allowed = ", ".join(sorted(CUSTODY_SUPPORTED_ALGORITHMS))
+            raise ValueError(f"custody.algorithm must be one of: {allowed}")
+        return self
+
+
 class SinkConfig(BaseModel):
     """Raw sink configuration selected through the safe registry."""
 
@@ -1194,6 +1277,7 @@ class AppConfig(BaseModel):
     message_metadata: MessageMetadataConfig = Field(default_factory=MessageMetadataConfig)
     mission_metadata: MissionMetadataConfig = Field(default_factory=MissionMetadataConfig)
     encryption: EncryptionConfig = Field(default_factory=EncryptionConfig)
+    custody: CustodyConfig = Field(default_factory=CustodyConfig)
     pre_sink_policy: PreSinkPolicyConfig = Field(default_factory=PreSinkPolicyConfig)
     sink: SinkConfig
 
@@ -1224,6 +1308,9 @@ ENV_OVERRIDES: dict[str, tuple[str, ...]] = {
     "NATS_SINKS_LABELS_DEFAULT": ("message_metadata", "labels", "default"),
     "NATS_SINKS_MISSION_METADATA_ENABLED": ("mission_metadata", "enabled"),
     "NATS_SINKS_MISSION_METADATA_HEADER": ("mission_metadata", "header"),
+    "NATS_SINKS_CUSTODY_ENABLED": ("custody", "enabled"),
+    "NATS_SINKS_CUSTODY_ALGORITHM": ("custody", "algorithm"),
+    "NATS_SINKS_CUSTODY_KEY_ID": ("custody", "key_id"),
     "NATS_SINKS_SINK_TYPE": ("sink", "type"),
 }
 

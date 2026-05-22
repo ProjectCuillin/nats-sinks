@@ -39,6 +39,7 @@ flowchart TB
         Envelope[NatsEnvelope]
         Encrypt[Optional payload encryption]
         Policy[Optional pre-sink policy gate]
+        Custody[Optional custody hash evidence]
         Priority[Optional priority lanes]
         DLQ[DLQ publisher]
         Metrics[Metrics hooks]
@@ -56,7 +57,7 @@ flowchart TB
     end
 
     Stream --> Consumer --> Runner
-    Runner --> Envelope --> Encrypt --> Policy --> Priority --> Protocol
+    Runner --> Envelope --> Encrypt --> Policy --> Custody --> Priority --> Protocol
     Protocol --> Oracle
     Protocol --> File
     Protocol --> Future
@@ -78,6 +79,7 @@ JetStream stream
   -> nats-sinks core runner
   -> optional payload encryption
   -> optional pre-sink policy gate
+  -> optional tamper-evident custody metadata
   -> optional in-batch priority lane ordering
   -> sink.write_batch(...)
   -> durable destination commit
@@ -95,6 +97,8 @@ The core runtime handles:
 - Optional payload encryption before sink delivery.
 - Optional fail-closed policy enforcement after normalization and core payload
   transformation, but before any destination write.
+- Optional tamper-evident custody metadata computation after policy acceptance,
+  but before any destination write.
 - Optional priority-lane ordering for already-fetched bounded batches.
 - Sink lifecycle.
 - Temporary versus permanent failure handling.
@@ -194,3 +198,12 @@ payload size. It does not run dynamic code or destination-specific SQL. A
 policy rejection is handled as a permanent validation failure: the rejected
 message does not reach the sink, and the core follows DLQ-before-ACK behavior
 when a DLQ is configured.
+
+Tamper-evident custody metadata is another core transformation. When enabled,
+the runner computes deterministic hashes over the normalized payload and stable
+metadata, attaches the custody object to `NatsEnvelope`, and then calls the
+sink. Sinks persist the custody object but do not decide whether it is required,
+valid, or sufficient for ACK. A custody computation failure is a pre-sink
+permanent validation failure, so the runner does not ACK the message unless
+configured DLQ publication succeeds first. See
+[Tamper-Evident Custody Metadata](tamper-evident-custody.md).

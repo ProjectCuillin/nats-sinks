@@ -42,6 +42,7 @@ def envelope_to_row(
     stored_at = datetime.now(UTC)
     normalized_payload = envelope.payload_for_json_storage(mode=payload_mode)
     metadata = envelope.metadata_for_json_storage(stored_at=stored_at)
+    metadata["custody"] = envelope.custody_for_json_storage()
     timestamps = metadata["timestamps"]
     derived_message_id = validate_envelope_idempotency(
         envelope,

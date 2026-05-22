@@ -29,6 +29,9 @@ release, and closed only after the containing release is published.
 - Generic mission metadata support for one validated JSON context object across
   the core runtime, Oracle `MISSION_METADATA_JSON`, file-sink output, and future
   sink contracts.
+- Optional tamper-evident custody metadata with deterministic payload,
+  metadata, and record hashes computed by the core before sink writes and
+  persisted by Oracle, file, and future sinks.
 - Basic metrics counters and observations for fetched, prepared, written,
   ACKed, NAKed, failed, DLQ, sink write, ACK error, and active batch behavior.
 - Local JSON metrics snapshots and the `nats-sink-metrics` inspection CLI for

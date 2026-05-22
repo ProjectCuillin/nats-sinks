@@ -73,6 +73,8 @@ used immediately:
   and related endpoint fields.
 - Optional core payload encryption for AES-256-GCM and AES-256-CCM before
   envelopes are delivered to Oracle, file, or future sinks.
+- Optional tamper-evident custody metadata with deterministic payload,
+  metadata, and record hashes computed before sink delivery.
 - Optional pre-sink policy enforcement that runs after message normalization,
   metadata defaults, mission metadata validation, and payload encryption, but
   before any destination write. The policy gate can require priority,
@@ -158,6 +160,8 @@ Included today:
 - Optional AES-256-GCM and AES-256-CCM payload encryption in the core runner.
 - Multi-key payload decryption helper for controlled key-rotation, replay, and
   verification workflows.
+- Optional tamper-evident custody metadata for deterministic verification
+  evidence. Custody hashes are not encryption or digital signatures.
 - JSON configuration and redacted effective-config output.
 - CLI command named `nats-sink`.
 - Metrics inspection command named `nats-sink-metrics`.
@@ -191,8 +195,9 @@ flowchart LR
     Crypto -->|no| Plain[Original payload bytes]
     Encrypted --> Policy{pre-sink policy enabled?}
     Plain --> Policy
-    Policy -->|passes| Sink[sink.write_batch]
+    Policy -->|passes| Custody{custody metadata enabled?}
     Policy -. permanent rejection .-> DLQ
+    Custody --> Sink[sink.write_batch]
     Sink --> Commit[Durable destination commit]
     Commit --> Ack[JetStream ACK]
 
@@ -670,6 +675,14 @@ The generic sink framework is documented separately in
 Oracle and file sinks use the same core delivery semantics, the same envelope
 contract, and the same commit-then-acknowledge rule.
 
+Generic data-handling features such as
+[payload encryption](https://nats-sinks.readthedocs.io/en/latest/payload-encryption/),
+[tamper-evident custody metadata](https://nats-sinks.readthedocs.io/en/latest/tamper-evident-custody/),
+[mission metadata](https://nats-sinks.readthedocs.io/en/latest/mission-metadata/),
+and [priority lanes](https://nats-sinks.readthedocs.io/en/latest/priority-lanes/)
+are documented separately from sink-specific pages so new sinks can adopt them
+without changing the public delivery contract.
+
 ## Failure Behavior
 
 ```mermaid
@@ -713,6 +726,8 @@ Important failure cases:
   publish rights for ordinary workers.
 - Use core payload encryption when destination storage should retain encrypted
   message bodies while keeping routing metadata available.
+- Use tamper-evident custody metadata when operators need deterministic hashes
+  for later verification, and remember that hashes are not encryption.
 - Use least-privilege destination credentials with access only to the required
   destination resources.
 

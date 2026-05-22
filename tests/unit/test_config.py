@@ -278,6 +278,66 @@ def test_logging_level_can_be_set_to_debug(tmp_path: Path) -> None:
     assert config.logging.level == "DEBUG"
 
 
+def test_custody_config_can_be_enabled_with_env_override(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*"
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/tmp/nats-sinks-test"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("NATS_SINKS_CUSTODY_ENABLED", "true")
+    monkeypatch.setenv("NATS_SINKS_CUSTODY_ALGORITHM", "sha512")
+
+    config = load_config(path)
+
+    assert config.custody.enabled is True
+    assert config.custody.algorithm == "sha512"
+
+
+def test_enabled_custody_requires_at_least_one_hash(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*"
+  },
+  "custody": {
+    "enabled": true,
+    "hash_payload": false,
+    "hash_metadata": false
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/tmp/nats-sinks-test"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError, match="hash_payload or hash_metadata"):
+        load_config(path, env_overrides=False)
+
+
 def test_pre_sink_policy_config_validates_subject_rules(tmp_path: Path) -> None:
     path = tmp_path / "config.json"
     path.write_text(

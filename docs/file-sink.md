@@ -245,6 +245,7 @@ Each uncompressed file contains a single JSON document:
     "mission_id": "SYN-MISSION-001",
     "f2t2ea_phase": "track"
   },
+  "custody": null,
   "payload": {
     "report_id": "R-1001",
     "status": "received"
@@ -282,6 +283,36 @@ framework fields. See [Mission Metadata](mission-metadata.md) and
 [F2T2EA Event Phase Tagging](use-cases/defence/f2t2ea-event-phase-tagging.md).
 For broader file-based handoff, edge operation, classification, labels, and
 audit examples, see [Defence And Mission Support](use-cases/defence/index.md).
+
+When top-level `custody.enabled` is true, the file sink writes the custody
+object as a top-level `custody` field. This object contains hashes for the
+normalized payload and stable metadata before the file was written. It gives
+auditors a deterministic value to recompute later, while the normal
+commit-then-ACK rule still depends on the file being atomically placed.
+
+Example custody object:
+
+```json
+{
+  "custody": {
+    "schema": "nats_sinks.custody.v1",
+    "schema_version": 1,
+    "algorithm": "sha256",
+    "hash_input_format": "canonical-json",
+    "key_id": "custody-policy-v1",
+    "payload_hash": "hex-encoded-payload-hash",
+    "metadata_hash": "hex-encoded-metadata-hash",
+    "record_hash": "hex-encoded-record-hash",
+    "previous_record_hash": null,
+    "hash_payload": true,
+    "hash_metadata": true,
+    "privacy": "hashes_are_not_encryption"
+  }
+}
+```
+
+See [Tamper-Evident Custody Metadata](tamper-evident-custody.md) for the full
+configuration model and privacy notes.
 
 ### Output Shape With Payload Encryption
 

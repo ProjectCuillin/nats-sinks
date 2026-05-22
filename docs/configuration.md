@@ -124,6 +124,16 @@ Oracle-specific fields inside the `sink` object.
       }
     ]
   },
+  "custody": {
+    "enabled": false,
+    "algorithm": "sha256",
+    "hash_payload": true,
+    "hash_metadata": true,
+    "include_previous_hash": false,
+    "previous_hash_header": "Nats-Sinks-Previous-Custody-Hash",
+    "key_id": null,
+    "max_hash_input_bytes": 16777216
+  },
   "pre_sink_policy": {
     "enabled": false,
     "unmatched_subject_action": "reject",
@@ -178,6 +188,7 @@ The top-level sections are:
 | `logging` | no | Standard Python logging level and payload logging switch. |
 | `metrics` | no | Metrics namespace, enablement flag, and optional local JSON snapshot path. |
 | `message_metadata` | no | Optional priority, classification, and labels extraction defaults applied to every message before sink delivery. |
+| `custody` | no | Optional tamper-evident payload and metadata hashes computed by the core before sink delivery. Disabled by default. |
 | `encryption` | no | Optional core payload encryption before messages are passed to any sink. |
 | `pre_sink_policy` | no | Optional fail-closed validation gate evaluated after normalization and core payload transformation, but before any sink write. |
 | `sink` | yes | Destination-specific sink configuration. `sink.type` chooses the sink implementation. |
@@ -815,6 +826,51 @@ not contain the plaintext message body. See [Payload Encryption](payload-encrypt
 for the full envelope shape, examples, testing guidance, and operational
 security notes.
 
+### `custody`
+
+The `custody` section enables optional tamper-evident evidence computed by the
+core before sink delivery. It is disabled by default because hashes can still
+reveal repeated payloads or repeated metadata patterns. When enabled, the runner
+computes a custody object, attaches it to `NatsEnvelope`, and every production
+sink persists it next to the durable record.
+
+Custody metadata is a pre-sink operation. If the core cannot compute it because
+the configured algorithm is invalid, a previous hash is malformed, or the
+canonical hash input exceeds the configured size limit, the sink is not called.
+The failure is treated as a permanent validation failure and follows the
+DLQ-before-ACK path when DLQ is enabled.
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `enabled` | no | `false` | `true` or `false`. | Enables custody metadata computation before sink writes. |
+| `algorithm` | no | `sha256` | `sha256`, `sha512`. | Hash algorithm used for payload, metadata, and record hashes. |
+| `hash_payload` | no | `true` | `true` or `false`. | Hashes the normalized payload storage value. |
+| `hash_metadata` | no | `true` | `true` or `false`. | Hashes stable generic metadata. Sink-local storage timestamps are excluded. |
+| `include_previous_hash` | no | `false` | `true` or `false`. | Reads an optional previous-record hash from the configured header. |
+| `previous_hash_header` | no | `Nats-Sinks-Previous-Custody-Hash` | Header name without control characters. | Header used for optional hash chaining. Missing values are accepted; malformed values fail closed. |
+| `key_id` | no | `null` | Non-secret text up to 128 characters. | Optional policy or future key-version identifier. Do not store key material here. |
+| `max_hash_input_bytes` | no | `16777216` | Integer `1024` to `1073741824`. | Maximum canonical JSON byte length accepted for each hash input. |
+
+Example:
+
+```json
+{
+  "custody": {
+    "enabled": true,
+    "algorithm": "sha256",
+    "hash_payload": true,
+    "hash_metadata": true,
+    "key_id": "custody-policy-v1"
+  }
+}
+```
+
+The persisted object includes fields such as `payload_hash`, `metadata_hash`,
+`record_hash`, and `previous_record_hash`. Hashes are not encryption and are
+not digital signatures. For the full model, examples, privacy guidance, and
+sink storage behavior, read
+[Tamper-Evident Custody Metadata](tamper-evident-custody.md).
+
 ### `pre_sink_policy`
 
 The `pre_sink_policy` section is an optional core runtime gate. It is disabled
@@ -1024,6 +1080,9 @@ Supported environment overrides:
 - `NATS_SINKS_LABELS_DEFAULT`
 - `NATS_SINKS_MISSION_METADATA_ENABLED`
 - `NATS_SINKS_MISSION_METADATA_HEADER`
+- `NATS_SINKS_CUSTODY_ENABLED`
+- `NATS_SINKS_CUSTODY_ALGORITHM`
+- `NATS_SINKS_CUSTODY_KEY_ID`
 - `NATS_SINKS_SINK_TYPE`
 
 Destination passwords should normally be supplied through environment variables

@@ -19,6 +19,7 @@ runner and are never delegated to destination code.
 """
 
 from nats_sinks.core.config import (
+    CustodyConfig,
     EncryptionConfig,
     EncryptionRuleConfig,
     MessageMetadataConfig,
@@ -31,6 +32,13 @@ from nats_sinks.core.config import (
     PreSinkPolicyRuleConfig,
     PriorityLaneConfig,
     PriorityLanesConfig,
+)
+from nats_sinks.core.custody import (
+    CUSTODY_SCHEMA,
+    CUSTODY_SUPPORTED_ALGORITHMS,
+    attach_custody_metadata,
+    canonical_json_bytes,
+    compute_custody_metadata,
 )
 from nats_sinks.core.encryption import (
     ENCRYPTED_PAYLOAD_KEY,
@@ -94,6 +102,8 @@ from nats_sinks.file import FileSink
 from nats_sinks.sinks.base import FlushableSink, HealthCheckableSink, SchemaAwareSink, Sink
 
 __all__ = [
+    "CUSTODY_SCHEMA",
+    "CUSTODY_SUPPORTED_ALGORITHMS",
     "DEFAULT_CLASSIFICATION_HEADER",
     "DEFAULT_LABELS_HEADER",
     "DEFAULT_METRIC_NAMESPACE",
@@ -105,6 +115,7 @@ __all__ = [
     "NATS_RESERVED_HEADER_NAMES",
     "AckError",
     "ConfigurationError",
+    "CustodyConfig",
     "DeadLetterError",
     "DestinationUnavailableError",
     "EncryptionConfig",
@@ -146,7 +157,10 @@ __all__ = [
     "SubjectPayloadEncryptor",
     "TemporarySinkError",
     "ValidationError",
+    "attach_custody_metadata",
     "build_nats_metadata_snapshot",
+    "canonical_json_bytes",
+    "compute_custody_metadata",
     "datetime_to_epoch_ns",
     "decrypt_payload",
     "evaluate_pre_sink_policy",

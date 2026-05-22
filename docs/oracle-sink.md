@@ -538,9 +538,18 @@ The epoch columns use Unix epoch nanoseconds:
 all message headers, known `Nats-` reserved headers that are present, JetStream
 stream/consumer/sequence values, optional reply subject, the normalized
 `priority`, `classification`, and `labels` fields, optional
-`mission_metadata`, and the timing fields. Missing optional headers such as
-`Nats-Msg-Id` or `Nats-Expected-Stream` remain absent/null and do not cause
-processing failures.
+`mission_metadata`, optional tamper-evident `custody` metadata, and the timing
+fields. Missing optional headers such as `Nats-Msg-Id` or
+`Nats-Expected-Stream` remain absent/null and do not cause processing failures.
+
+When top-level `custody.enabled` is true, Oracle stores the custody object in
+`METADATA_JSON.custody`. The recommended table does not require a dedicated
+custody column, which keeps the table shape compatible while still making the
+evidence queryable through Oracle JSON features. The custody object contains
+payload, metadata, and record hashes computed by the core before
+`OracleSink.write_batch(...)` is called. It is not encryption and not a digital
+signature. Read [Tamper-Evident Custody Metadata](tamper-evident-custody.md)
+for configuration, hash chaining, and privacy guidance.
 
 `mission_metadata_json` stores the optional validated mission metadata object
 resolved by the core runtime from the configured header or defaults. This keeps
@@ -607,6 +616,15 @@ Example metadata document:
     "received_at_epoch_ns": 1778926620000000000,
     "stored_at": "2026-05-16T10:18:00+00:00",
     "stored_at_epoch_ns": 1778926680000000000
+  },
+  "custody": {
+    "schema": "nats_sinks.custody.v1",
+    "algorithm": "sha256",
+    "payload_hash": "hex-encoded-payload-hash",
+    "metadata_hash": "hex-encoded-metadata-hash",
+    "record_hash": "hex-encoded-record-hash",
+    "previous_record_hash": null,
+    "privacy": "hashes_are_not_encryption"
   }
 }
 ```
@@ -633,7 +651,7 @@ organization.
 | `STORED_AT_EPOCH_NS` | `1778926680000000000` |
 | `PAYLOAD_JSON` | JSON object containing `_nats_sinks_encryption` with `algorithm`, `key_id`, `nonce`, `ciphertext`, `tag_length`, `plaintext_sha256`, and `plaintext_size_bytes`. |
 | `HEADERS_JSON` | Headers such as `Nats-Msg-Id`, `Nats-Sinks-Priority`, `Nats-Sinks-Classification`, and `Nats-Sinks-Labels` when present. |
-| `METADATA_JSON` | Full metadata document including `message_metadata.priority`, `message_metadata.classification`, and `message_metadata.labels`. |
+| `METADATA_JSON` | Full metadata document including `message_metadata.priority`, `message_metadata.classification`, `message_metadata.labels`, and optional `custody` evidence. |
 | `MISSION_METADATA_JSON` | Optional validated JSON object such as `{"profile":"mission-event-v1","mission_id":"SYN-MISSION-001","f2t2ea_phase":"track"}` when mission metadata is enabled. |
 
 For F2T2EA-style phase tagging, keep phase values metadata-only and do not use

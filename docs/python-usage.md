@@ -18,7 +18,7 @@ contract as the CLI.
 ## Recommended Imports
 
 ```python
-from nats_sinks import EncryptionConfig, JetStreamSinkRunner, NatsEnvelope, Sink
+from nats_sinks import CustodyConfig, EncryptionConfig, JetStreamSinkRunner, NatsEnvelope, Sink
 from nats_sinks.file import FileSink
 from nats_sinks.oracle import OracleSink
 ```
@@ -107,6 +107,37 @@ registry = PayloadKeyRegistry(
 
 plaintext = registry.decrypt_payload(stored_payload)
 ```
+
+## Enabling Custody Metadata
+
+Applications can also enable tamper-evident custody metadata through the
+runner. The core computes deterministic hashes before calling the sink, and the
+sink persists the custody object with the durable record.
+
+```python
+from nats_sinks import CustodyConfig, JetStreamSinkRunner
+from nats_sinks.file import FileSink
+
+sink = FileSink(directory="/var/lib/nats-sinks/events")
+
+runner = JetStreamSinkRunner(
+    nats_url="nats://localhost:4222",
+    stream="ORDERS",
+    consumer="orders-file-sink",
+    subject="orders.*",
+    sink=sink,
+    custody=CustodyConfig(
+        enabled=True,
+        algorithm="sha256",
+        key_id="custody-policy-v1",
+    ),
+)
+```
+
+Custody hashes are not encryption and not digital signatures. They are evidence
+values that can be recomputed later to detect unexpected changes to stored
+payloads or metadata. See
+[Tamper-Evident Custody Metadata](tamper-evident-custody.md).
 
 ## Capturing Metrics In Embedded Code
 

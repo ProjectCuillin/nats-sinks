@@ -225,6 +225,22 @@ disabled rule intentionally leaves matching payloads unchanged. See
 [Payload Encryption](payload-encryption.md) for the full design and
 configuration reference.
 
+Optional tamper-evident custody metadata can help auditors detect unexpected
+changes to stored payload or metadata records. When enabled, the runner hashes
+the normalized payload and stable metadata before sink delivery and asks sinks
+to persist the resulting custody object next to the durable record. This is
+not encryption and not a digital signature. A hash can reveal that two
+messages carried the same payload or metadata shape, even when the payload body
+is encrypted.
+
+Use custody metadata only after reviewing the privacy tradeoff for the
+deployment. Protect persisted custody objects with the same access controls,
+backup rules, retention rules, and issue-comment hygiene used for the
+surrounding event data. The optional `key_id` field is a non-secret policy or
+future key-version identifier; never place key material, tokens, locations, or
+private operational detail in it. See
+[Tamper-Evident Custody Metadata](tamper-evident-custody.md).
+
 Headers-only delivery can reduce payload exposure to a sink process, but it is
 not a complete confidentiality control. Subjects, headers, stream metadata,
 sequence numbers, message size, priority, classification, labels, mission

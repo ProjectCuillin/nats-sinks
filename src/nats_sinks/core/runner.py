@@ -26,6 +26,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from nats_sinks.core.config import (
+    CustodyConfig,
     DeadLetterConfig,
     DeliveryConfig,
     EncryptionConfig,
@@ -34,6 +35,7 @@ from nats_sinks.core.config import (
     PreSinkPolicyConfig,
 )
 from nats_sinks.core.consumer import envelope_from_nats_message
+from nats_sinks.core.custody import attach_custody_metadata
 from nats_sinks.core.dlq import build_dead_letter_payload
 from nats_sinks.core.encryption import PayloadEncryptor, PayloadTransformer
 from nats_sinks.core.envelope import NatsEnvelope
@@ -91,6 +93,7 @@ class JetStreamSinkRunner:
         message_metadata: MessageMetadataConfig | None = None,
         mission_metadata: MissionMetadataConfig | None = None,
         encryption: EncryptionConfig | None = None,
+        custody: CustodyConfig | None = None,
         pre_sink_policy: PreSinkPolicyConfig | None = None,
         metrics: MetricsRecorder | None = None,
         nats_options: Mapping[str, Any] | None = None,
@@ -117,6 +120,7 @@ class JetStreamSinkRunner:
         self.message_metadata = message_metadata or MessageMetadataConfig()
         self.mission_metadata = mission_metadata or MissionMetadataConfig()
         self.encryption = encryption or EncryptionConfig()
+        self.custody = custody or CustodyConfig()
         self.pre_sink_policy = pre_sink_policy or PreSinkPolicyConfig()
         self.metrics = metrics or NoopMetrics()
         self.nats_options = dict(nats_options or {})
@@ -398,6 +402,30 @@ class JetStreamSinkRunner:
                 return
 
         try:
+            # Custody evidence is computed in the core after payload
+            # transformation and policy acceptance, but before sink delivery.
+            # A failure here is a permanent pre-sink failure and must not ACK
+            # the original message unless DLQ publication succeeds first.
+            envelopes = attach_custody_metadata(envelopes, config=self.custody)
+        except PermanentSinkError as exc:
+            await self._handle_policy_rejections(
+                raw_message_list,
+                envelopes,
+                exc,
+                context="custody metadata generation failure",
+            )
+            return
+        except Exception as exc:
+            await self._handle_temporary_failure(
+                raw_message_list,
+                exc,
+                context="custody metadata generation failure",
+                error_metric=MetricNames.MESSAGE_NORMALIZATION_ERRORS_TOTAL,
+                log_exception=True,
+            )
+            return
+
+        try:
             # Priority-lane scheduling is intentionally placed after all core
             # normalization and transformation work, but before sink delivery.
             # The sink receives one ordered batch and the runner still ACKs only
@@ -572,19 +600,21 @@ class JetStreamSinkRunner:
         raw_messages: Sequence[Any],
         envelopes: Sequence[NatsEnvelope],
         error: PermanentSinkError,
+        *,
+        context: str = "pre-sink policy rejection",
     ) -> None:
         """Handle messages rejected before sink delivery.
 
-        Policy rejections are permanent message failures, but they are not sink
-        write failures.  They therefore use DLQ-before-ACK handling without
-        incrementing sink error counters or calling `sink.write_batch`.
+        Pre-sink rejections are permanent message failures, but they are not
+        sink write failures.  They therefore use DLQ-before-ACK handling
+        without incrementing sink error counters or calling `sink.write_batch`.
         """
 
         increment_metric(self.metrics, MetricNames.MESSAGES_FAILED_TOTAL, len(raw_messages))
         if not self.dead_letter.enabled:
             LOGGER.error(
-                "pre-sink policy rejected message batch and DLQ disabled; "
-                "rejected messages left unacked: %s",
+                "%s and DLQ disabled; rejected messages left unacked: %s",
+                context,
                 error,
             )
             return
@@ -602,7 +632,7 @@ class JetStreamSinkRunner:
             return
 
         ack_started = time.perf_counter()
-        await self._ack_all(raw_messages, context="after successful policy DLQ publication")
+        await self._ack_all(raw_messages, context=f"after successful {context} DLQ publication")
         observe_metric(
             self.metrics,
             MetricNames.MESSAGE_ACK_SECONDS,

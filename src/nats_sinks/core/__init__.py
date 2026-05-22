@@ -14,6 +14,13 @@ as Postgres, HTTP, file, S3, and Kafka easier to certify against the same
 contract.
 """
 
+from nats_sinks.core.custody import (
+    CUSTODY_SCHEMA,
+    CUSTODY_SUPPORTED_ALGORITHMS,
+    attach_custody_metadata,
+    canonical_json_bytes,
+    compute_custody_metadata,
+)
 from nats_sinks.core.encryption import (
     ENCRYPTED_PAYLOAD_KEY,
     PayloadEncryptor,
@@ -63,6 +70,8 @@ from nats_sinks.core.priority import PriorityLaneAssignment, order_by_priority_l
 from nats_sinks.core.runner import JetStreamSinkRunner
 
 __all__ = [
+    "CUSTODY_SCHEMA",
+    "CUSTODY_SUPPORTED_ALGORITHMS",
     "DEFAULT_CLASSIFICATION_HEADER",
     "DEFAULT_LABELS_HEADER",
     "DEFAULT_METRIC_NAMESPACE",
@@ -88,7 +97,10 @@ __all__ = [
     "PolicyViolation",
     "PriorityLaneAssignment",
     "SubjectPayloadEncryptor",
+    "attach_custody_metadata",
     "build_nats_metadata_snapshot",
+    "canonical_json_bytes",
+    "compute_custody_metadata",
     "datetime_to_epoch_ns",
     "decrypt_payload",
     "evaluate_pre_sink_policy",

@@ -77,6 +77,11 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   into separate backlog items for WebSocket configuration guardrails, optional
   connection header support, and an integration certification harness while
   keeping `nats://` and `tls://` as the certified production transports today.
+- Added optional tamper-evident custody metadata, including core configuration,
+  deterministic payload and metadata hash helpers, optional previous-record
+  hash capture, runner fail-closed behavior before sink writes, file sink
+  record output, Oracle `METADATA_JSON.custody` persistence, public API
+  exports, tests, and documentation.
 
 ### Changed
 

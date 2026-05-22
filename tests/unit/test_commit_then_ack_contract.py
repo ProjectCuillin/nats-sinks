@@ -15,6 +15,7 @@ from nats_sinks import (
     TemporarySinkError,
 )
 from nats_sinks.core.config import (
+    CustodyConfig,
     DeadLetterConfig,
     DeliveryConfig,
     MessageMetadataConfig,
@@ -558,7 +559,27 @@ async def test_message_normalization_failure_does_not_ack(
 
     assert events == ["nak"]
     assert not message.acked
-    assert message.nacked
+
+
+@pytest.mark.asyncio
+async def test_custody_generation_failure_does_not_ack_or_call_sink() -> None:
+    events: list[str] = []
+    message = FakeMessage(events)
+    message.headers["Nats-Sinks-Previous-Custody-Hash"] = "not-a-digest"
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=RecordingSink(events),
+        custody=CustodyConfig(enabled=True, include_previous_hash=True),
+    )
+
+    await runner.process_raw_batch([message])
+
+    assert events == []
+    assert not message.acked
+    assert not message.nacked
 
 
 @pytest.mark.asyncio

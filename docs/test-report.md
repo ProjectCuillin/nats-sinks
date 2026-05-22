@@ -14,11 +14,11 @@ logs from live systems.
 | Field | Value |
 | --- | --- |
 | Overall result | Pass |
-| Report generated | 2026-05-22 10:10:41 CEST |
+| Report generated | 2026-05-22 13:40:48 CEST |
 | Project version | `0.4.0` post-release development |
 | Python version | 3.12.4 |
 | Git revision checked | Active `release-v0.4.1` branch-first workflow workspace |
-| Worktree state | Active workspace with quiet branch-first release workflow automation, GitHub `main` branch protection, draft pull request helpers, manual release-validation dispatch, CODEOWNERS review ownership, pull request governance checks, release tag validation against `main`, updated release/backlog/contributor documentation, Oracle high-throughput staging-table merge mode for issue `#31`, and the previously validated `0.4.0` capability set covering secure-development hardening, strict JSON config loading, log-injection sanitization, secret-scan automation, the 316-control security rule review, project-specific security controls, expanded public API compatibility tests and documentation, release-version consistency checks, generated GitHub Dependency Graph manifests, detailed local backlog JSON items synced to GitHub Issues, release-target backlog labels, sanitized backlog comment tooling, completed-label workflow support for fixed or implemented issues awaiting release, stricter backlog lifecycle enforcement, release-gated backlog close automation, OCI Object Storage sink backlog tracking, standardized SPDX source headers, metrics snapshots and CLI, observability policy core, Prometheus and NATS monitoring connectors, Kubernetes examples, unified Debian/Oracle Linux systemd installer, NATS reconnect tuning, least-privilege NATS permission templates, JetStream topology guidance, retry backoff with jitter, priority-aware lanes, synthetic mission testing, mission-support examples, CycloneDX SBOM generation, release checksums, hash-verified installation guidance, property-style tests, defence and mission-support blueprints, generic mission metadata, payload encryption, and Oracle/file sink support |
+| Worktree state | Active workspace with quiet branch-first release workflow automation, GitHub `main` branch protection, draft pull request helpers, manual release-validation dispatch, CODEOWNERS review ownership, pull request governance checks, release tag validation against `main`, updated release/backlog/contributor documentation, Oracle high-throughput staging-table merge mode for issue `#31`, tamper-evident custody metadata for issue `#60`, and the previously validated `0.4.0` capability set covering secure-development hardening, strict JSON config loading, log-injection sanitization, secret-scan automation, the 316-control security rule review, project-specific security controls, expanded public API compatibility tests and documentation, release-version consistency checks, generated GitHub Dependency Graph manifests, detailed local backlog JSON items synced to GitHub Issues, release-target backlog labels, sanitized backlog comment tooling, completed-label workflow support for fixed or implemented issues awaiting release, stricter backlog lifecycle enforcement, release-gated backlog close automation, OCI Object Storage sink backlog tracking, standardized SPDX source headers, metrics snapshots and CLI, observability policy core, Prometheus and NATS monitoring connectors, Kubernetes examples, unified Debian/Oracle Linux systemd installer, NATS reconnect tuning, least-privilege NATS permission templates, JetStream topology guidance, retry backoff with jitter, priority-aware lanes, synthetic mission testing, mission-support examples, CycloneDX SBOM generation, release checksums, hash-verified installation guidance, property-style tests, defence and mission-support blueprints, generic mission metadata, payload encryption, and Oracle/file sink support |
 | Live NATS details | Redacted |
 | Live Oracle details | Redacted |
 
@@ -51,7 +51,8 @@ disconnected file handoff, DLQ triage and replay preparation,
 and destination outage recovery, runner metrics contract tests, global and
 subject-specific payload encryption, global and subject-specific
 priority/classification/labels message metadata defaults, generic mission
-metadata validation and storage, file sink, Oracle unit coverage, the
+metadata validation and storage, tamper-evident custody metadata with
+deterministic payload/metadata/record hashes, file sink, Oracle unit coverage, the
 deterministic synthetic mission scenario harness and local file-sink smoke
 adapter, the F2T2EA event phase tagging blueprint with tracked example
 validation, the expanded defence and mission-support blueprint set for sensor
@@ -93,6 +94,7 @@ flowchart LR
     Synthetic[Synthetic mission harness] --> Report
     F2T2EA[F2T2EA blueprint examples] --> Report
     MissionMeta[Generic mission metadata] --> Report
+    Custody[Tamper-evident custody metadata] --> Report
     Crypto[Payload encryption] --> Report
     MessageMeta[Priority / classification / labels metadata] --> Report
     File[File sink] --> Report

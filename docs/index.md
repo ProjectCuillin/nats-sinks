@@ -65,6 +65,9 @@ The current release provides the following production-ready foundation:
   messages are written by any sink.
 - A public multi-key payload decryption helper for controlled key-rotation,
   replay, migration, and verification workflows.
+- Optional tamper-evident custody metadata with deterministic payload,
+  metadata, and record hashes computed before sink writes. This is evidence
+  support for later verification, not encryption or a digital signature.
 - Optional pre-sink policy enforcement that runs after message normalization,
   metadata defaults, mission metadata validation, and payload encryption, but
   before Oracle, file, or future sink writes. It can require priority,
