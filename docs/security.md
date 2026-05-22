@@ -80,7 +80,8 @@ Use this baseline for code review and future releases:
   setup, sink selection, or policy evaluation is ambiguous.
 - Keep security-sensitive logic centralized and documented: configuration
   loading, TLS setup, credential resolution, SQL identifier validation, payload
-  encryption, log sanitization, redaction, DLQ shaping, and ACK decisions.
+  encryption, pre-sink policy enforcement, log sanitization, redaction, DLQ
+  shaping, and ACK decisions.
 - Use allow-list validation for enum values, formats, lengths, ranges, SQL
   identifiers, file extensions, URL schemes, sink names, route names, and NATS
   subject patterns.
@@ -146,6 +147,41 @@ The detailed maintainer-requested control review is tracked in
 status of all 316 secure-development guidance points as applied, already
 covered, partially covered, roadmap, or not applicable for the current package
 surface.
+
+## Pre-Sink Policy Gate
+
+The optional `pre_sink_policy` gate is a security and correctness control that
+runs after the core has built a validated `NatsEnvelope`, resolved generic
+metadata, validated mission metadata, and optionally encrypted the payload. It
+runs before any sink writes. This placement lets one destination-neutral policy
+protect Oracle, file, and future sinks without duplicating checks in every
+destination module.
+
+The gate is disabled by default. When enabled, it is fail-closed by default:
+subjects that do not match any rule are rejected unless an operator explicitly
+sets `unmatched_subject_action` to `allow`. Rules are intentionally simple and
+auditable. They can require priority, classification, labels, mission metadata,
+encrypted payloads, mission metadata root-key allow lists, and maximum
+sink-bound payload size.
+
+The policy engine does not execute Python code, templates, regular
+expressions, dynamic imports, or user-provided expressions. Rejections use
+sanitized reason codes and must not include payload bodies, credentials, table
+names, private network locators, or other sensitive values. A policy rejection
+is treated as a permanent validation failure: the message never reaches the
+sink, and if DLQ is configured the original JetStream message is ACKed or
+terminally acknowledged only after DLQ publication succeeds.
+
+Use the policy gate for deployment-wide controls such as:
+
+- requiring encrypted payloads for selected subjects,
+- requiring classification for restricted operational streams,
+- requiring labels that identify an audit lane or mission-support workflow,
+- rejecting mission metadata fields outside an approved root-key vocabulary,
+- bounding payload size before handing data to destination drivers.
+
+The full configuration reference is in
+[Configuration](configuration.md#pre_sink_policy).
 
 ## Payload Privacy
 

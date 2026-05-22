@@ -51,6 +51,9 @@ represent the same need.
 - Mission metadata as a validated JSON context object for mission, operation,
   platform, source-system, track, confidence, releasability, and lifecycle
   metadata.
+- Optional pre-sink policy enforcement for requiring classification, labels,
+  mission metadata, encrypted payloads, and size limits before destination
+  writes.
 - Payload wrapping for non-JSON text and bytes.
 - Optional payload encryption before sink delivery.
 - Local file output for disconnected handoff and evidence capture.

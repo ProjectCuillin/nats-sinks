@@ -124,6 +124,22 @@ Oracle-specific fields inside the `sink` object.
       }
     ]
   },
+  "pre_sink_policy": {
+    "enabled": false,
+    "unmatched_subject_action": "reject",
+    "rules": [
+      {
+        "subject": "orders.secure.>",
+        "require_priority": true,
+        "require_classification": true,
+        "required_labels": ["orders"],
+        "require_mission_metadata": true,
+        "require_encrypted_payload": true,
+        "max_payload_bytes": 1048576,
+        "allowed_mission_metadata_keys": ["profile", "phase", "operation"]
+      }
+    ]
+  },
   "sink": {
     "type": "file",
     "directory": ".local/file-sink/events",
@@ -163,6 +179,7 @@ The top-level sections are:
 | `metrics` | no | Metrics namespace, enablement flag, and optional local JSON snapshot path. |
 | `message_metadata` | no | Optional priority, classification, and labels extraction defaults applied to every message before sink delivery. |
 | `encryption` | no | Optional core payload encryption before messages are passed to any sink. |
+| `pre_sink_policy` | no | Optional fail-closed validation gate evaluated after normalization and core payload transformation, but before any sink write. |
 | `sink` | yes | Destination-specific sink configuration. `sink.type` chooses the sink implementation. |
 
 The only supported `delivery.ack_policy` value is `after_sink_commit`, which
@@ -770,6 +787,83 @@ ciphertext, tag length, plaintext size, and plaintext SHA-256 digest. It does
 not contain the plaintext message body. See [Payload Encryption](payload-encryption.md)
 for the full envelope shape, examples, testing guidance, and operational
 security notes.
+
+### `pre_sink_policy`
+
+The `pre_sink_policy` section is an optional core runtime gate. It is disabled
+by default because not every deployment needs a policy layer. When enabled, it
+runs after the runner has normalized the message, resolved priority,
+classification, labels, mission metadata, and optional payload encryption, but
+before `sink.write_batch(...)` is called.
+
+This means the rule is sink-neutral: the same policy protects Oracle, file, and
+future sinks. A rejected message never reaches a sink. Policy rejection is a
+permanent validation failure. If DLQ is enabled, the rejected message is
+published to DLQ and the original JetStream message is ACKed or terminally
+acknowledged only after DLQ publication succeeds. If DLQ publication fails, the
+original message is not ACKed.
+
+The policy engine intentionally does not support Python code, dynamic imports,
+regular expressions, templates, or a general expression language. Supported
+checks are explicit allow-listed fields that are easy to review:
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `enabled` | no | `false` | `true` or `false`. | Enables the pre-sink policy gate. When true, at least one rule is required. |
+| `unmatched_subject_action` | no | `reject` | `reject` or `allow`. | What happens when the gate is enabled and no rule matches a message subject. The secure default rejects unmatched subjects. |
+| `rules` | no | `[]` | List of rule objects. | Subject-scoped checks. All matching rules apply, so a global rule and a subject-specific rule can both constrain the same message. |
+
+Rule fields:
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `subject` | no | `>` | NATS subject pattern such as `orders.*` or `orders.secure.>`. | Subjects matched by this rule. |
+| `require_priority` | no | `false` | `true` or `false`. | Requires `NatsEnvelope.priority` to be present after `message_metadata` resolution. |
+| `require_classification` | no | `false` | `true` or `false`. | Requires `NatsEnvelope.classification` to be present. |
+| `required_labels` | no | `[]` | String with semicolon-separated labels or a JSON array of strings. | Requires all listed labels to be present in `NatsEnvelope.labels`. |
+| `require_mission_metadata` | no | `false` | `true` or `false`. | Requires a validated mission metadata object. |
+| `require_encrypted_payload` | no | `false` | `true` or `false`. | Requires the payload delivered to the sink to be the standard nats-sinks encrypted payload envelope. |
+| `max_payload_bytes` | no | `null` | Integer `0` to `1073741824`. | Rejects messages whose current sink-bound payload bytes exceed this size. If encryption is enabled, this checks encrypted envelope size. |
+| `allowed_mission_metadata_keys` | no | `null` | JSON array of safe root key names. | If set, every root key in mission metadata must be in this allow list. An empty list means no mission metadata keys are allowed. Secret-looking key names are rejected in configuration. |
+
+Example: require classification and encrypted payloads for secure operational
+events, while still allowing routine order events through a less restrictive
+rule:
+
+```json
+{
+  "pre_sink_policy": {
+    "enabled": true,
+    "rules": [
+      {
+        "subject": "orders.secure.>",
+        "require_priority": true,
+        "require_classification": true,
+        "required_labels": ["orders", "audit"],
+        "require_mission_metadata": true,
+        "require_encrypted_payload": true,
+        "allowed_mission_metadata_keys": ["profile", "phase", "operation"]
+      },
+      {
+        "subject": "orders.routine.*",
+        "require_classification": true,
+        "max_payload_bytes": 1048576
+      }
+    ]
+  }
+}
+```
+
+The gate emits policy metrics when enabled:
+
+- `policy_messages_passed_total`,
+- `policy_messages_rejected_total`,
+- `policy_batches_passed_total`,
+- `policy_batches_rejected_total`,
+- `policy_evaluation_errors_total`.
+
+Read [Metrics](metrics.md) for CLI examples and
+[Dead Letter Queues](dead-letter-queues.md) for the ACK-after-DLQ rule.
 
 ### `sink`
 

@@ -67,8 +67,22 @@ MAX_ENCRYPTION_KEY_ID_LENGTH = 128
 MAX_CONFIG_BYTES = 1_048_576
 NATS_ALLOWED_URL_SCHEMES = frozenset({"nats", "tls", "ws", "wss"})
 PRIORITY_LANE_NAME_RE = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
+PRE_SINK_POLICY_MISSION_KEY_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.:-]{0,127}$")
 ASCII_CONTROL_MAX = 31
 ASCII_DELETE = 127
+MAX_POLICY_LABEL_LENGTH = 128
+MAX_POLICY_PAYLOAD_BYTES = 1_073_741_824
+POLICY_SECRET_KEY_PARTS = (
+    "password",
+    "passwd",
+    "pwd",
+    "token",
+    "secret",
+    "private_key",
+    "credential",
+    "api_key",
+    "key_material",
+)
 
 
 def _validate_nats_server_url(value: str, *, field: str) -> str:
@@ -404,6 +418,137 @@ class DeadLetterConfig(BaseModel):
     include_headers: bool = True
     include_error: bool = True
     ack_term_after_publish: bool = False
+
+
+class PreSinkPolicyRuleConfig(BaseModel):
+    """One allow-listed pre-sink policy rule.
+
+    Rules are data-only configuration, not executable expressions. Every
+    enabled rule is evaluated against matching subjects before any sink sees
+    the message. If a rule fails, the message follows the permanent-failure
+    path and can be published to DLQ before ACK.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    subject: str = ">"
+    require_priority: bool = False
+    require_classification: bool = False
+    required_labels: tuple[str, ...] = Field(default_factory=tuple)
+    require_mission_metadata: bool = False
+    require_encrypted_payload: bool = False
+    max_payload_bytes: int | None = Field(default=None, ge=0, le=MAX_POLICY_PAYLOAD_BYTES)
+    allowed_mission_metadata_keys: tuple[str, ...] | None = None
+
+    @field_validator("subject")
+    @classmethod
+    def validate_subject(cls, value: str) -> str:
+        """Validate policy subject patterns with the same NATS syntax as routing."""
+
+        return validate_subject_pattern(value)
+
+    @field_validator("required_labels", mode="before")
+    @classmethod
+    def normalize_required_labels(cls, value: object) -> tuple[str, ...]:
+        """Normalize and bound required labels before runtime policy checks."""
+
+        labels = normalise_labels_value(value)
+        for label in labels:
+            if len(label) > MAX_POLICY_LABEL_LENGTH:
+                raise ValueError(
+                    f"policy required labels must not exceed {MAX_POLICY_LABEL_LENGTH} characters"
+                )
+            if any(
+                ord(character) <= ASCII_CONTROL_MAX or ord(character) == ASCII_DELETE
+                for character in label
+            ):
+                raise ValueError("policy required labels must not contain control characters")
+        return labels
+
+    @field_validator("allowed_mission_metadata_keys", mode="before")
+    @classmethod
+    def normalize_allowed_mission_metadata_keys(
+        cls,
+        value: object,
+    ) -> tuple[str, ...] | None:
+        """Validate root mission-metadata keys used by the policy allow list."""
+
+        if value is None:
+            return None
+        if isinstance(value, str):
+            raw_values = [value]
+        elif isinstance(value, (list, tuple, set, frozenset)):
+            raw_values = list(value)
+        else:
+            raise ValueError("policy allowed_mission_metadata_keys must be a string or list")
+
+        keys: list[str] = []
+        seen: set[str] = set()
+        for item in raw_values:
+            if not isinstance(item, str):
+                raise ValueError("policy allowed_mission_metadata_keys must contain strings")
+            key = item.strip()
+            if not key:
+                raise ValueError("policy allowed_mission_metadata_keys must not contain blanks")
+            if "\n" in key or "\r" in key or "\x00" in key:
+                raise ValueError(
+                    "policy allowed_mission_metadata_keys must not contain control characters"
+                )
+            if PRE_SINK_POLICY_MISSION_KEY_RE.fullmatch(key) is None:
+                raise ValueError(
+                    "policy allowed_mission_metadata_keys must start with a letter and contain "
+                    "only letters, numbers, underscores, dots, colons, or hyphens"
+                )
+            key_lower = key.lower()
+            if any(part in key_lower for part in POLICY_SECRET_KEY_PARTS):
+                raise ValueError(
+                    "policy allowed_mission_metadata_keys must not contain secret-like names"
+                )
+            if key in seen:
+                continue
+            keys.append(key)
+            seen.add(key)
+        return tuple(keys)
+
+    @model_validator(mode="after")
+    def validate_rule_has_check(self) -> PreSinkPolicyRuleConfig:
+        """Reject no-op policy rules that would make reviews misleading."""
+
+        has_allowed_keys_check = "allowed_mission_metadata_keys" in self.model_fields_set
+        if not (
+            self.require_priority
+            or self.require_classification
+            or self.required_labels
+            or self.require_mission_metadata
+            or self.require_encrypted_payload
+            or self.max_payload_bytes is not None
+            or has_allowed_keys_check
+        ):
+            raise ValueError("pre-sink policy rule must configure at least one check")
+        return self
+
+
+class PreSinkPolicyConfig(BaseModel):
+    """Destination-neutral policy gate evaluated before sink writes.
+
+    The gate is disabled by default. Once enabled, configuration intentionally
+    fails closed: at least one explicit rule is required, and unmatched subjects
+    are rejected unless the operator opts into `unmatched_subject_action=allow`.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    unmatched_subject_action: Literal["allow", "reject"] = "reject"
+    rules: list[PreSinkPolicyRuleConfig] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_enabled_policy_has_rules(self) -> PreSinkPolicyConfig:
+        """Require explicit rules before enabling the pre-sink gate."""
+
+        if self.enabled and not self.rules:
+            raise ValueError("pre_sink_policy.enabled requires at least one rule")
+        return self
 
 
 class LoggingConfig(BaseModel):
@@ -1049,6 +1194,7 @@ class AppConfig(BaseModel):
     message_metadata: MessageMetadataConfig = Field(default_factory=MessageMetadataConfig)
     mission_metadata: MissionMetadataConfig = Field(default_factory=MissionMetadataConfig)
     encryption: EncryptionConfig = Field(default_factory=EncryptionConfig)
+    pre_sink_policy: PreSinkPolicyConfig = Field(default_factory=PreSinkPolicyConfig)
     sink: SinkConfig
 
 

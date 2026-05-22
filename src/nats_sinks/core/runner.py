@@ -31,6 +31,7 @@ from nats_sinks.core.config import (
     EncryptionConfig,
     MessageMetadataConfig,
     MissionMetadataConfig,
+    PreSinkPolicyConfig,
 )
 from nats_sinks.core.consumer import envelope_from_nats_message
 from nats_sinks.core.dlq import build_dead_letter_payload
@@ -52,6 +53,7 @@ from nats_sinks.core.metrics import (
     observe_metric,
     set_metric_value,
 )
+from nats_sinks.core.policy import evaluate_pre_sink_policy, policy_violation_error
 from nats_sinks.core.priority import order_by_priority_lanes
 from nats_sinks.core.retry import RetryPolicy
 from nats_sinks.sinks.base import Sink
@@ -89,6 +91,7 @@ class JetStreamSinkRunner:
         message_metadata: MessageMetadataConfig | None = None,
         mission_metadata: MissionMetadataConfig | None = None,
         encryption: EncryptionConfig | None = None,
+        pre_sink_policy: PreSinkPolicyConfig | None = None,
         metrics: MetricsRecorder | None = None,
         nats_options: Mapping[str, Any] | None = None,
         jetstream: Any | None = None,
@@ -114,6 +117,7 @@ class JetStreamSinkRunner:
         self.message_metadata = message_metadata or MessageMetadataConfig()
         self.mission_metadata = mission_metadata or MissionMetadataConfig()
         self.encryption = encryption or EncryptionConfig()
+        self.pre_sink_policy = pre_sink_policy or PreSinkPolicyConfig()
         self.metrics = metrics or NoopMetrics()
         self.nats_options = dict(nats_options or {})
         self._payload_encryptor = (
@@ -261,7 +265,10 @@ class JetStreamSinkRunner:
         finally:
             await self.stop()
 
-    async def process_raw_batch(self, raw_messages: Sequence[Any]) -> None:  # noqa: PLR0911, PLR0915
+    async def process_raw_batch(  # noqa: PLR0911, PLR0912, PLR0915
+        self,
+        raw_messages: Sequence[Any],
+    ) -> None:
         """Process a batch of raw NATS messages.
 
         ACK is sent only after sink.write_batch returns success. On permanent failures,
@@ -271,7 +278,8 @@ class JetStreamSinkRunner:
         if not raw_messages:
             return
 
-        increment_metric(self.metrics, MetricNames.MESSAGES_FETCHED_TOTAL, len(raw_messages))
+        raw_message_list = list(raw_messages)
+        increment_metric(self.metrics, MetricNames.MESSAGES_FETCHED_TOTAL, len(raw_message_list))
         increment_metric(self.metrics, MetricNames.BATCHES_FETCHED_TOTAL)
         mapping_started = time.perf_counter()
         try:
@@ -281,7 +289,7 @@ class JetStreamSinkRunner:
                     message_metadata=self.message_metadata,
                     mission_metadata=self.mission_metadata,
                 )
-                for raw_message in raw_messages
+                for raw_message in raw_message_list
             ]
             observe_metric(
                 self.metrics,
@@ -300,18 +308,18 @@ class JetStreamSinkRunner:
                         raw_message,
                         message_metadata=self.message_metadata,
                     )
-                    for raw_message in raw_messages
+                    for raw_message in raw_message_list
                 ]
             except Exception as fallback_exc:
                 await self._handle_temporary_failure(
-                    raw_messages,
+                    raw_message_list,
                     fallback_exc,
                     context="message normalization failure",
                     error_metric=MetricNames.MESSAGE_NORMALIZATION_ERRORS_TOTAL,
                     log_exception=True,
                 )
                 return
-            await self._handle_permanent_failure(raw_messages, fallback_envelopes, exc)
+            await self._handle_permanent_failure(raw_message_list, fallback_envelopes, exc)
             return
         except Exception as exc:
             observe_metric(
@@ -320,7 +328,7 @@ class JetStreamSinkRunner:
                 time.perf_counter() - mapping_started,
             )
             await self._handle_temporary_failure(
-                raw_messages,
+                raw_message_list,
                 exc,
                 context="message normalization failure",
                 error_metric=MetricNames.MESSAGE_NORMALIZATION_ERRORS_TOTAL,
@@ -336,13 +344,59 @@ class JetStreamSinkRunner:
                 envelopes = self._payload_encryptor.encrypt_batch(envelopes)
         except Exception as exc:
             await self._handle_temporary_failure(
-                raw_messages,
+                raw_message_list,
                 exc,
                 context="payload encryption failure",
                 error_metric=MetricNames.PAYLOAD_ENCRYPTION_ERRORS_TOTAL,
                 log_exception=True,
             )
             return
+        try:
+            policy_evaluation = evaluate_pre_sink_policy(envelopes, self.pre_sink_policy)
+        except PermanentSinkError as exc:
+            await self._handle_policy_rejections(raw_message_list, envelopes, exc)
+            return
+        except Exception as exc:
+            await self._handle_temporary_failure(
+                raw_message_list,
+                exc,
+                context="pre-sink policy evaluation failure",
+                error_metric=MetricNames.POLICY_EVALUATION_ERRORS_TOTAL,
+                log_exception=True,
+            )
+            return
+
+        if self.pre_sink_policy.enabled:
+            if policy_evaluation.accepted_indexes:
+                increment_metric(
+                    self.metrics,
+                    MetricNames.POLICY_MESSAGES_PASSED_TOTAL,
+                    len(policy_evaluation.accepted_indexes),
+                )
+                increment_metric(self.metrics, MetricNames.POLICY_BATCHES_PASSED_TOTAL)
+            if policy_evaluation.rejected_indexes:
+                increment_metric(
+                    self.metrics,
+                    MetricNames.POLICY_MESSAGES_REJECTED_TOTAL,
+                    len(policy_evaluation.rejected_indexes),
+                )
+                increment_metric(self.metrics, MetricNames.POLICY_BATCHES_REJECTED_TOTAL)
+
+        if policy_evaluation.has_rejections:
+            rejected_raw = [raw_message_list[index] for index in policy_evaluation.rejected_indexes]
+            rejected_envelopes = [envelopes[index] for index in policy_evaluation.rejected_indexes]
+            await self._handle_policy_rejections(
+                rejected_raw,
+                rejected_envelopes,
+                policy_violation_error(policy_evaluation.violations),
+            )
+            raw_message_list = [
+                raw_message_list[index] for index in policy_evaluation.accepted_indexes
+            ]
+            envelopes = [envelopes[index] for index in policy_evaluation.accepted_indexes]
+            if not raw_message_list:
+                return
+
         try:
             # Priority-lane scheduling is intentionally placed after all core
             # normalization and transformation work, but before sink delivery.
@@ -354,7 +408,7 @@ class JetStreamSinkRunner:
                 metrics=self.metrics,
             )
         except PermanentSinkError as exc:
-            await self._handle_permanent_failure(raw_messages, envelopes, exc)
+            await self._handle_permanent_failure(raw_message_list, envelopes, exc)
             return
         increment_metric(self.metrics, MetricNames.MESSAGES_PREPARED_TOTAL, len(envelopes))
         set_metric_value(self.metrics, MetricNames.CURRENT_BATCH_MESSAGES, float(len(envelopes)))
@@ -363,17 +417,17 @@ class JetStreamSinkRunner:
         try:
             await self.sink.write_batch(envelopes)
         except PermanentSinkError as exc:
-            await self._handle_permanent_failure(raw_messages, envelopes, exc)
+            await self._handle_permanent_failure(raw_message_list, envelopes, exc)
             return
         except TemporarySinkError as exc:
-            await self._handle_temporary_failure(raw_messages, exc)
+            await self._handle_temporary_failure(raw_message_list, exc)
             return
         except SinkError as exc:
-            await self._handle_temporary_failure(raw_messages, exc)
+            await self._handle_temporary_failure(raw_message_list, exc)
             return
         except Exception as exc:
             await self._handle_temporary_failure(
-                raw_messages,
+                raw_message_list,
                 exc,
                 context="unexpected sink failure",
                 log_exception=True,
@@ -385,13 +439,13 @@ class JetStreamSinkRunner:
         increment_metric(self.metrics, MetricNames.SINK_BATCHES_WRITTEN_TOTAL)
         increment_metric(self.metrics, MetricNames.MESSAGES_WRITTEN_TOTAL, len(envelopes))
         ack_started = time.perf_counter()
-        await self._ack_all(raw_messages)
+        await self._ack_all(raw_message_list)
         observe_metric(
             self.metrics,
             MetricNames.MESSAGE_ACK_SECONDS,
             time.perf_counter() - ack_started,
         )
-        increment_metric(self.metrics, MetricNames.MESSAGES_ACKED_TOTAL, len(raw_messages))
+        increment_metric(self.metrics, MetricNames.MESSAGES_ACKED_TOTAL, len(raw_message_list))
         set_metric_value(self.metrics, MetricNames.LAST_SINK_SUCCESS_EPOCH_SECONDS, time.time())
 
     async def _handle_temporary_failure(
@@ -506,6 +560,49 @@ class JetStreamSinkRunner:
 
         ack_started = time.perf_counter()
         await self._ack_all(raw_messages, context="after successful DLQ publication")
+        observe_metric(
+            self.metrics,
+            MetricNames.MESSAGE_ACK_SECONDS,
+            time.perf_counter() - ack_started,
+        )
+        increment_metric(self.metrics, MetricNames.MESSAGES_ACKED_TOTAL, len(raw_messages))
+
+    async def _handle_policy_rejections(
+        self,
+        raw_messages: Sequence[Any],
+        envelopes: Sequence[NatsEnvelope],
+        error: PermanentSinkError,
+    ) -> None:
+        """Handle messages rejected before sink delivery.
+
+        Policy rejections are permanent message failures, but they are not sink
+        write failures.  They therefore use DLQ-before-ACK handling without
+        incrementing sink error counters or calling `sink.write_batch`.
+        """
+
+        increment_metric(self.metrics, MetricNames.MESSAGES_FAILED_TOTAL, len(raw_messages))
+        if not self.dead_letter.enabled:
+            LOGGER.error(
+                "pre-sink policy rejected message batch and DLQ disabled; "
+                "rejected messages left unacked: %s",
+                error,
+            )
+            return
+
+        await self._publish_dlq(envelopes, error)
+        increment_metric(self.metrics, MetricNames.MESSAGES_DLQ_TOTAL, len(envelopes))
+        if self.dead_letter.ack_term_after_publish:
+            term_started = time.perf_counter()
+            await self._term_all(raw_messages)
+            observe_metric(
+                self.metrics,
+                MetricNames.MESSAGE_TERM_SECONDS,
+                time.perf_counter() - term_started,
+            )
+            return
+
+        ack_started = time.perf_counter()
+        await self._ack_all(raw_messages, context="after successful policy DLQ publication")
         observe_metric(
             self.metrics,
             MetricNames.MESSAGE_ACK_SECONDS,

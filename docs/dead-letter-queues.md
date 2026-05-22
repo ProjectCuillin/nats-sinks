@@ -18,6 +18,9 @@ Examples:
 - invalid JSON payload,
 - missing required idempotency field,
 - validation failure,
+- pre-sink policy rejection such as missing classification, missing required
+  labels, unencrypted payload on a subject that requires encryption, or a
+  payload that exceeds an approved size limit,
 - non-retryable destination error.
 
 ## ACK Rule
@@ -53,12 +56,18 @@ for the design decision and safety limits.
 sequenceDiagram
     participant JS as JetStream
     participant R as Runner
+    participant P as Pre-sink policy
     participant S as Sink
     participant Q as DLQ Subject
 
     JS->>R: Deliver message
-    R->>S: write_batch
-    S-->>R: PermanentSinkError
+    R->>P: Evaluate optional policy
+    alt Policy rejects
+        P-->>R: PolicyViolationError
+    else Policy passes
+        R->>S: write_batch
+        S-->>R: PermanentSinkError
+    end
     R->>Q: Publish DLQ JSON
     Q-->>R: Publish success
     alt Default policy

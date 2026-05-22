@@ -20,6 +20,7 @@ from nats_sinks.core.encryption import (
     PayloadKeyRegistry,
     SubjectPayloadEncryptor,
     decrypt_payload,
+    is_encrypted_payload_envelope,
 )
 from nats_sinks.core.envelope import NatsEnvelope
 from nats_sinks.core.message_metadata import (
@@ -57,6 +58,7 @@ from nats_sinks.core.payload import (
     PayloadStorageMode,
     normalize_payload_for_json_storage,
 )
+from nats_sinks.core.policy import PolicyEvaluation, PolicyViolation, evaluate_pre_sink_policy
 from nats_sinks.core.priority import PriorityLaneAssignment, order_by_priority_lanes
 from nats_sinks.core.runner import JetStreamSinkRunner
 
@@ -82,11 +84,15 @@ __all__ = [
     "PayloadKeyRegistry",
     "PayloadOriginalFormat",
     "PayloadStorageMode",
+    "PolicyEvaluation",
+    "PolicyViolation",
     "PriorityLaneAssignment",
     "SubjectPayloadEncryptor",
     "build_nats_metadata_snapshot",
     "datetime_to_epoch_ns",
     "decrypt_payload",
+    "evaluate_pre_sink_policy",
+    "is_encrypted_payload_envelope",
     "load_metrics_snapshot",
     "metric_rows_from_snapshot",
     "normalize_payload_for_json_storage",

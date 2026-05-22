@@ -42,6 +42,9 @@ def test_metric_specs_have_unique_names_and_kinds() -> None:
     assert MetricNames.TERM_ERRORS_TOTAL in names
     assert MetricNames.PRIORITY_LANE_MESSAGES_TOTAL in names
     assert MetricNames.CURRENT_PRIORITY_LANES_ACTIVE in names
+    assert MetricNames.POLICY_MESSAGES_PASSED_TOTAL in names
+    assert MetricNames.POLICY_MESSAGES_REJECTED_TOTAL in names
+    assert MetricNames.POLICY_EVALUATION_ERRORS_TOTAL in names
     assert MetricNames.ORACLE_DUPLICATES_TOTAL in names
     assert {spec.kind for spec in METRIC_SPECS} == {"counter", "histogram", "gauge"}
 

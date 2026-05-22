@@ -16,6 +16,7 @@ persistence evidence are unacceptable.
 ```mermaid
 flowchart LR
     NATS[NATS JetStream] --> Core[nats-sinks core]
+    Core --> Policy[Optional pre-sink policy]
     Core --> Oracle[Oracle sink]
     Core --> File[File sink]
     Core --> Future[Future sinks]
@@ -45,6 +46,12 @@ recovery. The defence pages then add domain-specific blueprint language on top
 of the same generic features. None of these pages define separate product
 modes, and they do not make nats-sinks a targeting, fire-control,
 weapons-release, or autonomous decision platform.
+
+Many of these blueprints can use the optional pre-sink policy gate to require
+classification, labels, mission metadata, encrypted payloads, or payload-size
+limits before data reaches Oracle, file, or future sinks. The policy remains a
+generic core feature; the use-case pages simply show how an organization might
+apply it.
 
 ## Contribution Guidance
 

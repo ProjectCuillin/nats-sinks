@@ -269,6 +269,36 @@ Use these metrics together with `messages_dlq_total`. A terminal
 acknowledgement without a corresponding DLQ publication would indicate a bug or
 an unsafe custom integration.
 
+## Pre-Sink Policy Metrics
+
+Pre-sink policy metrics are emitted only when `pre_sink_policy.enabled` is
+true. They are aggregate by design. The runner does not expose subjects,
+priority values, classification values, labels, mission metadata keys, message
+IDs, table names, file paths, or payload fields as metric labels.
+
+```bash
+nats-sink-metrics show .local/nats-sinks/metrics.json --metric "policy_*"
+```
+
+Example table output:
+
+```text
+KIND     METRIC                            VALUE  DESCRIPTION
+counter  policy_batches_passed_total          18  Batches whose messages all passed pre-sink policy evaluation.
+counter  policy_batches_rejected_total         2  Batches with at least one message rejected by pre-sink policy evaluation.
+counter  policy_messages_passed_total       1150  Messages accepted by pre-sink policy evaluation.
+counter  policy_messages_rejected_total        3  Messages rejected by pre-sink policy evaluation before any sink write.
+counter  policy_evaluation_errors_total        0  Messages affected by unexpected pre-sink policy evaluation errors.
+```
+
+Use these counters with `messages_failed_total` and `messages_dlq_total`.
+A policy rejection is a permanent validation failure. The rejected message does
+not reach the sink. When DLQ is enabled, the original JetStream message is
+ACKed or terminally acknowledged only after DLQ publication succeeds.
+
+For configuration details, read
+[Configuration](configuration.md#pre_sink_policy).
+
 ## Priority Lane Metrics
 
 Priority lane metrics are emitted only when `delivery.priority_lanes.enabled`
@@ -723,6 +753,11 @@ The preferred metric suffixes are:
 | `dlq_publish_errors_total` | counter | Messages whose DLQ publication failed before original ACK. |
 | `ack_errors_total` | counter | Messages whose JetStream ACK failed after durable success. |
 | `term_errors_total` | counter | Messages whose terminal acknowledgement failed after successful DLQ publication. |
+| `policy_messages_passed_total` | counter | Messages accepted by pre-sink policy evaluation. |
+| `policy_messages_rejected_total` | counter | Messages rejected by pre-sink policy evaluation before any sink write. |
+| `policy_batches_passed_total` | counter | Batches whose messages all passed pre-sink policy evaluation. |
+| `policy_batches_rejected_total` | counter | Batches with at least one message rejected by pre-sink policy evaluation. |
+| `policy_evaluation_errors_total` | counter | Messages affected by unexpected pre-sink policy evaluation errors. |
 | `nats_connection_disconnected_total` | counter | NATS client disconnect events observed by the runner. |
 | `nats_connection_reconnected_total` | counter | NATS client reconnect events observed by the runner. |
 | `nats_connection_closed_total` | counter | NATS client closed events observed by the runner. |

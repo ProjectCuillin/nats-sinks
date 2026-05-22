@@ -27,6 +27,8 @@ from nats_sinks.core.config import (
     MessageMetadataRuleConfig,
     MissionMetadataConfig,
     MissionMetadataRuleConfig,
+    PreSinkPolicyConfig,
+    PreSinkPolicyRuleConfig,
     PriorityLaneConfig,
     PriorityLanesConfig,
 )
@@ -36,6 +38,7 @@ from nats_sinks.core.encryption import (
     PayloadKeyRegistry,
     SubjectPayloadEncryptor,
     decrypt_payload,
+    is_encrypted_payload_envelope,
 )
 from nats_sinks.core.envelope import NatsEnvelope
 from nats_sinks.core.errors import (
@@ -45,6 +48,7 @@ from nats_sinks.core.errors import (
     DestinationUnavailableError,
     NatsSinksError,
     PermanentSinkError,
+    PolicyViolationError,
     RetryExhaustedError,
     SerializationError,
     SinkError,
@@ -84,6 +88,7 @@ from nats_sinks.core.payload import (
     PayloadStorageMode,
     normalize_payload_for_json_storage,
 )
+from nats_sinks.core.policy import PolicyEvaluation, PolicyViolation, evaluate_pre_sink_policy
 from nats_sinks.core.runner import JetStreamSinkRunner
 from nats_sinks.file import FileSink
 from nats_sinks.sinks.base import FlushableSink, HealthCheckableSink, SchemaAwareSink, Sink
@@ -126,6 +131,11 @@ __all__ = [
     "PayloadOriginalFormat",
     "PayloadStorageMode",
     "PermanentSinkError",
+    "PolicyEvaluation",
+    "PolicyViolation",
+    "PolicyViolationError",
+    "PreSinkPolicyConfig",
+    "PreSinkPolicyRuleConfig",
     "PriorityLaneConfig",
     "PriorityLanesConfig",
     "RetryExhaustedError",
@@ -139,6 +149,8 @@ __all__ = [
     "build_nats_metadata_snapshot",
     "datetime_to_epoch_ns",
     "decrypt_payload",
+    "evaluate_pre_sink_policy",
+    "is_encrypted_payload_envelope",
     "load_metrics_snapshot",
     "metric_rows_from_snapshot",
     "normalize_payload_for_json_storage",

@@ -62,6 +62,12 @@ The current release provides the following production-ready foundation:
   messages are written by any sink.
 - A public multi-key payload decryption helper for controlled key-rotation,
   replay, migration, and verification workflows.
+- Optional pre-sink policy enforcement that runs after message normalization,
+  metadata defaults, mission metadata validation, and payload encryption, but
+  before Oracle, file, or future sink writes. It can require priority,
+  classification, labels, mission metadata, encrypted payloads, and payload
+  size limits by subject. Policy rejections never reach a sink and follow the
+  DLQ-before-ACK rule when DLQ is configured.
 - A CLI command named `nats-sink` for validation, redacted effective config,
   sink health checks, and running sink processes.
 - A companion CLI command named `nats-sink-metrics` for inspecting local JSON
@@ -193,6 +199,8 @@ operations without hunting through a long flat list.
 - [Mission Metadata](mission-metadata.md): add a validated JSON context object
   for mission, operation, platform, source-system, track, confidence,
   releasability, or lifecycle metadata.
+- [Configuration](configuration.md#pre_sink_policy): configure the optional
+  pre-sink policy gate for destination-neutral validation before sink writes.
 
 ### Observability
 

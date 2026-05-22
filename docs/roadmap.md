@@ -12,6 +12,9 @@
   `skip_existing` duplicate handling.
 - Core payload encryption with AES-256-GCM and AES-256-CCM before sink writes,
   including global and per-subject encryption policies.
+- Fail-closed pre-sink policy enforcement for subject-scoped requirements such
+  as priority, classification, labels, mission metadata, encrypted payloads,
+  approved mission metadata keys, and bounded sink-bound payload size.
 - Core message metadata for priority, classification, and labels so
   mission-oriented deployments can preserve operational handling context across
   all production sinks.
@@ -105,8 +108,8 @@
 - Expanded property-based or dedicated fuzz tooling if the deterministic
   bounded generator suite reaches its limits or future parsers become more
   complex.
-- Payload and metadata size policy controls for deployments that need stricter
-  runtime bounds than the default JetStream and destination limits.
+- Expanded metadata-size and schema policy controls for deployments that need
+  stricter mission metadata validation than the current root-key allow list.
 - Hash-verified installation guidance for high-trust environments.
 - Certified TLS certificate authentication guidance.
 - Certified NKEY with challenge authentication support.

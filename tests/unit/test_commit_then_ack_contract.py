@@ -19,6 +19,7 @@ from nats_sinks.core.config import (
     DeliveryConfig,
     MessageMetadataConfig,
     MissionMetadataConfig,
+    PreSinkPolicyConfig,
     PriorityLaneConfig,
     PriorityLanesConfig,
 )
@@ -633,6 +634,139 @@ async def test_payload_encryption_failure_records_specific_metric() -> None:
     assert metrics.counters[MetricNames.PAYLOAD_ENCRYPTION_ERRORS_TOTAL] == 1
     assert metrics.counters[MetricNames.SINK_WRITE_ERRORS_TOTAL] == 0
     assert metrics.counters[MetricNames.MESSAGES_ACKED_TOTAL] == 0
+
+
+@pytest.mark.asyncio
+async def test_pre_sink_policy_rejection_goes_to_dlq_before_ack_without_sink_write() -> None:
+    events: list[str] = []
+    message = FakeMessage(events)
+    message.headers = {}
+    metrics = InMemoryMetrics()
+    js = FakeJetStream(events)
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=RecordingSink(events),
+        pre_sink_policy=PreSinkPolicyConfig.model_validate(
+            {
+                "enabled": True,
+                "rules": [{"subject": "orders.*", "require_classification": True}],
+            }
+        ),
+        dead_letter=DeadLetterConfig(enabled=True, subject="orders.dlq"),
+        jetstream=js,
+        metrics=metrics,
+    )
+
+    await runner.process_raw_batch([message])
+
+    assert events == ["dlq", "ack"]
+    assert message.acked
+    assert js.published[0][0] == "orders.dlq"
+    assert metrics.counters[MetricNames.POLICY_MESSAGES_REJECTED_TOTAL] == 1
+    assert metrics.counters[MetricNames.POLICY_BATCHES_REJECTED_TOTAL] == 1
+    assert metrics.counters[MetricNames.SINK_WRITE_ERRORS_TOTAL] == 0
+
+
+@pytest.mark.asyncio
+async def test_pre_sink_policy_mixed_batch_dlqs_rejected_and_writes_accepted() -> None:
+    events: list[str] = []
+    accepted = FakeMessage(events)
+    accepted.headers = {"X-Classification": "NATO RESTRICTED"}
+    accepted.metadata.sequence = FakeSequence(stream=1, consumer=1)
+    rejected = FakeMessage(events)
+    rejected.headers = {}
+    rejected.metadata.sequence = FakeSequence(stream=2, consumer=2)
+    sink = MetadataRecordingSink(events)
+    metrics = InMemoryMetrics()
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=sink,
+        message_metadata=MessageMetadataConfig.model_validate(
+            {"classification": {"header": "X-Classification"}}
+        ),
+        pre_sink_policy=PreSinkPolicyConfig.model_validate(
+            {
+                "enabled": True,
+                "rules": [{"subject": "orders.*", "require_classification": True}],
+            }
+        ),
+        dead_letter=DeadLetterConfig(enabled=True, subject="orders.dlq"),
+        jetstream=FakeJetStream(events),
+        metrics=metrics,
+    )
+
+    await runner.process_raw_batch([accepted, rejected])
+
+    assert events == ["dlq", "ack", "write", "commit", "ack"]
+    assert accepted.acked
+    assert rejected.acked
+    assert [message.stream_sequence for message in sink.messages] == [1]
+    assert metrics.counters[MetricNames.POLICY_MESSAGES_PASSED_TOTAL] == 1
+    assert metrics.counters[MetricNames.POLICY_MESSAGES_REJECTED_TOTAL] == 1
+    assert metrics.counters[MetricNames.MESSAGES_WRITTEN_TOTAL] == 1
+    assert metrics.counters[MetricNames.MESSAGES_ACKED_TOTAL] == 2
+
+
+@pytest.mark.asyncio
+async def test_pre_sink_policy_dlq_failure_does_not_ack_or_write() -> None:
+    events: list[str] = []
+    message = FakeMessage(events)
+    message.headers = {}
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=RecordingSink(events),
+        pre_sink_policy=PreSinkPolicyConfig.model_validate(
+            {
+                "enabled": True,
+                "rules": [{"subject": "orders.*", "require_classification": True}],
+            }
+        ),
+        dead_letter=DeadLetterConfig(enabled=True, subject="orders.dlq"),
+        jetstream=FakeJetStream(events, fail_publish=True),
+    )
+
+    with pytest.raises(DeadLetterError):
+        await runner.process_raw_batch([message])
+
+    assert events == ["dlq"]
+    assert not message.acked
+    assert not message.nacked
+
+
+@pytest.mark.asyncio
+async def test_pre_sink_policy_rejection_without_dlq_leaves_message_unacked() -> None:
+    events: list[str] = []
+    message = FakeMessage(events)
+    message.headers = {}
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=RecordingSink(events),
+        pre_sink_policy=PreSinkPolicyConfig.model_validate(
+            {
+                "enabled": True,
+                "rules": [{"subject": "orders.*", "require_classification": True}],
+            }
+        ),
+        dead_letter=DeadLetterConfig(enabled=False),
+    )
+
+    await runner.process_raw_batch([message])
+
+    assert events == []
+    assert not message.acked
+    assert not message.nacked
 
 
 @pytest.mark.asyncio

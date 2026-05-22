@@ -34,6 +34,9 @@ The tests also cover:
 - payload encryption helpers such as `EncryptionConfig`, `PayloadEncryptor`,
   `SubjectPayloadEncryptor`, `PayloadKeyRegistry`, and `decrypt_payload`,
 - message metadata configuration classes,
+- pre-sink policy configuration and evaluation helpers such as
+  `PreSinkPolicyConfig`, `PreSinkPolicyRuleConfig`,
+  `PolicyViolationError`, and `evaluate_pre_sink_policy`,
 - payload normalization helpers,
 - metrics classes and helpers such as `MetricNames`, `InMemoryMetrics`,
   `JsonFileMetrics`, `load_metrics_snapshot`, and

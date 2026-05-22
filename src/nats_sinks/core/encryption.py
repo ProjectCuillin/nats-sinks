@@ -118,6 +118,28 @@ def _load_encrypted_payload(value: bytes | str | Mapping[str, Any]) -> Mapping[s
     return envelope
 
 
+def is_encrypted_payload_envelope(value: bytes | str | Mapping[str, Any]) -> bool:
+    """Return whether a value is a nats-sinks encrypted payload envelope.
+
+    Policy checks use this helper to verify that a message body has already
+    passed through core payload encryption before it reaches a sink. The helper
+    intentionally returns `False` for malformed input rather than exposing
+    parser errors or payload content in policy messages.
+    """
+
+    try:
+        envelope = _load_encrypted_payload(value)
+    except SerializationError:
+        return False
+    return (
+        envelope.get("schema") == ENCRYPTED_PAYLOAD_SCHEMA
+        and envelope.get("version") == ENCRYPTED_PAYLOAD_VERSION
+        and isinstance(envelope.get("algorithm"), str)
+        and isinstance(envelope.get("key_id"), str)
+        and isinstance(envelope.get("ciphertext"), str)
+    )
+
+
 class PayloadTransformer(Protocol):
     """Small runtime protocol for objects that transform envelope payloads.
 

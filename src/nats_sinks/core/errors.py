@@ -44,6 +44,10 @@ class ValidationError(PermanentSinkError):
     """A message or configuration value failed framework validation."""
 
 
+class PolicyViolationError(ValidationError):
+    """A normalized message failed the configured pre-sink policy gate."""
+
+
 class DestinationUnavailableError(TemporarySinkError):
     """The destination is temporarily unavailable."""
 

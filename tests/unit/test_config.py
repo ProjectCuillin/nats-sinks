@@ -278,6 +278,131 @@ def test_logging_level_can_be_set_to_debug(tmp_path: Path) -> None:
     assert config.logging.level == "DEBUG"
 
 
+def test_pre_sink_policy_config_validates_subject_rules(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "orders-file-sink",
+    "subject": "orders.*"
+  },
+  "pre_sink_policy": {
+    "enabled": true,
+    "rules": [
+      {
+        "subject": "orders.*",
+        "require_priority": true,
+        "require_classification": true,
+        "required_labels": "orders;audit",
+        "require_mission_metadata": true,
+        "allowed_mission_metadata_keys": ["profile", "phase"],
+        "max_payload_bytes": 1048576
+      }
+    ]
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/tmp/nats-sinks-test"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(path, env_overrides=False)
+
+    assert config.pre_sink_policy.enabled
+    assert config.pre_sink_policy.rules[0].subject == "orders.*"
+    assert config.pre_sink_policy.rules[0].required_labels == ("orders", "audit")
+
+
+def test_enabled_pre_sink_policy_requires_explicit_rules(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "orders-file-sink",
+    "subject": "orders.*"
+  },
+  "pre_sink_policy": {
+    "enabled": true
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/tmp/nats-sinks-test"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError, match=r"pre_sink_policy\.enabled requires"):
+        load_config(path, env_overrides=False)
+
+
+def test_pre_sink_policy_rejects_noop_and_secret_like_key_rules(tmp_path: Path) -> None:
+    noop_path = tmp_path / "noop.json"
+    noop_path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "orders-file-sink",
+    "subject": "orders.*"
+  },
+  "pre_sink_policy": {
+    "enabled": true,
+    "rules": [{"subject": "orders.*"}]
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/tmp/nats-sinks-test"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+    secret_key_path = tmp_path / "secret-key.json"
+    secret_key_path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "orders-file-sink",
+    "subject": "orders.*"
+  },
+  "pre_sink_policy": {
+    "enabled": true,
+    "rules": [
+      {
+        "subject": "orders.*",
+        "allowed_mission_metadata_keys": ["profile", "api_key"]
+      }
+    ]
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/tmp/nats-sinks-test"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError, match="at least one check"):
+        load_config(noop_path, env_overrides=False)
+    with pytest.raises(ConfigurationError, match="secret-like names"):
+        load_config(secret_key_path, env_overrides=False)
+
+
 def test_delivery_retry_backoff_controls_are_validated(tmp_path: Path) -> None:
     path = tmp_path / "config.json"
     path.write_text(

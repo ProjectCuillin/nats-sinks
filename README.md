@@ -71,6 +71,12 @@ used immediately:
   and related endpoint fields.
 - Optional core payload encryption for AES-256-GCM and AES-256-CCM before
   envelopes are delivered to Oracle, file, or future sinks.
+- Optional pre-sink policy enforcement that runs after message normalization,
+  metadata defaults, mission metadata validation, and payload encryption, but
+  before any destination write. The policy gate can require priority,
+  classification, labels, mission metadata, encrypted payloads, and payload
+  size limits by subject. Rejected messages never reach a sink and follow the
+  DLQ-before-ACK rule when DLQ is configured.
 - `nats_sinks.oracle.OracleSink`, the production Oracle Database sink with
   connection pooling, Oracle Autonomous Database connection options, `merge`
   and `insert_ignore` idempotent modes, optional high-throughput staging-table
@@ -157,6 +163,8 @@ Included today:
 - Synthetic mission scenario harness for core and file-sink smoke testing.
 - Generic mission metadata support with validated JSON context for Oracle,
   file sink, and future sinks.
+- Optional pre-sink policy enforcement for fail-closed, destination-neutral
+  checks before Oracle, file, or future sink writes.
 - F2T2EA phase-tagging documentation as a use-case blueprint on top of mission
   metadata, not runtime workflow automation.
 - Unit tests for ACK ordering, DLQ ordering, config loading, SQL generation, and Oracle mapping.
@@ -179,8 +187,10 @@ flowchart LR
     Envelope --> Crypto{payload encryption enabled?}
     Crypto -->|yes| Encrypted[Encrypted payload envelope]
     Crypto -->|no| Plain[Original payload bytes]
-    Encrypted --> Sink[sink.write_batch]
-    Plain --> Sink
+    Encrypted --> Policy{pre-sink policy enabled?}
+    Plain --> Policy
+    Policy -->|passes| Sink[sink.write_batch]
+    Policy -. permanent rejection .-> DLQ
     Sink --> Commit[Durable destination commit]
     Commit --> Ack[JetStream ACK]
 

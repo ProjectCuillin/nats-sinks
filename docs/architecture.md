@@ -36,6 +36,7 @@ flowchart TB
         Runner[JetStreamSinkRunner]
         Envelope[NatsEnvelope]
         Encrypt[Optional payload encryption]
+        Policy[Optional pre-sink policy gate]
         Priority[Optional priority lanes]
         DLQ[DLQ publisher]
         Metrics[Metrics hooks]
@@ -53,7 +54,7 @@ flowchart TB
     end
 
     Stream --> Consumer --> Runner
-    Runner --> Envelope --> Encrypt --> Priority --> Protocol
+    Runner --> Envelope --> Encrypt --> Policy --> Priority --> Protocol
     Protocol --> Oracle
     Protocol --> File
     Protocol --> Future
@@ -74,6 +75,7 @@ JetStream stream
   -> durable consumer
   -> nats-sinks core runner
   -> optional payload encryption
+  -> optional pre-sink policy gate
   -> optional in-batch priority lane ordering
   -> sink.write_batch(...)
   -> durable destination commit
@@ -89,6 +91,8 @@ The core runtime handles:
 - Bounded batch fetching.
 - Conversion from raw NATS messages to `NatsEnvelope`.
 - Optional payload encryption before sink delivery.
+- Optional fail-closed policy enforcement after normalization and core payload
+  transformation, but before any destination write.
 - Optional priority-lane ordering for already-fetched bounded batches.
 - Sink lifecycle.
 - Temporary versus permanent failure handling.
@@ -159,3 +163,11 @@ Payload encryption is also part of the core, not a sink-specific responsibility.
 When enabled, the runner encrypts `NatsEnvelope.data` and passes a copied
 envelope to the sink. Metadata remains clear. This lets all sinks store the
 same encrypted payload envelope without duplicating cryptographic code.
+
+Pre-sink policy enforcement is also part of the core. The policy gate is
+configured with explicit allow-listed checks such as required priority,
+classification, labels, mission metadata, encrypted payloads, and bounded
+payload size. It does not run dynamic code or destination-specific SQL. A
+policy rejection is handled as a permanent validation failure: the rejected
+message does not reach the sink, and the core follows DLQ-before-ACK behavior
+when a DLQ is configured.

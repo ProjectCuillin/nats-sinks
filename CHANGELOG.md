@@ -36,6 +36,16 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 - Added a researched backlog item for a future Oracle MySQL sink, including
   initial design direction for MySQL Connector/Python, idempotent upserts,
   TLS, least-privilege access, test planning, and documentation scope.
+- Added a fail-closed pre-sink policy gate that runs after normalization,
+  message metadata, mission metadata, and optional payload encryption but before
+  any destination write. The gate supports subject-scoped requirements for
+  priority, classification, labels, mission metadata, encrypted payloads,
+  approved mission metadata root keys, and bounded sink-bound payload size.
+- Added policy rejection handling that keeps rejected messages away from sinks,
+  follows DLQ-before-ACK behavior for permanent validation failures, and avoids
+  acknowledging originals when DLQ publication fails.
+- Added pre-sink policy metrics, public policy helper exports, configuration
+  validation, commit-then-ACK contract coverage, and operator documentation.
 
 ### Changed
 
