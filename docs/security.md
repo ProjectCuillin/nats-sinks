@@ -240,6 +240,13 @@ should use durable pull consumers and commit-then-acknowledge rather than
 ordered inspection consumers. See
 [Ordered Consumer Evaluation](ordered-consumer-evaluation.md).
 
+Push-consumer support is not enabled today. If added later, it must be manual
+ACK only, bounded by explicit pending-message and pending-byte limits, and
+protected against unbounded callback intake. Flow-control errors, heartbeat
+events, callback exceptions, and queue saturation must be logged without
+payloads, credentials, private subject families, or sensitive metadata values.
+See [Push Consumer Evaluation](push-consumer-evaluation.md).
+
 Key rotation should use explicit `key_id` values. New runtime configuration
 encrypts with the active key, while authorized verification, replay, or
 migration tooling can use `PayloadKeyRegistry` to decrypt records written with

@@ -152,7 +152,9 @@ release, and closed only after the containing release is published.
 - Helm chart.
 - Advanced observability.
 - WebSocket connection support and documentation.
-- Push-consumer support where it can preserve commit-then-acknowledge semantics.
+- Push-consumer capability and configuration guardrails.
+- Opt-in bounded push-consumer runner mode.
+- Push-consumer delivery-contract and flow-control certification tests.
 - Ordered-consumer client compatibility checks.
 - Read-only ordered-consumer inspection CLI, clearly separated from production
   durable sink processing.

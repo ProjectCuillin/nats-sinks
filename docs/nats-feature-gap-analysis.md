@@ -103,7 +103,7 @@ Current gap details:
 | Multiple FilterSubjects | Consumers can filter on multiple subjects. | Single `nats.subject` only. Oracle table routing happens after delivery. | Phase 2 |
 | HeadersOnly delivery | Consumers can deliver only headers and expose the omitted body size through a NATS header. | Evaluated in [Headers-Only Delivery Evaluation](headers-only-delivery.md). Current code safely handles empty payloads, but explicit headers-only support is split into consumer configuration, payload-presence metadata, and sink or DLQ certification backlog items. | Phase 2 |
 | Consumer metadata | Consumers support user metadata. | Not exposed. | Phase 3 |
-| Push consumers | NATS supports push delivery to a subject. | Not supported by the runner by design today. | Phase 3 |
+| Push consumers | NATS supports push delivery to a subject, optional queue-style deliver groups, `MaxAckPending`, FlowControl, and IdleHeartbeat. | Evaluated in [Push Consumer Evaluation](push-consumer-evaluation.md). Not enabled in runtime; follow-up work is split into capability/config guardrails, an opt-in bounded push runner mode, and push delivery-contract certification tests. Pull remains the default. | Phase 3 |
 | Ordered consumers | NATS supports ordered consumers for inspection and analysis workflows. | Evaluated in [Ordered Consumer Evaluation](ordered-consumer-evaluation.md). Not enabled in runtime; follow-up work is split into client compatibility checks, a read-only inspection CLI, and durable replay-to-sinks guidance that keeps production writes on durable pull consumers. | Phase 3 |
 | Queue-style push subscriptions | Push delivery can use queue groups. | Not supported. Pull consumers are preferred for sink work. | Phase 3 |
 | Consumer replicas and memory storage | Consumer state can have replica and memory options. | Not exposed. | Phase 3 |
@@ -194,7 +194,10 @@ Some gaps should remain intentional:
   deployment-design guidance without making the sink worker a stream
   management tool.
 - Ordered consumers are useful for inspection and replay, but they do not match
-  the first release's durable destination-write model.
+  the durable destination-write model.
+- Push consumers may be supportable later, but only as an explicit manual-ACK
+  runner mode with bounded in-flight work, flow-control handling, and shutdown
+  tests.
 
 Other gaps are good candidates for future work:
 
@@ -202,6 +205,8 @@ Other gaps are good candidates for future work:
 - explicit consumer configuration and reconciliation,
 - optional confirmed ACK support, ACK confirmation metrics, optional
   `InProgress` heartbeat support, and InProgress guardrails,
+- push-consumer capability/config guardrails, opt-in push runner mode, and
+  push delivery-contract certification tests,
 - read-only ordered-consumer inspection tooling and durable replay-to-sinks
   guidance,
 - multi-subject filters,

@@ -146,6 +146,13 @@ durable pull-consumer sink workers. Replay into sinks should use durable
 pull-consumer semantics with commit-then-acknowledge. See
 [Ordered Consumer Evaluation](ordered-consumer-evaluation.md).
 
+Push-consumer support has also been evaluated, but it is not enabled today.
+Future push mode must be explicit, manual-ACK only, bounded by queue and
+pending-byte limits, and tested for graceful shutdown before it can be treated
+as production-ready. Pull consumers remain the operational default because the
+worker controls when and how many messages are fetched. See
+[Push Consumer Evaluation](push-consumer-evaluation.md).
+
 Prometheus sharing should use the policy-controlled observability layer rather
 than an ad hoc shell redirection. The separate `nats-sink-observe` CLI can
 generate a disabled policy from runtime config, write a filtered textfile for

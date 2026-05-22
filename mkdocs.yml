@@ -32,6 +32,7 @@ nav:
       - JetStream Topology: jetstream-topology.md
       - Acknowledgement Confirmation Evaluation: acknowledgement-confirmation.md
       - InProgress Evaluation: in-progress-evaluation.md
+      - Push Consumer Evaluation: push-consumer-evaluation.md
       - Ordered Consumer Evaluation: ordered-consumer-evaluation.md
       - Headers-Only Delivery Evaluation: headers-only-delivery.md
       - Feature Gap Analysis: nats-feature-gap-analysis.md

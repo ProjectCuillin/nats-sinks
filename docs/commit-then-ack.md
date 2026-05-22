@@ -139,6 +139,19 @@ to policy.
 The evaluation and recommended implementation split are documented in
 [InProgress Evaluation](in-progress-evaluation.md).
 
+## Push Consumers
+
+JetStream push consumers deliver messages to a delivery subject instead of
+waiting for the client to fetch a bounded batch. That does not change the ACK
+rule. A future push runner mode must use manual acknowledgement only and must
+ACK only after the sink reports durable success or after DLQ publication
+succeeds for permanent failures.
+
+Push mode is not enabled today. It needs bounded callback intake, pending
+message and byte limits, flow-control and heartbeat handling, and shutdown
+tests before it can be production-ready. The evaluation and implementation
+split are documented in [Push Consumer Evaluation](push-consumer-evaluation.md).
+
 ## Non-Negotiable Invariant
 
 > A JetStream message must only be acknowledged after all required durable side effects have completed successfully. ACK is the final confirmation of successful processing, never a prerequisite for processing.

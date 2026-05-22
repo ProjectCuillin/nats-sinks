@@ -1,0 +1,28 @@
+{
+  "id": "push-consumer-runner-mode",
+  "title": "[Feature]: Add opt-in bounded push-consumer runner mode",
+  "area": "Core runtime and delivery semantics",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["nats", "testing", "documentation"],
+  "problem": "Some deployments standardize on JetStream push consumers, but nats-sinks currently only uses pull consumers. A push mode could help those deployments, but only if the runner can preserve bounded in-flight work, graceful shutdown, retry behavior, DLQ-before-ACK handling, and ACK-after-durable-success semantics.",
+  "proposal": "Add an explicit opt-in push-consumer runner mode after the capability and configuration guardrails exist. The mode should subscribe with manual acknowledgement, enqueue messages into a bounded internal queue, form bounded batches for the existing processing path, stop accepting new messages during shutdown, and reuse the same commit-then-ACK processing pipeline used by pull mode.",
+  "users": "Operators with NATS deployments built around push consumers and maintainers expanding JetStream compatibility without changing the default pull-consumer posture.",
+  "delivery_semantics": "Push mode must call the same batch processing contract that ACKs only after sink success or successful DLQ publication. Temporary failures must not ACK. Callback return must never imply message success.",
+  "security": "Push mode must not log payloads by default. Queue overflow, flow-control, and shutdown errors must be logged with safe operational categories and without sensitive payloads, credentials, or private subject values.",
+  "acceptance": [
+    "Push mode is disabled by default and explicitly configured.",
+    "Push callbacks use manual ACK and do not acknowledge before durable sink success.",
+    "In-flight message count and memory exposure are bounded.",
+    "Shutdown stops new intake before draining or releasing current work.",
+    "Pull-mode behavior remains the documented production default."
+  ],
+  "tests": "Add unit tests for callback enqueue behavior, bounded queue overflow, shutdown intake stop, ACK ordering, NAK or leave-unacked behavior, DLQ-before-ACK behavior, and unchanged pull mode. Add optional local NATS integration tests for push delivery when enabled. Run scripts/check.sh.",
+  "documentation": "Update push-consumer evaluation, architecture, commit-then-ACK, configuration, operations, testing, roadmap, and changelog documentation.",
+  "closeout": "Close after the release containing the opt-in push-consumer runner mode is published. Include release tag, tests, documentation, and limitations.",
+  "relationships": {
+    "related": ["#38"],
+    "blocked_by": ["backlog:push-consumer-capability-config"],
+    "blocks": ["backlog:push-consumer-certification-tests"]
+  }
+}

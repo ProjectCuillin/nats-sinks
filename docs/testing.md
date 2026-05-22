@@ -56,6 +56,12 @@ replay-to-sinks tests should stay on the normal commit-then-acknowledge
 contract and prove that replay never ACKs before durable sink success. See
 [Ordered Consumer Evaluation](ordered-consumer-evaluation.md).
 
+Push-consumer support is also documentation and backlog only. Future push-mode
+tests must prove manual ACK behavior, bounded callback intake, no ACK on
+temporary failures, DLQ-before-ACK behavior on permanent failures, flow-control
+and heartbeat handling, graceful shutdown, and unchanged pull-mode behavior.
+See [Push Consumer Evaluation](push-consumer-evaluation.md).
+
 ## Bounded Property-Style Tests
 
 The repository uses deterministic bounded generator tests for security-sensitive

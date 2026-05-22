@@ -313,6 +313,12 @@ The `delivery` section controls how the core runner fetches, writes, retries,
 and ACKs messages. It is destination-neutral: Oracle, file, and future sinks all
 receive batches according to these settings.
 
+Current releases use pull consumers only. Push-consumer support has been
+evaluated for a future explicit runner mode, but it is not a configuration
+option yet because it needs separate manual-ACK, pending-limit, flow-control,
+heartbeat, shutdown, and certification guardrails. See
+[Push Consumer Evaluation](push-consumer-evaluation.md).
+
 | Field | Required | Default | Valid values | Description |
 | --- | --- | --- | --- | --- |
 | `batch_size` | no | `100` | Integer `1` to `10000`. | Maximum number of messages to fetch and pass to `sink.write_batch(...)` at once. It is an upper bound, not a requirement to wait for a full batch. |

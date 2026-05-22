@@ -3,21 +3,21 @@
   "title": "[Feature]: Evaluate push-consumer support without weakening ACK semantics",
   "area": "Core runtime and delivery semantics",
   "priority": "P4 - research or design needed",
-  "target_release": "unscheduled",
-  "labels": ["nats"],
+  "target_release": "v0.4.1",
+  "labels": ["nats", "completed"],
   "problem": "The core runner intentionally uses pull consumers for controlled batching and backpressure. NATS also supports push consumers, but they introduce different flow-control and concurrency behavior. Supporting push consumers might help specific deployments, but only if commit-then-ACK and bounded in-flight work remain enforceable.",
-  "proposal": "Evaluate push-consumer support as a separate runner mode. The design should document backpressure, max in-flight messages, ordered shutdown, retry behavior, and why pull consumers remain the preferred production default unless a push mode can preserve the same safety properties.",
+  "proposal": "Evaluate push-consumer support as a separate runner mode and document the decision. The evaluation should explain why pull consumers remain the preferred production default, which safety properties a future push mode must preserve, and which follow-up implementation work should be tracked separately.",
   "users": "NATS users who already operate push consumer patterns and maintainers evaluating broader JetStream compatibility.",
   "delivery_semantics": "Push mode must ACK only after durable sink success, must bound in-flight work, and must avoid unbounded memory growth. If these cannot be guaranteed, the feature should remain unsupported with documented rationale.",
   "security": "The feature must not require broader permissions than necessary and must not log payloads or sensitive metadata when flow-control errors occur.",
   "acceptance": [
     "A push-consumer design decision is documented.",
-    "If implemented, push mode is opt-in and tested for backpressure and shutdown.",
+    "Recommended implementation work is split into separate feature requests.",
     "Pull mode remains the documented default.",
-    "Delivery-contract tests cover ACK ordering in push mode.",
+    "Delivery-contract test requirements cover ACK ordering in push mode.",
     "Limitations are explicit."
   ],
-  "tests": "Add mocked consumer tests and optional local NATS integration tests if implemented. Run scripts/check.sh.",
-  "documentation": "Update docs/architecture.md, docs/commit-then-ack.md, docs/configuration.md, docs/operations.md, docs/nats-feature-gap-analysis.md, ROADMAP.md, and CHANGELOG.md.",
-  "closeout": "Close after an implementation release or documented rejection. Include release tag or decision, tests, and safety rationale."
+  "tests": "Run backlog manifest validation, Markdown link checks, focused backlog and documentation tests, and scripts/check.sh after the evaluation documentation and follow-up backlog items are in place.",
+  "documentation": "Update docs/push-consumer-evaluation.md, docs/architecture.md, docs/commit-then-ack.md, docs/configuration.md, docs/operations.md, docs/testing.md, docs/nats-feature-gap-analysis.md, ROADMAP.md, docs/roadmap.md, and CHANGELOG.md.",
+  "closeout": "Close with documented decision evidence after the evaluation findings are posted and follow-up feature requests are created."
 }

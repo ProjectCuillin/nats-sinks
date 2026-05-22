@@ -65,6 +65,10 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   into separate backlog items for client compatibility checks, a read-only
   ordered inspection CLI, and durable replay-to-sinks guidance that keeps
   production writes on durable pull consumers.
+- Added a push-consumer evaluation and split future implementation work into
+  separate backlog items for capability and configuration guardrails, an
+  opt-in bounded push runner mode, and push delivery-contract certification
+  tests while keeping pull consumers as the production default.
 
 ### Changed
 
