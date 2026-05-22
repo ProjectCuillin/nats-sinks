@@ -123,7 +123,7 @@ def test_sync_issue_planning_applies_native_blocked_by_relationship() -> None:
         "repos/ProjectCuillin/nats-sinks/issues/42/dependencies/blocked_by",
         "-H",
         "X-GitHub-Api-Version: 2026-03-10",
-        "-f",
+        "-F",
         "issue_id=1300",
     ] in calls
 

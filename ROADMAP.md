@@ -146,6 +146,9 @@ release, and closed only after the containing release is published.
 - Bounded subject-family metric aggregation without raw subject export by
   default.
 - Subject-aware observability certification tests and operator runbook.
+- WebSocket connection configuration guardrails for explicit `ws://` and
+  `wss://` transport validation, mixed URL-list rejection, and TLS local CA
+  behavior.
 
 ## Phase 3
 
@@ -153,7 +156,11 @@ release, and closed only after the containing release is published.
 - Sink certification tests.
 - Helm chart.
 - Advanced observability.
-- WebSocket connection support and documentation.
+- Optional WebSocket connection header support with redaction and environment
+  variable sourcing for sensitive values.
+- WebSocket integration certification harness and operator runbook for
+  `ws://`, `wss://`, reconnect behavior, and unchanged commit-then-ACK
+  contracts.
 - Push-consumer capability and configuration guardrails.
 - Opt-in bounded push-consumer runner mode.
 - Push-consumer delivery-contract and flow-control certification tests.

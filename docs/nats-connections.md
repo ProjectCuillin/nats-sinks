@@ -255,9 +255,17 @@ takes precedence over the single `url` value. Keep the single `url` field for
 simple local development or single-endpoint deployments.
 
 Every URL in `urls` is validated with the same scheme allow list as `url`:
-`nats`, `tls`, `ws`, or `wss`. If any configured seed URL uses `tls://`,
-`nats-sinks` builds a TLS context and passes it to `nats-py`, even when the
-fallback `url` field remains at its default value.
+`nats`, `tls`, `ws`, or `wss`. If any configured seed URL uses `tls://`, or if
+TLS certificate files are configured, `nats-sinks` builds a TLS context and
+passes it to `nats-py`, even when the fallback `url` field remains at its
+default value.
+
+`ws://` and `wss://` are accepted by configuration validation because NATS and
+`nats-py` support WebSocket transport. That does not yet make WebSocket
+transport production-certified in `nats-sinks`. WebSocket deployment still
+needs explicit project-level guardrails for mixed URL lists, `wss://` local CA
+trust, optional connection headers, proxy behavior, and integration evidence.
+See [WebSocket Connection Evaluation](websocket-connection-evaluation.md).
 
 Do not embed credentials in any URL. Use `token_env` or `password_env` so
 secrets stay out of configuration files, process listings, logs, and support
@@ -425,6 +433,25 @@ flowchart TD
 | `nats.tls_verify` | Enables certificate and hostname verification. | No | Keep `true` in production. |
 | `nats.tls_cert_file` | Optional client certificate chain. | No, but sensitive operationally | Roadmap for certified cert auth. |
 | `nats.tls_key_file` | Optional client private key file. | Yes | Protect file permissions carefully. |
+
+## WebSocket Transport Status
+
+NATS supports WebSocket connections, and the `nats-sinks` URL validator accepts
+`ws://` and `wss://`. The current certified production path remains `nats://`
+or `tls://` until WebSocket-specific follow-up work is implemented.
+
+Use this current status table when reviewing deployments:
+
+| Transport | Current status | Recommendation |
+| --- | --- | --- |
+| `nats://` | Supported. | Use only in isolated local development or protected networks where plaintext transport is explicitly accepted. |
+| `tls://` | Supported and documented for production. | Preferred production transport today. Use `tls_ca_file` for private CAs. |
+| `ws://` | Accepted by validation, not production-certified. | Use only for local labs or explicit evaluation. |
+| `wss://` | Accepted by validation, not production-certified. | Preferred future WebSocket transport after guardrails and certification tests are added. |
+
+WebSocket transport must not change commit-then-acknowledge behavior. A
+WebSocket connection failure is a transport event; it is not sink success and
+must never trigger an ACK by itself.
 
 ## Live Connection Probe
 

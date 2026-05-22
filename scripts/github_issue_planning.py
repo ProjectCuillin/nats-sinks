@@ -373,7 +373,7 @@ def _add_blocked_by(
             f"repos/{owner}/{repo}/issues/{issue_number}/dependencies/blocked_by",
             "-H",
             f"X-GitHub-Api-Version: {ISSUE_API_VERSION}",
-            "-f",
+            "-F",
             f"issue_id={dependency}",
         ]
     )

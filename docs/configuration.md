@@ -235,8 +235,8 @@ classification, and labels without changing producer payloads.
 
 | Field | Required | Default | Valid values | Description |
 | --- | --- | --- | --- | --- |
-| `url` | no | `nats://localhost:4222` | URL using `nats`, `tls`, `ws`, or `wss`. | Single server URL passed to `nats-py` when `urls` is not set. Use `tls://` or TLS certificate fields for encrypted production connections. Unsupported schemes fail validation. |
-| `urls` | no | `[]` | Non-empty list of URLs using `nats`, `tls`, `ws`, or `wss`. | Optional seed server list for clustered deployments. When set, it is passed to `nats-py` as `servers` and takes precedence over `url`. If any seed URL uses `tls://`, the CLI builds a TLS context. |
+| `url` | no | `nats://localhost:4222` | URL using `nats`, `tls`, `ws`, or `wss`. | Single server URL passed to `nats-py` when `urls` is not set. Use `tls://` for certified encrypted TCP connections today. `ws://` and `wss://` are accepted by validation but remain evaluated, not production-certified, until the WebSocket follow-up work is implemented. Unsupported schemes fail validation. |
+| `urls` | no | `[]` | Non-empty list of URLs using `nats`, `tls`, `ws`, or `wss`. | Optional seed server list for clustered deployments. When set, it is passed to `nats-py` as `servers` and takes precedence over `url`. If any seed URL uses `tls://`, or if TLS certificate files are configured, the CLI builds a TLS context. WebSocket seed lists should not mix `ws` or `wss` URLs with `nats` or `tls` URLs. |
 | `stream` | yes | none | Non-empty JetStream stream name. | Stream that owns the messages consumed by the sink. |
 | `consumer` | yes | none | Consumer/durable name accepted by NATS. | Durable consumer name when `durable` is true. It is also used in logging and metrics context. |
 | `subject` | yes | none | NATS subject or wildcard subject, for example `orders.*` or `orders.>`. | Subject used for pull subscription binding. It should be covered by the configured stream subjects. |
@@ -272,6 +272,9 @@ Validation rules:
   `nkey_seed_file` are mutually exclusive authentication modes,
 - `url` and every `urls` entry must use one of the supported NATS client
   schemes: `nats`, `tls`, `ws`, or `wss`,
+- WebSocket schemes are allowed syntactically, but production-certified
+  WebSocket support is tracked separately in
+  [WebSocket Connection Evaluation](websocket-connection-evaluation.md),
 - `tls_key_file` requires `tls_cert_file`,
 - bcrypted NATS passwords are a server-side storage detail; the client still
   sends the clear-text password from `password` or `password_env`.

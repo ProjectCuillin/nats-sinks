@@ -73,6 +73,10 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   implementation work into separate backlog items for a disabled-by-default
   policy model, bounded subject-family aggregation, and certification tests
   while keeping current metric export aggregate-only by default.
+- Added a WebSocket connection evaluation and split future implementation work
+  into separate backlog items for WebSocket configuration guardrails, optional
+  connection header support, and an integration certification harness while
+  keeping `nats://` and `tls://` as the certified production transports today.
 
 ### Changed
 
@@ -98,6 +102,8 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Fixed
 
+- Fixed GitHub backlog relationship sync so native issue dependencies submit
+  numeric `issue_id` values to the GitHub API instead of string values.
 - Fixed the high-confidence secret scanner so it prefers `rg` when available
   but falls back to `grep` in minimal CI environments where ripgrep is not
   installed.

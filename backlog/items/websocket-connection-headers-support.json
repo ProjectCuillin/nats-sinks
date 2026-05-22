@@ -1,0 +1,36 @@
+{
+  "id": "websocket-connection-headers-support",
+  "title": "[Feature]: Add optional WebSocket connection header support",
+  "area": "Core runtime and delivery semantics",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": [
+    "nats",
+    "security",
+    "testing",
+    "documentation"
+  ],
+  "problem": "Some WebSocket deployments require custom headers for proxy routing or controlled authentication layers. nats-py supports ws_connection_headers, but exposing arbitrary headers in nats-sinks configuration could leak secrets or make logs unsafe.",
+  "proposal": "Add an optional WebSocket header configuration model that is disabled by default, validates header names and bounded values, supports environment-variable references for sensitive values, rejects dangerous or ambiguous headers, redacts all values in effective configuration, and passes approved headers to nats-py as ws_connection_headers.",
+  "users": "Operators behind approved WebSocket gateways or reverse proxies and security teams reviewing controlled header-based routing requirements.",
+  "delivery_semantics": "WebSocket headers affect only connection establishment. They must not affect sink writes, ACK behavior, DLQ behavior, retry decisions, or idempotency.",
+  "security": "Never log header values. Reject multiline values and control characters. Do not support user-provided arbitrary Authorization header values unless they come from an explicit environment-variable source and are redacted everywhere. Document proxy-log exposure risks.",
+  "acceptance": [
+    "Header support is disabled unless explicitly configured.",
+    "Header names and values are validated and size bounded.",
+    "Sensitive header values can be sourced from environment variables without appearing in JSON examples.",
+    "Redacted effective config never prints header values.",
+    "nats-py receives headers only after validation succeeds."
+  ],
+  "tests": "Add unit tests for valid headers, invalid names, control characters, oversized values, environment-variable resolution, redaction, and nats-py option construction. Run scripts/check.sh.",
+  "documentation": "Update the WebSocket evaluation, configuration, security, operations, and NATS connection documentation with safe examples and clear warnings.",
+  "closeout": "Close after the release containing optional WebSocket header support is published. Include tests, documentation, and limitations.",
+  "relationships": {
+    "related": [
+      "#45"
+    ],
+    "blocked_by": [
+      "backlog:websocket-connection-configuration-guardrails"
+    ]
+  }
+}

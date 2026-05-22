@@ -54,6 +54,15 @@ messages after durable sink success, and publish to the configured DLQ subject
 only when DLQ is enabled. Templates are provided in
 [NATS Least-Privilege Permissions](nats-permissions.md).
 
+The certified production connection path is still direct NATS TCP with
+`nats://` for controlled local use or `tls://` for encrypted production
+connectivity. WebSocket URLs are accepted by configuration validation because
+NATS and `nats-py` support `ws://` and `wss://`, but WebSocket transport remains
+an evaluated future capability until the follow-up guardrails and integration
+certification work are complete. See
+[WebSocket Connection Evaluation](websocket-connection-evaluation.md) before
+approving WebSocket transport in an operational deployment.
+
 If the selected stream is built from mirrors, sources, subject transforms,
 republish rules, compression, placement policies, or stream metadata, review
 the topology before treating the sink's idempotency key as final. Those

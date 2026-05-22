@@ -3,21 +3,27 @@
   "title": "[Feature]: Evaluate WebSocket connection support",
   "area": "Core runtime and delivery semantics",
   "priority": "P4 - research or design needed",
-  "target_release": "unscheduled",
-  "labels": ["nats"],
+  "target_release": "v0.4.1",
+  "labels": [
+    "nats",
+    "security",
+    "testing",
+    "documentation",
+    "completed"
+  ],
   "problem": "Some NATS deployments expose WebSocket connectivity for constrained network environments. nats-sinks currently documents standard NATS connection modes but does not certify WebSocket connections. Supporting this mode requires understanding client behavior, TLS expectations, proxy behavior, and production suitability.",
-  "proposal": "Evaluate WebSocket connection support through nats-py capabilities, configuration fields, TLS settings, and integration tests. If supported, document the mode clearly and add tests proving that connection setup works without changing the runner’s delivery semantics.",
+  "proposal": "Evaluate WebSocket connection support through nats-py capabilities, configuration fields, TLS settings, and integration tests. The evaluation concluded that WebSocket transport is viable but should remain treated as accepted-by-validation and not yet production-certified until separate configuration guardrails, optional header support, and integration certification work are implemented.",
   "users": "Operators in environments where direct NATS TCP connectivity is unavailable, maintainers tracking NATS client compatibility, and security reviewers assessing proxy and TLS behavior.",
   "delivery_semantics": "Connection transport must not change commit-then-ACK behavior. Reconnect, timeout, and shutdown behavior must remain consistent with existing connection handling.",
   "security": "WebSocket transport must validate TLS by default, avoid insecure proxy assumptions, and redact connection configuration. Documentation must avoid real network details and must clearly state production caveats.",
   "acceptance": [
     "WebSocket support is evaluated and documented.",
-    "Configuration validation covers supported transport settings.",
-    "Tests or manual validation guidance are added.",
-    "Reconnect behavior is described for this transport.",
+    "Configuration validation behavior is described, including current ws:// and wss:// scheme acceptance.",
+    "Follow-up feature requests are created for certified implementation work.",
+    "Reconnect and proxy behavior are described for this transport.",
     "Unsupported limitations are explicit."
   ],
-  "tests": "Add unit tests for configuration and option construction. Add optional integration tests only when local test infrastructure exists. Run scripts/check.sh.",
-  "documentation": "Update docs/configuration.md, docs/security.md, docs/operations.md, docs/nats-feature-gap-analysis.md, ROADMAP.md, and CHANGELOG.md.",
-  "closeout": "Close after released implementation or documented no-go decision. Include release tag or decision note, tests, and limitations."
+  "tests": "Validate backlog JSON, Markdown links, focused backlog and documentation tests, and scripts/check.sh. Implementation tests are tracked in follow-up feature requests.",
+  "documentation": "Updated docs/websocket-connection-evaluation.md, docs/configuration.md, docs/security.md, docs/operations.md, docs/nats-feature-gap-analysis.md, ROADMAP.md, docs/roadmap.md, and CHANGELOG.md.",
+  "closeout": "Close as a completed evaluation after findings are posted and follow-up feature requests are created. Implementation work remains in the follow-up issues."
 }

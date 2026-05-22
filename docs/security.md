@@ -301,6 +301,15 @@ Bcrypt is a server-side storage control. The client still needs the clear-text
 password to authenticate, so username/password and token authentication should
 use TLS in production.
 
+WebSocket transport is evaluated but not yet production-certified by
+`nats-sinks`. The configuration validator accepts `ws://` and `wss://` because
+NATS and `nats-py` support those schemes, but operators should prefer
+`tls://` until WebSocket guardrails, optional header handling, and integration
+certification are implemented. When WebSocket transport is introduced, prefer
+`wss://`, verify certificates, avoid credentials in URLs or headers, and assume
+that reverse proxies may log paths, headers, and client metadata. See
+[WebSocket Connection Evaluation](websocket-connection-evaluation.md).
+
 Use least-privilege NATS subject permissions for the runtime account. A
 standard worker should be able to request from its configured pull consumer,
 receive inbox responses, ACK messages it has received, and publish to the
