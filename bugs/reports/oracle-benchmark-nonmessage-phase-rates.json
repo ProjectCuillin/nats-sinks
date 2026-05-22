@@ -1,0 +1,28 @@
+{
+  "id": "oracle-benchmark-nonmessage-phase-rates",
+  "title": "[Bug]: Oracle benchmark reports message rates for non-message phases",
+  "area": "Testing",
+  "severity": "low",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.0",
+  "labels": ["testing", "oracle", "metrics"],
+  "summary": "The sanitized Oracle benchmark report calculates messages-per-second for every phase from the configured message count. Retry-delay and shutdown phases are timing or lifecycle observations rather than message-processing throughput phases, so reporting message rates for them can mislead operators.",
+  "observed": "When retry-delay or shutdown timing observations are present, the benchmark renderer can publish messages-per-second values based on the full benchmark message count.",
+  "expected": "Message-processing phases such as publish, fetch, map, write, commit, and ACK may report messages-per-second. Retry-delay and shutdown phases should report timing only unless a future implementation records explicit phase-specific work counts.",
+  "reproduction": "Build an Oracle benchmark report with retry and shutdown observations and inspect the rendered phase dictionaries for messages_per_second on those non-message phases.",
+  "failing_test": "Add a focused regression test under tests/unit that proves retry and shutdown benchmark phases omit messages_per_second.",
+  "impact": "This is a low-severity reporting accuracy issue. It does not change live NATS, Oracle writes, ACK behavior, idempotency, DLQ behavior, or benchmark execution. It only corrects public-safe benchmark report interpretation.",
+  "delivery_semantics": "No delivery semantics are changed. Oracle commit-before-ACK behavior remains untouched.",
+  "security": "The fix must preserve benchmark redaction and must not add service endpoints, usernames, passwords, wallet paths, certificates, private subjects, table names, or payload bodies to benchmark output.",
+  "acceptance": [
+    "A focused regression test covers retry and shutdown benchmark phase-rate output.",
+    "Retry-delay benchmark phases omit messages_per_second.",
+    "Shutdown benchmark phases omit messages_per_second.",
+    "Message-processing phases still report messages_per_second when observations exist.",
+    "Oracle benchmark documentation explains which phases represent throughput and which phases are lifecycle timing observations.",
+    "Existing unit, smoke, documentation, package, and release checks still pass."
+  ],
+  "tests": "Run the focused regression test, Oracle benchmark unit tests, synthetic load-profile tests, smoke tests, and the full local check script.",
+  "documentation": "Update CHANGELOG.md and docs/performance.md to explain the benchmark phase-rate distinction.",
+  "closeout": "Close only after the release containing the fix is published. Include the release tag, regression evidence, verification evidence, and any remaining limitations."
+}

@@ -9,15 +9,115 @@ This repository is safety-sensitive infrastructure code. Follow these rules:
   decrypted payloads by default.
 - Never weaken idempotency behavior without updating tests and documentation.
 - Never add dependencies without a clear reason.
+- When dependencies change, edit `pyproject.toml` first, regenerate the
+  generated `requirements*.txt` manifests with
+  `python scripts/update-dependency-manifests.py`, and keep the manifest check
+  green so GitHub Dependency Graph and Dependabot see the intended dependency
+  surface.
 - Never make network calls in unit tests.
 - Keep unit tests deterministic.
 - Keep integration tests isolated behind markers.
+- Use deterministic bounded property-style tests for validators, parsers,
+  normalizers, subject matching, metadata handling, and file path sanitization
+  when they accept external or semi-trusted input. If adding a property-testing
+  dependency such as Hypothesis, justify it as development-only and update
+  dependency manifests, docs, and release notes.
 - Keep only the latest sanitized test report at `docs/test-report.md`; never
   commit raw logs, server addresses, usernames, passwords, tokens, certificate
   contents, wallet material, connection strings, or sensitive payloads.
 - Treat malformed payloads, invalid commands, invalid configuration, network failures, database failures, and DLQ failures as first-class production paths.
 - Add deterministic unhappy-path and fuzz-style tests for validators, parsers, normalizers, and delivery decisions.
 - Prefer small, reviewable changes.
+- Treat GitHub Issues as the live backlog and `CHANGELOG.md` as the shipped
+  history. User-visible feature work should have a detailed GitHub feature
+  request before implementation unless the change is a small typo or
+  mechanical maintenance item.
+- If a new backlog item is found locally and GitHub access is unavailable,
+  create a validated JSON item under `backlog/items/` and run
+  `python scripts/sync-backlog-issues.py --dry-run`; do not treat chat history
+  as the backlog.
+- Backlog JSON must include a clear `target_release` value. Use
+  `unscheduled` until the work is assigned to a concrete release tag, then use
+  a tag such as `v0.4.0` so the issue receives a release label.
+- Backlog and bug JSON must include one of the supported priority values. Let
+  the sync tooling write the official GitHub Issue `Priority` field. Do not
+  hand-write priority labels, recreate legacy `priority-p*` labels on issues,
+  or bypass the Issue-field sync path for normal backlog and bug work.
+- When an issue depends on, blocks, or is otherwise related to another managed
+  issue, declare that relationship in the local JSON `relationships` object
+  using only safe references such as `#123`, `backlog:item-id`, or
+  `bug:item-id`. Let the tooling populate GitHub-native dependency
+  relationships where supported. Never include private URLs, IP addresses,
+  system names, payloads, or secrets in relationship metadata.
+- Before live issue sync, ensure `gh` can update issues
+  (`gh auth refresh -s repo -s read:org`) and set
+  `NATS_SINKS_GITHUB_ISSUE_FIELD_ORG` and
+  `NATS_SINKS_GITHUB_ISSUE_PRIORITY_FIELD` if the defaults are not correct.
+  In automation, prefer the optional
+  `NATS_SINKS_GITHUB_ISSUE_PRIORITY_FIELD_ID` when a token can edit issues but
+  should not enumerate organization Issue fields.
+- Never put secrets, credential values, certificate material, private
+  operational details, live network locators, IP addresses, sensitive subjects,
+  or payload examples in backlog JSON, GitHub feature requests, progress
+  comments, close-out comments, or generated issue bodies.
+- Validate local backlog definitions with
+  `python scripts/sync-backlog-issues.py --check` and dry-run them before
+  syncing. The validation must reject common public-leak patterns before
+  content reaches GitHub Issues.
+- When implementing a feature request, link the issue in the pull request and
+  add a sanitized progress comment with
+  `python scripts/comment-backlog-issue.py --dry-run` before posting it for
+  real. The comment should explain the intended implementation approach,
+  tests, documentation, and planned release tag without leaking private
+  details.
+- Before starting issue work, assign the GitHub issue to the maintainer doing
+  the work, apply the concrete release label, and post a sanitized `started`
+  lifecycle comment. The comment must include `Planned Work`, `Test Plan`, and
+  `Documentation And Release Notes` sections.
+- When implementation is complete locally, post a sanitized `completed` or
+  `closeout` lifecycle comment. The comment must include `Completed Work`,
+  `Acceptance Criteria`, `Test Plan Evidence`, and `Close-Out Evidence`
+  sections. Use `--complete-acceptance` only after the test plan has actually
+  been executed and evidence has been summarized without secrets or private
+  operational details. The managed comment helper applies the `completed`
+  label for `completed`, `closeout`, and `released` lifecycle statuses. This
+  label means implementation is complete in development while the issue
+  remains open until release-gated closure.
+- Do not use pull request closing keywords for normal feature work before a
+  release is published. Prefer `Related #123`; the release workflow closes
+  managed backlog issues after the associated GitHub Release exists.
+- Close a feature request only after the release that contains it has actually
+  been published. Use the release-gated close-out helper where practical so the
+  tool verifies the GitHub Release before closing the issue. Release
+  automation must also verify that acceptance criteria are checked and that
+  close-out evidence plus test-plan evidence comments exist.
+- When closing a feature request, include a detailed close-out summary covering
+  what shipped, which checks passed, which docs changed, and any known
+  limitations or follow-up issues.
+- Treat defects found during testing, review, or release preparation as
+  managed bug reports, not informal chat notes. Create or sync a sanitized
+  bug report under `bugs/reports/*.json` with `python scripts/sync-bug-reports.py`
+  unless the defect is a tiny non-user-visible typo.
+- Bug reports must be assigned to `louwersj`, carry the official `bug` label,
+  a severity label, a priority label, and a release label. Never include
+  secrets, live service locators, IP addresses, credentials, certificate
+  material, wallet data, sensitive subjects, or payload examples in bug JSON,
+  bug comments, or issue bodies.
+- Fix bugs with test-driven development. Add the smallest focused failing
+  regression test first, add it to the normal test suite, then post a
+  sanitized `failing-test` comment with `scripts/comment-bug-issue.py --dry-run`
+  before implementing the fix.
+- For bug fixes, post a sanitized `started` comment before or during the fix
+  and a `completed` or `closeout` comment after verification. Completed bug
+  comments must include `Completed Fix`, `Acceptance Criteria`,
+  `Regression Test Evidence`, `Verification Evidence`, and `Close-Out
+  Evidence`. The managed bug comment helper applies the `completed` label for
+  `completed`, `closeout`, and `released` lifecycle statuses so fixed bugs can
+  stay visibly complete while waiting for the release that closes them.
+- Keep managed bug reports open until the release containing the fix is
+  published. Release automation closes only bug issues with the matching
+  release label, checked acceptance criteria, and sanitized regression,
+  verification, and close-out evidence.
 - Update docs when public behavior changes.
 - Update `CHANGELOG.md` for user-visible changes.
 - Keep documentation and `CHANGELOG.md` prepared for the next release after
@@ -49,6 +149,10 @@ Subject-specific core policies, such as payload encryption rules, must use the
 shared NATS subject matcher and must be evaluated deterministically in
 configuration order. First matching rule wins, unmatched subjects use the
 documented global fallback, and disabled rules are explicit exemptions.
+
+Retry behavior is delivery semantics. Preserve bounded retries, exponential
+backoff, jitter controls, and the rule that retry exhaustion must not ACK a
+message whose durable work did not succeed.
 
 Required processing order:
 
@@ -95,7 +199,16 @@ users, downstream maintainers, and automated operations teams:
 - Avoid dynamic imports from untrusted configuration. Sink selection should go
   through safe registries or explicit entry points with documented behavior.
 - Keep generated artifacts out of source control unless they are intentionally
-  tracked examples or documentation assets.
+  tracked examples or documentation assets. Treat `site/` as MkDocs output:
+  edit README, `docs/`, `mkdocs.yml`, and source configuration instead of
+  editing generated HTML as the source of truth.
+- Keep runtime version reporting aligned with release metadata. If
+  `pyproject.toml` changes, `src/nats_sinks/__init__.py`, README release text,
+  `docs/index.md`, and `CHANGELOG.md` must be updated together and
+  `scripts/check-version-consistency.py` must pass.
+- Treat documented imports as compatibility promises. Public import paths shown
+  in the README or docs need public API tests before they are changed, removed,
+  or moved.
 
 ## Configuration And Secrets
 
@@ -128,6 +241,26 @@ code:
 - Redact secrets in CLI output, logs, exceptions, reports, and test snapshots.
 - Do not dump complete process environments, complete connection strings, or
   raw headers that may contain credentials.
+- Observability policy files are security policy. Generated policies must be
+  disabled by default, must not export payloads or secrets, and must require
+  explicit allow lists before a connector shares metrics with Prometheus or any
+  future platform.
+- Prometheus textfile export is a separate service concern. Keep
+  `nats-sink-observe` independent from NATS, Oracle, file sinks, and future
+  destinations; it should read local snapshots, apply policy, and write only
+  approved metrics.
+- NATS server monitoring endpoint integration must remain a separate
+  observability concern. Do not make `JetStreamSinkRunner` poll `/jsz`,
+  `/healthz`, or any other monitoring endpoint. Any NATS monitoring connector
+  must be disabled by default, validate URLs and endpoint paths, enforce
+  timeouts and response-size limits, extract only allow-listed scalar fields,
+  avoid storing the monitoring base URL in snapshots, and never affect ACK,
+  retry, DLQ, or sink-write behavior.
+- Do not add sensitive or high-cardinality labels to observability connectors
+  by default. Subjects, message IDs, stream sequence values, table names, file
+  paths, priority values, classification values, labels, payload fields,
+  usernames, and host-specific secrets require explicit design review before
+  they can be exported anywhere.
 - Keep example credentials obviously fake and clearly marked for local
   development only.
 - When adding config fields, document defaults, accepted values, security
@@ -137,6 +270,41 @@ code:
 
 Assume `nats-sinks` will be used in critical production systems:
 
+- Treat every external input as hostile until it has been validated,
+  normalized, bounded, authorized where relevant, and safely converted into a
+  typed internal structure. NATS messages, headers, subjects, JSON config,
+  environment variables, filesystem paths, database rows, DLQ messages,
+  command-line arguments, and third-party library responses are all trust
+  boundaries.
+- Prefer fail-closed behavior. Authentication, authorization, validation,
+  configuration loading, dependency loading, encryption setup, sink registry
+  selection, and policy evaluation must deny the operation or raise a
+  framework error when the safe decision is ambiguous.
+- Apply defense in depth. Validation, allow-listing, type checks, bounded
+  resource use, safe logging, dependency scanning, integration-test gates,
+  least-privilege examples, and runtime shutdown behavior should overlap so
+  one missed layer does not create silent loss or data exposure.
+- Threat-model important features before implementation. Identify the assets,
+  trust boundaries, abuse cases, attacker capabilities, operational impact,
+  worst-case failure mode, and tests that prove the design fails safely.
+- Keep security designs simple, explicit, and reviewable. Avoid clever hidden
+  behavior, implicit dynamic dispatch, user-controlled code paths, and
+  surprising fallback behavior.
+- Centralize security-sensitive logic. Authentication option construction,
+  TLS context creation, configuration parsing, SQL identifier validation,
+  payload encryption, metadata extraction, redaction, DLQ shaping, ACK
+  decisions, and log sanitization should live in one obvious place with tests.
+- Secure behavior must be the default. Risky behavior such as direct secrets
+  in JSON config, payload logging, TLS verification disablement,
+  non-idempotent append-style writes, retained test key material, or destructive
+  test-table cleanup must require explicit configuration and documentation.
+- Treat internal systems as potentially hostile. Compromised publishers,
+  poisoned queues, corrupted caches, malicious insiders, and stale retained
+  test databases can bypass perimeter assumptions.
+- Document invariants directly in code, tests, documentation, ADRs, and release
+  notes. Future maintainers must know that commit-then-ACK, idempotency,
+  redaction, bounded input, payload encryption semantics, and metadata handling
+  are safety properties, not optional style preferences.
 - Treat message payloads, NATS headers, Oracle rows, and DLQ messages as
   potentially sensitive.
 - Treat encryption key material as highly sensitive. Tests that generate keys
@@ -169,10 +337,142 @@ Assume `nats-sinks` will be used in critical production systems:
   should receive only the permissions needed for the configured sink table.
 - Do not introduce pickle, unsafe YAML loading, shell interpolation, or unsafe
   deserialization of untrusted data.
+- Validate input at every boundary with allow lists for accepted values,
+  formats, lengths, ranges, URL schemes, file extensions, MIME types, enum
+  fields, SQL identifiers, sink names, route names, NATS subjects, filenames,
+  and operational modes. Reject malformed input early instead of repairing,
+  guessing, or partially accepting it.
+- Normalize and canonicalize paths, URLs, encodings, Unicode text, hostnames,
+  and filenames before validation or comparison. Filesystem writes must resolve
+  to an intended base directory and reject traversal, symlink escape, absolute
+  extracted paths, and ambiguous names.
+- Enforce maximum sizes for config files, JSON payloads, strings, arrays,
+  batch operations, retries, queue depths, file output, decompressed data, and
+  any count that could allocate memory or trigger downstream native behavior.
+- Use real parsers for structured input. Do not parse nested or escaped formats
+  with ad hoc string splitting or regular expressions. Reject duplicate or
+  ambiguous keys in security-sensitive JSON where parser differences could
+  change meaning.
+- Keep data and code separate in SQL, shell commands, HTML, JavaScript, XML,
+  LDAP, regular expressions, templates, serializers, and browser contexts. Do
+  not concatenate untrusted data into executable or interpretable strings.
+- Use parameterized SQL for values and allow-list validation for dynamic table
+  names, column names, operators, sort fields, route names, and sink names.
+- Avoid shell execution in production code. If a subprocess is ever required,
+  use a fixed executable, argument-list calls with `shell=False`, timeouts, a
+  minimal environment, output limits, and sanitized output.
+- Treat logs as an injection surface. Sanitize control characters, newlines,
+  terminal escape sequences, and attacker-controlled formatting before log
+  records reach terminals or collectors.
+- Treat Python native extensions, C libraries, compression libraries, database
+  drivers, image/archive parsers, and FFI boundaries as memory-unsafe
+  components. Validate sizes, offsets, counts, file headers, decompressed
+  sizes, and dimensions before handing untrusted data to native code.
+- Use the `secrets` module or cryptographic library randomness for keys,
+  nonces, tokens, and identifiers with security impact. Never use `random` for
+  security-sensitive randomness.
+- Use constant-time comparison for secrets, MACs, signatures, reset tokens, or
+  future authentication material.
+- Keep cryptographic code on established libraries and authenticated modes.
+  Never invent custom encryption, signing, hashing, key exchange, or nonce
+  handling. Keys must stay separate from encrypted data and support versioned
+  rotation in production designs.
+- Keep secrets out of source code, Git history, logs, screenshots, tickets,
+  test fixtures, generated docs, Docker images, command-line arguments, and
+  client-visible assets. Prefer short-lived, least-privileged, auditable
+  credentials over long-lived personal tokens.
+- Never deserialize untrusted data with object-capable formats such as
+  `pickle`, `marshal`, `shelve`, unsafe YAML loaders, or equivalent formats
+  that can instantiate classes or execute hooks.
+- For file handling, generate server-side names, bound file counts and sizes,
+  use secure temporary files, reject traversal, validate archive paths before
+  extraction, and treat Markdown, SVG, HTML, documents, media, fonts, and
+  archives as active or risky content unless sanitized or sandboxed.
+- Avoid SSRF-style features by default. If future sinks or tools fetch
+  user-supplied URLs, allow-list schemes, hosts, ports, and destination
+  services; block private, loopback, link-local, multicast, and metadata
+  ranges after DNS resolution and redirects; set strict timeouts and response
+  size limits; and never forward internal credentials.
+- Use atomic database constraints, transactions, compare-and-swap behavior,
+  unique indexes, and destination idempotency keys instead of relying on
+  check-then-act logic in memory.
+- Bound retries and external calls. Use timeouts, finite retry counts,
+  backoff, jitter, backpressure, admission control, and graceful degradation.
+- Keep dependencies pinned or constrained, scanned, justified, actively
+  maintained, and reviewed for new transitive risk. Do not install
+  dependencies dynamically at runtime.
+- Avoid `eval`, `exec`, unsafe dynamic imports, user-controlled attribute
+  access, runtime code generation, broad monkey-patching, mutable default
+  arguments, and hidden global state.
+- Handle errors explicitly. Catch only exceptions that can be handled safely;
+  unexpected errors should fail through controlled framework paths without
+  leaking stack traces, SQL fragments, filesystem paths, environment variables,
+  internal hostnames, or secrets to users.
 - When adding file handling, avoid path traversal, avoid following untrusted
   symlinks for sensitive files, and document expected permissions.
 - Keep dependency updates, CodeQL, dependency review, Ruff, typing, Bandit, and
   package checks green.
+- Keep GitHub Dependency Graph support healthy. The generated pip manifests are
+  release and security evidence, not hand-maintained dependency sources.
+- Treat SBOM generation as release evidence. Keep `scripts/sbom.sh`, local
+  check scripts, CI, release workflows, release documentation, and
+  `CHANGELOG.md` aligned whenever package build or dependency behavior changes.
+- Never include secrets, payloads, live service details, local wallet files,
+  certificates, private keys, or `.local/` runtime configuration in SBOM
+  artifacts or SBOM documentation. SBOM files should be derived from package
+  metadata and the build environment only.
+- Keep `docs/security-rule-review.md` current when the security posture
+  changes. If a new sink, protocol surface, authentication mode, parser,
+  filesystem behavior, crypto behavior, web/API feature, native dependency, or
+  release process changes an applicability decision, update the register,
+  tests, documentation, agent guidance, and changelog in the same change.
+
+## Production Hardening Checklist
+
+Before completing any code change, evaluate the change against this checklist
+and update code, tests, documentation, and `CHANGELOG.md` where the answer is
+not clearly safe:
+
+- external input is validated, normalized, bounded, and rejected by default
+  when invalid;
+- least privilege applies to users, database accounts, containers, CI jobs,
+  cloud identities, runtime service accounts, and file permissions;
+- authentication and authorization, if present, are separated and deny by
+  default when identity, tenant, role, ownership, policy, or resource state is
+  missing or ambiguous;
+- object-level authorization is enforced for the exact subject, action,
+  resource, tenant, and object state when a feature exposes objects;
+- SQL, shell, HTML, JavaScript, XML, LDAP, regex, template, and serialization
+  contexts keep code separate from data;
+- secrets are not present in code, logs, traces, tests, images, command-line
+  arguments, tickets, screenshots, or client-visible assets;
+- deserialization cannot instantiate objects, import modules, call hooks, or
+  execute code from untrusted input;
+- file paths, uploads, archives, temporary files, and generated outputs cannot
+  escape intended storage locations;
+- subprocess calls, if unavoidable, use fixed executables, argument lists,
+  `shell=False`, timeouts, minimal environments, and sanitized output;
+- every external operation has a timeout, bounded retries, backoff, jitter, and
+  idempotency where needed;
+- caches, queues, payloads, parser depth, batch operations, and memory growth
+  are bounded;
+- logs are structured, sanitized, redacted, useful for operators, and free of
+  sensitive payloads by default;
+- dependencies are constrained, scanned, justified, actively maintained, and
+  not dynamically installed at runtime;
+- native-code and FFI boundaries validate sizes, lifetimes, file metadata, and
+  untrusted input before crossing the boundary;
+- performance-sensitive changes are measured before optimization and keep
+  readability unless profiling proves otherwise;
+- tests cover normal paths, failure paths, malformed input, abuse cases,
+  boundary values, duplicate messages, dependency failures, and concurrency
+  risks where relevant;
+- static analysis, linting, type checking, dependency scanning, secret
+  scanning, formatting, package builds, and documentation builds remain green;
+- graceful shutdown, health checks, monitoring signals, and safe deployment or
+  rollback guidance are documented when runtime behavior changes;
+- crashes, hangs, memory growth, data corruption, flaky behavior, and parser
+  inconsistencies are treated as reliability and security signals.
 
 ## Failure Handling
 
@@ -221,6 +521,25 @@ Production operations depend on useful, safe signals:
 - Avoid high-cardinality or sensitive values in metrics labels.
 - Metrics and timing measurements should be best-effort observations; they must
   not affect ACK ordering or durable commit behavior.
+- NATS server monitoring snapshots are observability evidence only. They must
+  not include raw endpoint JSON by default, credentials, base URLs, private
+  topology, subjects, account names, stream names, consumer names, payloads, or
+  secrets unless a reviewed policy explicitly selects a safe scalar field.
+- Oracle duplicate/conflict metrics are observability, not delivery semantics.
+  They must stay low-cardinality, free of table names, subjects, constraint
+  names, payloads, message IDs, classification values, labels, and secrets, and
+  must never decide whether a JetStream message is ACKed.
+- Metrics names are part of the operational contract. Add new metrics through
+  `src/nats_sinks/core/metrics.py`, document them in operations guidance, keep
+  labels low-cardinality, avoid sensitive metadata as labels, and preserve
+  compatibility aliases when renaming existing operational signals.
+- The `nats-sink-metrics` CLI must remain a local snapshot reader. It should
+  not connect to NATS, Oracle, local file sink directories, cloud services, or
+  future destination backends. Keep table, JSON, JSONL, shell, names, and
+  Prometheus text output deterministic and easy to pipe in scripts.
+- Metrics snapshots must stay bounded, schema-versioned, duplicate-key
+  checked, UTF-8 checked, and free of payloads, secrets, credentials,
+  certificate material, private key material, and sensitive operational content.
 
 ## Data And Idempotency
 
@@ -244,6 +563,16 @@ At-least-once delivery means duplicate processing is normal:
 - Apply metadata defaults only when the configured header is absent. If a
   configured priority, classification, or labels header is present but empty or
   whitespace-only, preserve that as explicit null or no labels for the message.
+- Preserve the core `mission_metadata` contract for all production sinks that
+  support structured metadata. Mission metadata is one validated JSON object,
+  not a growing set of fixed domain-specific columns. Oracle stores it in
+  `MISSION_METADATA_JSON`, file sink records expose it as top-level
+  `mission_metadata`, and future sinks should document their equivalent
+  storage behavior.
+- Treat mission metadata as hostile input until it has been parsed with a JSON
+  parser, duplicate-key checked, size-bounded, profile-checked when configured,
+  and screened for secret-looking key names. Invalid mission metadata is a
+  permanent validation failure and must follow DLQ-before-ACK behavior.
 - Do not use `priority`, `classification`, or `labels` as idempotency keys
   unless a future sink explicitly documents a safe, unique, and tested use
   case. They are labels for operations and policy, not durable uniqueness
@@ -273,9 +602,9 @@ behavior that mocks can miss:
   an older layout. Do not silently drop or recreate retained tables unless the
   operator set an explicit drop/recreate flag or selected a fresh test table.
 - Oracle tables using the default mapping now require nullable `PRIORITY` and
-  `CLASSIFICATION` columns. When changing the recommended schema again, update
-  the DDL helper, Oracle docs, least-privilege setup docs, retained-table
-  schema checks, live e2e tests, and release notes together.
+  `CLASSIFICATION` and `LABELS` columns. When changing the recommended schema
+  again, update the DDL helper, Oracle docs, least-privilege setup docs,
+  retained-table schema checks, live e2e tests, and release notes together.
 - Live encrypted and unencrypted e2e checks should use explicit test table
   names when validating new storage behavior, so old local environment defaults
   cannot hide schema drift.
@@ -301,7 +630,8 @@ mypy src
 python -m pytest -q
 mkdocs build --strict
 python -m build
-twine check dist/*
+scripts/sbom.sh
+twine check dist/*.whl dist/*.tar.gz
 ```
 
 Additional testing expectations:
@@ -311,6 +641,9 @@ Additional testing expectations:
 - Use table-driven tests for validators and route matching where possible.
 - Use property-style or fuzz-style tests for parsers and normalizers when they
   accept external input.
+- Keep bounded generator tests small enough that failing cases are actionable
+  in CI logs and do not print sensitive payloads, credentials, local service
+  locators, or raw private operational data.
 - Keep live NATS, Oracle, and end-to-end tests behind explicit integration
   markers and environment variables.
 - Encryption test helpers should generate temporary AES key material, delete it
@@ -324,6 +657,11 @@ Additional testing expectations:
   sink where practical: priority, classification, and labels present; only one
   field present; none present; defaults applied; subject defaults applied; and
   explicitly empty headers becoming null or no labels.
+- Prefer the synthetic mission scenario harness for repeatable edge-case
+  evidence when live NATS or Oracle services are not required. Keep generated
+  subjects, payloads, classifications, labels, and reports fake and sanitized.
+  Do not add live service access to the harness itself; use separate
+  integration wrappers gated by ignored local configuration.
 - Sanitize test reports before committing. Do not include hostnames, usernames,
   passwords, wallet contents, certificates, tokens, or private payloads.
 - Do not mark live integration tests as passed unless they were actually run in
@@ -353,6 +691,11 @@ JetStream, Oracle, Python packaging, or sink connectors:
   subtle and precise; do not imply official status, accreditation, tactical
   suitability, exactly-once delivery, or security guarantees the project does
   not provide.
+- Treat F2T2EA phase tagging and similar mission lifecycle concepts as
+  metadata-only documentation patterns unless a separate generic feature has
+  been explicitly designed, implemented, and tested. Never imply that
+  nats-sinks performs targeting, fire-control, weapons release,
+  rules-of-engagement evaluation, or autonomous decision-making.
 - Update README, docs pages, examples, and CLI help together when public
   behavior changes.
 - Keep the documentation set in a release-ready state. Do not leave new
@@ -383,5 +726,9 @@ The package should remain PyPI-ready after ordinary development work:
   commit PyPI tokens, GitHub tokens, signing keys, or local release credentials.
 - Release automation should create or update the GitHub Release from the pushed
   tag and attach the built source distribution and wheel.
+- Release automation should generate CycloneDX SBOM JSON and XML files after
+  the package build, upload them as workflow artifacts, and attach them to the
+  GitHub Release as evidence. Do not upload SBOM files to PyPI as package
+  distributions.
 - Keep GitHub Actions versions current with GitHub-hosted runner runtimes so
   releases do not depend on deprecated Node.js versions.

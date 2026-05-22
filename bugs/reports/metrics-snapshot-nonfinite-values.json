@@ -1,0 +1,28 @@
+{
+  "id": "metrics-snapshot-nonfinite-values",
+  "title": "[Bug]: Metrics snapshots can emit non-standard JSON numbers",
+  "area": "Metrics and observability",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.0",
+  "labels": ["metrics", "observability", "serialization"],
+  "summary": "Metrics snapshot creation and writing can accept non-finite float values. Python JSON output may then emit NaN or Infinity, which is not valid interoperable JSON for local operators, scripts, or observability connectors.",
+  "observed": "A gauge or observation value of NaN can reach metrics_snapshot() and write_metrics_snapshot(), producing a non-standard JSON snapshot instead of failing closed.",
+  "expected": "Metrics counters, gauges, and observations should remain finite JSON numbers. Non-finite values should be rejected before a snapshot is written.",
+  "reproduction": "Run a focused regression test that sets a gauge to NaN and asserts metrics snapshot creation rejects the value before writing JSON.",
+  "failing_test": "Add a focused regression test under tests/unit that proves non-finite metrics values are rejected.",
+  "impact": "Invalid metrics JSON can break nats-sink-metrics, observability policy exports, Prometheus textfile generation, service diagnostics, and release evidence pipelines.",
+  "delivery_semantics": "No delivery semantics are changed. Metrics remain observational and must not affect commit-then-ACK behavior.",
+  "security": "The fix must not include metric values from private payloads or logs. Error messages should name the metric field but not expose sensitive data.",
+  "acceptance": [
+    "A focused regression test covers non-finite gauge rejection.",
+    "A focused regression test covers non-finite observation rejection.",
+    "write_metrics_snapshot() writes standards-compliant JSON only.",
+    "load_metrics_snapshot() rejects non-standard constants in snapshot files.",
+    "nats-sink-metrics continues to read valid snapshots.",
+    "Existing unit, smoke, documentation, package, and release checks still pass."
+  ],
+  "tests": "Run the focused regression test, metrics tests, observability tests, metrics CLI tests, and the full local check script.",
+  "documentation": "Update CHANGELOG.md and metrics documentation to state that metric values must be finite JSON numbers.",
+  "closeout": "Close only after the release containing the fix is published. Include the release tag, regression evidence, verification evidence, and any remaining limitations."
+}

@@ -27,6 +27,14 @@ jobs:
         run: ruff check .
       - name: Type check
         run: mypy src
+      - name: Version consistency
+        run: python scripts/check-version-consistency.py
+      - name: Dependency manifest consistency
+        run: python scripts/update-dependency-manifests.py --check
+      - name: Local backlog item validation
+        run: python scripts/sync-backlog-issues.py --check
+      - name: Local bug report validation
+        run: python scripts/sync-bug-reports.py --check
       - name: Markdown link check
         run: python scripts/check-markdown-links.py
       - name: Unit tests
@@ -34,14 +42,17 @@ jobs:
       - name: Sink capability checks
         run: scripts/check-sinks.sh
       - name: Documentation build
-        run: mkdocs build --strict
-      - name: GitHub Pages documentation build
-        env:
-          NATS_SINKS_DOCS_SITE_URL: https://projectcuillin.github.io/nats-sinks/
-        run: mkdocs build --strict
+        run: scripts/check-docs.sh
       - name: Build
         run: python -m build
+      - name: Generate SBOM
+        run: scripts/sbom.sh
       - name: Twine check
-        run: twine check dist/*
+        run: twine check dist/*.whl dist/*.tar.gz
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v7
+        with:
+          name: sbom-${{ matrix.python-version }}
+          path: dist/sbom/*
       - name: Security scan
-        run: bandit -q -r src
+        run: scripts/security.sh

@@ -1,4 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
+
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -12,8 +14,16 @@ from nats_sinks import (
     PermanentSinkError,
     TemporarySinkError,
 )
-from nats_sinks.core.config import DeadLetterConfig, DeliveryConfig, MessageMetadataConfig
+from nats_sinks.core.config import (
+    DeadLetterConfig,
+    DeliveryConfig,
+    MessageMetadataConfig,
+    MissionMetadataConfig,
+    PriorityLaneConfig,
+    PriorityLanesConfig,
+)
 from nats_sinks.core.errors import DeadLetterError
+from nats_sinks.core.metrics import InMemoryMetrics, MetricNames
 from nats_sinks.core.runner import JetStreamSinkRunner
 
 
@@ -41,15 +51,22 @@ class FakeMessage:
         self.events = events
         self.acked = False
         self.nacked = False
+        self.nak_delays: list[float | None] = []
 
     async def ack(self) -> None:
         self.events.append("ack")
         self.acked = True
 
     async def nak(self, delay: float | None = None) -> None:
-        del delay
         self.events.append("nak")
         self.nacked = True
+        self.nak_delays.append(delay)
+
+
+class AckFailingMessage(FakeMessage):
+    async def ack(self) -> None:
+        self.events.append("ack_failed")
+        raise RuntimeError("ack connection closed")
 
 
 class RecordingSink:
@@ -218,6 +235,39 @@ async def test_sink_success_triggers_ack_after_commit() -> None:
 
 
 @pytest.mark.asyncio
+async def test_successful_batch_records_clear_metrics_without_affecting_ack_order() -> None:
+    events: list[str] = []
+    message = FakeMessage(events)
+    metrics = InMemoryMetrics()
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=RecordingSink(events),
+        metrics=metrics,
+    )
+
+    await runner.process_raw_batch([message])
+
+    assert events == ["write", "commit", "ack"]
+    assert metrics.counters[MetricNames.MESSAGES_FETCHED_TOTAL] == 1
+    assert metrics.counters[MetricNames.BATCHES_FETCHED_TOTAL] == 1
+    assert metrics.counters[MetricNames.MESSAGES_PREPARED_TOTAL] == 1
+    assert metrics.counters[MetricNames.LEGACY_MESSAGES_RECEIVED_TOTAL] == 1
+    assert metrics.counters[MetricNames.MESSAGES_WRITTEN_TOTAL] == 1
+    assert metrics.counters[MetricNames.SINK_BATCHES_WRITTEN_TOTAL] == 1
+    assert metrics.counters[MetricNames.LEGACY_BATCHES_WRITTEN_TOTAL] == 1
+    assert metrics.counters[MetricNames.MESSAGES_ACKED_TOTAL] == 1
+    assert metrics.observations[MetricNames.SINK_BATCH_WRITE_SECONDS]
+    assert metrics.observations[MetricNames.LEGACY_BATCH_WRITE_SECONDS]
+    assert metrics.gauges[MetricNames.CURRENT_BATCH_MESSAGES] == 1.0
+    assert metrics.gauges[MetricNames.LEGACY_CURRENT_BATCH_SIZE] == 1.0
+    assert MetricNames.LAST_SINK_SUCCESS_EPOCH_SECONDS in metrics.gauges
+    assert MetricNames.LEGACY_LAST_SUCCESS_TIMESTAMP in metrics.gauges
+
+
+@pytest.mark.asyncio
 async def test_runner_applies_priority_and_classification_before_sink_write() -> None:
     events: list[str] = []
     message = FakeMessage(events)
@@ -255,6 +305,55 @@ async def test_runner_applies_priority_and_classification_before_sink_write() ->
     assert sink.messages[0].classification == "internal"
     assert sink.messages[0].labels == ("default", "orders")
     assert message.acked
+
+
+@pytest.mark.asyncio
+async def test_priority_lanes_reorder_sink_batch_without_ack_before_commit() -> None:
+    events: list[str] = []
+    routine = FakeMessage(events)
+    routine.headers = {"X-Priority": "routine"}
+    routine.metadata.sequence = FakeSequence(stream=1, consumer=1)
+    urgent = FakeMessage(events)
+    urgent.headers = {"X-Priority": "urgent"}
+    urgent.metadata.sequence = FakeSequence(stream=2, consumer=2)
+    sink = MetadataRecordingSink(events)
+    metadata_config = MessageMetadataConfig.model_validate(
+        {
+            "priority": {
+                "header": "X-Priority",
+                "default": "routine",
+            },
+        }
+    )
+    metrics = InMemoryMetrics()
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=sink,
+        message_metadata=metadata_config,
+        delivery=DeliveryConfig(
+            priority_lanes=PriorityLanesConfig(
+                enabled=True,
+                default_lane="routine",
+                lanes=[
+                    PriorityLaneConfig(name="urgent", priorities=("urgent",), weight=2),
+                    PriorityLaneConfig(name="routine", priorities=("routine",), weight=1),
+                ],
+            )
+        ),
+        metrics=metrics,
+    )
+
+    await runner.process_raw_batch([routine, urgent])
+
+    assert [message.stream_sequence for message in sink.messages] == [2, 1]
+    assert events == ["write", "commit", "ack", "ack"]
+    assert routine.acked
+    assert urgent.acked
+    assert metrics.counters[MetricNames.PRIORITY_LANE_MESSAGES_TOTAL] == 2
+    assert metrics.gauges[MetricNames.CURRENT_PRIORITY_LANES_ACTIVE] == 2.0
 
 
 @pytest.mark.asyncio
@@ -300,6 +399,106 @@ async def test_temporary_failure_does_not_ack() -> None:
     assert events == ["write", "nak"]
     assert not message.acked
     assert message.nacked
+
+
+@pytest.mark.asyncio
+async def test_temporary_failure_records_failure_and_nak_metrics() -> None:
+    events: list[str] = []
+    message = FakeMessage(events)
+    metrics = InMemoryMetrics()
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=RecordingSink(events, TemporarySinkError("try again")),
+        metrics=metrics,
+    )
+
+    await runner.process_raw_batch([message])
+
+    assert not message.acked
+    assert message.nacked
+    assert metrics.counters[MetricNames.MESSAGES_FAILED_TOTAL] == 1
+    assert metrics.counters[MetricNames.SINK_WRITE_ERRORS_TOTAL] == 1
+    assert metrics.counters[MetricNames.MESSAGES_NACKED_TOTAL] == 1
+    assert metrics.counters[MetricNames.MESSAGES_ACKED_TOTAL] == 0
+
+
+@pytest.mark.asyncio
+async def test_temporary_failure_uses_exponential_backoff_delay_from_delivery_attempt() -> None:
+    events: list[str] = []
+    message = FakeMessage(events)
+    message.metadata.num_delivered = 3
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=RecordingSink(events, TemporarySinkError("try again")),
+        delivery=DeliveryConfig(
+            retry_backoff_ms=1000,
+            retry_backoff_max_ms=10_000,
+            retry_backoff_mode="exponential",
+            retry_backoff_multiplier=2.0,
+            retry_jitter="none",
+        ),
+    )
+
+    await runner.process_raw_batch([message])
+
+    assert events == ["write", "nak"]
+    assert message.nak_delays == [4.0]
+    assert not message.acked
+
+
+@pytest.mark.asyncio
+async def test_temporary_failure_retry_jitter_can_be_disabled_for_predictable_operations() -> None:
+    events: list[str] = []
+    message = FakeMessage(events)
+    message.metadata.num_delivered = 2
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=RecordingSink(events, TemporarySinkError("try again")),
+        delivery=DeliveryConfig(
+            retry_backoff_ms=500,
+            retry_backoff_max_ms=10_000,
+            retry_backoff_mode="linear",
+            retry_jitter="none",
+        ),
+    )
+
+    await runner.process_raw_batch([message])
+
+    assert message.nak_delays == [1.0]
+
+
+@pytest.mark.asyncio
+async def test_temporary_failure_does_not_nak_when_active_retry_budget_is_exhausted() -> None:
+    events: list[str] = []
+    message = FakeMessage(events)
+    message.metadata.num_delivered = 3
+    metrics = InMemoryMetrics()
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=RecordingSink(events, TemporarySinkError("try again")),
+        delivery=DeliveryConfig(max_retries=2, retry_jitter="none"),
+        metrics=metrics,
+    )
+
+    await runner.process_raw_batch([message])
+
+    assert events == ["write"]
+    assert not message.acked
+    assert not message.nacked
+    assert metrics.counters[MetricNames.MESSAGES_FAILED_TOTAL] == 1
+    assert metrics.counters[MetricNames.MESSAGES_NACKED_TOTAL] == 0
 
 
 @pytest.mark.asyncio
@@ -351,6 +550,38 @@ async def test_message_normalization_failure_does_not_ack(
 
 
 @pytest.mark.asyncio
+async def test_message_normalization_failure_records_specific_metric(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+    message = FakeMessage(events)
+    metrics = InMemoryMetrics()
+
+    def fail_normalization(_raw_message: object) -> NatsEnvelope:
+        raise RuntimeError("broken client message")
+
+    monkeypatch.setattr(
+        "nats_sinks.core.runner.envelope_from_nats_message",
+        fail_normalization,
+    )
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=RecordingSink(events),
+        metrics=metrics,
+    )
+
+    await runner.process_raw_batch([message])
+
+    assert metrics.counters[MetricNames.MESSAGES_FAILED_TOTAL] == 1
+    assert metrics.counters[MetricNames.MESSAGE_NORMALIZATION_ERRORS_TOTAL] == 1
+    assert metrics.counters[MetricNames.SINK_WRITE_ERRORS_TOTAL] == 0
+    assert metrics.counters[MetricNames.MESSAGES_ACKED_TOTAL] == 0
+
+
+@pytest.mark.asyncio
 async def test_payload_encryption_failure_does_not_write_or_ack() -> None:
     events: list[str] = []
     message = FakeMessage(events)
@@ -368,6 +599,29 @@ async def test_payload_encryption_failure_does_not_write_or_ack() -> None:
     assert events == ["encrypt", "nak"]
     assert not message.acked
     assert message.nacked
+
+
+@pytest.mark.asyncio
+async def test_payload_encryption_failure_records_specific_metric() -> None:
+    events: list[str] = []
+    message = FakeMessage(events)
+    metrics = InMemoryMetrics()
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=RecordingSink(events),
+        payload_encryptor=FailingPayloadEncryptor(events),  # type: ignore[arg-type]
+        metrics=metrics,
+    )
+
+    await runner.process_raw_batch([message])
+
+    assert metrics.counters[MetricNames.MESSAGES_FAILED_TOTAL] == 1
+    assert metrics.counters[MetricNames.PAYLOAD_ENCRYPTION_ERRORS_TOTAL] == 1
+    assert metrics.counters[MetricNames.SINK_WRITE_ERRORS_TOTAL] == 0
+    assert metrics.counters[MetricNames.MESSAGES_ACKED_TOTAL] == 0
 
 
 @pytest.mark.asyncio
@@ -393,6 +647,31 @@ async def test_permanent_failure_publishes_dlq_before_ack() -> None:
 
 
 @pytest.mark.asyncio
+async def test_permanent_failure_records_dlq_and_ack_metrics() -> None:
+    events: list[str] = []
+    message = FakeMessage(events)
+    metrics = InMemoryMetrics()
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=RecordingSink(events, PermanentSinkError("bad input")),
+        dead_letter=DeadLetterConfig(enabled=True, subject="orders.dlq"),
+        jetstream=FakeJetStream(events),
+        metrics=metrics,
+    )
+
+    await runner.process_raw_batch([message])
+
+    assert events == ["write", "dlq", "ack"]
+    assert metrics.counters[MetricNames.MESSAGES_FAILED_TOTAL] == 1
+    assert metrics.counters[MetricNames.SINK_WRITE_ERRORS_TOTAL] == 1
+    assert metrics.counters[MetricNames.MESSAGES_DLQ_TOTAL] == 1
+    assert metrics.counters[MetricNames.MESSAGES_ACKED_TOTAL] == 1
+
+
+@pytest.mark.asyncio
 async def test_malformed_json_payload_goes_to_dlq_before_ack() -> None:
     events: list[str] = []
     message = FakeMessage(events, data=b"{not-json")
@@ -410,6 +689,33 @@ async def test_malformed_json_payload_goes_to_dlq_before_ack() -> None:
     await runner.process_raw_batch([message])
 
     assert events == ["write", "dlq", "ack"]
+    assert message.acked
+    assert js.published[0][0] == "orders.dlq"
+
+
+@pytest.mark.asyncio
+async def test_invalid_mission_metadata_goes_to_dlq_before_ack() -> None:
+    events: list[str] = []
+    message = FakeMessage(events)
+    message.headers = {
+        "Nats-Msg-Id": "m-1",
+        "Nats-Sinks-Mission-Metadata": "{not-json",
+    }
+    js = FakeJetStream(events)
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=RecordingSink(events),
+        mission_metadata=MissionMetadataConfig(enabled=True),
+        dead_letter=DeadLetterConfig(enabled=True, subject="orders.dlq"),
+        jetstream=js,
+    )
+
+    await runner.process_raw_batch([message])
+
+    assert events == ["dlq", "ack"]
     assert message.acked
     assert js.published[0][0] == "orders.dlq"
 
@@ -433,6 +739,54 @@ async def test_dlq_publish_failure_does_not_ack_original() -> None:
 
     assert events == ["write", "dlq"]
     assert not message.acked
+
+
+@pytest.mark.asyncio
+async def test_dlq_publish_failure_records_metric_without_ack() -> None:
+    events: list[str] = []
+    message = FakeMessage(events)
+    metrics = InMemoryMetrics()
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=RecordingSink(events, PermanentSinkError("bad input")),
+        dead_letter=DeadLetterConfig(enabled=True, subject="orders.dlq"),
+        jetstream=FakeJetStream(events, fail_publish=True),
+        metrics=metrics,
+    )
+
+    with pytest.raises(DeadLetterError):
+        await runner.process_raw_batch([message])
+
+    assert not message.acked
+    assert metrics.counters[MetricNames.DLQ_PUBLISH_ERRORS_TOTAL] == 1
+    assert metrics.counters[MetricNames.MESSAGES_DLQ_TOTAL] == 0
+    assert metrics.counters[MetricNames.MESSAGES_ACKED_TOTAL] == 0
+
+
+@pytest.mark.asyncio
+async def test_ack_failure_records_metric_after_sink_success() -> None:
+    events: list[str] = []
+    message = AckFailingMessage(events)
+    metrics = InMemoryMetrics()
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=RecordingSink(events),
+        metrics=metrics,
+    )
+
+    with pytest.raises(Exception, match="failed to ACK JetStream message"):
+        await runner.process_raw_batch([message])
+
+    assert events == ["write", "commit", "ack_failed"]
+    assert metrics.counters[MetricNames.MESSAGES_WRITTEN_TOTAL] == 1
+    assert metrics.counters[MetricNames.ACK_ERRORS_TOTAL] == 1
+    assert metrics.counters[MetricNames.MESSAGES_ACKED_TOTAL] == 0
 
 
 @pytest.mark.asyncio

@@ -1,4 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
+
 """Destination sink protocols.
 
 The `Sink` protocol is intentionally small: start, write a batch, stop.  A sink

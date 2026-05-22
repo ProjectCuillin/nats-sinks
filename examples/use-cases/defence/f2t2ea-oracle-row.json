@@ -1,0 +1,56 @@
+{
+  "table": "MISSION_EVENT_INBOX",
+  "columns": {
+    "STREAM_NAME": "MISSION_SYNTHETIC",
+    "STREAM_SEQUENCE": 1,
+    "SUBJECT": "mission.synthetic.sensor.track.0001",
+    "MESSAGE_ID": "synthetic-f2t2ea-0001",
+    "PRIORITY": "immediate",
+    "CLASSIFICATION": "NATO SECRET",
+    "LABELS": "synthetic;mission-test;f2t2ea-example",
+    "MISSION_METADATA_JSON": {
+      "schema": "nats_sinks.use_case.mission_metadata.v1",
+      "profile": "f2t2ea-event-phase-tagging",
+      "profile_version": 1,
+      "f2t2ea": {
+        "phase": "track",
+        "phase_label": "Track",
+        "phase_source": "publisher",
+        "phase_asserted_at": "2026-01-01T12:00:00Z"
+      },
+      "handling": {
+        "priority": "immediate",
+        "classification": "NATO SECRET",
+        "labels": [
+          "synthetic",
+          "mission-test",
+          "f2t2ea-example"
+        ]
+      }
+    },
+    "PAYLOAD_JSON": {
+      "event": {
+        "event_id": "SYN-F2T2EA-0001",
+        "event_type": "synthetic-track-update"
+      },
+      "payload": {
+        "summary": "Synthetic event used only for documentation and tests."
+      }
+    },
+    "METADATA_JSON": {
+      "message_metadata": {
+        "priority": "immediate",
+        "classification": "NATO SECRET",
+        "labels": [
+          "synthetic",
+          "mission-test",
+          "f2t2ea-example"
+        ]
+      }
+    }
+  },
+  "notes": [
+    "MISSION_METADATA_JSON is populated from the generic core mission_metadata feature when enabled.",
+    "The Oracle sink stores this object as metadata and does not interpret F2T2EA phase semantics."
+  ]
+}

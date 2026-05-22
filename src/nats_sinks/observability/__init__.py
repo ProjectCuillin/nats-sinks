@@ -1,0 +1,81 @@
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
+# SPDX-License-Identifier: Apache-2.0
+
+"""Observability policy and connector helpers.
+
+The observability package is intentionally separate from the core runner and
+destination sinks.  The runner emits small, safe metric names; observability
+connectors decide what, if anything, is shared with external platforms such as
+Prometheus.  This keeps delivery semantics independent from monitoring tools
+and lets operators run observability as a separate Linux service.
+"""
+
+from nats_sinks.observability.nats_monitoring import (
+    NATS_MONITORING_SNAPSHOT_SCHEMA,
+    NatsMonitoringEndpointObservation,
+    NatsMonitoringError,
+    build_nats_monitoring_url,
+    collect_nats_monitoring_snapshot,
+    ensure_nats_monitoring_enabled,
+    extract_nats_monitoring_fields,
+    load_nats_monitoring_snapshot,
+    render_nats_monitoring_prometheus,
+    write_nats_monitoring_snapshot,
+)
+from nats_sinks.observability.policy import (
+    NATS_MONITORING_ALLOWED_ENDPOINTS,
+    OBSERVABILITY_POLICY_SCHEMA,
+    NatsServerMonitoringPolicy,
+    ObservabilityPolicy,
+    ObservabilitySubjectPolicy,
+    PrometheusHttpEndpointPolicy,
+    PrometheusTextfilePolicy,
+    build_policy_from_app_config,
+    load_observability_policy,
+    observability_policy_template,
+    write_observability_policy,
+)
+from nats_sinks.observability.prometheus import (
+    filter_metric_rows,
+    render_prometheus_textfile,
+    write_prometheus_textfile,
+)
+from nats_sinks.observability.prometheus_http import (
+    PrometheusHttpResponse,
+    build_prometheus_http_server,
+    ensure_prometheus_http_enabled,
+    render_prometheus_http_response,
+    serve_prometheus_http,
+)
+
+__all__ = [
+    "NATS_MONITORING_ALLOWED_ENDPOINTS",
+    "NATS_MONITORING_SNAPSHOT_SCHEMA",
+    "OBSERVABILITY_POLICY_SCHEMA",
+    "NatsMonitoringEndpointObservation",
+    "NatsMonitoringError",
+    "NatsServerMonitoringPolicy",
+    "ObservabilityPolicy",
+    "ObservabilitySubjectPolicy",
+    "PrometheusHttpEndpointPolicy",
+    "PrometheusHttpResponse",
+    "PrometheusTextfilePolicy",
+    "build_nats_monitoring_url",
+    "build_policy_from_app_config",
+    "build_prometheus_http_server",
+    "collect_nats_monitoring_snapshot",
+    "ensure_nats_monitoring_enabled",
+    "ensure_prometheus_http_enabled",
+    "extract_nats_monitoring_fields",
+    "filter_metric_rows",
+    "load_nats_monitoring_snapshot",
+    "load_observability_policy",
+    "observability_policy_template",
+    "render_nats_monitoring_prometheus",
+    "render_prometheus_http_response",
+    "render_prometheus_textfile",
+    "serve_prometheus_http",
+    "write_nats_monitoring_snapshot",
+    "write_observability_policy",
+    "write_prometheus_textfile",
+]

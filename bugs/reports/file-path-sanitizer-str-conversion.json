@@ -1,0 +1,27 @@
+{
+  "id": "file-path-sanitizer-str-conversion",
+  "title": "[Bug]: File path sanitizer can crash when string conversion fails",
+  "area": "File sink",
+  "severity": "low",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.0",
+  "labels": ["testing", "security"],
+  "summary": "The file sink path component sanitizer assumed that every input can be converted with str(value). A hostile or unusual object whose string conversion raises could make the sanitizer raise an unexpected exception instead of producing a safe fallback component.",
+  "observed": "A deterministic generator test passed an object with failing string conversion into the path component sanitizer. The sanitizer raised an unexpected runtime exception before it could produce a bounded filename component.",
+  "expected": "The sanitizer should treat failed string conversion as hostile input, avoid exposing object representations, and return a deterministic safe fallback component that cannot escape the configured output directory.",
+  "reproduction": "Run the focused regression test that calls the file sink path component sanitizer with a synthetic object whose string conversion raises.",
+  "failing_test": "Add a focused regression test under tests/unit that proves failed string conversion in the file path sanitizer is handled safely.",
+  "impact": "This is a low-severity robustness issue. Normal NatsEnvelope subjects are strings, so the common runtime path is not expected to pass such objects. The sanitizer is still a public defensive boundary and should fail closed for hostile values.",
+  "delivery_semantics": "No JetStream delivery semantics are changed. The fix only hardens file sink path sanitization and must not affect ACK ordering, DLQ handling, retry behavior, idempotency, Oracle behavior, or payload normalization.",
+  "security": "The fix must not log or expose raw object representations. The fallback component must remain bounded, deterministic, and safe for use as one filesystem path component under the configured file sink directory.",
+  "acceptance": [
+    "A focused regression test covers failed string conversion in the file path sanitizer.",
+    "The sanitizer returns a bounded safe fallback component instead of raising an unexpected exception.",
+    "The fallback component contains no path separators and is not a current or parent directory component.",
+    "Existing file sink path traversal and duplicate handling tests still pass.",
+    "No runtime delivery semantics are changed."
+  ],
+  "tests": "Run the focused regression test, the bounded property generator tests, file sink unit tests, payload normalization tests, unhappy-path fuzz tests, and the full local check script.",
+  "documentation": "Update CHANGELOG.md and the sanitized test report if the hardening fix changes release evidence.",
+  "closeout": "Close only after the release containing the fix is published. Include the release tag, regression evidence, verification evidence, and any remaining limitations."
+}

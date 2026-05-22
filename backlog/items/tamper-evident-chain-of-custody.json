@@ -1,0 +1,23 @@
+{
+  "id": "tamper-evident-chain-of-custody",
+  "title": "[Feature]: Add tamper-evident chain-of-custody metadata",
+  "area": "Core runtime and delivery semantics",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["security"],
+  "problem": "High-assurance event custody workflows need to detect unexpected record changes after a message has been written to a durable destination. nats-sinks currently preserves message data and metadata, but it does not define a common tamper-evident record envelope with hashes, commit identifiers, or optional hash chaining.",
+  "proposal": "Design and implement optional tamper-evident custody metadata that can record payload hash, normalized metadata hash, sink commit identifier, hash algorithm, hash key version when applicable, and an optional previous-record hash for append-only destinations. The feature should be destination-neutral and should allow sinks to expose what they can support without changing ACK ownership.",
+  "users": "Security reviewers, auditors, mission-support operators, compliance teams, platform engineers, and future sink authors who need a consistent audit story across database and file destinations.",
+  "delivery_semantics": "Custody metadata must be computed before sink write and returned or confirmed only after durable sink success when sink-specific commit identifiers are involved. Failure to compute or verify required custody metadata should fail closed and must not lead to ACK before durable success.",
+  "security": "Hashing must not be described as encryption. Cryptographic algorithms must be allow-listed. Payload hashes can still reveal information about repeated payloads, so documentation must explain privacy trade-offs. Logs must not include full payloads, keys, or sensitive metadata while computing custody evidence.",
+  "acceptance": [
+    "A custody metadata model is documented with supported algorithms and privacy notes.",
+    "Core helpers can compute stable hashes over normalized payload and metadata structures.",
+    "Oracle and file sink design notes explain how custody metadata would be stored.",
+    "Hash chaining is optional and documented as destination-dependent.",
+    "Tests cover deterministic hashing, redaction, malformed inputs, and no ACK on custody failure."
+  ],
+  "tests": "Add unit tests for canonicalization, hash computation, algorithm allow-listing, malformed metadata, large input bounds, file sink output, Oracle row mapping, and commit-then-ack ordering when custody metadata generation fails.",
+  "documentation": "Update docs/security.md, docs/architecture.md, docs/oracle-sink.md, docs/file-sink.md, docs/use-cases, ROADMAP.md, and CHANGELOG.md with custody behavior, examples, non-goals, and verification guidance.",
+  "closeout": "Close only after the release containing chain-of-custody support is published. Include release tag, algorithms, storage behavior, tests run, and follow-up work for signatures if separate."
+}

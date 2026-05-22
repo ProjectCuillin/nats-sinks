@@ -41,8 +41,4 @@ jobs:
       - name: Check PyPI-facing Markdown links
         run: python scripts/check-markdown-links.py
       - name: Build documentation
-        run: mkdocs build --strict
-      - name: Build GitHub Pages documentation
-        env:
-          NATS_SINKS_DOCS_SITE_URL: https://projectcuillin.github.io/nats-sinks/
-        run: mkdocs build --strict
+        run: scripts/check-docs.sh

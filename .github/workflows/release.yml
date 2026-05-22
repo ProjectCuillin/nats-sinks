@@ -23,19 +23,26 @@ jobs:
       - name: Sink capability checks
         run: scripts/check-sinks.sh
       - name: Documentation build
-        run: mkdocs build --strict
-      - name: GitHub Pages documentation build
-        env:
-          NATS_SINKS_DOCS_SITE_URL: https://projectcuillin.github.io/nats-sinks/
-        run: mkdocs build --strict
+        run: scripts/check-docs.sh
       - name: Build
         run: python -m build
+      - name: Generate SBOM
+        run: scripts/sbom.sh
+      - name: Generate checksum manifest
+        run: python scripts/generate-checksums.py dist
       - name: Check
-        run: twine check dist/*
+        run: twine check dist/*.whl dist/*.tar.gz
       - uses: actions/upload-artifact@v7
         with:
           name: dist
-          path: dist/*
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
+            dist/SHA256SUMS
+      - uses: actions/upload-artifact@v7
+        with:
+          name: sbom
+          path: dist/sbom/*
 
   publish:
     needs: build
@@ -65,17 +72,42 @@ jobs:
         with:
           name: dist
           path: dist
+      - uses: actions/download-artifact@v8
+        with:
+          name: sbom
+          path: dist/sbom
       - name: Create or update GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG_NAME: ${{ github.ref_name }}
         run: |
           if gh release view "$TAG_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$TAG_NAME" dist/* --repo "$GITHUB_REPOSITORY" --clobber
+            gh release upload "$TAG_NAME" dist/*.whl dist/*.tar.gz dist/SHA256SUMS dist/sbom/* --repo "$GITHUB_REPOSITORY" --clobber
           else
-            gh release create "$TAG_NAME" dist/* \
+            gh release create "$TAG_NAME" dist/*.whl dist/*.tar.gz dist/SHA256SUMS dist/sbom/* \
               --repo "$GITHUB_REPOSITORY" \
               --title "$TAG_NAME" \
               --generate-notes \
               --verify-tag
           fi
+
+  close-released-backlog-issues:
+    needs:
+      - github-release
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Close released backlog issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          python scripts/close-released-backlog-issues.py --repo "$GITHUB_REPOSITORY" --release "$TAG_NAME"
+          python scripts/close-released-bug-issues.py --repo "$GITHUB_REPOSITORY" --release "$TAG_NAME"

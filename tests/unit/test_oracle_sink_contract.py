@@ -1,4 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
+
 from __future__ import annotations
 
 import base64
@@ -9,7 +11,14 @@ from typing import Any
 
 import pytest
 
-from nats_sinks import ConfigurationError, DestinationUnavailableError, NatsEnvelope
+from nats_sinks import (
+    ConfigurationError,
+    DestinationUnavailableError,
+    InMemoryMetrics,
+    MetricNames,
+    NatsEnvelope,
+    PermanentSinkError,
+)
 from nats_sinks.core.config import EncryptionConfig
 from nats_sinks.core.encryption import ENCRYPTED_PAYLOAD_KEY, PayloadEncryptor
 from nats_sinks.oracle import OracleSink
@@ -79,9 +88,17 @@ class FakeCursor:
         self.executions.append((sql, rows))
 
 
+class DuplicateReportingCursor(FakeCursor):
+    """Cursor test double that reports fewer affected rows than attempted."""
+
+    def __init__(self, rowcount: int) -> None:
+        super().__init__()
+        self.rowcount = rowcount
+
+
 class RecordingConnection:
-    def __init__(self) -> None:
-        self.cursor_instance = FakeCursor()
+    def __init__(self, cursor: FakeCursor | None = None) -> None:
+        self.cursor_instance = cursor or FakeCursor()
         self.committed = False
 
     def __enter__(self) -> RecordingConnection:
@@ -98,8 +115,8 @@ class RecordingConnection:
 
 
 class RecordingPool:
-    def __init__(self) -> None:
-        self.connection = RecordingConnection()
+    def __init__(self, connection: RecordingConnection | None = None) -> None:
+        self.connection = connection or RecordingConnection()
 
     def acquire(self) -> RecordingConnection:
         return self.connection
@@ -126,12 +143,14 @@ class CommitFailingPool:
 
 @pytest.mark.asyncio
 async def test_oracle_insert_ignore_duplicate_is_success() -> None:
+    metrics = InMemoryMetrics()
     sink = OracleSink(
         dsn="localhost:1521/FREEPDB1",
         user="app_user",
         password="example",  # noqa: S106 - local test placeholder
         table="NATS_SINK_EVENTS",
         mode="insert_ignore",
+        metrics=metrics,
     )
     sink._pool = object()
 
@@ -142,6 +161,61 @@ async def test_oracle_insert_ignore_duplicate_is_success() -> None:
     sink._write_rows_sync = raise_duplicate  # type: ignore[method-assign]
 
     await sink.write_batch([envelope()])
+
+    assert metrics.counters[MetricNames.ORACLE_CONFLICTS_TOTAL] == 1
+    assert metrics.counters[MetricNames.ORACLE_DUPLICATES_TOTAL] == 1
+    assert metrics.counters[MetricNames.ORACLE_DUPLICATE_IGNORED_TOTAL] == 1
+
+
+@pytest.mark.asyncio
+async def test_oracle_insert_ignore_rowcount_reports_ignored_duplicates() -> None:
+    metrics = InMemoryMetrics()
+    sink = OracleSink(
+        dsn="localhost:1521/FREEPDB1",
+        user="app_user",
+        password="example",  # noqa: S106 - local test placeholder
+        table="NATS_SINK_EVENTS",
+        mode="insert_ignore",
+        metrics=metrics,
+    )
+    cursor = DuplicateReportingCursor(rowcount=1)
+    sink._pool = RecordingPool(RecordingConnection(cursor))
+
+    await sink.write_batch(
+        [envelope_with_subject("orders.created", 1), envelope_with_subject("orders.created", 2)]
+    )
+
+    assert metrics.counters[MetricNames.ORACLE_CONFLICTS_TOTAL] == 0
+    assert metrics.counters[MetricNames.ORACLE_DUPLICATES_TOTAL] == 1
+    assert metrics.counters[MetricNames.ORACLE_DUPLICATE_IGNORED_TOTAL] == 1
+    assert sink._duplicate_ignored_count(cursor, [{}]) == 0
+
+
+@pytest.mark.asyncio
+async def test_oracle_plain_insert_duplicate_records_conflict_and_raises() -> None:
+    metrics = InMemoryMetrics()
+    sink = OracleSink(
+        dsn="localhost:1521/FREEPDB1",
+        user="app_user",
+        password="example",  # noqa: S106 - local test placeholder
+        table="NATS_SINK_EVENTS",
+        mode="insert",
+        metrics=metrics,
+    )
+    sink._pool = object()
+
+    def raise_duplicate(rows_by_table: dict[str, list[dict[str, Any]]]) -> None:
+        del rows_by_table
+        raise RuntimeError("ORA-00001: unique constraint violated")
+
+    sink._write_rows_sync = raise_duplicate  # type: ignore[method-assign]
+
+    with pytest.raises(PermanentSinkError, match="duplicate key"):
+        await sink.write_batch([envelope()])
+
+    assert metrics.counters[MetricNames.ORACLE_CONFLICTS_TOTAL] == 1
+    assert metrics.counters[MetricNames.ORACLE_DUPLICATES_TOTAL] == 0
+    assert metrics.counters[MetricNames.ORACLE_DUPLICATE_IGNORED_TOTAL] == 0
 
 
 @pytest.mark.asyncio
@@ -200,6 +274,42 @@ def test_oracle_wallet_password_requires_wallet_location() -> None:
             table="NATS_SINK_EVENTS",
             mode="merge",
         )
+
+
+@pytest.mark.parametrize(
+    ("raw_error", "expected"),
+    [
+        (
+            "ORA-00904: invalid identifier",
+            "configured Oracle table may be missing columns expected by nats-sinks",
+        ),
+        (
+            "ORA-00942: table or view does not exist",
+            "table or view is not available to the runtime user",
+        ),
+        (
+            "ORA-01017: invalid username/password; logon denied",
+            "authentication failed",
+        ),
+    ],
+)
+def test_oracle_translation_explains_common_operator_configuration_errors(
+    raw_error: str,
+    expected: str,
+) -> None:
+    sink = OracleSink(
+        dsn="localhost:1521/FREEPDB1",
+        user="app_user",
+        password="example",  # noqa: S106 - local test placeholder
+        table="NATS_SINK_EVENTS",
+        mode="merge",
+    )
+
+    translated = sink._translate_exception(RuntimeError(raw_error), "Oracle batch write failed")
+
+    assert isinstance(translated, PermanentSinkError)
+    assert expected in str(translated)
+    assert "example" not in str(translated)
 
 
 @pytest.mark.asyncio

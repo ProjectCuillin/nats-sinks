@@ -1,0 +1,28 @@
+{
+  "id": "payload-json-nonfinite-values",
+  "title": "[Bug]: Payload normalization accepts non-standard JSON constants",
+  "area": "Core runtime and delivery semantics",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.0",
+  "labels": ["security", "serialization"],
+  "summary": "Payload normalization uses Python JSON parsing defaults, which accept non-standard constants such as NaN and Infinity. Those values are not valid interoperable JSON and can later be written to JSON-capable sinks as invalid JSON.",
+  "observed": "A payload such as {\"value\": NaN} can be treated as valid JSON instead of being rejected by json_only mode or wrapped as text by json_or_envelope mode.",
+  "expected": "Only standards-compliant JSON should be preserved as JSON. Non-standard constants should be treated as invalid JSON: json_only mode should raise SerializationError, and json_or_envelope mode should preserve the original UTF-8 text in the nats-sinks payload envelope.",
+  "reproduction": "Run a focused regression test that normalizes a payload containing NaN and asserts json_only rejects it while json_or_envelope wraps it as text.",
+  "failing_test": "Add a focused regression test under tests/unit that proves non-standard JSON constants are not accepted as valid payload JSON.",
+  "impact": "This can affect any JSON-capable sink, including Oracle and file output, because invalid non-finite values may become persisted JSON text that downstream tools reject or interpret differently.",
+  "delivery_semantics": "Commit-then-ACK ordering must not change. The fix only changes payload classification at the serialization boundary: invalid standard JSON remains eligible for DLQ in json_only mode and durable text-envelope storage in json_or_envelope mode.",
+  "security": "The fix must not log raw payload bodies. Error messages may include the subject but must not echo the invalid payload content.",
+  "acceptance": [
+    "A focused regression test covers NaN payload handling.",
+    "json_only mode raises SerializationError for non-standard JSON constants.",
+    "json_or_envelope mode wraps non-standard JSON constants as UTF-8 text.",
+    "NatsEnvelope.payload_as_json raises SerializationError for non-standard JSON constants.",
+    "Oracle and file sink JSON serialization remains standards-compliant.",
+    "Existing unit, smoke, documentation, package, and release checks still pass."
+  ],
+  "tests": "Run the focused regression test, payload normalization tests, envelope tests, Oracle mapping tests, file sink tests, and the full local check script.",
+  "documentation": "Update CHANGELOG.md and payload documentation to explain that nats-sinks uses standards-compliant JSON parsing and treats non-standard constants as invalid JSON.",
+  "closeout": "Close only after the release containing the fix is published. Include the release tag, regression evidence, verification evidence, and any remaining limitations."
+}

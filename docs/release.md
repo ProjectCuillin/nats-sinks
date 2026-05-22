@@ -21,11 +21,21 @@ When a release is prepared, move those entries into the versioned section for
 the new tag and confirm that the README, docs site, examples, package metadata,
 and CLI behavior describe the same release.
 
+GitHub Issues are the live backlog. The changelog is not a planning backlog; it
+is the record of shipped or staged user-visible behavior. Before preparing a
+release, review the issues labeled for the release and confirm each feature
+request is assigned, has a sanitized implementation note, has checked
+Acceptance Criteria, and has public sanitized `Test Plan Evidence` plus
+`Close-Out Evidence` comments. See [Backlog Management](backlog-management.md).
+
 ## Build
 
 ```bash
 python -m build
-twine check dist/*
+python scripts/update-dependency-manifests.py --check
+scripts/sbom.sh
+python scripts/generate-checksums.py dist
+twine check dist/*.whl dist/*.tar.gz
 ```
 
 ## Release Flow
@@ -34,7 +44,9 @@ twine check dist/*
 flowchart TD
     Change[Merge release changes] --> Checks[Run CI checks]
     Checks --> Build[Build sdist and wheel]
-    Build --> Verify[twine check]
+    Build --> SBOM[Generate CycloneDX SBOM]
+    SBOM --> Checksums[Generate SHA256SUMS]
+    Checksums --> Verify[twine check]
     Verify --> GHAuth[Check local gh authentication]
     GHAuth --> TestPyPI[TestPyPI publish]
     TestPyPI --> Smoke[Install smoke test]
@@ -49,7 +61,17 @@ The release workflow does not create the git tag. Maintainers create and push
 an annotated tag such as `v0.1.0`. The tag push starts
 `.github/workflows/release.yml`; after the package is published to PyPI, the
 workflow creates the GitHub Release page from that tag and uploads the built
-source distribution and wheel as release assets.
+source distribution, wheel, `SHA256SUMS`, and CycloneDX SBOM files as release
+assets. SBOM files and checksums are release evidence and are not uploaded to
+PyPI.
+
+After the GitHub Release exists, release automation closes open managed backlog
+issues labeled for the release tag. For example, an open issue labeled
+`backlog` and `release-v0.4.0` closes only after the `v0.4.0` GitHub Release
+has been created or updated. This keeps feature requests open while work is
+merely pending push, merged, or waiting for publication. The close-out helper
+also checks that all Acceptance Criteria are ticked and that the issue has
+sanitized test-plan and close-out evidence comments before it closes anything.
 
 Documentation publication is handled separately by Read the Docs. After the
 one-time Read the Docs project import, pushes to `main` and release tags build
@@ -116,6 +138,11 @@ relying on the stored GitHub CLI login.
 ## Checklist
 
 - Confirm all user-visible changes are represented in Markdown documentation.
+- Confirm every user-visible feature has a linked GitHub issue or a documented
+  reason why no issue was needed.
+- Confirm release-labeled feature requests are assigned, have an implementation
+  note, have all Acceptance Criteria checked, and include sanitized test-plan
+  and close-out evidence comments.
 - Confirm `CHANGELOG.md` has a complete version section for this release and a
   clean `Unreleased` section for future work.
 - Update `CHANGELOG.md`.
@@ -125,13 +152,15 @@ relying on the stored GitHub CLI login.
 - Confirm `ruff check .`.
 - Confirm `mypy src`.
 - Confirm `python scripts/check-markdown-links.py`.
-- Confirm `mkdocs build --strict`.
-- Confirm `NATS_SINKS_DOCS_SITE_URL="https://projectcuillin.github.io/nats-sinks/" mkdocs build --strict`.
+- Confirm `scripts/check-docs.sh`.
 - Confirm `scripts/check-sinks.sh`.
 - Confirm `pytest`.
 - Confirm `bandit -q -r src`.
+- Confirm `python scripts/update-dependency-manifests.py --check`.
 - Confirm `python -m build`.
-- Confirm `twine check dist/*`.
+- Confirm `scripts/sbom.sh`.
+- Confirm `python scripts/generate-checksums.py dist`.
+- Confirm `twine check dist/*.whl dist/*.tar.gz`.
 - Smoke test `nats-sink --help`.
 - Smoke test `nats-sink validate examples/file-basic/config.json`.
 - Smoke test `nats-sink test-sink examples/file-basic/config.json`.
@@ -141,7 +170,11 @@ relying on the stored GitHub CLI login.
   `.local` environment files are available; otherwise document that they were
   not run in `docs/test-report.md`.
 - Create and push an annotated `v*` tag.
-- Confirm the GitHub Release exists and includes the built `dist/*` assets.
+- Confirm the GitHub Release exists and includes the built wheel, source
+  distribution, `SHA256SUMS`, and `dist/sbom/*.cyclonedx.*` assets.
+- Confirm release-labeled backlog issues were closed only after the GitHub
+  Release exists and only after acceptance criteria plus evidence comments were
+  present.
 - Confirm Read the Docs built `latest` or the release tag successfully.
 - Confirm the GitHub Pages mirror deployed successfully when documentation was
   changed on `main`.

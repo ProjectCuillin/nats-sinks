@@ -1,0 +1,23 @@
+{
+  "id": "stream-management-helpers",
+  "title": "[Feature]: Add optional JetStream stream management helpers",
+  "area": "Operations and deployment",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["nats", "deployment"],
+  "problem": "nats-sinks focuses on consuming from existing streams, but operators often need guidance or helper commands for stream retention, discard policy, storage type, replicas, and duplicate-window settings. Adding helpers can be useful, but stream administration requires broader permissions and should not be mixed into the runtime worker by default.",
+  "proposal": "Design optional stream management helpers or documentation that help users validate or prepare streams for sink workloads. Administrative helpers should be separate from the sink worker, require explicit use, and explain required permissions. Documentation should describe retention, discard, storage, replicas, and duplicate-window considerations.",
+  "users": "NATS administrators, platform operators, and maintainers supporting deployment setup.",
+  "delivery_semantics": "Stream settings affect retention and duplicate windows, so documentation must explain how they interact with at-least-once delivery and idempotent sinks. Runtime ACK behavior must remain unchanged.",
+  "security": "Stream administration requires elevated permissions. Helpers must not run automatically in the sink worker and must not require broad permissions for normal processing.",
+  "acceptance": [
+    "Stream management guidance is documented.",
+    "Any helper command is separate from nats-sink run.",
+    "Permission differences between runtime and administration are clear.",
+    "Configuration examples use placeholders only.",
+    "Tests cover helper validation if code is added."
+  ],
+  "tests": "Run documentation checks and add unit tests for helper validation if implemented. Run scripts/check.sh.",
+  "documentation": "Update docs/operations.md, docs/architecture.md, docs/security.md, docs/nats-feature-gap-analysis.md, ROADMAP.md, and CHANGELOG.md.",
+  "closeout": "Close after released documentation or helper implementation. Include release tag, scope delivered, tests, and limitations."
+}

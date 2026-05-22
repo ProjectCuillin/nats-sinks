@@ -122,8 +122,13 @@ Before relying on the workflow, build the documentation locally:
 ```bash
 python -m pip install -e ".[docs]"
 python scripts/check-markdown-links.py
-NATS_SINKS_DOCS_SITE_URL="https://projectcuillin.github.io/nats-sinks/" mkdocs build --strict
+scripts/check-docs.sh
 ```
+
+The helper builds the GitHub Pages variant without using the shared `site/`
+directory, so it is safe to run while another local documentation check is
+active. The GitHub Pages workflow itself still writes to `site/` because that
+single workflow build is the artifact that gets uploaded.
 
 To preview the site in a browser:
 

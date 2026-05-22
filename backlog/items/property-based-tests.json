@@ -1,0 +1,23 @@
+{
+  "id": "property-based-tests",
+  "title": "[Testing]: Add property-based tests for validators and normalizers",
+  "area": "Testing",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.0",
+  "labels": ["testing", "security"],
+  "problem": "The test suite includes deterministic unit and fuzz-style tests, but several boundaries would benefit from property-based testing. Configuration loading, subject matching, payload normalization, metadata resolution, and file path sanitization all process untrusted or semi-trusted input where many edge cases are hard to enumerate manually.",
+  "proposal": "Introduce property-based tests using a justified development dependency or a small deterministic generator strategy. Focus first on subject matching, metadata rules, payload normalization, path sanitization, and configuration validators. The tests should be bounded, deterministic in CI, and documented as part of the production hardening strategy.",
+  "users": "Maintainers, security reviewers, and downstream users who benefit from stronger confidence in boundary validation and failure behavior.",
+  "delivery_semantics": "Property-based tests should prove that malformed input fails safely and cannot trigger early ACKs through normalization or configuration errors. They do not change runtime delivery semantics directly.",
+  "security": "Generators must include malformed, oversized, nested, empty, and control-character inputs. Test output must not include secrets or private values. Any new dependency must be development-only and justified.",
+  "acceptance": [
+    "Property-based or equivalent bounded generator tests cover at least three high-risk validators.",
+    "Tests are deterministic and suitable for CI.",
+    "Failures produce actionable messages without leaking payloads.",
+    "Development dependency manifests are updated if a new tool is added.",
+    "Security documentation references the new test layer."
+  ],
+  "tests": "Add property-based tests under tests/unit and run scripts/check.sh. If dependencies change, run dependency manifest checks and SBOM generation.",
+  "documentation": "Update docs/testing.md, docs/development.md, docs/security-rule-review.md, ROBOTS.md, AGENTS.md, ROADMAP.md, and CHANGELOG.md.",
+  "closeout": "Close after the release with the new tests is published. Include release tag, validators covered, dependency impact, and any follow-up coverage gaps."
+}

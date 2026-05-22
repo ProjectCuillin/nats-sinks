@@ -1,4 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
+
 from __future__ import annotations
 
 import ssl
@@ -49,6 +51,7 @@ def test_nats_options_allows_connection_without_authentication() -> None:
 
     options = cli_main._nats_options(config)
 
+    assert options["servers"] == ["nats://localhost:4222"]
     assert "user" not in options
     assert "password" not in options
     assert "token" not in options
@@ -63,6 +66,45 @@ def test_nats_options_resolve_token_from_environment(
     options = cli_main._nats_options(config)
 
     assert options["token"] == "client-token"  # noqa: S105
+
+
+def test_nats_options_support_multiple_seed_urls_and_reconnect_tuning() -> None:
+    config = app_config(
+        {
+            "urls": [
+                "nats://nats-a.example:4222",
+                "nats://nats-b.example:4222",
+            ],
+            "allow_reconnect": True,
+            "connect_timeout_seconds": 7,
+            "reconnect_time_wait_seconds": 3,
+            "max_reconnect_attempts": -1,
+            "ping_interval_seconds": 30,
+            "max_outstanding_pings": 4,
+            "pending_size_bytes": 4_194_304,
+            "drain_timeout_seconds": 15,
+        }
+    )
+
+    options = cli_main._nats_options(config)
+
+    assert options["servers"] == [
+        "nats://nats-a.example:4222",
+        "nats://nats-b.example:4222",
+    ]
+    assert options["allow_reconnect"] is True
+    assert options["connect_timeout"] == 7
+    assert options["reconnect_time_wait"] == 3
+    assert options["max_reconnect_attempts"] == -1
+    assert options["ping_interval"] == 30
+    assert options["max_outstanding_pings"] == 4
+    assert options["pending_size"] == 4_194_304
+    assert options["drain_timeout"] == 15
+
+
+def test_nats_config_rejects_ambiguous_seed_urls() -> None:
+    with pytest.raises(ValueError, match=r"nats\.urls"):
+        app_config({"urls": ["nats://nats-a.example:4222", "   "]})
 
 
 def test_nats_options_missing_secret_environment_variable_raises() -> None:

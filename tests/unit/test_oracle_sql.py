@@ -1,4 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
+
 from __future__ import annotations
 
 import pytest
@@ -35,6 +37,7 @@ def test_build_merge_sql_uses_bind_variables() -> None:
     assert ":classification" in statement.sql
     assert ":labels" in statement.sql
     assert ":metadata_json" in statement.sql
+    assert ":mission_metadata_json" in statement.sql
     assert ":stored_at_epoch_ns" in statement.sql
 
 
@@ -65,6 +68,7 @@ def test_recommended_ddl_contains_metadata_and_epoch_columns() -> None:
     ddl = create_events_table_ddl("nats_sink_events")
 
     assert "metadata_json     json" in ddl
+    assert "mission_metadata_json json" in ddl
     assert "priority          clob" in ddl
     assert "classification    clob" in ddl
     assert "labels            clob" in ddl

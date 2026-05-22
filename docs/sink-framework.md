@@ -93,18 +93,23 @@ normalization contract exposed by `NatsEnvelope.payload_for_json_storage()` and
 
 The default mode is `json_or_envelope`:
 
-- valid JSON is parsed and stored unchanged,
+- standards-compliant JSON is parsed and stored unchanged,
 - non-JSON UTF-8 text is wrapped in a nats-sinks JSON payload envelope,
 - non-text bytes are wrapped as base64 in the same JSON payload envelope.
+
+`nats-sinks` deliberately rejects Python-only JSON constants such as `NaN`,
+`Infinity`, and `-Infinity`. They are not standards-compliant JSON. In the
+default `json_or_envelope` mode they are preserved as original text in the
+payload envelope; in `json_only` mode they raise `SerializationError`.
 
 ```mermaid
 flowchart TD
     B[NATS body bytes] --> M{payload_mode}
-    M -->|json_or_envelope| J{Valid JSON?}
+    M -->|json_or_envelope| J{Standards-compliant JSON?}
     J -->|yes| Raw[Store original JSON value]
     J -->|no, UTF-8 text| Text[Store JSON envelope with payload_format=text]
     J -->|no, non-text bytes| Bytes[Store JSON envelope with payload_format=bytes and base64 payload]
-    M -->|json_only| Strict[Require valid JSON or raise SerializationError]
+    M -->|json_only| Strict[Require standards-compliant JSON or raise SerializationError]
     M -->|text_envelope| TextOnly[Wrap every payload as UTF-8 text]
     M -->|bytes_envelope| BytesOnly[Wrap every payload as base64 bytes]
 ```
@@ -181,13 +186,14 @@ The snapshot captures:
   redelivery flag, pending count, and client timestamp,
 - optional reply subject,
 - normalized application metadata fields `priority`, `classification`, and `labels`,
+- optional validated `mission_metadata` JSON context,
 - message creation, receipt, and storage times as Unix epoch nanoseconds.
 
 The metadata snapshot is intentionally useful for audit and after-action
 analysis. It preserves the operational context needed to answer when a message
 was created, when it was received by the sink runner, when it was stored, which
-subject and stream carried it, and which priority, classification, and labels
-were visible at ingestion time.
+subject and stream carried it, and which priority, classification, labels, and
+optional mission metadata were visible at ingestion time.
 
 ```mermaid
 flowchart TD
@@ -196,11 +202,13 @@ flowchart TD
     Env --> Reserved[Known and future Nats-* headers]
     Env --> JS[JetStream metadata]
     Env --> AppMeta[priority / classification / labels]
+    Env --> MissionMeta[optional mission_metadata]
     Env --> Time[message_created / received / stored epoch ns]
     Headers --> Doc[metadata_json document]
     Reserved --> Doc
     JS --> Doc
     AppMeta --> Doc
+    MissionMeta --> Doc
     Time --> Doc
 ```
 
@@ -312,6 +320,11 @@ import OracleSink`, existing `sink.type: "oracle"` configurations, and the
 core `JetStreamSinkRunner` behavior should keep working. A breaking release
 should only be needed if the project intentionally changes a documented public
 API, configuration field, or safety invariant.
+
+Public sink imports should be added to the compatibility contract in
+`tests/unit/test_public_api.py` and documented in
+[Public API Compatibility](public-api.md). This keeps future sink additions
+safe for users who already depend on Oracle, file, or core runtime imports.
 
 The commit-then-acknowledge invariant is not an extension point. Future sinks
 may optimize their destination writes, but they must not acknowledge JetStream

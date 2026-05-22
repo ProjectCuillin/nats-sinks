@@ -1,0 +1,26 @@
+{
+  "id": "oracle-payload-field-structured-value",
+  "title": "[Bug]: Oracle payload_field idempotency accepts structured values as keys",
+  "area": "Oracle sink",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.0",
+  "labels": ["sink-oracle", "testing"],
+  "summary": "Oracle payload-field idempotency converts structured payload values to string representations instead of rejecting them.",
+  "observed": "A selected payload field containing an object or list can become an idempotency key through a language-specific string representation.",
+  "expected": "payload_field idempotency must resolve to a scalar value before it can be used as a key.",
+  "reproduction": "Run the focused regression test that extracts a payload_field value whose value is an object.",
+  "failing_test": "tests/unit/test_bug_hunt_non_json_boundaries.py::test_oracle_payload_field_rejects_structured_values",
+  "impact": "Structured values can produce unstable or surprising idempotency keys.",
+  "delivery_semantics": "The fix raises a permanent validation error before Oracle commit so the core can avoid ACK and use DLQ policy when configured.",
+  "security": "Restricting idempotency keys to scalar values keeps durable identity explicit and reviewable.",
+  "acceptance": [
+    "Structured payload_field values are rejected.",
+    "Scalar payload_field values continue to work.",
+    "Oracle mapping tests continue to pass.",
+    "The focused regression test and full checks pass."
+  ],
+  "tests": "Run the focused regression test, Oracle mapping tests, Oracle sink contract tests, and the full local check script.",
+  "documentation": "Update Oracle idempotency documentation or release notes if scalar key requirements are clarified.",
+  "closeout": "Close only after the release containing the fix is published with regression and verification evidence."
+}

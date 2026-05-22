@@ -1,4 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
+
 """Oracle-specific error helpers.
 
 The Oracle driver may expose structured error codes or only formatted error

@@ -1,4 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
+
 """Production local filesystem sink.
 
 `FileSink` writes one JSON file per message under a configured directory.  It is
@@ -196,13 +198,20 @@ class FileSink:
 
     def _json_bytes(self, record: dict[str, Any]) -> bytes:
         if self.config.pretty:
-            rendered = json.dumps(record, ensure_ascii=False, indent=2, sort_keys=True)
+            rendered = json.dumps(
+                record,
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+                allow_nan=False,
+            )
         else:
             rendered = json.dumps(
                 record,
                 ensure_ascii=False,
                 sort_keys=True,
                 separators=(",", ":"),
+                allow_nan=False,
             )
         return f"{rendered}\n".encode()
 

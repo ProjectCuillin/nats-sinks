@@ -1,4 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
+
 """Oracle DDL helpers.
 
 DDL support is intentionally opt-in.  Production systems often manage database
@@ -35,6 +37,7 @@ def create_events_table_ddl(table: str = "NATS_SINK_EVENTS") -> str:
     payload_json      json,
     headers_json      json,
     metadata_json     json,
+    mission_metadata_json json,
     constraint {table_name.split(".")[-1]}_pk
         primary key (stream_name, stream_sequence)
 )"""

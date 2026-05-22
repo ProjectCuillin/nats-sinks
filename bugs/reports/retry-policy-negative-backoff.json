@@ -1,0 +1,26 @@
+{
+  "id": "retry-policy-negative-backoff",
+  "title": "[Bug]: RetryPolicy direct construction accepts negative backoff values",
+  "area": "Core runtime and delivery semantics",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.0",
+  "labels": ["testing"],
+  "summary": "The RetryPolicy dataclass accepts negative backoff timing when constructed directly through the Python API.",
+  "observed": "A direct RetryPolicy instance can contain negative backoff values even though runtime configuration bounds them.",
+  "expected": "RetryPolicy must reject negative backoff timing at construction time.",
+  "reproduction": "Run the focused regression test that constructs RetryPolicy with a negative base backoff.",
+  "failing_test": "tests/unit/test_bug_hunt_non_json_boundaries.py::test_retry_policy_rejects_negative_backoff_values",
+  "impact": "Embedding applications could produce confusing retry delays if they construct policies directly.",
+  "delivery_semantics": "The fix preserves bounded retry semantics and does not alter ACK ordering.",
+  "security": "Explicit bounds avoid hidden timing behavior in failure handling.",
+  "acceptance": [
+    "RetryPolicy rejects negative base backoff values.",
+    "RetryPolicy rejects negative maximum backoff values.",
+    "Valid fixed, linear, and exponential policies continue to work.",
+    "The focused regression test and full checks pass."
+  ],
+  "tests": "Run the focused regression test, retry tests, and the full local check script.",
+  "documentation": "Update retry documentation or release notes if public RetryPolicy validation is clarified.",
+  "closeout": "Close only after the release containing the fix is published with regression and verification evidence."
+}

@@ -1,0 +1,23 @@
+{
+  "id": "stream-topology-documentation",
+  "title": "[Docs]: Document advanced JetStream topology considerations",
+  "area": "Documentation",
+  "priority": "P4 - research or design needed",
+  "target_release": "v0.4.0",
+  "labels": ["nats", "documentation"],
+  "problem": "The roadmap names stream mirrors, sources, subject transforms, republish behavior, stream compression, placement, and metadata guidance. These are JetStream capabilities that can affect how messages reach nats-sinks, but they are not core sink features. Users still need guidance about how these topology choices interact with event custody and idempotency.",
+  "proposal": "Add documentation that explains how advanced JetStream topology features may affect nats-sinks deployments. The page should describe considerations, risks, and questions to ask rather than claiming direct management support for every JetStream capability.",
+  "users": "NATS architects, platform operators, and maintainers answering deployment-design questions.",
+  "delivery_semantics": "Topology choices can alter subjects, stream names, sequence behavior, and replay paths. Documentation must explain how idempotency strategies should be selected when stream or subject transformations are present.",
+  "security": "Topology documentation must avoid private deployment examples and must warn that transformed subjects and metadata may still reveal sensitive operational structure.",
+  "acceptance": [
+    "Advanced topology documentation is added.",
+    "Mirrors, sources, transforms, republish, compression, placement, and metadata are discussed.",
+    "Idempotency and stream sequence implications are explained.",
+    "Unsupported management behavior is clearly separated from guidance.",
+    "README or operations docs link to the page."
+  ],
+  "tests": "Run markdown link checks, mkdocs builds, and scripts/check.sh.",
+  "documentation": "Update docs/nats-feature-gap-analysis.md, docs/architecture.md, docs/operations.md, docs/idempotency.md, ROADMAP.md, and CHANGELOG.md.",
+  "closeout": "Close after documentation ships in a release. Include release tag, pages changed, checks run, and follow-up implementation issues if any."
+}

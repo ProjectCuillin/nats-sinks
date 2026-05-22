@@ -1,0 +1,23 @@
+{
+  "id": "pre-sink-policy-enforcement-gate",
+  "title": "[Feature]: Add a pre-sink policy enforcement gate",
+  "area": "Core runtime and delivery semantics",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["security"],
+  "problem": "The core validates configuration, payload handling, metadata, and sink contracts, but there is no general policy gate that can fail closed before a message reaches any sink. Controlled environments often need rules such as requiring classification, requiring encryption for selected subjects, limiting payload size by subject, rejecting unknown mission metadata fields, or routing permanent policy failures to DLQ.",
+  "proposal": "Design a destination-neutral pre-sink policy engine with explicit allow-listed rules and fail-closed behavior. Policies should be configured centrally, applied after message normalization and before sink writes, and reported through safe errors and metrics. The initial implementation should be simple and auditable rather than a general-purpose scripting engine.",
+  "users": "Security reviewers, operators, platform teams, maintainers, and future sink authors who need consistent validation before data is persisted to Oracle, files, object storage, or other destinations.",
+  "delivery_semantics": "Policy rejection is a permanent failure unless a specific rule marks the condition temporary. DLQ-before-ACK must be preserved. A rejected message must not reach a sink. A policy engine failure should fail closed and avoid ACK unless the message is safely handled through configured failure flow.",
+  "security": "Policy definitions must avoid dynamic code execution, unsafe imports, or user-controlled expressions. Rules should be selected from an explicit allow list, bounded, validated, and documented. Error messages must be helpful without exposing sensitive payloads or private metadata.",
+  "acceptance": [
+    "A policy gate design explains supported rule types and non-goals.",
+    "Policies can apply globally or by subject pattern.",
+    "Policy failures do not reach sinks and follow DLQ-before-ACK behavior.",
+    "Metrics record policy pass and fail counts without exposing sensitive values.",
+    "Tests cover fail-closed behavior, malformed policy config, subject matching, and no ACK on failed DLQ publication."
+  ],
+  "tests": "Add unit tests for every rule type, malformed config, subject-aware matching, fail-closed behavior, DLQ integration, metrics, logging redaction, and sink isolation. Add fuzz tests for policy input where practical.",
+  "documentation": "Update docs/configuration.md, docs/security.md, docs/architecture.md, docs/dead-letter-queues.md, docs/metrics.md, docs/use-cases, ROADMAP.md, and CHANGELOG.md with examples and failure behavior.",
+  "closeout": "Close after the release containing the policy gate is published. Include release tag, supported rule types, tests run, docs updated, and follow-up policy ideas."
+}

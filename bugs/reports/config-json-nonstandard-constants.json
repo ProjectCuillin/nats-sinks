@@ -1,0 +1,26 @@
+{
+  "id": "config-json-nonstandard-constants",
+  "title": "[Bug]: Configuration JSON accepts non-standard constants",
+  "area": "Configuration",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.0",
+  "labels": ["security", "serialization"],
+  "summary": "The core configuration loader rejects duplicate JSON keys but still allows Python-specific constants such as NaN and Infinity. Those constants are not valid interoperable JSON and should fail before Pydantic validation or environment override handling.",
+  "observed": "A configuration document containing an unused value such as NaN can be parsed by the low-level JSON loader instead of being rejected as invalid JSON at the trust boundary.",
+  "expected": "The configuration loader should reject non-standard JSON constants consistently with payload, metrics, and NATS monitoring parsers.",
+  "reproduction": "Run the focused regression test that writes a small configuration JSON document containing NaN and calls the core load_json helper.",
+  "failing_test": "tests/unit/test_bug_hunt_strict_json_boundaries.py::test_config_loader_rejects_nonstandard_json_constants",
+  "impact": "Configuration files are operator-controlled trust-boundary inputs. Accepting non-standard JSON makes behavior less portable and can hide malformed local configuration in public evidence or release checks.",
+  "delivery_semantics": "The fix must not change commit-then-ACK behavior. It only tightens configuration parsing before the runner starts.",
+  "security": "The fix must reject malformed configuration without printing secrets, environment values, payloads, or local deployment details.",
+  "acceptance": [
+    "A focused regression test proves non-standard JSON constants are rejected by the configuration loader.",
+    "The loader error is human-readable and does not include sensitive values.",
+    "Valid JSON configuration files continue to load normally.",
+    "Existing unit, smoke, documentation, package, and release checks still pass."
+  ],
+  "tests": "Run the focused regression test, configuration tests, CLI validation tests, and the full local check script.",
+  "documentation": "Update CHANGELOG.md and security documentation to state that configuration parsing uses standards-compliant JSON only.",
+  "closeout": "Close only after the release containing the fix is published. Include the release tag, regression evidence, verification evidence, and any remaining limitations."
+}

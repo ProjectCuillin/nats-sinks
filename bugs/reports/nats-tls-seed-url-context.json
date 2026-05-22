@@ -1,0 +1,26 @@
+{
+  "id": "nats-tls-seed-url-context",
+  "title": "[Bug]: TLS context is not created when only NATS seed URLs use TLS",
+  "area": "CLI",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.0",
+  "labels": ["nats", "security", "testing"],
+  "summary": "The CLI creates a TLS context when the primary URL uses TLS, but not when TLS is present only in the configured seed URL list.",
+  "observed": "A multi-server configuration using TLS seed URLs can be passed to the NATS client without a TLS context unless a certificate option is also configured.",
+  "expected": "Any configured TLS NATS server URL must cause the CLI to build and pass an SSL context.",
+  "reproduction": "Run the focused regression test that configures only a TLS seed URL and inspects the NATS connection options.",
+  "failing_test": "tests/unit/test_bug_hunt_non_json_boundaries.py::test_nats_options_builds_tls_context_for_tls_seed_urls",
+  "impact": "TLS seed-list deployments can fail or use incomplete TLS setup despite having valid TLS server URLs.",
+  "delivery_semantics": "No ACK behavior changes. The fix affects connection setup before JetStream processing begins.",
+  "security": "The fix ensures TLS transport intent is honored for all configured NATS server entries.",
+  "acceptance": [
+    "A TLS context is created when any configured NATS seed URL uses TLS.",
+    "Primary TLS URL behavior continues to work.",
+    "Certificate and local CA options continue to be honored.",
+    "The focused regression test and full checks pass."
+  ],
+  "tests": "Run the focused regression test, NATS connection option tests, CLI tests, and the full local check script.",
+  "documentation": "Update NATS TLS documentation if seed-list TLS behavior is clarified.",
+  "closeout": "Close only after the release containing the fix is published with regression and verification evidence."
+}

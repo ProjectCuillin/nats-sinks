@@ -1,0 +1,27 @@
+{
+  "id": "hash-verified-installation-guidance",
+  "title": "[Docs]: Add hash-verified installation guidance",
+  "area": "Packaging and release",
+  "priority": "P3 - backlog candidate",
+  "target_release": "v0.4.0",
+  "labels": [
+    "release",
+    "security",
+    "documentation"
+  ],
+  "problem": "The project builds packages, publishes SBOM artifacts, and documents installation options, but high-trust environments may also require hash-verified installs. Without guidance, users may not know how to pin package versions and verify artifacts reproducibly.",
+  "proposal": "Document hash-verified installation workflows for Python package installs, release artifact verification, dependency manifests, SBOM use, and offline review. The guidance should complement PyPI Trusted Publishing and should avoid requiring every user to adopt the strictest workflow.",
+  "users": "Security-conscious operators, release engineers, compliance teams, and maintainers preparing reproducible deployment instructions.",
+  "delivery_semantics": "This item does not change runtime delivery semantics. It improves supply-chain confidence for the package users install.",
+  "security": "Guidance must avoid recommending unsafe token handling or secrets in command history. It should explain limitations of hashes, dependency resolution, and environment-specific wheels without overclaiming.",
+  "acceptance": [
+    "Documentation explains version pinning and hash-verified installation.",
+    "Release artifacts and SBOM guidance are linked coherently.",
+    "Examples use placeholders and public package names only.",
+    "No runtime dependency changes are introduced unless justified.",
+    "CHANGELOG.md records the documentation addition."
+  ],
+  "tests": "Run markdown link checks, mkdocs builds, SBOM generation, and scripts/check.sh.",
+  "documentation": "Update docs/dependency-management.md, docs/sbom.md, docs/publishing.md, docs/release.md, docs/security.md, README.md, ROADMAP.md, and CHANGELOG.md.",
+  "closeout": "Close after the release containing the guidance is published. Include release tag, pages updated, checks run, and known limitations."
+}

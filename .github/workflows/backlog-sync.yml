@@ -1,0 +1,49 @@
+name: Backlog Sync
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Validate and print intended issue sync actions without writing to GitHub"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+  push:
+    branches: [main]
+    paths:
+      - "backlog/items/**/*.json"
+      - "scripts/sync-backlog-issues.py"
+      - "scripts/sync-issue-planning.py"
+      - "scripts/github_issue_planning.py"
+      - "scripts/comment-backlog-issue.py"
+      - ".github/workflows/backlog-sync.yml"
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Validate local backlog files
+        run: python scripts/sync-backlog-issues.py --check
+      - name: Sync backlog files to GitHub Issues
+        env:
+          GH_TOKEN: ${{ secrets.NATS_SINKS_ISSUE_FIELDS_TOKEN || github.token }}
+          NATS_SINKS_GITHUB_ISSUE_FIELD_ORG: ${{ vars.NATS_SINKS_GITHUB_ISSUE_FIELD_ORG || github.repository_owner }}
+          NATS_SINKS_GITHUB_ISSUE_PRIORITY_FIELD: ${{ vars.NATS_SINKS_GITHUB_ISSUE_PRIORITY_FIELD || 'Priority' }}
+          NATS_SINKS_GITHUB_ISSUE_PRIORITY_FIELD_ID: ${{ vars.NATS_SINKS_GITHUB_ISSUE_PRIORITY_FIELD_ID }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "true" ]; then
+            python scripts/sync-backlog-issues.py --dry-run
+          else
+            python scripts/sync-backlog-issues.py
+          fi

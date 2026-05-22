@@ -1,0 +1,26 @@
+{
+  "id": "nats-consumer-negative-metadata",
+  "title": "[Bug]: NATS consumer normalization accepts negative JetStream metadata values",
+  "area": "Core runtime and delivery semantics",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.0",
+  "labels": ["nats", "testing"],
+  "summary": "The NATS message adapter converts negative sequence and pending metadata values into envelope fields instead of treating them as absent.",
+  "observed": "A message-like object with negative JetStream sequence or pending values produces an envelope containing those negative values.",
+  "expected": "Negative JetStream sequence, delivery, and pending values should be ignored during normalization because they are not valid operational metadata.",
+  "reproduction": "Run the focused regression test that normalizes a message-like object with negative metadata values.",
+  "failing_test": "tests/unit/test_bug_hunt_non_json_boundaries.py::test_consumer_ignores_negative_jetstream_metadata_values",
+  "impact": "Corrupted or hostile metadata could flow into idempotency keys, routing decisions, metrics, or persisted metadata.",
+  "delivery_semantics": "The fix treats invalid metadata as missing and avoids creating invalid idempotency keys from negative values.",
+  "security": "The adapter continues treating client-provided metadata as untrusted input at the boundary.",
+  "acceptance": [
+    "Negative JetStream metadata values normalize to missing values.",
+    "Positive JetStream metadata values continue to normalize correctly.",
+    "Consumer and envelope tests continue to pass.",
+    "The focused regression test and full checks pass."
+  ],
+  "tests": "Run the focused regression test, envelope tests, commit-then-ack tests, and the full local check script.",
+  "documentation": "Update release notes if metadata normalization hardening is mentioned.",
+  "closeout": "Close only after the release containing the fix is published with regression and verification evidence."
+}

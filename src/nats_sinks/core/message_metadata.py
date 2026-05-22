@@ -1,4 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
+
 """Application-level message metadata helpers.
 
 NATS and JetStream already provide operational metadata such as stream

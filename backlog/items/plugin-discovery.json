@@ -1,0 +1,23 @@
+{
+  "id": "plugin-discovery",
+  "title": "[Feature]: Add safe plugin discovery for external sinks",
+  "area": "Future sink",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "security"],
+  "problem": "The package can grow additional built-in sinks, but long-term extensibility may require third-party sink plugins. Dynamic discovery can introduce supply-chain and code-execution risks if arbitrary configuration can select modules or classes without a strict policy.",
+  "proposal": "Design safe plugin discovery using explicit entry points, allow-listed plugin names, compatibility metadata, and a certification requirement. Discovery should be optional, disabled or tightly controlled by default, and documented as an advanced extension path rather than the primary way to use production sinks.",
+  "users": "External maintainers building additional sinks, operators evaluating third-party connectors, and core maintainers protecting the public API.",
+  "delivery_semantics": "Plugins must implement the same Sink protocol and must never ACK messages. Certification must prove commit-then-ACK remains core-owned and that plugin sinks return success only after durable destination success.",
+  "security": "Plugin loading is a code-execution boundary. Configuration must not allow arbitrary imports. Documentation must explain dependency trust, review, version compatibility, and why untrusted plugins are unsafe.",
+  "acceptance": [
+    "A plugin discovery design is documented before implementation.",
+    "Discovery uses explicit allow lists or trusted entry-point metadata.",
+    "Plugin sinks must pass certification tests before production recommendation.",
+    "Dynamic imports from untrusted config remain prohibited.",
+    "Public API compatibility tests cover the extension surface."
+  ],
+  "tests": "Add unit tests for registry behavior, rejected unknown plugins, compatibility metadata, and certification hooks if code is added. Run scripts/check.sh.",
+  "documentation": "Update docs/sink-framework.md, docs/development.md, docs/security.md, docs/public-api.md, ROADMAP.md, and CHANGELOG.md.",
+  "closeout": "Close after a released design or implementation. Include release tag, plugin policy, tests run, and follow-up issues for plugin certification or marketplace guidance."
+}

@@ -1,0 +1,49 @@
+name: Bug Report Sync
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Validate and print intended bug sync actions without writing to GitHub"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+  push:
+    branches: [main]
+    paths:
+      - "bugs/reports/**/*.json"
+      - "scripts/sync-bug-reports.py"
+      - "scripts/sync-issue-planning.py"
+      - "scripts/github_issue_planning.py"
+      - "scripts/comment-bug-issue.py"
+      - ".github/workflows/bug-report-sync.yml"
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Validate local bug report files
+        run: python scripts/sync-bug-reports.py --check
+      - name: Sync bug reports to GitHub Issues
+        env:
+          GH_TOKEN: ${{ secrets.NATS_SINKS_ISSUE_FIELDS_TOKEN || github.token }}
+          NATS_SINKS_GITHUB_ISSUE_FIELD_ORG: ${{ vars.NATS_SINKS_GITHUB_ISSUE_FIELD_ORG || github.repository_owner }}
+          NATS_SINKS_GITHUB_ISSUE_PRIORITY_FIELD: ${{ vars.NATS_SINKS_GITHUB_ISSUE_PRIORITY_FIELD || 'Priority' }}
+          NATS_SINKS_GITHUB_ISSUE_PRIORITY_FIELD_ID: ${{ vars.NATS_SINKS_GITHUB_ISSUE_PRIORITY_FIELD_ID }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "true" ]; then
+            python scripts/sync-bug-reports.py --dry-run
+          else
+            python scripts/sync-bug-reports.py
+          fi

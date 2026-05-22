@@ -1,4 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
+
 """Oracle SQL generation with strict identifier validation.
 
 Oracle bind variables can protect values, but they cannot bind table or column
@@ -37,6 +39,7 @@ FIELD_TO_BIND = {
     "payload": "payload_json",
     "headers": "headers_json",
     "metadata": "metadata_json",
+    "mission_metadata": "mission_metadata_json",
 }
 
 

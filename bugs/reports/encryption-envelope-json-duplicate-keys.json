@@ -1,0 +1,26 @@
+{
+  "id": "encryption-envelope-json-duplicate-keys",
+  "title": "[Bug]: Encryption envelope parser accepts duplicate JSON keys",
+  "area": "Security",
+  "severity": "high",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.0",
+  "labels": ["security", "serialization"],
+  "summary": "The payload encryption envelope parser uses default JSON parsing and can silently accept duplicate keys before decrypting a payload.",
+  "observed": "A JSON envelope containing two encryption-envelope keys can be parsed with the final one silently winning.",
+  "expected": "Encrypted payload envelopes should reject duplicate keys as ambiguous before any decryption or integrity checks run.",
+  "reproduction": "Run the focused regression test that constructs an encrypted payload envelope with duplicate root keys and calls decrypt_payload.",
+  "failing_test": "tests/unit/test_bug_hunt_strict_json_boundaries.py::test_encryption_payload_rejects_duplicate_json_keys",
+  "impact": "Encryption envelopes are security-sensitive boundary data. Ambiguous parsing could let a stored payload differ from what operators or downstream validation expect.",
+  "delivery_semantics": "The fix must not change ACK ordering. Invalid encrypted payload inspection should raise a framework serialization error when a caller explicitly decrypts it.",
+  "security": "The fix must not log plaintext, ciphertext, key material, nonces, tags, or full envelope contents.",
+  "acceptance": [
+    "A focused regression test proves duplicate encryption envelope JSON keys are rejected.",
+    "Valid encrypted payloads still decrypt successfully.",
+    "Error messages do not include crypto material.",
+    "Existing encryption tests still pass."
+  ],
+  "tests": "Run the focused regression test, encryption tests, payload tests, and the full local check script.",
+  "documentation": "Update CHANGELOG.md and encryption documentation to mention strict envelope parsing.",
+  "closeout": "Close only after the release containing the fix is published. Include the release tag, regression evidence, verification evidence, and any remaining limitations."
+}

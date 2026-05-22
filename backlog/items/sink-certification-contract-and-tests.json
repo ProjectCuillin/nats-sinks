@@ -1,0 +1,23 @@
+{
+  "id": "sink-certification-contract-and-tests",
+  "title": "[Feature]: Define sink certification contracts and reusable tests",
+  "area": "Testing",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "unscheduled",
+  "labels": ["testing", "sink-new"],
+  "problem": "Oracle and file sinks now have production behavior, but future sinks need a repeatable certification standard before they can be called production-ready. Without a formal contract, a future sink could accidentally skip idempotency tests, mishandle payload normalization, expose sensitive metadata, or imply delivery semantics that the core does not provide.",
+  "proposal": "Create a documented sink certification contract and reusable test helpers that every production sink must pass. The contract should cover start and stop lifecycle, batch writes, commit-before-success behavior, duplicate handling, payload modes, encrypted payloads, metadata fields, error translation, health checks when supported, and security logging expectations. Future Postgres, HTTP, S3, and Kafka-related work should reference this contract before release.",
+  "users": "Maintainers adding future sinks, reviewers approving production sink claims, and users deciding whether a sink is safe for at-least-once processing.",
+  "delivery_semantics": "The contract must explicitly test that sinks do not ACK messages, that successful writes mean durable destination success, and that retryable versus permanent failures are represented through framework errors. It must preserve the boundary where the core owns delivery semantics and sinks own destination writes.",
+  "security": "Certification must include checks for secret redaction, no payload logging by default, safe path or SQL handling where relevant, bounded input, and no network calls in unit tests. Tests must avoid live credentials and sensitive examples.",
+  "acceptance": [
+    "A sink certification document exists and is linked from sink framework docs.",
+    "Reusable test helpers or fixtures are added for common sink behavior.",
+    "Oracle and file sinks are evaluated against the contract where practical.",
+    "Future sink documentation explains that certification is required before production status.",
+    "CHANGELOG.md records the new certification process."
+  ],
+  "tests": "Add unit tests for certification helpers and apply them to existing production sinks where practical. Run scripts/check-sinks.sh and scripts/check.sh before close-out.",
+  "documentation": "Update docs/sink-framework.md, docs/testing.md, docs/development.md, docs/oracle-sink.md, docs/file-sink.md, ROADMAP.md, and CHANGELOG.md.",
+  "closeout": "Close after a release includes the contract and tests. Include the release tag, certified surfaces, remaining gaps, and follow-up issues for sink-specific certification additions."
+}

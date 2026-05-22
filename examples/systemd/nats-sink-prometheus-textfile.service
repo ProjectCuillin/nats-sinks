@@ -1,0 +1,20 @@
+[Unit]
+Description=nats-sinks Prometheus textfile export
+Documentation=https://github.com/ProjectCuillin/nats-sinks/
+RequiresMountsFor=/var/lib/nats-sink
+
+[Service]
+Type=oneshot
+User=nats-sink
+Group=nats-sink
+ExecStart=/opt/nats-sinks/venv/bin/nats-sink-observe prometheus-textfile /var/lib/nats-sink/metrics.json /etc/nats-sinks/observability.prometheus.json --output /var/lib/node_exporter/textfile_collector/nats_sinks.prom
+WorkingDirectory=/var/lib/nats-sink
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadOnlyPaths=/etc/nats-sinks /var/lib/nats-sink
+ReadWritePaths=/var/lib/node_exporter/textfile_collector
+
+[Install]
+WantedBy=multi-user.target

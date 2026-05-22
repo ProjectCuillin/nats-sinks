@@ -1,0 +1,121 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nats-sink-file-worker
+  namespace: nats-sinks
+  labels:
+    app.kubernetes.io/name: nats-sinks
+    app.kubernetes.io/component: worker
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: nats-sinks
+      app.kubernetes.io/component: worker
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: nats-sinks
+        app.kubernetes.io/component: worker
+    spec:
+      serviceAccountName: nats-sink-worker
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 90
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: nats-sink
+          image: ghcr.io/projectcuillin/nats-sinks:0.4.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - "run"
+            - "/etc/nats-sinks/config.json"
+          env:
+            - name: NATS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nats-sink-runtime-secrets
+                  key: NATS_PASSWORD
+          ports: []
+          readinessProbe:
+            exec:
+              command:
+                - "nats-sink"
+                - "validate"
+                - "/etc/nats-sinks/config.json"
+            initialDelaySeconds: 5
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            exec:
+              command:
+                - "nats-sink"
+                - "validate"
+                - "/etc/nats-sinks/config.json"
+            initialDelaySeconds: 30
+            periodSeconds: 60
+            timeoutSeconds: 5
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - "python"
+                  - "-c"
+                  - "import time; time.sleep(10)"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - "ALL"
+          volumeMounts:
+            - name: config
+              mountPath: /etc/nats-sinks/config.json
+              subPath: config.json
+              readOnly: true
+            - name: trust-material
+              mountPath: /etc/nats-sinks/tls
+              readOnly: true
+            - name: event-output
+              mountPath: /var/lib/nats-sinks/events
+            - name: metrics-snapshot
+              mountPath: /var/lib/nats-sinks/metrics
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: nats-sink-file-worker-config
+        - name: trust-material
+          secret:
+            secretName: nats-sink-trust-material
+            optional: true
+        - name: event-output
+          persistentVolumeClaim:
+            claimName: nats-sink-file-events
+        - name: metrics-snapshot
+          emptyDir:
+            sizeLimit: 64Mi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi

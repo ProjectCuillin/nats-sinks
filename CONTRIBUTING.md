@@ -45,6 +45,9 @@ Unit tests must be deterministic and must not make network calls. Integration te
 ## Branch and Commit Flow
 
 - Keep changes small and reviewable.
+- Use GitHub Issues as the live backlog. Create or link a detailed feature
+  request before implementing user-visible work, unless the change is a small
+  typo or mechanical maintenance item.
 - Use descriptive commit messages.
 - Update tests when behavior changes.
 - Update documentation and `CHANGELOG.md` for user-visible changes.
@@ -55,8 +58,14 @@ Unit tests must be deterministic and must not make network calls. Integration te
 Pull requests should include:
 
 - A clear problem statement.
+- A linked issue or a clear explanation for why no issue was needed.
 - The implementation approach.
 - Test coverage or a reason tests are not applicable.
 - Documentation updates for public behavior changes.
+- Detailed close-out notes when a feature request is completed, including what
+  shipped, which checks passed, which docs changed, and any follow-up issues.
 
 The commit-then-acknowledge invariant is non-negotiable: core owns delivery semantics, and sinks must never ACK JetStream messages.
+
+See [Backlog Management](https://nats-sinks.readthedocs.io/en/latest/backlog-management/)
+for the full issue and close-out workflow.

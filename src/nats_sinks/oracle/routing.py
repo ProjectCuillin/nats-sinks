@@ -1,4 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
+
 """NATS subject routing helpers for Oracle table selection.
 
 OracleSink can write different message subjects to different tables while the

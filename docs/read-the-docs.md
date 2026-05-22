@@ -74,8 +74,13 @@ development:
 
 ```bash
 python -m pip install -e ".[docs]"
-mkdocs build --strict
+scripts/check-docs.sh
 ```
+
+The helper builds both the default Read the Docs canonical site and the GitHub
+Pages canonical variant in isolated temporary directories. This is safer than
+running two `mkdocs build` commands against the shared `site/` directory,
+because MkDocs cleans that directory before each build.
 
 The `.readthedocs.yaml` file is build-service configuration. It does not change
 the runtime configuration format for `nats-sinks`; application configuration
@@ -134,7 +139,7 @@ The `Docs` workflow runs on documentation-related pull requests and pushes to
 
 ```bash
 python scripts/check-markdown-links.py
-mkdocs build --strict
+scripts/check-docs.sh
 ```
 
 The workflow does not publish documentation itself. Read the Docs owns hosted

@@ -21,7 +21,14 @@ The project is written for operators and developers who care about reliable
 event movement in operational environments. That includes commercial platforms,
 public-sector systems, defence logistics, mission telemetry, audit pipelines,
 and other settings where a message can represent an operational fact that must
-not be silently lost.
+not be silently lost. In sensor-driven warfighting support environments,
+`nats-sinks` is best understood as a durable event custody layer around
+command-and-control data fabrics, sensor-fusion pipelines, platform telemetry,
+weapon-system status events, sensor-to-shooter workflows, and kill-chain or
+kill-mesh style coordination messages. It preserves evidence and state for
+authorized downstream systems; it is not a targeting system, fire-control
+system, weapons-release mechanism, rules-of-engagement engine, or automation
+layer for lethal decision-making.
 
 ## Documentation Sites
 
@@ -55,6 +62,32 @@ The current release provides the following production-ready foundation:
   messages are written by any sink.
 - A CLI command named `nats-sink` for validation, redacted effective config,
   sink health checks, and running sink processes.
+- A companion CLI command named `nats-sink-metrics` for inspecting local JSON
+  metrics snapshots as tables, JSON, JSONL, shell variables, metric names, or
+  Prometheus text output.
+- A companion CLI command named `nats-sink-observe` for generating disabled
+  observability policies, reviewing metric and subject sharing, and writing
+  policy-filtered Prometheus textfiles for node_exporter or running the
+  optional native Prometheus HTTP endpoint.
+- Basic metrics counters and timing observations for fetched, prepared,
+  written, ACKed, NAKed, failed, DLQ, sink write, ACK error, and active batch
+  behavior. The built-in runner can write a local JSON snapshot when
+  configured, Oracle duplicate/conflict counters are readable through the same
+  snapshot and CLI, and external observability sharing is controlled by a
+  separate policy that is disabled by default for both textfile and native
+  HTTP connectors.
+- Exponential retry backoff with configurable caps and jitter for retryable
+  failures, preserving redelivery safety without creating synchronized retry
+  storms during shared outages.
+- Optional priority-aware processing lanes that reorder already-fetched
+  bounded batches with weighted starvation controls while preserving
+  commit-then-ACK behavior.
+- CycloneDX SBOM generation, SHA-256 release checksum manifests, and
+  [hash-verified installation guidance](hash-verified-installs.md) for
+  high-trust deployment workflows.
+- [Kubernetes deployment examples](kubernetes.md) with JSON ConfigMaps, Secret
+  references, restrictive security contexts, resource limits, graceful
+  shutdown settings, and optional Prometheus observability sidecars.
 - `nats_sinks.oracle.OracleSink`, a production Oracle Database sink with
   connection pooling, idempotent `merge` and `insert_ignore` modes, Oracle
   Autonomous Database connection options, subject-to-table routing, metadata
@@ -68,8 +101,10 @@ The current release provides the following production-ready foundation:
 
 The same features are intentionally useful in mission-oriented deployments:
 priority can signal handling urgency, classification can capture the handling
-domain, labels can carry operational tags, and payload encryption can protect
-stored message bodies while leaving enough metadata for routing and audit.
+domain, labels can carry operational tags such as sensor family, mission
+thread, platform class, exercise identifier, coalition caveat, or audit lane,
+and payload encryption can protect stored message bodies while leaving enough
+metadata for routing and audit.
 
 ## Production Sinks
 
@@ -97,7 +132,7 @@ flowchart LR
 
 ## Package Status
 
-The current release is `0.3.0`. The project is in the `0.x` phase: it is a
+The current release is `0.4.0`. The project is in the `0.x` phase: it is a
 production-ready foundation with Oracle and local file sinks, while the public
 API remains intentionally small so it can stabilize before `1.0.0`.
 
@@ -111,6 +146,46 @@ API remains intentionally small so it can stabilize before `1.0.0`.
   duplicate handling.
 - Read [Payload Encryption](payload-encryption.md) when stored message bodies
   should be encrypted while metadata remains available for operations.
+- Read [Priority-Aware Processing Lanes](priority-lanes.md) when mixed-urgency
+  batches should prefer urgent messages without claiming strict total ordering.
+- Read [Mission Metadata](mission-metadata.md) when you need a validated JSON
+  context object for mission, operation, platform, source-system, track,
+  confidence, releasability, or lifecycle metadata.
+- Read [Metrics](metrics.md) when you want local snapshot inspection, shell
+  scripting examples, Python hooks, or Prometheus text output.
+- Read [Observability](observability.md) and [Prometheus Integration](prometheus.md)
+  when you want policy-controlled Prometheus export through node_exporter or
+  the optional native HTTP endpoint as separate Linux services.
+- Read [NATS Server Monitoring](nats-server-monitoring.md) when you need to
+  understand why server endpoints such as `/jsz` and `/healthz` stay outside
+  the delivery worker.
+- Read [NATS Least-Privilege Permissions](nats-permissions.md) when preparing
+  production NATS runtime accounts, DLQ publish rights, or advisory-reader
+  accounts.
+- Read [Advanced JetStream Topology](jetstream-topology.md) when mirrors,
+  sources, subject transforms, republish rules, compression, placement, or
+  stream metadata are part of the event path.
+- Read [Use Cases](use-cases/index.md) when you want blueprints that combine
+  generic nats-sinks features for a specific operational context without
+  changing the framework into a one-use-case product.
+- Read [Mission-Support Operational Examples](use-cases/mission-support/index.md)
+  when you want complete patterns for restricted event storage, disconnected
+  file handoff, DLQ triage, and destination outage recovery.
+- Read [Synthetic Mission Testing](use-cases/defence/synthetic-mission-testing.md)
+  when you need repeatable fake mission-style scenarios for release evidence,
+  file-sink smoke checks, or future sink certification without live services.
+- Read [Sensor Event Custody](use-cases/defence/sensor-event-custody.md),
+  [Classification And Labels](use-cases/defence/classification-and-labels.md),
+  [Chain Of Custody](use-cases/defence/chain-of-custody.md),
+  [Cross-Domain Handoff Preparation](use-cases/defence/cross-domain-handoff-preparation.md),
+  [Edge Operation](use-cases/defence/edge-operation.md), and
+  [Audit-Oriented Persistence](use-cases/defence/audit-oriented-persistence.md)
+  for concrete mission-support blueprint examples based on current generic
+  runtime features.
+- Read [F2T2EA Event Phase Tagging](use-cases/defence/f2t2ea-event-phase-tagging.md)
+  when you need an optional metadata-only lifecycle tagging pattern built on
+  the generic mission metadata feature and kept separate from targeting,
+  fire-control, and decision automation.
 - Read [Security](security.md) before deploying with real credentials or payloads.
 
 ## What Is Next
@@ -121,7 +196,7 @@ are implemented, tested, documented, and released.
 
 Planned areas include:
 
-- broader metrics and observability,
+- OpenTelemetry metrics connector,
 - additional idempotency strategies,
 - Postgres, HTTP, S3, Kafka, and other sink modules,
 - Docker and Kubernetes deployment assets,

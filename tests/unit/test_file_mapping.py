@@ -1,4 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
+
 from __future__ import annotations
 
 import json
@@ -150,12 +152,14 @@ def test_file_record_preserves_json_payload_and_metadata() -> None:
     assert record["classification"] == "restricted"
     assert record["labels"] == "billing;urgent"
     assert record["labels_list"] == ["billing", "urgent"]
+    assert record["mission_metadata"] is None
     assert record["payload"] == {"order_id": "O-1001"}
     assert record["payload_info"]["original_format"] == "json"
     assert record["metadata"]["jetstream"]["stream_sequence"] == 7
     assert record["metadata"]["message_metadata"]["priority"] == "urgent"
     assert record["metadata"]["message_metadata"]["classification"] == "restricted"
     assert record["metadata"]["message_metadata"]["labels"] == ["billing", "urgent"]
+    assert record["metadata"]["mission_metadata"] is None
 
 
 def test_file_record_stores_missing_message_metadata_as_null() -> None:
@@ -166,6 +170,7 @@ def test_file_record_stores_missing_message_metadata_as_null() -> None:
     assert record["classification"] is None
     assert record["labels"] is None
     assert record["labels_list"] == []
+    assert record["mission_metadata"] is None
     assert record["metadata"]["message_metadata"] == {
         "priority": None,
         "classification": None,

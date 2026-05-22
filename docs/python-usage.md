@@ -84,6 +84,105 @@ The sink receives encrypted payload bytes in a standard
 sequence, and headers remains clear. See [Payload Encryption](payload-encryption.md)
 for decryption helpers and operational guidance.
 
+## Capturing Metrics In Embedded Code
+
+The CLI keeps metrics no-op by default unless `metrics.snapshot_file` is set in
+JSON configuration. Embedded applications can pass any object implementing the
+small metrics protocol. `InMemoryMetrics` is useful for tests, local
+diagnostics, and examples. `JsonFileMetrics` writes the same dependency-free
+snapshot that the `nats-sink-metrics` command reads. Production services
+normally adapt the same metric suffixes to Prometheus, OpenTelemetry, StatsD,
+or another approved telemetry system.
+
+```python
+from nats_sinks import InMemoryMetrics, JetStreamSinkRunner, MetricNames
+from nats_sinks.file import FileSink
+
+metrics = InMemoryMetrics()
+sink = FileSink(directory="/var/lib/nats-sinks/events")
+
+runner = JetStreamSinkRunner(
+    nats_url="nats://localhost:4222",
+    stream="ORDERS",
+    consumer="orders-file-sink",
+    subject="orders.*",
+    sink=sink,
+    metrics=metrics,
+)
+
+# After the runner has processed traffic, your application can inspect or
+# export the counters through its own telemetry stack.
+written = metrics.counters[MetricNames.MESSAGES_WRITTEN_TOTAL]
+```
+
+Write a local snapshot for the standalone metrics CLI:
+
+```python
+from nats_sinks import JsonFileMetrics, JetStreamSinkRunner
+from nats_sinks.file import FileSink
+
+metrics = JsonFileMetrics(".local/nats-sinks/metrics.json", namespace="nats_sinks")
+sink = FileSink(directory="/var/lib/nats-sinks/events")
+
+runner = JetStreamSinkRunner(
+    nats_url="nats://localhost:4222",
+    stream="ORDERS",
+    consumer="orders-file-sink",
+    subject="orders.*",
+    sink=sink,
+    metrics=metrics,
+)
+```
+
+Oracle-specific counters use the same recorder. When embedding `OracleSink`,
+pass the recorder to both the sink and the runner so duplicate/conflict
+observations appear beside core delivery counters:
+
+```python
+from nats_sinks import JsonFileMetrics, JetStreamSinkRunner, MetricNames
+from nats_sinks.oracle import OracleSink
+
+metrics = JsonFileMetrics(".local/nats-sinks/metrics.json", namespace="nats_sinks")
+sink = OracleSink(
+    dsn="localhost:1521/FREEPDB1",
+    user="app_user",
+    password_env="ORACLE_PASSWORD",
+    table="NATS_SINK_EVENTS",
+    mode="insert_ignore",
+    metrics=metrics,
+)
+
+runner = JetStreamSinkRunner(
+    nats_url="nats://localhost:4222",
+    stream="ORDERS",
+    consumer="orders-oracle-sink",
+    subject="orders.*",
+    sink=sink,
+    metrics=metrics,
+)
+
+# After traffic is processed, this counter shows duplicate rows that Oracle
+# safely absorbed through idempotent handling.
+duplicates = metrics.counters[MetricNames.ORACLE_DUPLICATES_TOTAL]
+```
+
+Read the same snapshot from Python:
+
+```python
+from nats_sinks import load_metrics_snapshot, metric_rows_from_snapshot
+
+snapshot = load_metrics_snapshot(".local/nats-sinks/metrics.json")
+rows = metric_rows_from_snapshot(snapshot)
+
+for row in rows:
+    print(row.kind, row.name, row.value)
+```
+
+Metrics are observational only. A metrics recorder must not ACK, NAK, mutate
+messages, inspect plaintext payloads, or block durable sink completion. See
+[Metrics](metrics.md) for the snapshot CLI, Python helpers, supported names,
+output formats, and compatibility aliases.
+
 ## Embedding In An Async Service
 
 `JetStreamSinkRunner.run()` is an async method. In an existing async service,
@@ -140,6 +239,17 @@ framework errors, and the production sink modules that ship with the package.
 Config helper imports are useful, but future releases may add a higher-level
 `create_runner_from_config` helper to make JSON-configured embedding even
 cleaner.
+
+## Public API Compatibility
+
+The import paths shown on this page are protected by compatibility tests in
+`tests/unit/test_public_api.py`. Those tests make sure README examples,
+package-level imports, production sink imports, sink extension points, metrics
+helpers, configuration helpers, and console-script entry points keep working
+across refactors.
+
+See [Public API Compatibility](public-api.md) for the full contract and the
+maintenance process for adding new public symbols.
 
 ## Embedded Flow
 

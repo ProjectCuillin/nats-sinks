@@ -1,0 +1,23 @@
+{
+  "id": "event-freshness-staleness-metrics",
+  "title": "[Feature]: Add event freshness and staleness metrics",
+  "area": "Metrics and observability",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["observability", "nats"],
+  "problem": "Operators need to know not only that messages were written, but how old they were when received and stored. nats-sinks stores receive and store timing data, yet it does not expose a complete freshness model for event age, stale event counts, and possible source clock skew.",
+  "proposal": "Add core metrics and optional record fields for event age at receive, event age at sink commit, stale event counts, missing creation timestamp counts, and source clock skew observations. The feature should rely on validated message creation timestamp metadata when available and should handle missing or malformed timestamps gracefully.",
+  "users": "Operators, observability engineers, mission-support teams, incident responders, and maintainers diagnosing delayed events, backlog replay, degraded networks, or sensor-source timing issues.",
+  "delivery_semantics": "Freshness metrics are observational. They must not change ACK behavior unless a separately configured policy gate rejects stale events. Metric failures must not prevent sink writes or ACK after durable success.",
+  "security": "Timestamps and source identifiers can reveal operational patterns. Metrics should avoid high-cardinality labels and should not expose sensitive source names by default. Documentation must explain safe aggregation choices.",
+  "acceptance": [
+    "Metrics are defined for event age at receive and event age at store.",
+    "Missing, malformed, future, and skewed timestamps are handled without crashing.",
+    "Prometheus and metrics CLI output can expose configured freshness metrics.",
+    "Tests cover timestamp parsing, missing metadata, malformed metadata, future timestamps, and redaction.",
+    "Documentation explains tuning and privacy implications."
+  ],
+  "tests": "Add unit tests for timestamp extraction, epoch conversion, malformed inputs, future timestamps, skew detection, metrics snapshots, Prometheus rendering, CLI output, and no payload logging.",
+  "documentation": "Update docs/metrics.md, docs/observability.md, docs/prometheus.md, docs/configuration.md, docs/operations.md, docs/use-cases, ROADMAP.md, and CHANGELOG.md.",
+  "closeout": "Close after the release containing freshness metrics is published. Include release tag, metric names, tests run, documentation links, and limitations."
+}

@@ -1,4 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
+
 """Unit tests for small CLI behaviors that should not require network access."""
 
 import json
@@ -6,8 +8,9 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from nats_sinks import __version__
-from nats_sinks.cli.main import app
+from nats_sinks import InMemoryMetrics, MetricNames, __version__
+from nats_sinks.cli.main import _attach_metrics_to_sink, app
+from nats_sinks.oracle import OracleSink
 
 
 def test_cli_version_option_exits_before_requiring_command() -> None:
@@ -107,3 +110,47 @@ def test_cli_run_reports_missing_encryption_key_without_network(tmp_path: Path) 
 
     assert result.exit_code == 1
     assert "environment variable NATS_SINKS_TEST_MISSING_KEY_B64 is not set" in result.output
+
+
+def test_cli_run_rejects_invalid_log_level_without_traceback(tmp_path: Path) -> None:
+    config = tmp_path / "file-config.json"
+    config.write_text(
+        json.dumps(
+            {
+                "nats": {
+                    "url": "nats://localhost:4222",
+                    "stream": "ORDERS",
+                    "consumer": "file-orders-sink",
+                    "subject": "orders.*",
+                },
+                "sink": {
+                    "type": "file",
+                    "directory": str(tmp_path / "events"),
+                    "fsync": False,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(app, ["run", str(config), "--log-level", "TRACE"])
+
+    assert result.exit_code == 2
+    assert "logging.level must be one of" in result.output
+    assert "Traceback" not in result.output
+
+
+def test_cli_metrics_hook_attaches_oracle_sink_counters() -> None:
+    metrics = InMemoryMetrics()
+    sink = OracleSink(
+        dsn="localhost:1521/FREEPDB1",
+        user="app_user",
+        password="example",  # noqa: S106 - local test placeholder
+        table="NATS_SINK_EVENTS",
+        mode="insert_ignore",
+    )
+
+    _attach_metrics_to_sink(sink, metrics)
+    sink._record_duplicate_ignored(1)
+
+    assert metrics.counters[MetricNames.ORACLE_DUPLICATES_TOTAL] == 1

@@ -1,0 +1,22 @@
+[Unit]
+Description=nats-sinks native Prometheus HTTP endpoint
+Documentation=https://github.com/ProjectCuillin/nats-sinks/
+RequiresMountsFor=/var/lib/nats-sink
+After=nats-sink.service
+
+[Service]
+Type=simple
+User=nats-sink
+Group=nats-sink
+ExecStart=/opt/nats-sinks/venv/bin/nats-sink-observe prometheus-http /var/lib/nats-sink/metrics.json /etc/nats-sinks/observability.prometheus.json
+WorkingDirectory=/var/lib/nats-sink
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadOnlyPaths=/etc/nats-sinks /var/lib/nats-sink
+
+[Install]
+WantedBy=multi-user.target

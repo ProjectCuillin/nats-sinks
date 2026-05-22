@@ -1,4 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
+
 """Map NATS envelopes to Oracle bind rows.
 
 The mapping layer converts framework envelopes into dictionaries consumed by
@@ -64,9 +66,26 @@ def envelope_to_row(
             normalized_payload.value,
             sort_keys=True,
             separators=(",", ":"),
+            allow_nan=False,
         ),
-        "headers_json": json.dumps(dict(envelope.headers), sort_keys=True, separators=(",", ":")),
-        "metadata_json": json.dumps(metadata, sort_keys=True, separators=(",", ":")),
+        "headers_json": json.dumps(
+            dict(envelope.headers),
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ),
+        "metadata_json": json.dumps(
+            metadata,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ),
+        "mission_metadata_json": json.dumps(
+            envelope.mission_metadata_for_json_storage(),
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ),
     }
 
 

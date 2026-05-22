@@ -1,4 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
+
 """Oracle sink configuration models.
 
 Oracle configuration is validated separately from the generic app config so the
@@ -20,7 +22,7 @@ from __future__ import annotations
 import os
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from nats_sinks.core.errors import ConfigurationError
 from nats_sinks.core.payload import PayloadStorageMode
@@ -37,6 +39,23 @@ class OracleIdempotencyConfig(BaseModel):
     strategy: IdempotencyStrategy = "stream_sequence"
     columns: list[str] = Field(default_factory=lambda: ["STREAM_NAME", "STREAM_SEQUENCE"])
     payload_field: str | None = None
+
+    @field_validator("payload_field")
+    @classmethod
+    def validate_payload_field(cls, value: str | None) -> str | None:
+        """Validate dotted payload-field paths before runtime extraction."""
+
+        if value is None:
+            return None
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("idempotency.payload_field must not be empty")
+        if "\x00" in rendered or "\n" in rendered or "\r" in rendered:
+            raise ValueError("idempotency.payload_field must not contain control characters")
+        parts = rendered.split(".")
+        if any(not part for part in parts):
+            raise ValueError("idempotency.payload_field must not contain empty path segments")
+        return rendered
 
     @model_validator(mode="after")
     def validate_payload_strategy(self) -> OracleIdempotencyConfig:
@@ -70,6 +89,7 @@ class OracleColumnMapping(BaseModel):
     payload: str = "PAYLOAD_JSON"
     headers: str = "HEADERS_JSON"
     metadata: str = "METADATA_JSON"
+    mission_metadata: str = "MISSION_METADATA_JSON"
 
 
 class OracleTableRoute(BaseModel):

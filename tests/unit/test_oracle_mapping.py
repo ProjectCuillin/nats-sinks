@@ -1,4 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
+
 from __future__ import annotations
 
 import json
@@ -46,6 +48,7 @@ def test_envelope_to_row_maps_payload_and_headers() -> None:
     assert row["stored_at_epoch_ns"] is not None
     assert json.loads(row["payload_json"])["order_id"] == "O-1001"
     assert json.loads(row["headers_json"])["Nats-Msg-Id"] == "m-1"
+    assert json.loads(row["mission_metadata_json"]) is None
     metadata = json.loads(row["metadata_json"])
     assert metadata["nats"]["reserved_headers"]["Nats-Msg-Id"] == "m-1"
     assert metadata["message_metadata"] == {
@@ -53,6 +56,7 @@ def test_envelope_to_row_maps_payload_and_headers() -> None:
         "classification": None,
         "labels": [],
     }
+    assert metadata["mission_metadata"] is None
 
 
 def test_envelope_to_row_maps_priority_classification_and_labels() -> None:
@@ -70,6 +74,27 @@ def test_envelope_to_row_maps_priority_classification_and_labels() -> None:
         "classification": "restricted",
         "labels": ["billing", "urgent"],
     }
+
+
+def test_envelope_to_row_maps_mission_metadata_json_column() -> None:
+    row = envelope_to_row(
+        envelope(
+            mission_metadata={
+                "profile": "mission-event-v1",
+                "mission_id": "M-1001",
+                "f2t2ea_phase": "track",
+            }
+        ),
+        idempotency=OracleIdempotencyConfig(),
+    )
+
+    assert json.loads(row["mission_metadata_json"]) == {
+        "profile": "mission-event-v1",
+        "mission_id": "M-1001",
+        "f2t2ea_phase": "track",
+    }
+    metadata = json.loads(row["metadata_json"])
+    assert metadata["mission_metadata"]["mission_id"] == "M-1001"
 
 
 def test_payload_field_idempotency_uses_payload_value() -> None:

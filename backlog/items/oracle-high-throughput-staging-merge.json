@@ -1,0 +1,23 @@
+{
+  "id": "oracle-high-throughput-staging-merge",
+  "title": "[Feature]: Add Oracle high-throughput staging-table merge mode",
+  "area": "Oracle sink",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "unscheduled",
+  "labels": ["sink-oracle"],
+  "problem": "The Oracle sink writes batches efficiently for the current production foundation, but very large message volumes may benefit from array-loaded staging tables followed by one set-based merge into the destination table. This can reduce per-row merge overhead, but it introduces new schema, cleanup, transaction, and privilege concerns that need a deliberate design.",
+  "proposal": "Design and implement an optional high-throughput Oracle mode that loads normalized rows into a validated staging table and then performs one set-based merge into the configured destination table. The mode should be disabled by default, require explicit staging configuration, preserve idempotency, commit only after the full durable operation succeeds, and clean up staging data safely.",
+  "users": "Operators writing large JetStream batches into Oracle where backend write throughput is the main bottleneck and where database privileges can be prepared for a staging workflow.",
+  "delivery_semantics": "The batch is successful only after staging load, set-based merge, cleanup policy, and final commit complete. If any step fails before commit, the core must not ACK. If commit succeeds and ACK fails, duplicate redelivery must be handled by the destination idempotency keys.",
+  "security": "The staging table name and columns must be strictly validated. The runtime database account should receive only required privileges. Logs must not include payloads or bind values. Cleanup behavior must avoid destructive privileges beyond the configured staging objects.",
+  "acceptance": [
+    "High-throughput mode is opt-in and documented as advanced Oracle behavior.",
+    "Staging identifiers are validated and values use bind variables.",
+    "Commit and rollback behavior is covered by tests.",
+    "Duplicate redelivery remains safe in idempotent modes.",
+    "Performance documentation explains when this mode is appropriate."
+  ],
+  "tests": "Add SQL generation tests, transaction failure tests, duplicate tests, and environment-gated Oracle integration tests when feasible. Run scripts/check-sinks.sh, scripts/run-oracle-e2e.sh when credentials are available, and scripts/check.sh.",
+  "documentation": "Update docs/oracle-sink.md, docs/performance.md, docs/operations.md, docs/security.md, ROADMAP.md, and CHANGELOG.md with staging-table setup, privilege guidance, and limitations.",
+  "closeout": "Close after the release containing this mode is published. Include the release tag, throughput design summary, tests run, live integration status, documentation updates, and any production caveats."
+}

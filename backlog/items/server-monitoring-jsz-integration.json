@@ -1,0 +1,27 @@
+{
+  "id": "server-monitoring-jsz-integration",
+  "title": "[Feature]: Add NATS server monitoring endpoint observability connector",
+  "area": "Metrics and observability",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.0",
+  "labels": ["observability", "nats"],
+  "problem": "NATS server monitoring endpoints can provide JetStream and server health context. nats-sinks currently reports its own runtime metrics but does not integrate server monitoring data. Pulling server monitoring data introduces network, authorization, and metadata exposure concerns that need careful design.",
+  "proposal": "Implement a separate disabled-by-default observability connector for selected NATS server monitoring data. The connector must run through nats-sink-observe, keep existing NATS and platform monitoring as the preferred server-level view, and avoid making the sink worker responsible for polling server monitoring endpoints.",
+  "users": "Operators troubleshooting queue lag, JetStream health, reconnect behavior, and sink runtime issues.",
+  "delivery_semantics": "Server monitoring data is observational only. Monitoring failures must not change ACK behavior, retries, DLQ, or sink writes.",
+  "security": "Monitoring endpoints may expose sensitive topology or operational detail. Any integration must be disabled by default, use explicit allow lists, validate endpoints, enforce timeouts, and avoid exporting private metadata by default.",
+  "acceptance": [
+    "A design decision documents whether and how server monitoring integration belongs in the project.",
+    "A disabled-by-default nats-sink-observe connector can poll approved NATS monitoring endpoints.",
+    "The helper is separate from sink delivery.",
+    "Endpoint URLs, endpoint paths, field paths, timeouts, response sizes, TLS verification, and local CA settings are validated.",
+    "Snapshots do not store the configured monitoring base URL and include only policy-approved scalar fields.",
+    "Prometheus output is optional and renders only selected numeric values.",
+    "Security and permission implications are documented.",
+    "Tests cover endpoint validation, disabled-by-default behavior, malformed responses, snapshot rendering, Prometheus rendering, and CLI behavior without live network calls.",
+    "Roadmap is updated with the decision."
+  ],
+  "tests": "Add unit tests for configuration, policy validation, connector behavior, CLI behavior, and systemd installer asset coverage. Run documentation checks and scripts/check.sh.",
+  "documentation": "Update docs/observability.md, docs/operations.md, docs/security.md, docs/nats-feature-gap-analysis.md, ROADMAP.md, and CHANGELOG.md.",
+  "closeout": "Close after released design or implementation. Include release tag or decision evidence, tests, and limitations."
+}

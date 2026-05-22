@@ -1,4 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
+
 from __future__ import annotations
 
 import asyncio
@@ -16,9 +18,9 @@ import pytest
 from nats.js.api import AckPolicy, ConsumerConfig, DeliverPolicy, StreamConfig
 from nats.js.errors import NotFoundError
 
-from nats_sinks.core.config import DeliveryConfig, EncryptionConfig
+from nats_sinks.core.config import DeliveryConfig, EncryptionConfig, MissionMetadataConfig
 from nats_sinks.core.encryption import ENCRYPTED_PAYLOAD_KEY, PayloadEncryptor
-from nats_sinks.core.metrics import InMemoryMetrics
+from nats_sinks.core.metrics import InMemoryMetrics, MetricNames
 from nats_sinks.core.runner import JetStreamSinkRunner
 from nats_sinks.oracle import OracleSink
 from nats_sinks.oracle.routing import matches_subject
@@ -30,6 +32,7 @@ DEFAULT_TEXT_PAYLOAD_INTERVAL = 17
 DEFAULT_EMPTY_PAYLOAD_INTERVAL = 31
 DEFAULT_MISSING_MESSAGE_ID_INTERVAL = 23
 DEFAULT_EXPECTED_STREAM_HEADER_INTERVAL = 29
+DEFAULT_MISSION_METADATA_INTERVAL = 5
 DEFAULT_E2E_TEST_TABLE = "NATS_SINKS_E2E_EVENTS_V2"
 MESSAGE_METADATA_PATTERN_SIZE = 4
 REQUIRED_E2E_COLUMNS = {
@@ -47,6 +50,7 @@ REQUIRED_E2E_COLUMNS = {
     "PAYLOAD_JSON",
     "HEADERS_JSON",
     "METADATA_JSON",
+    "MISSION_METADATA_JSON",
 }
 
 
@@ -69,6 +73,7 @@ class E2ECase:
     expected_empty_payloads: int
     expected_message_ids: int
     expected_stream_headers: int
+    expected_mission_metadata: int
     expected_priorities: int
     expected_classifications: int
     expected_labels: int
@@ -345,6 +350,18 @@ def _encrypted_payload_count_by_run_id(pool: Any, *, table: str, run_id: str) ->
     return int(row[0])
 
 
+def _mission_metadata_count_by_run_id(pool: Any, *, table: str, run_id: str) -> int:
+    table_name = validate_identifier(table)
+    with pool.acquire() as connection:
+        with connection.cursor() as cursor:
+            sql = f"select count(*) {_run_filter_sql(table_name)} and json_value(mission_metadata_json, '$.profile') = :profile"  # noqa: E501
+            cursor.execute(sql, {"run_id": run_id, "profile": "mission-event-v1"})
+            row = cursor.fetchone()
+    if row is None:
+        return 0
+    return int(row[0])
+
+
 def _message_metadata_counts_by_run_id(
     pool: Any, *, table: str, run_id: str
 ) -> tuple[int, int, int, int]:
@@ -431,7 +448,7 @@ def _table_columns(pool: Any, *, table: str) -> set[str]:
 def _print_timings_if_requested(*, metrics: InMemoryMetrics, message_count: int) -> None:
     if _e2e_setting("PRINT_TIMINGS", "false").lower() not in {"1", "true", "yes", "on"}:
         return
-    observations = metrics.observations.get("batch_write_seconds", [])
+    observations = metrics.observations.get(MetricNames.SINK_BATCH_WRITE_SECONDS, [])
     total = sum(observations)
     batches = len(observations)
     rate = message_count / total if total > 0 else 0.0
@@ -476,6 +493,7 @@ async def _publish_e2e_messages(
     empty_interval: int,
     missing_message_id_interval: int,
     expected_stream_header_interval: int,
+    mission_metadata_interval: int = DEFAULT_MISSION_METADATA_INTERVAL,
 ) -> None:
     for index in range(message_count):
         message_id = f"{run_id}-{index:06d}"
@@ -502,6 +520,17 @@ async def _publish_e2e_messages(
             headers["Nats-Msg-Id"] = message_id
         if index % expected_stream_header_interval == 0:
             headers["Nats-Expected-Stream"] = stream
+        if index % mission_metadata_interval == 0:
+            headers["Nats-Sinks-Mission-Metadata"] = json.dumps(
+                {
+                    "profile": "mission-event-v1",
+                    "mission_id": f"mission-{run_id}",
+                    "f2t2ea_phase": "track",
+                    "source_system": "nats-sinks-e2e",
+                    "event_index": index,
+                },
+                separators=(",", ":"),
+            )
         await js.publish(
             subject,
             payload,
@@ -537,6 +566,7 @@ def _build_e2e_case() -> E2ECase:
     expected_empty_payloads = len(empty_payload_indexes)
     expected_message_ids = message_count - len(range(0, message_count, missing_message_id_interval))
     expected_stream_headers = len(range(0, message_count, expected_stream_header_interval))
+    expected_mission_metadata = len(range(0, message_count, DEFAULT_MISSION_METADATA_INTERVAL))
     expected_priorities = len(
         [index for index in range(message_count) if index % MESSAGE_METADATA_PATTERN_SIZE in {0, 1}]
     )
@@ -569,6 +599,7 @@ def _build_e2e_case() -> E2ECase:
         expected_empty_payloads=expected_empty_payloads,
         expected_message_ids=expected_message_ids,
         expected_stream_headers=expected_stream_headers,
+        expected_mission_metadata=expected_mission_metadata,
         expected_priorities=expected_priorities,
         expected_classifications=expected_classifications,
         expected_labels=expected_labels,
@@ -670,6 +701,15 @@ async def _assert_e2e_rows(
         )
         == case.expected_stream_headers
     )
+    assert (
+        await asyncio.to_thread(
+            _mission_metadata_count_by_run_id,
+            sink._pool,
+            table=case.table,
+            run_id=case.run_id,
+        )
+        == case.expected_mission_metadata
+    )
     priority_count, classification_count, labels_count, both_count = await asyncio.to_thread(
         _message_metadata_counts_by_run_id,
         sink._pool,
@@ -680,11 +720,11 @@ async def _assert_e2e_rows(
     assert classification_count == case.expected_classifications
     assert labels_count == case.expected_labels
     assert both_count == case.expected_both_message_metadata
-    observations = metrics.observations.get("batch_write_seconds", [])
+    observations = metrics.observations.get(MetricNames.SINK_BATCH_WRITE_SECONDS, [])
     assert observations
     assert len(observations) == case.expected_batch_count
     assert sum(observations) > 0
-    assert metrics.gauges["current_batch_size"] == case.expected_final_batch_size
+    assert metrics.gauges[MetricNames.CURRENT_BATCH_MESSAGES] == case.expected_final_batch_size
     _print_timings_if_requested(metrics=metrics, message_count=case.message_count)
     info = await setup_js.consumer_info(case.stream, case.consumer)
     assert info.num_ack_pending == 0
@@ -701,6 +741,8 @@ async def _prepare_sink_table_for_e2e(sink: OracleSink, case: E2ECase) -> None:
         if missing:
             pytest.fail(
                 f"Oracle e2e table {case.table!r} is missing required columns {missing}. "
+                "The retained table is likely stale or incorrectly constructed for the "
+                "current nats-sinks Oracle schema contract. "
                 "Use NATS_SINKS_E2E_DROP_TABLE_BEFORE=true or choose a fresh "
                 "NATS_SINKS_E2E_ORACLE_TABLE."
             )
@@ -743,6 +785,10 @@ async def test_nats_publish_runner_receive_and_oracle_store() -> None:
                 subject=case.subject,
                 sink=sink,
                 delivery=DeliveryConfig(batch_size=case.batch_size, batch_timeout_ms=5000),
+                mission_metadata=MissionMetadataConfig(
+                    enabled=True,
+                    allowed_profiles=("mission-event-v1",),
+                ),
                 encryption=case.encryption,
                 metrics=metrics,
                 nats_options=_nats_options(),

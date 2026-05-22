@@ -1,0 +1,23 @@
+{
+  "id": "mission-event-metadata-profile",
+  "title": "[Feature]: Add a generic mission event metadata profile",
+  "area": "Core runtime and delivery semantics",
+  "priority": "P3 - backlog candidate",
+  "target_release": "v0.4.0",
+  "labels": ["security", "documentation"],
+  "problem": "nats-sinks already supports core message metadata such as priority, classification, labels, timestamps, headers, and delivery identifiers. Mission-oriented deployments often need richer event context such as mission identifiers, operation identifiers, tasking references, source systems, sensor identifiers, platform identifiers, track identifiers, correlation identifiers, source confidence, releasability, and origin domain. Adding fixed columns for every possible context field would make the framework rigid and would push the project toward a single use case instead of a reusable sink framework.",
+  "proposal": "Add a destination-neutral mission event metadata profile that can be carried as a validated JSON metadata object. The profile should define stable field names, safe value types, size limits, optional defaulting, subject-aware overrides, and an explicit schema identifier. Oracle should be able to store the object in a configurable JSON column, while the file sink should include the same object inside the emitted JSON record. The profile must remain generic enough for logistics, platform telemetry, operational reporting, industrial telemetry, and defence data custody workflows.",
+  "users": "Operators, integrators, mission-support teams, platform engineers, maintainers, and future sink authors who need a common way to preserve operational context without hard-coding every domain-specific field into the core schema.",
+  "delivery_semantics": "Mission metadata must be normalized before a message reaches a sink. Invalid mission metadata should be treated as a permanent validation failure and follow the existing DLQ-before-ACK behavior. The feature must not change commit-then-acknowledge ordering, idempotency key behavior, or sink responsibility boundaries.",
+  "security": "The metadata profile must treat all message-provided metadata as untrusted input. It should validate field names, value types, lengths, list sizes, allowed enumerations where configured, and total document size. Sensitive context must not be logged by default. The profile should support redaction guidance and avoid storing secrets, private network locators, credentials, or raw operational payloads in metadata.",
+  "acceptance": [
+    "A generic mission metadata profile is documented with field names, value types, limits, defaults, and versioning.",
+    "Core configuration can enable or disable the profile and set safe defaults without requiring a defence-specific deployment.",
+    "Oracle can store the metadata object in a configurable JSON column without adding mandatory fixed columns for every profile field.",
+    "The file sink can include the same metadata object in its output JSON structure.",
+    "Invalid metadata follows permanent-failure handling and DLQ-before-ACK semantics."
+  ],
+  "tests": "Add unit tests for validation, defaulting, subject-aware overrides, size limits, JSON structure rendering, Oracle row mapping, file sink output mapping, malformed metadata handling, and DLQ-before-ACK behavior. Add compatibility tests proving existing priority, classification, and labels fields continue to work.",
+  "documentation": "Add or update docs for generic metadata, Oracle storage, file sink output, configuration reference, security guidance, idempotency guidance, and examples. Include a clear statement that defence is one use-case family and not the only intended use of the profile.",
+  "closeout": "Close only after the release containing the metadata profile is published. Include release tag, schema version, supported fields, tests run, documentation pages, and known limitations."
+}

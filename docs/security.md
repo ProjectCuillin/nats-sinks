@@ -35,7 +35,116 @@ Resolved passwords are not printed.
 
 ## JSON Configuration
 
-Runtime config uses JSON. JSON avoids parser features that are not needed for this package and gives operators a direct mapping to the validated Pydantic model tree.
+Runtime config uses JSON. JSON avoids parser features that are not needed for
+this package and gives operators a direct mapping to the validated Pydantic
+model tree.
+
+The loader treats configuration as hostile input until it has passed several
+checks:
+
+- the file must be UTF-8,
+- the file must stay within the documented size limit,
+- the root value must be a JSON object,
+- duplicate object keys are rejected instead of accepting the last value,
+- non-standard constants such as `NaN`, `Infinity`, and `-Infinity` are
+  rejected instead of being accepted as Python-specific extensions,
+- allowed environment overrides are applied through an explicit allow list,
+- the final structure is validated with Pydantic models, and
+- unknown fields are rejected in core configuration sections.
+
+This fail-closed behavior helps operators catch mistakes before a sink connects
+to NATS or acknowledges any JetStream message.
+
+## Production Secure Development Baseline
+
+Every feature should be reviewed as a small threat model before implementation.
+For `nats-sinks`, the most important assets are message payloads, message
+metadata, destination rows or files, secrets, encryption keys, idempotency keys,
+DLQ records, logs, and acknowledgement state.
+
+```mermaid
+flowchart LR
+    Input[External input] --> Validate[Validate and bound]
+    Validate --> Normalize[Normalize and type]
+    Normalize --> Policy[Apply explicit policy]
+    Policy --> Work[Perform durable work]
+    Work --> Log[Log sanitized outcome]
+    Work --> Ack[ACK only after durable success]
+```
+
+Use this baseline for code review and future releases:
+
+- Treat NATS subjects, headers, payloads, config files, environment variables,
+  database rows, files, DLQ messages, and third-party responses as untrusted.
+- Fail closed when validation, authorization, dependency loading, encryption
+  setup, sink selection, or policy evaluation is ambiguous.
+- Keep security-sensitive logic centralized and documented: configuration
+  loading, TLS setup, credential resolution, SQL identifier validation, payload
+  encryption, log sanitization, redaction, DLQ shaping, and ACK decisions.
+- Use allow-list validation for enum values, formats, lengths, ranges, SQL
+  identifiers, file extensions, URL schemes, sink names, route names, and NATS
+  subject patterns.
+- Use real parsers for structured formats and reject malformed, oversized,
+  duplicate-key, non-standard-constant, or ambiguous input early.
+- Keep data separate from code. Use SQL bind variables for values, never shell
+  out with untrusted strings, and never use `eval`, `exec`, pickle, unsafe YAML
+  loaders, or user-controlled dynamic imports.
+- Bound batches, payloads, config files, retries, queue depths, parser depth,
+  file output, and any count that could trigger CPU, memory, database, or
+  native-library exhaustion.
+- Treat logs as an injection surface. Sanitize control characters and redact
+  secrets while retaining enough subject, stream, sequence, sink, and error
+  category context for operators.
+- Treat observability output as an information-sharing boundary. Metrics,
+  timestamps, failure counters, duplicate counters, and write timings can
+  reveal operational tempo even without payloads. Use disabled-by-default
+  observability policies and allow lists before publishing to Prometheus or
+  any future monitoring platform. NATS server monitoring endpoint values must
+  also be selected with explicit endpoint and field allow lists before they are
+  stored locally or rendered for Prometheus.
+- Prefer least privilege for NATS accounts, Oracle users, service accounts,
+  CI jobs, containers, cloud identities, filesystems, and documentation
+  examples.
+- Keep cryptography on mature libraries and authenticated modes. Keys must stay
+  separate from encrypted data and should be loaded through secure runtime
+  configuration or a managed secret store.
+- Treat native libraries, database drivers, compression libraries, and FFI
+  boundaries as memory-safety boundaries. Validate sizes and file metadata
+  before handing untrusted data to them.
+- Use bounded retries, backoff, jitter, timeouts, connection pooling,
+  backpressure, graceful shutdown, and idempotency for external operations.
+- Add tests for normal paths, negative paths, malformed input, duplicate
+  messages, boundary values, dependency failures, and abuse cases. Treat
+  crashes, hangs, flaky tests, memory growth, and data corruption as security
+  and reliability signals.
+- Keep local and CI guardrails active. The repository includes
+  `scripts/secret-scan.sh` as a lightweight high-confidence secret scanner,
+  `scripts/security.sh` for secret scanning plus Bandit, CodeQL for static
+  security analysis, dependency review for pull requests, Dependabot for
+  updates, CycloneDX SBOM generation for release evidence, and pre-commit
+  hooks for local checks.
+
+Release SBOM guidance is documented in [SBOM And Release Evidence](sbom.md).
+Dependency Graph and manifest-maintenance guidance is documented in
+[Dependency Management](dependency-management.md). High-trust deployment
+guidance for pinned, hash-verified installs is documented in
+[Hash-Verified Installs](hash-verified-installs.md).
+Policy-controlled metric and selected NATS monitoring export is documented in
+[Observability](observability.md) and [Prometheus Integration](prometheus.md).
+The NATS server monitoring connector and delivery-boundary decision, including
+`/jsz` and `/healthz` handling, are documented in
+[NATS Server Monitoring Integration](nats-server-monitoring.md).
+NATS runtime account authorization templates are documented in
+[NATS Least-Privilege Permissions](nats-permissions.md).
+Kubernetes-specific deployment examples, including service accounts,
+security contexts, Secret references, NetworkPolicy guidance, and resource
+limits, are documented in [Kubernetes Deployment](kubernetes.md).
+
+The detailed maintainer-requested control review is tracked in
+[Security Rule Review](security-rule-review.md). That page records the current
+status of all 316 secure-development guidance points as applied, already
+covered, partially covered, roadmap, or not applicable for the current package
+surface.
 
 ## Payload Privacy
 
@@ -46,6 +155,22 @@ well. Even when the payload is encrypted, metadata can reveal operational
 tempo, routing, classification, source systems, or unit and platform naming
 conventions. Use subject design, header minimization, access controls, and
 retention policies accordingly.
+
+Domain-specific metadata can be sensitive too. A field such as
+`mission_metadata.f2t2ea.phase` may reveal workflow stage or operational tempo
+even when the value is only used for custody and audit. Public examples must
+stay synthetic, and live deployments should protect mission metadata with the
+same access-control, retention, and release rules used for the surrounding
+event. The core mission metadata feature validates object structure, size,
+duplicate keys, non-standard JSON constants, and secret-looking field names
+before sinks see the message.
+See [Mission Metadata](mission-metadata.md) and
+[F2T2EA Event Phase Tagging](use-cases/defence/f2t2ea-event-phase-tagging.md)
+for safe example wording and non-goals. The broader
+[Defence And Mission Support](use-cases/defence/index.md) blueprint set shows
+how to document mission-oriented deployments without placing live operational
+details, credentials, network locators, or sensitive payloads into public docs
+or GitHub Issues.
 
 Optional core payload encryption can protect message bodies before they are
 stored by a sink. When enabled, the runner encrypts only the body bytes and
@@ -98,6 +223,14 @@ Supported NATS client authentication modes in this release are documented in
 Bcrypt is a server-side storage control. The client still needs the clear-text
 password to authenticate, so username/password and token authentication should
 use TLS in production.
+
+Use least-privilege NATS subject permissions for the runtime account. A
+standard worker should be able to request from its configured pull consumer,
+receive inbox responses, ACK messages it has received, and publish to the
+configured DLQ subject only when DLQ is enabled. It should not need broad
+publish, broad subscribe, stream administration, or source-subject publish
+rights. See [NATS Least-Privilege Permissions](nats-permissions.md) for
+templates and validation checklists.
 
 ```mermaid
 flowchart LR
@@ -174,3 +307,8 @@ flowchart TD
 ## Dependency Hygiene
 
 Dependencies are intentionally limited. CI includes formatting, linting, type checking, unit tests, package build checks, dependency review, CodeQL, and Bandit.
+
+Release builds also generate `SHA256SUMS` so operators can verify GitHub
+Release assets before promoting them into controlled mirrors or wheelhouses.
+Hash verification is a deployment control rather than a runtime feature: it
+does not change ACK behavior, sink writes, payload encryption, or idempotency.

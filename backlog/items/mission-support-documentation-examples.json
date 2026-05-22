@@ -1,0 +1,23 @@
+{
+  "id": "mission-support-documentation-examples",
+  "title": "[Docs]: Add mission-support operational examples",
+  "area": "Documentation",
+  "priority": "P3 - backlog candidate",
+  "target_release": "v0.4.0",
+  "labels": ["documentation"],
+  "problem": "The documentation explains individual features, but mission-oriented operators often need scenario-based guidance that shows how those features combine. Examples such as restricted event storage, disconnected file handoff, DLQ triage, replay, and recovery procedures are easier to adopt when they are described as complete operational patterns rather than isolated configuration options.",
+  "proposal": "Add a set of scenario-driven documentation pages that show how to combine core delivery semantics, metadata, encryption, file sink behavior, Oracle storage, DLQs, metrics, and service deployment. The examples should remain generic and safe for a public repository while using clear operational language that helps readers map nats-sinks to disciplined event custody workflows.",
+  "users": "New users, operators in controlled environments, public-sector readers, maintainers writing support answers, and security reviewers assessing whether the project fits their operational workflow.",
+  "delivery_semantics": "The examples must reinforce commit-then-acknowledge, at-least-once delivery, idempotency, redelivery, and DLQ-before-ACK behavior. They must not imply exactly-once processing or loss-free guarantees beyond the documented model.",
+  "security": "Examples must use fake values only, avoid private operational details, avoid sensitive subjects, and explain how payloads, metadata, classifications, labels, and encryption are handled. No example may contain secrets, live network details, wallet material, certificate contents, or sensitive payloads.",
+  "acceptance": [
+    "At least four scenario pages are added or expanded.",
+    "Each scenario includes configuration, operational flow, failure behavior, and test guidance.",
+    "Examples clearly separate generic behavior from sink-specific behavior.",
+    "Markdown diagrams are included where they help readers understand the flow.",
+    "README.md and docs/index.md link to the scenarios."
+  ],
+  "tests": "Run markdown link checks, mkdocs build in both hosted modes, and scripts/check.sh. Add example validation tests if new JSON config files are committed.",
+  "documentation": "Update README.md, docs/index.md, docs/operations.md, docs/dead-letter-queues.md, docs/file-sink.md, docs/oracle-sink.md, and any new scenario pages.",
+  "closeout": "Close after the scenario documentation ships in a release. Include the release tag, pages added, diagrams included, checks run, and follow-up scenarios that remain out of scope."
+}

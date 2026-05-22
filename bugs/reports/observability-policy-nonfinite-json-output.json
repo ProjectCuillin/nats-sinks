@@ -1,0 +1,26 @@
+{
+  "id": "observability-policy-nonfinite-json-output",
+  "title": "[Bug]: Observability policy writer can emit non-standard JSON",
+  "area": "Metrics and observability",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.0",
+  "labels": ["observability", "serialization"],
+  "summary": "The observability policy writer uses default json.dumps behavior when writing raw dictionary policies, which can emit NaN or Infinity into policy files.",
+  "observed": "A raw policy dictionary containing a non-finite value can be written to disk as non-standard JSON.",
+  "expected": "The policy writer should use standards-compliant JSON emission and reject non-finite values before writing a file.",
+  "reproduction": "Run the focused regression test that attempts to write a raw observability policy dictionary containing NaN.",
+  "failing_test": "tests/unit/test_bug_hunt_strict_json_boundaries.py::test_observability_policy_writer_rejects_nonfinite_raw_dict_values",
+  "impact": "Observability policies are security controls for metric sharing. They should remain portable, strict JSON documents and fail closed when invalid.",
+  "delivery_semantics": "No JetStream ACK behavior changes. This fix affects optional observability policy generation only.",
+  "security": "The fix must not print policy contents that may include local paths or operational naming details.",
+  "acceptance": [
+    "A focused regression test proves raw policy dictionaries with non-finite values are rejected.",
+    "Valid ObservabilityPolicy instances continue to write atomically.",
+    "The error is reported as a configuration error.",
+    "Existing observability policy tests still pass."
+  ],
+  "tests": "Run the focused regression test, observability policy tests, observability CLI tests, and the full local check script.",
+  "documentation": "Update CHANGELOG.md and observability documentation to mention strict JSON policy writing.",
+  "closeout": "Close only after the release containing the fix is published. Include the release tag, regression evidence, verification evidence, and any remaining limitations."
+}

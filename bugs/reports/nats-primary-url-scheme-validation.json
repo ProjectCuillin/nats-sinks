@@ -1,0 +1,26 @@
+{
+  "id": "nats-primary-url-scheme-validation",
+  "title": "[Bug]: NATS primary URL accepts unsupported schemes",
+  "area": "Configuration",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.0",
+  "labels": ["nats", "security", "testing"],
+  "summary": "The NATS configuration model accepts unsupported primary connection URL schemes instead of failing closed during validation.",
+  "observed": "A configuration can pass validation with a primary NATS URL scheme that the client should not use for broker connections.",
+  "expected": "Primary NATS URLs must be limited to explicitly supported schemes before the runner attempts to connect.",
+  "reproduction": "Run the focused regression test that configures an unsupported primary NATS URL scheme.",
+  "failing_test": "tests/unit/test_bug_hunt_non_json_boundaries.py::test_nats_config_rejects_unsupported_primary_url_scheme",
+  "impact": "A typo or unsafe scheme can survive validation and fail later in a less clear runtime path.",
+  "delivery_semantics": "No ACK behavior changes. The fix fails configuration before any JetStream messages are fetched.",
+  "security": "Failing closed on connection schemes reduces accidental use of unsupported transports and keeps network behavior reviewable.",
+  "acceptance": [
+    "Unsupported primary NATS URL schemes are rejected during configuration validation.",
+    "Supported NATS URL schemes continue to validate.",
+    "The error message identifies the NATS URL field.",
+    "The focused regression test and full checks pass."
+  ],
+  "tests": "Run the focused regression test, NATS connection option tests, configuration tests, and the full local check script.",
+  "documentation": "Update configuration and release notes if the accepted NATS URL scheme policy is clarified.",
+  "closeout": "Close only after the release containing the fix is published with regression and verification evidence."
+}

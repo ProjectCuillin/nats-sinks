@@ -55,6 +55,14 @@ Recommended for JetStream sinks. It uses:
 
 This pair is stable for a message in a stream and maps naturally to a primary key.
 
+When mirrors, sources, subject transforms, or rebuilt streams are part of the
+event path, confirm which stream name and sequence number the sink actually
+observes. `stream_sequence` is intentionally scoped to the consumed stream. If
+the same business event may reach the sink through more than one topology path,
+prefer a stable producer `Nats-Msg-Id` or a strict `payload_field` key.
+Topology-specific guidance is documented in
+[Advanced JetStream Topology](jetstream-topology.md).
+
 ### `message_id`
 
 Uses a stable NATS message ID header. This is useful when producers already enforce message IDs.

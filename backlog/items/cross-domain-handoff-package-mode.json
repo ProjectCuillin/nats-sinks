@@ -1,0 +1,23 @@
+{
+  "id": "cross-domain-handoff-package-mode",
+  "title": "[Feature]: Add cross-domain handoff package guidance and optional packaging",
+  "area": "Security",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["security", "documentation"],
+  "problem": "Some environments need to prepare event data for controlled review, transfer, or archive between separated domains. nats-sinks can persist events safely, but it does not yet define a package format that groups payload, metadata, hashes, labels, encryption state, timestamps, and validation evidence into a reviewable bundle.",
+  "proposal": "Research and design an optional cross-domain handoff package mode. The mode should produce reviewable packages for human or external system processing, not act as a cross-domain solution by itself. It should include a manifest, normalized metadata, optional encrypted payload, hashes, schema version, and sink commit evidence where available.",
+  "users": "Operators, security reviewers, data custodians, mission-support teams, and maintainers who need a safe package pattern for controlled review or downstream handoff.",
+  "delivery_semantics": "Package creation must happen before ACK only when the package destination is the durable sink operation. If package creation fails, the core must not ACK. If a package is generated after another durable sink success for export purposes, the documentation must clarify that it is a separate workflow and not part of the original ACK boundary unless explicitly configured.",
+  "security": "The feature must not claim to be a certified cross-domain solution. Packages must avoid path traversal, unbounded archive growth, unsafe compression behavior, secret leakage, and unsanitized filenames. Manifest fields must be validated and bounded.",
+  "acceptance": [
+    "A research note defines scope, non-goals, package contents, and safety constraints.",
+    "Documentation clearly states that nats-sinks is not a cross-domain guard or certification boundary.",
+    "A proposed package schema includes manifest, metadata, hashes, timestamps, and payload reference or encrypted payload.",
+    "If implemented, file paths and package contents are validated and bounded.",
+    "Tests cover package manifest validation, path safety, size limits, and sanitized output examples."
+  ],
+  "tests": "Start with documentation and schema validation tests. If code is implemented, add unit tests for manifest rendering, archive or directory output safety, path traversal rejection, payload size limits, hash consistency, and cleanup after failure.",
+  "documentation": "Add docs under use cases and security, update file sink docs if packaging uses the file sink, update ROADMAP.md and CHANGELOG.md, and include sanitized diagrams and examples.",
+  "closeout": "Close only after a release publishes the research outcome or implementation. Include release tag, scope decision, safety constraints, tests run, and follow-up certification limitations."
+}

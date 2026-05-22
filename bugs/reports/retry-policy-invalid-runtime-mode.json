@@ -1,0 +1,26 @@
+{
+  "id": "retry-policy-invalid-runtime-mode",
+  "title": "[Bug]: RetryPolicy direct construction accepts unknown mode strings",
+  "area": "Core runtime and delivery semantics",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.0",
+  "labels": ["testing"],
+  "summary": "The RetryPolicy dataclass relies on type hints for mode strings but does not enforce them at runtime.",
+  "observed": "A direct RetryPolicy instance with an unknown backoff mode is accepted and falls into exponential behavior.",
+  "expected": "RetryPolicy must enforce allowed backoff and jitter modes during construction.",
+  "reproduction": "Run the focused regression test that constructs RetryPolicy with an unknown backoff mode.",
+  "failing_test": "tests/unit/test_bug_hunt_non_json_boundaries.py::test_retry_policy_rejects_unknown_runtime_modes",
+  "impact": "Embedding applications can silently get a different retry algorithm than the one they intended.",
+  "delivery_semantics": "The fix keeps retry decisions explicit without changing commit-then-ack ordering.",
+  "security": "Failing closed on policy enums makes failure behavior easier to audit.",
+  "acceptance": [
+    "RetryPolicy rejects unknown backoff modes.",
+    "RetryPolicy rejects unknown jitter modes.",
+    "Valid configured modes continue to work.",
+    "The focused regression test and full checks pass."
+  ],
+  "tests": "Run the focused regression test, retry tests, and the full local check script.",
+  "documentation": "Update retry documentation or release notes if runtime policy validation is clarified.",
+  "closeout": "Close only after the release containing the fix is published with regression and verification evidence."
+}

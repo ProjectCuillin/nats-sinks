@@ -1,0 +1,23 @@
+{
+  "id": "defence-use-case-blueprints",
+  "title": "[Docs]: Add defence use-case blueprints without making the product defence-only",
+  "area": "Documentation",
+  "priority": "P3 - backlog candidate",
+  "target_release": "v0.4.0",
+  "labels": ["documentation", "security"],
+  "problem": "nats-sinks is increasingly useful for mission-oriented environments, but the project must remain a general-purpose sink framework. Readers need concrete defence examples, while commercial, industrial, public-sector, and platform teams must still see that the product is not a single-use-case platform.",
+  "proposal": "Create a dedicated documentation area for use-case blueprints. Defence should be one use-case family under that area, with pages for mission metadata, F2T2EA event phase tagging, sensor event custody, classification and labels, chain of custody, cross-domain handoff preparation, edge operation, and audit-oriented persistence. The pages must describe how to use generic nats-sinks features rather than requiring defence-only code paths.",
+  "users": "External readers, solution architects, maintainers, mission-support integrators, security reviewers, and new users who need examples before mapping nats-sinks to their own environment.",
+  "delivery_semantics": "Every blueprint must reinforce commit-then-acknowledge, at-least-once delivery, idempotent sink behavior, DLQ-before-ACK handling, and safe redelivery. The examples must not imply exactly-once delivery or autonomous operational decision-making.",
+  "security": "The documentation must use sanitized example identifiers only and must not include live locations, credentials, private infrastructure details, sensitive operational procedures, or instructions for weapons-release automation. Defence examples should focus on event custody, persistence, auditability, metadata discipline, and controlled handoff.",
+  "acceptance": [
+    "A docs use-cases area exists with defence as one sub-area.",
+    "F2T2EA event phase tagging is documented as metadata for audit, routing, persistence, and analysis.",
+    "Examples show Oracle JSON-column storage and file sink JSON output for mission metadata.",
+    "Documentation clearly states that nats-sinks is not a targeting, fire-control, or weapons-release system.",
+    "README.md and docs navigation link to the use-case blueprints without making defence the only project audience."
+  ],
+  "tests": "Run markdown link checks, mkdocs builds, and documentation examples validation where config files are included. Add doc tests or snapshot checks for example JSON if a local pattern exists.",
+  "documentation": "Add docs under a use-case folder, update README.md, docs/index.md, docs/oracle-sink.md, docs/file-sink.md, docs/security.md, docs/operations.md, ROADMAP.md, and CHANGELOG.md.",
+  "closeout": "Close after the release with the use-case blueprint documentation is published. Include release tag, pages added, diagrams added, checks run, and follow-up blueprint ideas."
+}

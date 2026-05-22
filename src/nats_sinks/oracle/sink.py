@@ -1,4 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
+
 """Oracle sink implementation.
 
 `OracleSink` is the first production destination sink for nats-sinks.  It owns
@@ -23,7 +25,9 @@ from __future__ import annotations
 import asyncio
 import importlib
 import logging
+import time
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Any
 
 from pydantic import ValidationError as PydanticValidationError
@@ -35,6 +39,13 @@ from nats_sinks.core.errors import (
     PermanentSinkError,
     SerializationError,
     TemporarySinkError,
+)
+from nats_sinks.core.metrics import (
+    MetricNames,
+    MetricsRecorder,
+    NoopMetrics,
+    increment_metric,
+    observe_metric,
 )
 from nats_sinks.core.payload import PayloadStorageMode
 from nats_sinks.oracle.config import (
@@ -50,6 +61,27 @@ from nats_sinks.oracle.routing import resolve_table_for_subject, validate_subjec
 from nats_sinks.oracle.sql import OracleWriteSql, build_write_sql
 
 LOGGER = logging.getLogger(__name__)
+
+_SCHEMA_MISMATCH_HINT = (
+    "The configured Oracle table may be missing columns expected by nats-sinks, "
+    "or the configured column mapping may not match the table shape. Verify the "
+    "target table, configured column names, idempotency key columns, and current "
+    "recommended Oracle DDL. If this is a retained test table from an older "
+    "release, migrate it or recreate it with the current schema."
+)
+
+
+@dataclass(frozen=True, slots=True)
+class _OracleWriteStats:
+    """Small internal summary of Oracle write observations.
+
+    The core ACK contract still depends only on whether `write_batch` returns
+    or raises. These counts are best-effort operational signals for idempotent
+    Oracle modes and must never change commit or ACK behavior.
+    """
+
+    duplicates: int = 0
+    duplicate_ignored: int = 0
 
 
 class OracleSink:
@@ -81,6 +113,7 @@ class OracleSink:
         idempotency: OracleIdempotencyConfig | dict[str, Any] | None = None,
         table_routes: list[OracleTableRoute] | list[dict[str, Any]] | None = None,
         config: OracleSinkConfig | None = None,
+        metrics: MetricsRecorder | None = None,
     ) -> None:
         if config is None:
             try:
@@ -114,6 +147,7 @@ class OracleSink:
             except PydanticValidationError as exc:
                 raise ConfigurationError(str(exc)) from exc
         self.config = config
+        self.metrics: MetricsRecorder = metrics or NoopMetrics()
         self._pool: Any | None = None
         self._oracledb: Any | None = None
         self._write_sql_cache: dict[str, OracleWriteSql] = {}
@@ -128,7 +162,12 @@ class OracleSink:
             )
 
     @classmethod
-    def from_mapping(cls, raw_config: dict[str, Any]) -> OracleSink:
+    def from_mapping(
+        cls,
+        raw_config: dict[str, Any],
+        *,
+        metrics: MetricsRecorder | None = None,
+    ) -> OracleSink:
         """Build an Oracle sink from a raw sink configuration mapping."""
 
         try:
@@ -157,7 +196,19 @@ class OracleSink:
             auto_create=config.auto_create,
             payload_mode=config.payload_mode,
             config=config,
+            metrics=metrics,
         )
+
+    def set_metrics(self, metrics: MetricsRecorder | None) -> None:
+        """Attach the runner-owned metrics recorder to this sink.
+
+        The CLI constructs sinks before it starts the runner.  This small hook
+        lets Oracle-specific idempotency counters land in the same local JSON
+        snapshot as the core delivery counters without giving the sink any
+        control over ACK decisions.
+        """
+
+        self.metrics = metrics or NoopMetrics()
 
     async def start(self) -> None:
         """Create the Oracle connection pool."""
@@ -227,13 +278,17 @@ class OracleSink:
 
         try:
             rows_by_table = self._rows_by_table(messages)
-            await asyncio.to_thread(self._write_rows_sync, rows_by_table)
+            stats = await asyncio.to_thread(self._write_rows_sync, rows_by_table)
+            self._record_write_stats(stats)
         except SerializationError:
             raise
         except PermanentSinkError:
             raise
         except Exception as exc:
+            if is_duplicate_error(exc):
+                self._record_oracle_conflict(len(messages))
             if self.config.mode == "insert_ignore" and is_duplicate_error(exc):
+                self._record_duplicate_ignored(len(messages))
                 return
             raise self._translate_exception(exc, "Oracle batch write failed") from exc
 
@@ -307,8 +362,9 @@ class OracleSink:
         self._write_sql_cache[sql.table_name] = sql
         return sql
 
-    def _write_rows_sync(self, rows_by_table: dict[str, list[dict[str, Any]]]) -> None:
+    def _write_rows_sync(self, rows_by_table: dict[str, list[dict[str, Any]]]) -> _OracleWriteStats:
         pool = self._require_pool()
+        duplicate_ignored = 0
         with pool.acquire() as connection:
             self._prepare_connection_sync(connection)
             with connection.cursor() as cursor:
@@ -318,11 +374,75 @@ class OracleSink:
                     sql = self._write_sql_cache.get(table)
                     if sql is None:
                         sql = self._write_sql_for_table(table)
+                    execute_started = time.perf_counter()
                     cursor.executemany(sql.sql, rows)
+                    observe_metric(
+                        self.metrics,
+                        MetricNames.ORACLE_EXECUTE_SECONDS,
+                        time.perf_counter() - execute_started,
+                    )
+                    duplicate_ignored += self._duplicate_ignored_count(cursor, rows)
+            commit_started = time.perf_counter()
             try:
                 connection.commit()
             except Exception as exc:
+                observe_metric(
+                    self.metrics,
+                    MetricNames.ORACLE_COMMIT_SECONDS,
+                    time.perf_counter() - commit_started,
+                )
                 raise DestinationUnavailableError("Oracle commit failed") from exc
+            observe_metric(
+                self.metrics,
+                MetricNames.ORACLE_COMMIT_SECONDS,
+                time.perf_counter() - commit_started,
+            )
+        return _OracleWriteStats(
+            duplicates=duplicate_ignored,
+            duplicate_ignored=duplicate_ignored,
+        )
+
+    def _duplicate_ignored_count(self, cursor: Any, rows: Sequence[dict[str, Any]]) -> int:
+        """Estimate duplicates skipped by `insert_ignore` using Oracle rowcount.
+
+        `insert_ignore` is generated as a `merge` with only a `when not matched`
+        insert clause.  For duplicate idempotency keys Oracle performs no data
+        change, so `cursor.rowcount` can be lower than the attempted row count.
+        Some drivers or database versions may not expose a useful rowcount; in
+        those cases the sink reports zero rather than guessing.
+        """
+
+        if self.config.mode != "insert_ignore":
+            return 0
+        raw_rowcount = getattr(cursor, "rowcount", None)
+        if raw_rowcount is None:
+            return 0
+        try:
+            rowcount = int(raw_rowcount)
+        except (TypeError, ValueError):
+            return 0
+        if rowcount < 0:
+            return 0
+        return max(len(rows) - min(rowcount, len(rows)), 0)
+
+    def _record_write_stats(self, stats: object) -> None:
+        """Record optional Oracle-specific counters after committed success."""
+
+        if isinstance(stats, _OracleWriteStats) and stats.duplicates:
+            self._record_duplicate_ignored(stats.duplicate_ignored)
+
+    def _record_oracle_conflict(self, count: int) -> None:
+        """Record Oracle conflicts without including table names or payload data."""
+
+        increment_metric(self.metrics, MetricNames.ORACLE_CONFLICTS_TOTAL, count)
+
+    def _record_duplicate_ignored(self, count: int) -> None:
+        """Record duplicate rows that were safe to treat as prior success."""
+
+        if count <= 0:
+            return
+        increment_metric(self.metrics, MetricNames.ORACLE_DUPLICATES_TOTAL, count)
+        increment_metric(self.metrics, MetricNames.ORACLE_DUPLICATE_IGNORED_TOTAL, count)
 
     def _prepare_connection_sync(self, connection: Any) -> None:
         """Apply session settings that keep sink writes transaction-friendly."""
@@ -341,8 +461,23 @@ class OracleSink:
         self, exc: BaseException, context: str
     ) -> TemporarySinkError | PermanentSinkError:
         code = oracle_error_code(exc)
-        if code in {"ORA-01017", "ORA-00942", "ORA-00904"}:
-            return PermanentSinkError(f"{context}: {code}")
+        if code == "ORA-01017":
+            return PermanentSinkError(
+                f"{context}: ORA-01017 authentication failed. Verify the Oracle user, "
+                "password environment variable, wallet settings, and database service name. "
+                "Resolved secrets are intentionally not logged."
+            )
+        if code == "ORA-00942":
+            return PermanentSinkError(
+                f"{context}: ORA-00942 table or view is not available to the runtime user. "
+                "The configured table may not exist, may be in a different schema, or the "
+                "runtime account may be missing required table privileges. Verify the table "
+                "name, schema owner, grants, migrations, and auto_create setting."
+            )
+        if code == "ORA-00904":
+            return PermanentSinkError(
+                f"{context}: ORA-00904 invalid Oracle identifier. {_SCHEMA_MISMATCH_HINT}"
+            )
         if code == "ORA-00001":
             return PermanentSinkError(f"{context}: duplicate key")
         return DestinationUnavailableError(f"{context}: {code or type(exc).__name__}")

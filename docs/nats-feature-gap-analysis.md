@@ -32,6 +32,8 @@ certified support in the sink framework.
 - local files as the first production filesystem sink,
 - NATS token and username/password authentication,
 - TLS server verification with a local CA file,
+- multiple NATS seed URLs,
+- reconnect tuning and NATS connection event metrics,
 - pass-through fields for NATS credentials and NKEY seed files, not yet
   certified as production auth modes.
 
@@ -70,14 +72,14 @@ Current gap details:
 
 | NATS capability | NATS support | Current `nats-sinks` status | Suggested priority |
 | --- | --- | --- | --- |
-| Multiple seed URLs for clusters | NATS clients can connect with multiple seed URLs. | Config exposes a single `nats.url`; list or comma-seed behavior is not documented or tested. | Phase 2 |
-| Reconnect tuning | NATS clients expose reconnect wait, max reconnects, jitter, buffers, and event callbacks. | Relies mostly on `nats-py` defaults; no JSON config or metrics callbacks. | Phase 2 |
-| Connection event metrics | NATS clients can report disconnect, reconnect, closed, discovered server, and async error events. | Metrics abstraction exists, but reconnect/disconnect callbacks are not wired. | Phase 2 |
+| Multiple seed URLs for clusters | NATS clients can connect with multiple seed URLs. | Supported through `nats.urls`, which is passed to `nats-py` as `servers`. | Implemented |
+| Reconnect tuning | NATS clients expose reconnect wait, max reconnects, buffers, ping behavior, and event callbacks. | Supported through JSON fields for reconnect enablement, connect timeout, reconnect wait, maximum reconnect attempts, ping settings, pending bytes, and drain timeout. | Implemented |
+| Connection event metrics | NATS clients can report disconnect, reconnect, closed, discovered server, and async error events. | Runner wraps `nats-py` callbacks and records connection event metrics while preserving user-supplied callbacks. | Implemented |
 | WebSocket connections | NATS URLs can use `ws://` for WebSocket connections. | Not documented, tested, or exposed with WebSocket-specific options. | Phase 3 |
 | TLS certificate identity auth | NATS can use client certificate/key material and server-side TLS verification. | Client cert/key can be loaded into the SSL context, but production certificate-auth guidance and tests are not certified. | Phase 2 |
 | NKEY challenge auth | NATS supports challenge-response auth using Ed25519 NKEYs. | `nkey_seed_file` exists as pass-through config, but this is not documented or tested as certified support. | Phase 2 |
 | Decentralized JWT auth | NATS supports operator/account/user JWT auth with credentials files and resolvers. | `creds_file` exists as pass-through config, but JWT workflows are not certified or documented deeply. | Phase 2 |
-| Accounts, exports, imports, permissions | NATS supports account isolation and subject-level permissions. | Treated as server-side policy; no validation or operator guide for required sink permissions. | Phase 2 |
+| Accounts, exports, imports, permissions | NATS supports account isolation and subject-level permissions. | Least-privilege runtime, DLQ, management, and advisory permission templates are documented. Account export/import designs remain server-side operator policy. | Implemented for runtime templates; deeper account design remains Phase 2 |
 | Auth callouts | NATS supports auth callout extensions. | Server-side feature; not supported or documented for sink deployments. | Phase 3 |
 
 ## JetStream Consumer Gaps
@@ -94,8 +96,8 @@ Current gap details:
 | --- | --- | --- | --- |
 | Explicit consumer creation/update | Consumers have a rich server-side configuration model. | Runner uses `pull_subscribe`; it does not create or reconcile consumer config. | Phase 2 |
 | AckWait | Controls when unacked messages redeliver. | Not configurable in JSON; users must manage consumer externally. | Phase 2 |
-| MaxDeliver | Controls maximum redelivery attempts before advisories. | `delivery.max_retries` exists but is not reconciled with server `MaxDeliver`. | Phase 2 |
-| BackOff | Server-side redelivery backoff sequence. | Local NAK delay exists; server-side backoff config is not managed. | Phase 2 |
+| MaxDeliver | Controls maximum redelivery attempts before advisories. | `delivery.max_retries` bounds active delayed NAK attempts, but it is not reconciled with server `MaxDeliver`. | Phase 2 |
+| BackOff | Server-side redelivery backoff sequence. | Local delayed NAK backoff supports fixed, linear, exponential, cap, and jitter controls; server-side backoff config is not managed. | Phase 2 |
 | MaxAckPending | Server-side flow control for outstanding unacked messages. | `batch_size` bounds fetches, but consumer `MaxAckPending` is not configured. | Phase 2 |
 | DeliverPolicy | Start at all, new, last, sequence, time, or last-per-subject. | Not exposed; external consumer setup required. | Phase 2 |
 | Multiple FilterSubjects | Consumers can filter on multiple subjects. | Single `nats.subject` only. Oracle table routing happens after delivery. | Phase 2 |
@@ -138,11 +140,11 @@ Current gap details:
 | Stream creation and reconciliation | Streams have rich configuration. | Not managed by `nats-sinks`; users create streams externally. | Phase 2 |
 | Retention and discard policies | Limits, interest, and work-queue retention are server-side stream options. | Not managed or validated. | Phase 2 |
 | Duplicate window | Streams can deduplicate publisher writes by `Nats-Msg-Id`. | Consumed `Nats-Msg-Id` can be used for sink idempotency, but publisher dedupe windows are not managed. | Phase 2 |
-| Mirrors and sources | Streams can replicate from other streams. | Not managed. | Phase 3 |
-| Subject transforms | NATS can transform subjects at stream ingress, source, mirror, or republish boundaries. | Oracle table routing is sink-side only; server-side transforms are not managed. | Phase 3 |
-| RePublish | Streams can republish stored messages to another subject. | Not managed. DLQ publish is separate and sink-specific. | Phase 3 |
-| Stream compression | File streams can use compression. | Not managed. | Phase 3 |
-| Stream metadata and placement | Streams can carry metadata and placement preferences. | Not managed. | Phase 3 |
+| Mirrors and sources | Streams can replicate from other streams. | Not managed by the runner; topology considerations and idempotency impacts are documented. | Guidance implemented; management remains Phase 3 |
+| Subject transforms | NATS can transform subjects at stream ingress, source, mirror, or republish boundaries. | Not managed by the runner; documentation explains that sink routing sees the delivered subject. | Guidance implemented; management remains Phase 3 |
+| RePublish | Streams can republish stored messages to another subject. | Not managed. Documentation separates server-side RePublish from sink DLQ publishing. | Guidance implemented; management remains Phase 3 |
+| Stream compression | File streams can use compression. | Not managed. Documentation explains that server-side stream compression is transparent to the runner. | Guidance implemented; management remains Phase 3 |
+| Stream metadata and placement | Streams can carry metadata and placement preferences. | Not managed. Documentation explains operational, latency, and per-message metadata boundaries. | Guidance implemented; management remains Phase 3 |
 | Per-message TTL, schedules, counters, atomic publish | Newer stream capabilities exist in recent NATS versions. | Out of scope for the sink runner. | Phase 3 |
 
 ## Core NATS Feature Gaps
@@ -177,9 +179,9 @@ events, API activity, stream changes, and consumer changes.
 | --- | --- | --- | --- |
 | JetStream advisories | `$JS.EVENT.ADVISORY.>` publishes operational events such as stream and consumer actions. | Not consumed or surfaced by `nats-sinks`. | Phase 2 |
 | MaxDeliver advisory handling | NATS emits advisories when messages hit maximum delivery attempts. | Not integrated; DLQ is driven by sink exceptions, not server advisories. | Phase 2 |
-| Server monitoring endpoints | NATS exposes monitoring such as `/jsz`. | Not integrated. | Phase 3 |
-| Reconnect/disconnect metrics | Client libraries expose connection event callbacks. | Metrics names exist conceptually, but callbacks are not wired. | Phase 2 |
-| Prometheus/OpenTelemetry export | NATS and application metrics can be exported externally. | Only a metrics abstraction exists. | Phase 2 |
+| Server monitoring endpoints | NATS exposes monitoring such as `/jsz` and `/healthz`. | Implemented as a separate disabled-by-default `nats-sink-observe` connector with explicit endpoint and field allow lists. The delivery worker still does not poll server monitoring endpoints. | Implemented for selected fields |
+| Reconnect/disconnect metrics | Client libraries expose connection event callbacks. | Runner records disconnect, reconnect, close, discovered-server, and async-error callback metrics. | Implemented |
+| Prometheus/OpenTelemetry export | NATS and application metrics can be exported externally. | Basic counters, gauges, timing observations, a local JSON snapshot, `nats-sink-metrics`, policy-controlled Prometheus textfile export, and an optional native Prometheus HTTP endpoint exist. OpenTelemetry is not shipped yet. | Phase 2 for OpenTelemetry |
 
 ## Design Notes
 
@@ -188,7 +190,9 @@ Some gaps should remain intentional:
 - `AckNone` and early ACK behavior conflict with commit-then-acknowledge.
 - Core NATS queue groups and request/reply are not destination sink semantics.
 - Stream and server topology management may belong in infrastructure-as-code
-  rather than inside the sink process.
+  rather than inside the sink process. The current documentation gives
+  deployment-design guidance without making the sink worker a stream
+  management tool.
 - Ordered consumers are useful for inspection and replay, but they do not match
   the first release's durable destination-write model.
 
@@ -198,9 +202,11 @@ Other gaps are good candidates for future work:
 - explicit consumer configuration and reconciliation,
 - `AckSync` and `InProgress` support,
 - multi-subject filters,
-- reconnect callbacks and metrics,
-- JetStream advisory consumption,
-- a documented permissions template for least-privilege NATS users.
+- JetStream advisory consumption beyond the documented read-only advisory
+  permission template.
+- broader NATS server monitoring field recipes, if operators need more
+  documented field selections in addition to the current explicit allow-list
+  connector.
 
 ## Source References
 

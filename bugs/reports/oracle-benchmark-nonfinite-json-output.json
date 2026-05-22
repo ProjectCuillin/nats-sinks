@@ -1,0 +1,26 @@
+{
+  "id": "oracle-benchmark-nonfinite-json-output",
+  "title": "[Bug]: Oracle benchmark reports can render non-standard JSON values",
+  "area": "Testing",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.0",
+  "labels": ["testing", "serialization"],
+  "summary": "Oracle benchmark phase timing objects can carry non-finite values and the JSON report renderer uses default json.dumps behavior, allowing NaN or Infinity in public evidence.",
+  "observed": "A benchmark phase containing NaN can be represented and rendered as non-standard JSON.",
+  "expected": "Benchmark timing objects should reject non-finite timing values before report rendering.",
+  "reproduction": "Run the focused regression test that constructs an Oracle benchmark phase with NaN timing data.",
+  "failing_test": "tests/unit/test_bug_hunt_strict_json_boundaries.py::test_oracle_benchmark_rejects_nonfinite_phase_timings",
+  "impact": "Benchmark reports may be uploaded as public issue or release evidence. They should never contain non-standard JSON.",
+  "delivery_semantics": "No runtime delivery behavior changes. This fix affects benchmark evidence generation only.",
+  "security": "The fix must preserve benchmark redaction and must not include service locators, credentials, table names, wallet paths, certificates, or payload data.",
+  "acceptance": [
+    "A focused regression test proves non-finite Oracle benchmark phase timings are rejected.",
+    "Valid benchmark reports still render as JSON and Markdown.",
+    "JSON report rendering remains standards-compliant.",
+    "Existing Oracle benchmark tests still pass."
+  ],
+  "tests": "Run the focused regression test, Oracle benchmark tests, and the full local check script.",
+  "documentation": "Update CHANGELOG.md and testing documentation to mention strict benchmark evidence output.",
+  "closeout": "Close only after the release containing the fix is published. Include the release tag, regression evidence, verification evidence, and any remaining limitations."
+}

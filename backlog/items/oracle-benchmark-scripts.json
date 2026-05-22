@@ -1,0 +1,23 @@
+{
+  "id": "oracle-benchmark-scripts",
+  "title": "[Feature]: Add Oracle benchmark scripts with phase timing",
+  "area": "Testing",
+  "priority": "P3 - backlog candidate",
+  "target_release": "v0.4.0",
+  "labels": ["sink-oracle", "testing"],
+  "problem": "Operators need to understand where time is spent when moving messages from NATS JetStream into Oracle. Existing tests can report backend timing observations, but there is no dedicated benchmark workflow that separates publish, fetch, map, write, commit, ACK, retry, and shutdown phases in a repeatable way.",
+  "proposal": "Add documented benchmark scripts that can run against non-production NATS and Oracle environments and produce sanitized timing summaries. The scripts should accept message count, batch size, payload shape, encryption mode, sink mode, and cleanup controls, while avoiding raw payloads and private environment details in output.",
+  "users": "Operators tuning Oracle sink deployments, maintainers evaluating throughput changes, and reviewers comparing normal writes with future staging-table modes.",
+  "delivery_semantics": "Benchmarks must exercise real commit-then-ACK behavior and must not bypass sink commits to inflate throughput. The scripts should report timing without changing ACK ordering or idempotency behavior.",
+  "security": "Benchmark output must redact secrets, usernames, network details, table details where needed, payloads, wallet material, and certificate material. Input configuration should come from local ignored files or environment variables rather than committed values.",
+  "acceptance": [
+    "Benchmark scripts report each major processing phase separately.",
+    "Scripts support configurable message count and batch size.",
+    "Output is sanitized and suitable for docs/test-report.md summaries.",
+    "Documentation explains that results are environment-specific observations.",
+    "CI does not require live Oracle or NATS services for unit checks."
+  ],
+  "tests": "Add unit tests for report redaction and command validation. Add environment-gated benchmark smoke checks if local services are available. Run scripts/check.sh.",
+  "documentation": "Update docs/performance.md, docs/testing.md, docs/oracle-sink.md, docs/test-report.md guidance, ROADMAP.md, and CHANGELOG.md.",
+  "closeout": "Close after a release includes the benchmark scripts and docs. Include the release tag, sample sanitized output, tests run, and limitations."
+}

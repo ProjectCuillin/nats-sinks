@@ -1,0 +1,23 @@
+{
+  "id": "s3-sink",
+  "title": "[Feature]: Design and implement an S3-compatible object sink",
+  "area": "Future sink",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "sink-s3"],
+  "problem": "Object storage is useful for durable handoff, archive, and disconnected processing workflows. The project does not yet provide an S3-compatible sink, and object sinks require careful key design so redelivery does not create uncontrolled duplicates or overwrite the wrong object.",
+  "proposal": "Add an S3-compatible sink with deterministic object keys, configurable duplicate handling, metadata sidecar or embedded JSON envelope options, bounded payload handling, optional compression compatibility, and clear guidance for credentials and least-privilege bucket policies. The first design should prioritize safe duplicate skip or overwrite behavior based on idempotency keys.",
+  "users": "Operators who need durable object handoff, archive-style event custody, or downstream batch processing without a relational database.",
+  "delivery_semantics": "The sink may return success only after the object write is durably accepted by the storage service according to the selected consistency model. Duplicate redelivery must be safe through deterministic keys and configured duplicate policy. The core remains responsible for ACK.",
+  "security": "Credentials must come from secure runtime configuration or platform identity, not committed files. Bucket names, prefixes, object metadata, and payloads must be treated as sensitive. Logs must not include object payloads or secret material. Network calls require timeouts and bounded retries.",
+  "acceptance": [
+    "S3 sink design documents duplicate policies and object-key construction.",
+    "Implementation validates bucket and prefix configuration safely.",
+    "Unit tests use mocks and make no network calls.",
+    "Optional integration tests are gated behind explicit environment settings.",
+    "Documentation covers least privilege, payload privacy, and operational recovery."
+  ],
+  "tests": "Add unit tests for key mapping, duplicate decisions, error translation, and ACK ordering. Add optional integration tests only behind markers. Run scripts/check-sinks.sh and scripts/check.sh.",
+  "documentation": "Add docs/s3-sink.md and update README.md, docs/sink-framework.md, docs/configuration.md, docs/security.md, docs/idempotency.md, ROADMAP.md, and CHANGELOG.md.",
+  "closeout": "Close after the S3 sink release is published. Include release tag, storage semantics, tests run, documentation links, and known limitations."
+}

@@ -1,4 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
+
 """Map NATS envelopes to filesystem paths and JSON documents.
 
 The mapping layer is intentionally free of filesystem side effects.  It builds
@@ -42,7 +44,13 @@ def safe_path_component(value: object, *, fallback: str = "value") -> str:
     they cannot escape the configured sink directory.
     """
 
-    rendered = str(value)
+    try:
+        rendered = str(value)
+    except Exception:
+        # Treat failed string conversion like any other hostile input.  The
+        # fallback uses only type metadata so the sanitizer does not leak a
+        # problematic object representation into filenames or error output.
+        rendered = f"{fallback}-unrenderable-{type(value).__module__}.{type(value).__qualname__}"
     cleaned = SAFE_COMPONENT_RE.sub("_", rendered).strip("._-")
     if not cleaned or cleaned in {".", ".."}:
         cleaned = f"{fallback}-{_digest(rendered)[:16]}"
@@ -118,6 +126,7 @@ def file_record_for_envelope(
         "classification": envelope.classification,
         "labels": labels_to_storage_string(envelope.labels),
         "labels_list": list(envelope.labels),
+        "mission_metadata": envelope.mission_metadata_for_json_storage(),
         "payload": normalized_payload.value,
         "payload_info": {
             "original_format": normalized_payload.original_format,

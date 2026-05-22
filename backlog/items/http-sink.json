@@ -1,0 +1,23 @@
+{
+  "id": "http-sink",
+  "title": "[Feature]: Add an HTTP sink with idempotency guidance",
+  "area": "Future sink",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "sink-http"],
+  "problem": "Some users need to forward JetStream events to internal services through HTTP. HTTP destinations vary widely in reliability and idempotency behavior, so adding an HTTP sink without strong rules could create silent loss, unsafe retries, or duplicate business effects.",
+  "proposal": "Design and implement an optional HTTP sink that sends normalized envelopes or payload envelopes to configured destinations with bounded timeouts, bounded retries, explicit idempotency-key support, safe header configuration, and clear warnings for endpoints that cannot provide idempotent semantics. The sink should be disabled unless configured and should never ACK messages itself.",
+  "users": "Operators integrating NATS JetStream with existing service endpoints, maintainers extending the sink framework, and security reviewers evaluating network egress behavior.",
+  "delivery_semantics": "A successful HTTP sink write must mean the endpoint returned a configured success status after receiving the request. The core may ACK only after the sink returns success. Retry behavior must be carefully documented because remote endpoints may process a request even when the client sees a timeout.",
+  "security": "Destination selection must be allow-listed and validated. The sink must avoid secrets in headers by default, avoid logging request bodies, enforce timeouts and maximum response sizes, and document network egress risks. The design must consider server-side request risks and should not allow untrusted messages to choose destinations.",
+  "acceptance": [
+    "HTTP sink configuration validates destination, method, headers, timeouts, and idempotency fields.",
+    "The sink supports explicit idempotency-key propagation.",
+    "Unit tests cover success, retryable failure, permanent failure, timeout, and invalid configuration.",
+    "Documentation warns that non-idempotent endpoints are unsafe for at-least-once redelivery.",
+    "No existing sink behavior changes."
+  ],
+  "tests": "Add deterministic unit tests using local mocks only. Add optional integration examples with a local test server. Run scripts/check-sinks.sh and scripts/check.sh.",
+  "documentation": "Add docs/http-sink.md and update README.md, docs/sink-framework.md, docs/configuration.md, docs/security.md, docs/idempotency.md, ROADMAP.md, and CHANGELOG.md.",
+  "closeout": "Close after release publication. Include the release tag, supported HTTP behavior, idempotency limitations, tests run, and documentation changes."
+}

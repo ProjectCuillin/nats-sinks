@@ -1,4 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
+
 """Framework-level payload encryption.
 
 This module encrypts message bodies before they are handed to a destination
@@ -69,7 +71,24 @@ def _load_aead_classes() -> tuple[type[Any], type[Any]]:
 def _canonical_json_bytes(value: Mapping[str, Any]) -> bytes:
     """Serialize JSON envelopes consistently for storage and tests."""
 
-    return json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
+
+
+def _reject_duplicate_json_object_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """Reject ambiguous encryption envelope JSON objects."""
+
+    result: dict[str, Any] = {}
+    for key, item in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON object key: {key}")
+        result[key] = item
+    return result
+
+
+def _reject_nonstandard_json_constant(value: str) -> None:
+    """Reject Python-only constants in encrypted payload envelopes."""
+
+    raise ValueError(f"non-standard JSON constant is not allowed: {value}")
 
 
 def _load_encrypted_payload(value: bytes | str | Mapping[str, Any]) -> Mapping[str, Any]:
@@ -80,8 +99,14 @@ def _load_encrypted_payload(value: bytes | str | Mapping[str, Any]) -> Mapping[s
     else:
         try:
             text = value.decode("utf-8") if isinstance(value, bytes) else value
-            loaded = json.loads(text)
+            loaded = json.loads(
+                text,
+                object_pairs_hook=_reject_duplicate_json_object_keys,
+                parse_constant=_reject_nonstandard_json_constant,
+            )
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise SerializationError("encrypted payload is not a valid JSON envelope") from exc
+        except ValueError as exc:
             raise SerializationError("encrypted payload is not a valid JSON envelope") from exc
         if not isinstance(loaded, Mapping):
             raise SerializationError("encrypted payload root must be a JSON object")

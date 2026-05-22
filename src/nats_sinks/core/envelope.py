@@ -1,4 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
+
 """Stable internal representation of a NATS message.
 
 `NatsEnvelope` is the object passed from the core runtime to destination sinks.
@@ -16,7 +18,6 @@ failed without leaking business data.
 from __future__ import annotations
 
 import hashlib
-import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -29,9 +30,14 @@ from nats_sinks.core.message_metadata import (
     normalise_labels_value,
     normalise_metadata_value,
 )
+from nats_sinks.core.mission_metadata import (
+    freeze_mission_metadata,
+    thaw_mission_metadata,
+)
 from nats_sinks.core.payload import (
     NormalizedPayload,
     PayloadStorageMode,
+    load_standard_json,
     normalize_payload_for_json_storage,
 )
 
@@ -90,6 +96,7 @@ class NatsEnvelope:
     priority: str | None = None
     classification: str | None = None
     labels: tuple[str, ...] = field(default_factory=tuple)
+    mission_metadata: Mapping[str, Any] | None = None
     reply: str | None = None
     domain: str | None = None
     received_at: datetime = field(default_factory=lambda: datetime.now(UTC))
@@ -114,6 +121,11 @@ class NatsEnvelope:
             normalise_metadata_value(self.classification),
         )
         object.__setattr__(self, "labels", normalise_labels_value(self.labels))
+        object.__setattr__(
+            self,
+            "mission_metadata",
+            freeze_mission_metadata(self.mission_metadata),
+        )
 
     def idempotency_key(self) -> str:
         """Return a stable best-effort idempotency key for this message."""
@@ -138,8 +150,8 @@ class NatsEnvelope:
         """Decode the payload as JSON without logging the payload content."""
 
         try:
-            return json.loads(self.payload_as_text())
-        except json.JSONDecodeError as exc:
+            return load_standard_json(self.payload_as_text())
+        except (ValueError, TypeError) as exc:
             msg = f"message payload for subject {self.subject!r} is not valid JSON"
             raise SerializationError(msg) from exc
 
@@ -171,3 +183,14 @@ class NatsEnvelope:
         from nats_sinks.core.metadata import build_nats_metadata_snapshot  # noqa: PLC0415
 
         return build_nats_metadata_snapshot(self, stored_at=stored_at)
+
+    def mission_metadata_for_json_storage(self) -> dict[str, Any] | None:
+        """Return the optional mission metadata object as JSON-compatible data.
+
+        The envelope keeps metadata immutable so sinks cannot accidentally
+        mutate the core-normalized object.  Sinks call this helper when they
+        need a normal dictionary for JSON serialization, database binding, or
+        file output.
+        """
+
+        return thaw_mission_metadata(self.mission_metadata)

@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nats-sink-file-events
+  namespace: nats-sinks
+  labels:
+    app.kubernetes.io/name: nats-sinks
+    app.kubernetes.io/component: file-sink-storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi

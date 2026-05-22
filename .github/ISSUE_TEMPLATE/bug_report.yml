@@ -7,19 +7,92 @@ body:
     id: summary
     attributes:
       label: Summary
-      description: What happened?
+      description: What happened? Keep the report sanitized and do not include secrets, live addresses, credentials, certificates, keys, sensitive subjects, or private payloads.
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: Select the impact level.
+      options:
+        - critical
+        - high
+        - medium
+        - low
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: Select the triage priority.
+      options:
+        - P1 - release blocker
+        - P2 - next minor release candidate
+        - P3 - backlog candidate
+        - P4 - research or design needed
+    validations:
+      required: true
+  - type: input
+    id: target-release
+    attributes:
+      label: Target release
+      description: Use unscheduled until the fix is assigned to a concrete release tag such as v0.4.0.
+      placeholder: unscheduled
     validations:
       required: true
   - type: textarea
     id: reproduction
     attributes:
       label: Reproduction
-      description: Minimal steps to reproduce.
+      description: Minimal steps to reproduce using sanitized values only.
+    validations:
+      required: true
+  - type: textarea
+    id: failing-test
+    attributes:
+      label: Failing regression test
+      description: Name the small focused test that proves the bug exists. Add the test before implementing the fix.
+    validations:
+      required: true
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behavior
+      description: Describe the current incorrect behavior.
     validations:
       required: true
   - type: textarea
     id: expected
     attributes:
       label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: delivery-semantics
+    attributes:
+      label: Delivery semantics and idempotency impact
+      description: Explain whether ACK ordering, DLQ behavior, retries, idempotency, or sink commits are affected.
+    validations:
+      required: true
+  - type: textarea
+    id: security
+    attributes:
+      label: Security and privacy considerations
+      description: Explain whether the bug affects validation, redaction, secrets, cryptography, auth, SQL/file safety, or sensitive metadata.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: List checkboxes that must be completed before release close-out.
+      value: |
+        - [ ] A focused failing regression test is committed before the fix.
+        - [ ] The fix makes the regression test pass.
+        - [ ] Relevant unit, smoke, integration, documentation, or release checks pass.
+        - [ ] Documentation and CHANGELOG.md are updated when user-visible behavior changes.
+        - [ ] A sanitized close-out comment includes regression and verification evidence.
     validations:
       required: true

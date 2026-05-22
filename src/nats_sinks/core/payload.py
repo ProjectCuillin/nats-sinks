@@ -1,4 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
+
 """Shared payload normalization for sinks that store JSON-compatible values.
 
 NATS message bodies are bytes.  Some destinations, including the first Oracle
@@ -52,6 +54,41 @@ def _payload_digest(data: bytes) -> str:
     """Return a stable digest used for diagnostics and duplicate analysis."""
 
     return hashlib.sha256(data).hexdigest()
+
+
+def _reject_nonstandard_json_constant(value: str) -> None:
+    """Reject Python JSON extensions such as NaN and Infinity."""
+
+    raise ValueError(f"non-standard JSON constant is not allowed: {value}")
+
+
+def _reject_duplicate_json_object_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """Reject JSON objects that would otherwise lose duplicate-key information."""
+
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON object key: {key}")
+        result[key] = value
+    return result
+
+
+def load_standard_json(text: str) -> Any:
+    """Parse standards-compliant JSON only.
+
+    Python's `json.loads` accepts `NaN`, `Infinity`, and `-Infinity` by
+    default.  Those constants are not interoperable JSON and can break
+    JSON-capable sinks, database JSON columns, and public release evidence.
+    Centralizing strict parsing keeps payload behavior consistent across the
+    core envelope helper and all sinks that use the shared normalization
+    contract.
+    """
+
+    return json.loads(
+        text,
+        object_pairs_hook=_reject_duplicate_json_object_keys,
+        parse_constant=_reject_nonstandard_json_constant,
+    )
 
 
 def _payload_envelope(
@@ -156,8 +193,8 @@ def normalize_payload_for_json_storage(
         return _text_payload(data, subject=subject, sha256=sha256)
 
     try:
-        payload = json.loads(text)
-    except json.JSONDecodeError as exc:
+        payload = load_standard_json(text)
+    except (json.JSONDecodeError, ValueError) as exc:
         if mode == "json_only":
             msg = f"message payload for subject {subject!r} is not valid JSON"
             raise SerializationError(msg) from exc

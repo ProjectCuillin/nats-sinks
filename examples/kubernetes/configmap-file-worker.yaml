@@ -1,0 +1,85 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nats-sink-file-worker-config
+  namespace: nats-sinks
+  labels:
+    app.kubernetes.io/name: nats-sinks
+    app.kubernetes.io/component: worker
+data:
+  config.json: |
+    {
+      "nats": {
+        "url": "tls://nats.example.svc.cluster.local:4222",
+        "stream": "MISSION_EVENTS",
+        "consumer": "file-mission-sink",
+        "subject": "mission.events.*",
+        "durable": true,
+        "user": "nats_sink_worker",
+        "password_env": "NATS_PASSWORD",
+        "tls_ca_file": "/etc/nats-sinks/tls/ca.crt",
+        "tls_verify": true,
+        "allow_reconnect": true,
+        "connect_timeout_seconds": 2,
+        "reconnect_time_wait_seconds": 2,
+        "max_reconnect_attempts": 60,
+        "drain_timeout_seconds": 30
+      },
+      "delivery": {
+        "batch_size": 64,
+        "batch_timeout_ms": 1000,
+        "ack_policy": "after_sink_commit",
+        "temporary_failure_action": "nak",
+        "max_retries": 5,
+        "retry_backoff_ms": 1000,
+        "retry_backoff_max_ms": 60000,
+        "retry_backoff_mode": "exponential",
+        "retry_jitter": "full",
+        "prefer_safe_duplication": true
+      },
+      "dead_letter": {
+        "enabled": true,
+        "subject": "mission.events.dlq",
+        "include_payload": false,
+        "include_headers": true,
+        "include_error": true
+      },
+      "logging": {
+        "level": "INFO",
+        "payload_logging": false
+      },
+      "metrics": {
+        "enabled": true,
+        "namespace": "nats_sinks",
+        "snapshot_file": "/var/lib/nats-sinks/metrics/metrics.json"
+      },
+      "message_metadata": {
+        "priority": {
+          "header": "Nats-Sinks-Priority",
+          "default": "routine"
+        },
+        "classification": {
+          "header": "Nats-Sinks-Classification",
+          "default": "NATO UNCLASSIFIED"
+        },
+        "labels": {
+          "header": "Nats-Sinks-Labels",
+          "default": []
+        }
+      },
+      "sink": {
+        "type": "file",
+        "directory": "/var/lib/nats-sinks/events",
+        "mode": "one_file_per_message",
+        "filename_strategy": "stream_sequence",
+        "duplicate_policy": "skip_existing",
+        "payload_mode": "json_or_envelope",
+        "extension": ".json",
+        "compression": "gzip",
+        "compression_level": 6,
+        "include_metadata": true,
+        "partition_by_subject": true,
+        "create_directory": true,
+        "fsync": true
+      }
+    }

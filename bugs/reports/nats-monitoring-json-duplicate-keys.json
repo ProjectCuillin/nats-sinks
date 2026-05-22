@@ -1,0 +1,26 @@
+{
+  "id": "nats-monitoring-json-duplicate-keys",
+  "title": "[Bug]: NATS monitoring JSON parser accepts duplicate keys",
+  "area": "Metrics and observability",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.0",
+  "labels": ["observability", "serialization"],
+  "summary": "The NATS server monitoring collector rejects non-standard JSON constants but still accepts duplicate object keys from monitoring endpoint responses.",
+  "observed": "A monitoring response with duplicate server_id fields can be parsed with only the last value retained.",
+  "expected": "Monitoring endpoint JSON should reject duplicate keys as ambiguous before field allow-list extraction occurs.",
+  "reproduction": "Run the focused regression test that passes duplicate-key monitoring JSON into the endpoint parser.",
+  "failing_test": "tests/unit/test_bug_hunt_strict_json_boundaries.py::test_nats_monitoring_rejects_duplicate_json_keys",
+  "impact": "Observability data can drive operational decisions. Ambiguous monitoring JSON should not be converted into public snapshots or Prometheus output.",
+  "delivery_semantics": "No JetStream ACK behavior changes. This fix affects the optional observability plane only.",
+  "security": "The fix must not expose NATS endpoint URLs, private host details, credentials, or full monitoring payloads in errors.",
+  "acceptance": [
+    "A focused regression test proves duplicate monitoring JSON keys are rejected.",
+    "Non-standard constant rejection remains in place.",
+    "Valid monitoring endpoint JSON continues to parse.",
+    "Existing observability tests still pass."
+  ],
+  "tests": "Run the focused regression test, NATS monitoring tests, observability CLI tests, and the full local check script.",
+  "documentation": "Update CHANGELOG.md and observability documentation to mention strict monitoring JSON parsing.",
+  "closeout": "Close only after the release containing the fix is published. Include the release tag, regression evidence, verification evidence, and any remaining limitations."
+}

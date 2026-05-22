@@ -1,0 +1,23 @@
+{
+  "id": "priority-aware-processing-lanes",
+  "title": "[Feature]: Add priority-aware processing lanes",
+  "area": "Core runtime and delivery semantics",
+  "priority": "P4 - research or design needed",
+  "target_release": "v0.4.0",
+  "labels": ["nats", "testing"],
+  "problem": "nats-sinks can store priority metadata, but processing currently treats batches uniformly. Some deployments may need controlled preference for urgent or high-priority events during backlog drain, while still preventing starvation and preserving commit-then-acknowledge semantics.",
+  "proposal": "Research and design priority-aware processing lanes that can select batches by configured subject patterns or metadata priority. The feature should avoid claiming global ordering guarantees and should include starvation controls, bounded in-flight work, and clear metrics for lane utilization.",
+  "users": "Operators, mission-support teams, platform engineers, and maintainers who need predictable backlog draining under mixed-priority workloads.",
+  "delivery_semantics": "Priority must not cause ACK before durable success. Priority-aware scheduling may change which messages are fetched or processed first, but every message must still pass validation, sink write, commit, and ACK-last ordering.",
+  "security": "Priority can be attacker-controlled if accepted from untrusted headers or payloads. The design must validate and bound values, support trusted defaulting, and avoid letting malformed or spoofed priority values bypass policy checks.",
+  "acceptance": [
+    "A design document explains lane behavior, ordering limitations, and starvation controls.",
+    "Priority values can be validated and defaulted globally or by subject pattern.",
+    "Metrics expose lane counts without leaking sensitive subject detail by default.",
+    "Tests cover priority spoofing, missing priority, mixed batches, and starvation prevention.",
+    "Documentation warns that priority lanes do not provide exactly-once or strict total ordering."
+  ],
+  "tests": "Add scheduler unit tests, malformed priority tests, subject-aware defaulting tests, metrics tests, and commit-then-ack ordering tests. Add load tests if implementation proceeds beyond design.",
+  "documentation": "Update docs/configuration.md, docs/architecture.md, docs/metrics.md, docs/operations.md, docs/use-cases, ROADMAP.md, and CHANGELOG.md.",
+  "closeout": "Close after the release containing design or implementation is published. Include release tag, scheduling behavior, tests run, and known ordering limitations."
+}

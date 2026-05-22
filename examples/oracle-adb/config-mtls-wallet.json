@@ -13,6 +13,10 @@
     "ack_policy": "after_sink_commit",
     "max_retries": 5,
     "retry_backoff_ms": 1000,
+    "retry_backoff_max_ms": 60000,
+    "retry_backoff_mode": "exponential",
+    "retry_backoff_multiplier": 2.0,
+    "retry_jitter": "full",
     "prefer_safe_duplication": true
   },
   "sink": {

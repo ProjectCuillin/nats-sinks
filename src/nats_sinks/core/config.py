@@ -1,4 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
+
 """JSON configuration models and safe loading helpers.
 
 The configuration module is the single entry point for converting user-provided
@@ -25,19 +27,28 @@ import binascii
 import copy
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any, Literal, cast
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic import ValidationError as PydanticValidationError
 
 from nats_sinks.core.errors import ConfigurationError
+from nats_sinks.core.errors import ValidationError as FrameworkValidationError
 from nats_sinks.core.message_metadata import (
     DEFAULT_CLASSIFICATION_HEADER,
     DEFAULT_LABELS_HEADER,
     DEFAULT_PRIORITY_HEADER,
     normalise_labels_value,
     normalise_metadata_value,
+)
+from nats_sinks.core.mission_metadata import (
+    DEFAULT_MAX_MISSION_METADATA_BYTES,
+    DEFAULT_MISSION_METADATA_HEADER,
+    MAX_MISSION_METADATA_BYTES,
+    normalize_mission_metadata_object,
 )
 from nats_sinks.core.subjects import matches_subject, validate_subject_pattern
 
@@ -53,6 +64,28 @@ SENSITIVE_KEY_PARTS = (
 )
 AES_256_KEY_BYTES = 32
 MAX_ENCRYPTION_KEY_ID_LENGTH = 128
+MAX_CONFIG_BYTES = 1_048_576
+NATS_ALLOWED_URL_SCHEMES = frozenset({"nats", "tls", "ws", "wss"})
+PRIORITY_LANE_NAME_RE = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
+ASCII_CONTROL_MAX = 31
+ASCII_DELETE = 127
+
+
+def _validate_nats_server_url(value: str, *, field: str) -> str:
+    """Validate a NATS client URL with an explicit transport allow list."""
+
+    rendered = value.strip()
+    if not rendered:
+        raise ValueError(f"{field} must not be empty")
+    if "\x00" in rendered or "\n" in rendered or "\r" in rendered:
+        raise ValueError(f"{field} must not contain control characters")
+    parsed = urlsplit(rendered)
+    if parsed.scheme not in NATS_ALLOWED_URL_SCHEMES:
+        allowed = ", ".join(sorted(NATS_ALLOWED_URL_SCHEMES))
+        raise ValueError(f"{field} must use one of these schemes: {allowed}")
+    if not parsed.netloc:
+        raise ValueError(f"{field} must include a host")
+    return rendered
 
 
 def _decode_aes_256_key(value: str, *, source: str) -> bytes:
@@ -92,6 +125,7 @@ class NatsConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     url: str = "nats://localhost:4222"
+    urls: list[str] = Field(default_factory=list)
     stream: str
     consumer: str
     subject: str
@@ -108,6 +142,14 @@ class NatsConfig(BaseModel):
     tls_cert_file: str | None = None
     tls_key_file: str | None = None
     tls_verify: bool = True
+    allow_reconnect: bool = True
+    connect_timeout_seconds: int = Field(default=2, ge=1, le=300)
+    reconnect_time_wait_seconds: int = Field(default=2, ge=0, le=3600)
+    max_reconnect_attempts: int = Field(default=60, ge=-1, le=1_000_000)
+    ping_interval_seconds: int = Field(default=120, ge=1, le=3600)
+    max_outstanding_pings: int = Field(default=2, ge=1, le=100)
+    pending_size_bytes: int = Field(default=2_097_152, ge=1024, le=1_073_741_824)
+    drain_timeout_seconds: int = Field(default=30, ge=1, le=3600)
 
     @model_validator(mode="after")
     def validate_secret_sources(self) -> NatsConfig:
@@ -117,9 +159,40 @@ class NatsConfig(BaseModel):
             raise ValueError("configure either nats.password or nats.password_env, not both")
         if self.token is not None and self.token_env is not None:
             raise ValueError("configure either nats.token or nats.token_env, not both")
+        has_password_source = self.password is not None or self.password_env is not None
+        has_user_password_auth = self.user is not None or has_password_source
+        if has_password_source and self.user is None:
+            raise ValueError("nats.user is required when nats.password or nats.password_env is set")
+        if self.user is not None and not has_password_source:
+            raise ValueError("nats.password or nats.password_env is required when nats.user is set")
+        auth_modes = [
+            has_user_password_auth,
+            self.token is not None or self.token_env is not None,
+            self.creds_file is not None,
+            self.nkey_seed_file is not None,
+        ]
+        if sum(1 for enabled in auth_modes if enabled) > 1:
+            raise ValueError("configure a single NATS authentication method")
         if self.tls_key_file is not None and self.tls_cert_file is None:
             raise ValueError("nats.tls_key_file requires nats.tls_cert_file")
         return self
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, value: str) -> str:
+        """Reject empty or control-character NATS URLs before connection setup."""
+
+        return _validate_nats_server_url(value, field="nats.url")
+
+    @field_validator("urls")
+    @classmethod
+    def validate_urls(cls, value: list[str]) -> list[str]:
+        """Validate optional NATS seed URLs while preserving configured order."""
+
+        rendered_urls: list[str] = []
+        for item in value:
+            rendered_urls.append(_validate_nats_server_url(item, field="nats.urls"))
+        return rendered_urls
 
     def resolve_password(self) -> str | None:
         """Resolve the NATS password only when opening a connection."""
@@ -146,8 +219,140 @@ class NatsConfig(BaseModel):
         return token
 
 
+class PriorityLaneConfig(BaseModel):
+    """One weighted processing lane used for in-batch priority scheduling.
+
+    A lane maps one or more normalized priority values, such as `urgent` or
+    `routine`, to a lane name and a small positive weight.  The runner uses
+    these weights only after messages have already been fetched into a bounded
+    batch.  They do not change JetStream server-side delivery order and they do
+    not weaken commit-then-acknowledge processing.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    priorities: tuple[str, ...] = Field(default_factory=tuple)
+    weight: int = Field(default=1, ge=1, le=100)
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        """Validate lane names before they can appear in policy or metrics."""
+
+        rendered = value.strip().lower()
+        if not PRIORITY_LANE_NAME_RE.fullmatch(rendered):
+            raise ValueError(
+                "priority lane names must start with a lowercase letter and may contain "
+                "only lowercase letters, digits, underscores, or hyphens"
+            )
+        return rendered
+
+    @field_validator("priorities", mode="before")
+    @classmethod
+    def normalize_priorities(cls, value: object) -> tuple[str, ...]:
+        """Normalize configured priority values into a case-insensitive tuple."""
+
+        if value is None:
+            return ()
+        raw_values: list[object]
+        if isinstance(value, str):
+            raw_values = [value]
+        elif isinstance(value, (list, tuple, set, frozenset)):
+            raw_values = list(value)
+        else:
+            raise ValueError("priority lane priorities must be a string or list of strings")
+
+        priorities: list[str] = []
+        seen: set[str] = set()
+        for item in raw_values:
+            rendered = normalise_metadata_value(item)
+            if rendered is None:
+                raise ValueError("priority lane priorities must not contain empty values")
+            normalized = rendered.casefold()
+            if any(
+                ord(character) <= ASCII_CONTROL_MAX or ord(character) == ASCII_DELETE
+                for character in normalized
+            ):
+                raise ValueError("priority lane priorities must not contain control characters")
+            if normalized in seen:
+                continue
+            priorities.append(normalized)
+            seen.add(normalized)
+        return tuple(priorities)
+
+
+class PriorityLanesConfig(BaseModel):
+    """Optional priority-aware processing policy for already-fetched batches.
+
+    Priority lanes are disabled by default so existing deployments keep exact
+    arrival-order sink delivery.  When enabled, the runner maps each envelope's
+    normalized `priority` metadata to a configured lane, orders the current
+    batch with weighted round-robin, then calls the sink once with that ordered
+    batch.  ACK behavior remains unchanged: ACK is still sent only after sink
+    durable success.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    default_lane: str = "default"
+    unknown_priority_action: Literal["default_lane", "reject"] = "default_lane"
+    max_priority_value_length: int = Field(default=64, ge=1, le=256)
+    lanes: list[PriorityLaneConfig] = Field(
+        default_factory=lambda: [PriorityLaneConfig(name="default", priorities=(), weight=1)]
+    )
+
+    @field_validator("default_lane")
+    @classmethod
+    def validate_default_lane(cls, value: str) -> str:
+        """Validate the lane name used for missing or unknown priority values."""
+
+        rendered = value.strip().lower()
+        if not PRIORITY_LANE_NAME_RE.fullmatch(rendered):
+            raise ValueError("delivery.priority_lanes.default_lane must be a valid lane name")
+        return rendered
+
+    @model_validator(mode="after")
+    def validate_lane_policy(self) -> PriorityLanesConfig:
+        """Reject ambiguous lane policies before any messages are fetched."""
+
+        lane_names: set[str] = set()
+        priority_to_lane: dict[str, str] = {}
+        for lane in self.lanes:
+            if lane.name in lane_names:
+                raise ValueError(f"duplicate priority lane name: {lane.name}")
+            lane_names.add(lane.name)
+            for priority in lane.priorities:
+                if len(priority) > self.max_priority_value_length:
+                    raise ValueError(
+                        "priority lane priority values must not exceed "
+                        f"{self.max_priority_value_length} characters"
+                    )
+                existing_lane = priority_to_lane.get(priority)
+                if existing_lane is not None:
+                    raise ValueError(
+                        f"priority value {priority!r} is assigned to both "
+                        f"{existing_lane!r} and {lane.name!r}"
+                    )
+                priority_to_lane[priority] = lane.name
+
+        if self.default_lane not in lane_names:
+            raise ValueError(
+                f"delivery.priority_lanes.default_lane {self.default_lane!r} "
+                "must match one configured lane"
+            )
+        return self
+
+
 class DeliveryConfig(BaseModel):
-    """Delivery behavior. ACK policy is intentionally fixed to commit-then-ack."""
+    """Delivery behavior. ACK policy is intentionally fixed to commit-then-ack.
+
+    Retry settings control only active delayed NAK behavior after retryable
+    failures.  They never permit early ACK.  When the active retry budget is
+    exhausted, the runner leaves messages redeliverable so JetStream
+    `AckWait`, `MaxDeliver`, and advisory policy remain the final authority.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -155,10 +360,31 @@ class DeliveryConfig(BaseModel):
     batch_timeout_ms: int = Field(default=1000, ge=1)
     max_in_flight_batches: int = Field(default=1, ge=1, le=64)
     ack_policy: Literal["after_sink_commit"] = "after_sink_commit"
-    max_retries: int = Field(default=5, ge=0)
-    retry_backoff_ms: int = Field(default=1000, ge=0)
+    max_retries: int = Field(default=5, ge=0, le=1_000_000)
+    retry_backoff_ms: int = Field(default=1000, ge=0, le=3_600_000)
+    retry_backoff_max_ms: int = Field(default=60_000, ge=0, le=3_600_000)
+    retry_backoff_mode: Literal["fixed", "linear", "exponential"] = "exponential"
+    retry_backoff_multiplier: float = Field(default=2.0, ge=1.0, le=10.0)
+    retry_jitter: Literal["none", "full", "equal"] = "full"
     temporary_failure_action: Literal["nak", "leave_unacked"] = "nak"
     prefer_safe_duplication: bool = True
+    priority_lanes: PriorityLanesConfig = Field(default_factory=PriorityLanesConfig)
+
+    @model_validator(mode="after")
+    def validate_retry_backoff_cap(self) -> DeliveryConfig:
+        """Reject retry policies whose cap is lower than the base delay.
+
+        Allowing a cap below the base delay is technically possible, but it is
+        easy for operators to misread in production.  Requiring the cap to be
+        equal to or above the base delay keeps the policy reviewable.
+        """
+
+        if self.retry_backoff_max_ms < self.retry_backoff_ms:
+            raise ValueError(
+                "delivery.retry_backoff_max_ms must be greater than or equal to "
+                "delivery.retry_backoff_ms"
+            )
+        return self
 
 
 class DeadLetterConfig(BaseModel):
@@ -181,6 +407,15 @@ class LoggingConfig(BaseModel):
     level: str = "INFO"
     payload_logging: bool = False
 
+    @field_validator("level")
+    @classmethod
+    def validate_level(cls, value: str) -> str:
+        """Fail closed when an unknown logging policy is configured."""
+
+        from nats_sinks.core.logging import normalize_log_level  # noqa: PLC0415
+
+        return normalize_log_level(value)
+
 
 class MetricsConfig(BaseModel):
     """Metrics settings."""
@@ -189,6 +424,30 @@ class MetricsConfig(BaseModel):
 
     enabled: bool = False
     namespace: str = "nats_sinks"
+    snapshot_file: str | None = None
+
+    @field_validator("namespace")
+    @classmethod
+    def validate_namespace(cls, value: str) -> str:
+        """Require a namespace that exporters can safely use as a metric prefix."""
+
+        from nats_sinks.core.metrics import validate_metric_namespace  # noqa: PLC0415
+
+        return validate_metric_namespace(value)
+
+    @field_validator("snapshot_file")
+    @classmethod
+    def validate_snapshot_file(cls, value: str | None) -> str | None:
+        """Reject ambiguous metrics snapshot paths before the runner starts."""
+
+        if value is None:
+            return None
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("metrics.snapshot_file must not be empty")
+        if "\x00" in rendered or "\n" in rendered or "\r" in rendered:
+            raise ValueError("metrics.snapshot_file must not contain control characters")
+        return rendered
 
 
 class MessageMetadataFieldConfig(BaseModel):
@@ -400,6 +659,163 @@ class MessageMetadataConfig(BaseModel):
             if rule.has_labels_default() and matches_subject(rule.subject, subject):
                 return rule.labels
         return self.labels.default
+
+
+class MissionMetadataRuleConfig(BaseModel):
+    """Subject-specific default mission metadata.
+
+    The rule does not inspect or transform payloads.  It only supplies a
+    validated JSON metadata object when the message does not already contain
+    the configured mission metadata header.  Setting `metadata` to `null`
+    explicitly clears the global default for matching subjects.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    subject: str
+    metadata: dict[str, Any] | None = None
+
+    @field_validator("subject")
+    @classmethod
+    def validate_subject(cls, value: str) -> str:
+        """Validate rule subjects with the same syntax as NATS wildcards."""
+
+        return validate_subject_pattern(value)
+
+    @field_validator("metadata", mode="before")
+    @classmethod
+    def validate_metadata(cls, value: object) -> object:
+        """Validate configured default metadata before runtime processing."""
+
+        if value is None:
+            return None
+        try:
+            return normalize_mission_metadata_object(
+                value,
+                max_bytes=MAX_MISSION_METADATA_BYTES,
+                source="mission metadata rule",
+            )
+        except FrameworkValidationError as exc:
+            raise ValueError(str(exc)) from exc
+
+    @model_validator(mode="after")
+    def validate_rule_has_metadata_field(self) -> MissionMetadataRuleConfig:
+        """Reject no-op rules that match a subject without setting metadata."""
+
+        if "metadata" not in self.model_fields_set:
+            raise ValueError("mission metadata rule must set metadata, including null if desired")
+        return self
+
+
+class MissionMetadataConfig(BaseModel):
+    """Optional generic mission event metadata configuration.
+
+    Mission metadata is a validated JSON object carried next to the payload.
+    It is disabled by default because not every deployment needs this richer
+    context.  When enabled, a publisher can provide the object through the
+    configured NATS header, while operators can set safe global and
+    subject-aware defaults in configuration.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    header: str = DEFAULT_MISSION_METADATA_HEADER
+    default: dict[str, Any] | None = None
+    rules: list[MissionMetadataRuleConfig] = Field(default_factory=list)
+    max_bytes: int = Field(
+        default=DEFAULT_MAX_MISSION_METADATA_BYTES,
+        ge=1,
+        le=MAX_MISSION_METADATA_BYTES,
+    )
+    allowed_profiles: tuple[str, ...] = Field(default_factory=tuple)
+
+    @field_validator("header")
+    @classmethod
+    def validate_header(cls, value: str) -> str:
+        """Require a safe header name for mission metadata extraction."""
+
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("mission_metadata.header must not be empty")
+        if "\n" in rendered or "\r" in rendered or "\x00" in rendered:
+            raise ValueError("mission_metadata.header must not contain control characters")
+        return rendered
+
+    @field_validator("default", mode="before")
+    @classmethod
+    def validate_default(cls, value: object) -> object:
+        """Validate optional global default metadata."""
+
+        if value is None:
+            return None
+        try:
+            return normalize_mission_metadata_object(
+                value,
+                max_bytes=MAX_MISSION_METADATA_BYTES,
+                source="mission metadata default",
+            )
+        except FrameworkValidationError as exc:
+            raise ValueError(str(exc)) from exc
+
+    @field_validator("allowed_profiles", mode="before")
+    @classmethod
+    def validate_allowed_profiles(cls, value: object) -> tuple[str, ...]:
+        """Normalize configured profile allow-list values."""
+
+        if value is None:
+            return ()
+        if isinstance(value, str):
+            raw_profiles = [value]
+        elif isinstance(value, (list, tuple, set, frozenset)):
+            raw_profiles = list(value)
+        else:
+            raise ValueError("mission_metadata.allowed_profiles must be a list of strings")
+
+        profiles: list[str] = []
+        seen: set[str] = set()
+        for item in raw_profiles:
+            if not isinstance(item, str):
+                raise ValueError("mission_metadata.allowed_profiles must contain only strings")
+            rendered = item.strip()
+            if not rendered:
+                raise ValueError("mission_metadata.allowed_profiles must not contain empty values")
+            if "\n" in rendered or "\r" in rendered or "\x00" in rendered:
+                raise ValueError(
+                    "mission_metadata.allowed_profiles must not contain control characters"
+                )
+            if rendered in seen:
+                continue
+            profiles.append(rendered)
+            seen.add(rendered)
+        return tuple(profiles)
+
+    @model_validator(mode="after")
+    def validate_default_against_effective_limits(self) -> MissionMetadataConfig:
+        """Recheck configured defaults with the operator's byte limit and profile allow-list."""
+
+        if self.default is not None:
+            try:
+                self.default = normalize_mission_metadata_object(
+                    self.default,
+                    max_bytes=self.max_bytes,
+                    allowed_profiles=self.allowed_profiles,
+                    source="mission metadata default",
+                )
+            except FrameworkValidationError as exc:
+                raise ValueError(str(exc)) from exc
+        for rule in self.rules:
+            if rule.metadata is not None:
+                try:
+                    rule.metadata = normalize_mission_metadata_object(
+                        rule.metadata,
+                        max_bytes=self.max_bytes,
+                        allowed_profiles=self.allowed_profiles,
+                        source=f"mission metadata rule {rule.subject}",
+                    )
+                except FrameworkValidationError as exc:
+                    raise ValueError(str(exc)) from exc
+        return self
 
 
 class EncryptionRuleConfig(BaseModel):
@@ -624,6 +1040,7 @@ class AppConfig(BaseModel):
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     metrics: MetricsConfig = Field(default_factory=MetricsConfig)
     message_metadata: MessageMetadataConfig = Field(default_factory=MessageMetadataConfig)
+    mission_metadata: MissionMetadataConfig = Field(default_factory=MissionMetadataConfig)
     encryption: EncryptionConfig = Field(default_factory=EncryptionConfig)
     sink: SinkConfig
 
@@ -652,6 +1069,8 @@ ENV_OVERRIDES: dict[str, tuple[str, ...]] = {
     ),
     "NATS_SINKS_LABELS_HEADER": ("message_metadata", "labels", "header"),
     "NATS_SINKS_LABELS_DEFAULT": ("message_metadata", "labels", "default"),
+    "NATS_SINKS_MISSION_METADATA_ENABLED": ("mission_metadata", "enabled"),
+    "NATS_SINKS_MISSION_METADATA_HEADER": ("mission_metadata", "header"),
     "NATS_SINKS_SINK_TYPE": ("sink", "type"),
 }
 
@@ -677,19 +1096,50 @@ def apply_environment_overrides(raw_config: dict[str, Any]) -> dict[str, Any]:
     return config
 
 
+def _reject_duplicate_object_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """Reject ambiguous JSON objects instead of accepting the last duplicate key."""
+
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON object key: {key}")
+        result[key] = value
+    return result
+
+
+def _reject_nonstandard_json_constant(value: str) -> None:
+    """Reject Python JSON extensions such as NaN and Infinity in config files."""
+
+    raise ValueError(f"non-standard JSON constant is not allowed: {value}")
+
+
 def load_json(path: str | Path) -> dict[str, Any]:
-    """Load a JSON configuration file and require an object at the root."""
+    """Load a bounded JSON configuration file and require an object at the root."""
 
     file_path = Path(path)
     try:
-        raw = json.loads(file_path.read_text(encoding="utf-8"))
+        raw_bytes = file_path.read_bytes()
     except OSError as exc:
         raise ConfigurationError(f"failed to read configuration file {file_path}") from exc
+    if len(raw_bytes) > MAX_CONFIG_BYTES:
+        raise ConfigurationError(
+            f"configuration file {file_path} exceeds the {MAX_CONFIG_BYTES} byte limit"
+        )
+    try:
+        raw_text = raw_bytes.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ConfigurationError(f"configuration file {file_path} is not valid UTF-8") from exc
+    try:
+        raw = json.loads(
+            raw_text,
+            object_pairs_hook=_reject_duplicate_object_keys,
+            parse_constant=_reject_nonstandard_json_constant,
+        )
     except json.JSONDecodeError as exc:
         raise ConfigurationError(f"configuration file {file_path} is not valid JSON") from exc
+    except ValueError as exc:
+        raise ConfigurationError(f"configuration file {file_path} is ambiguous: {exc}") from exc
 
-    if raw is None:
-        return {}
     if not isinstance(raw, dict):
         raise ConfigurationError("configuration root must be a mapping")
     return raw

@@ -1,0 +1,23 @@
+{
+  "id": "no-echo-connection-setting",
+  "title": "[Feature]: Add optional NATS no-echo connection setting",
+  "area": "Configuration",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["nats"],
+  "problem": "NATS clients can use a no-echo setting in some publish and subscribe workflows. nats-sinks primarily consumes from JetStream pull consumers and publishes only to DLQ when configured, so the practical value of no-echo needs evaluation before adding configuration surface.",
+  "proposal": "Evaluate whether exposing a no-echo connection option is useful for nats-sinks. If implemented, add a validated boolean configuration field, document when it matters, and test that it is passed safely to the NATS client without affecting delivery behavior.",
+  "users": "NATS operators with specialized connection policy requirements and maintainers tracking compatibility options.",
+  "delivery_semantics": "No-echo must not affect commit-then-ACK ordering, DLQ publication, or pull-consumer behavior. If the setting is irrelevant for the runner, documentation should say so clearly.",
+  "security": "The setting should not expose secrets or widen permissions. Configuration must remain explicit and redacted in effective output.",
+  "acceptance": [
+    "The project documents whether no-echo is supported or intentionally unnecessary.",
+    "If implemented, the config field is validated and tested.",
+    "Default behavior remains unchanged.",
+    "NATS option construction tests cover the setting.",
+    "CHANGELOG.md records the outcome."
+  ],
+  "tests": "Add configuration and NATS option construction tests if implemented. Run scripts/check.sh.",
+  "documentation": "Update docs/configuration.md, docs/operations.md, docs/nats-feature-gap-analysis.md, ROADMAP.md, and CHANGELOG.md.",
+  "closeout": "Close after release publication or documented decision. Include release tag or decision, tests, and limitations."
+}

@@ -1,4 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
+
 from __future__ import annotations
 
 import asyncio
@@ -29,6 +31,7 @@ REQUIRED_ORACLE_TEST_COLUMNS = {
     "PAYLOAD_JSON",
     "HEADERS_JSON",
     "METADATA_JSON",
+    "MISSION_METADATA_JSON",
 }
 
 
@@ -116,6 +119,7 @@ def _envelope(
     priority: str | None = None,
     classification: str | None = None,
     labels: tuple[str, ...] = (),
+    mission_metadata: dict[str, object] | None = None,
 ) -> NatsEnvelope:
     return NatsEnvelope(
         subject="orders.created",
@@ -132,6 +136,7 @@ def _envelope(
         priority=priority,
         classification=classification,
         labels=labels,
+        mission_metadata=mission_metadata,
     )
 
 
@@ -178,6 +183,18 @@ def _message_metadata_values(
         None if row[1] is None else str(row[1]),
         None if row[2] is None else str(row[2]),
     )
+
+
+def _mission_metadata_profile(pool: Any, *, table: str, stream: str) -> str | None:
+    table_name = validate_identifier(table)
+    with pool.acquire() as connection:
+        with connection.cursor() as cursor:
+            sql = f"select json_value(mission_metadata_json, '$.profile') from {table_name} where stream_name = :stream_name"  # noqa: E501, S608
+            cursor.execute(sql, {"stream_name": stream})
+            row: Mapping[int, Any] | tuple[Any, ...] | None = cursor.fetchone()
+    if row is None:
+        return None
+    return None if row[0] is None else str(row[0])
 
 
 def _drop_table(pool: Any, *, table: str) -> None:
@@ -258,6 +275,10 @@ async def test_oracle_integration_auto_creates_table_and_writes_batch() -> None:
                     priority="urgent",
                     classification="restricted",
                     labels=("billing", "urgent"),
+                    mission_metadata={
+                        "profile": "mission-event-v1",
+                        "mission_id": "integration-test",
+                    },
                 )
             ]
         )
@@ -268,6 +289,15 @@ async def test_oracle_integration_auto_creates_table_and_writes_batch() -> None:
             table=table,
             stream=stream,
         ) == ("urgent", "restricted", "billing;urgent")
+        assert (
+            await asyncio.to_thread(
+                _mission_metadata_profile,
+                sink._pool,
+                table=table,
+                stream=stream,
+            )
+            == "mission-event-v1"
+        )
     finally:
         await _stop_sink_for_test(sink, table=table)
 

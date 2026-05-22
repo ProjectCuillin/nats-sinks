@@ -15,6 +15,57 @@
 - Core message metadata for priority, classification, and labels so
   mission-oriented deployments can preserve operational handling context across
   all production sinks.
+- Generic mission metadata support for one validated JSON context object across
+  the core runtime, Oracle `MISSION_METADATA_JSON`, file-sink output, and future
+  sink contracts.
+- Basic metrics counters and observations for fetched, prepared, written,
+  ACKed, NAKed, failed, DLQ, sink write, ACK error, and active batch behavior.
+- Local JSON metrics snapshots and the `nats-sink-metrics` inspection CLI for
+  table, JSON, JSONL, shell, names, and Prometheus text output.
+- Observability core with disabled-by-default sharing policies and a
+  `nats-sink-observe` CLI for safe connector operation.
+- Policy-controlled Prometheus textfile connector for node_exporter, designed
+  to run as a separate Linux service from the sink worker.
+- Optional native Prometheus HTTP scrape endpoint, designed as a separate
+  disabled-by-default observability service that reads policy-filtered local
+  metrics snapshots.
+- NATS server monitoring diagnostic connector for selected endpoints such as
+  `/jsz` and `/healthz`, implemented outside the delivery worker with explicit
+  endpoint and field allow lists.
+- Kubernetes deployment examples with JSON ConfigMaps, Secret references,
+  mounted trust material, security contexts, resource limits, graceful
+  shutdown settings, and optional Prometheus observability sidecars.
+- Oracle duplicate/conflict metrics for idempotent Oracle operations, readable
+  through the same metrics snapshot and `nats-sink-metrics` CLI.
+- Multiple NATS seed URLs, reconnect tuning, and connection event metrics for
+  clustered or controlled-network deployments.
+- Least-privilege NATS permissions templates for runtime workers, DLQ publish
+  rights, optional consumer management, and advisory readers.
+- Advanced JetStream topology guidance for mirrors, sources, subject
+  transforms, republish behavior, stream compression, placement, metadata, and
+  idempotency review.
+- Exponential retry backoff with jitter controls for retryable failures while
+  preserving commit-then-acknowledge behavior.
+- CycloneDX SBOM generation as local, CI, and release evidence.
+- Deterministic bounded property-style generator tests for subject matching,
+  payload normalization, message metadata, mission metadata, and file path
+  sanitization.
+- Oracle benchmark scripts that report publish, fetch, map, backend write,
+  commit, ACK, retry, and shutdown timing separately for non-production
+  environments.
+- Synthetic load-test profiles for normal, retry, DLQ, shutdown, optional
+  encryption-workload, and metrics-snapshot behavior without live services.
+- Deterministic synthetic mission scenario harness for core envelope generation
+  and local file-sink smoke testing without live services.
+- F2T2EA event phase tagging blueprint as metadata-only use-case documentation
+  built on the generic mission metadata feature.
+- Defence and mission-support use-case blueprint documentation for sensor event
+  custody, classification and labels, chain of custody, cross-domain handoff
+  preparation, edge operation, and audit-oriented persistence while keeping the
+  framework generic.
+- Mission-support operational examples for restricted event storage,
+  disconnected file handoff, DLQ triage and replay preparation, and
+  destination outage recovery.
 - Commit-then-acknowledge contract tests proving ACK happens only after sink
   success and DLQ publication succeeds before ACK.
 - CLI.
@@ -24,36 +75,42 @@
 
 ## Phase 2
 
-- Better metrics.
-- Mission-support documentation examples for common operational patterns such
-  as restricted event storage, disconnected file handoff, DLQ triage, and
-  replay/recovery procedures.
+- OpenTelemetry OTLP metrics connector for deployments using collectors.
+- Additional observability connectors for StatsD, Datadog, Splunk HEC, Elastic
+  Observability, Grafana Alloy or Grafana Agent, Oracle Cloud Infrastructure
+  Monitoring, Amazon CloudWatch, Azure Monitor, and syslog bridges.
+- Additional mission-support documentation examples for future operator
+  runbooks, deeper replay drills, and sink-specific certification evidence.
 - Documented sink certification contract for idempotency, including required
   duplicate-redelivery tests for every new production sink.
 - Per-route or per-table Oracle idempotency overrides for deployments where
   different subjects need different durable keys.
-- More Oracle duplicate handling controls, such as optional conflict counters,
-  duplicate metrics, and clearer `merge` update-column controls.
+- More Oracle duplicate handling controls, such as clearer `merge`
+  update-column controls and deeper merge insert-versus-match visibility where
+  Oracle execution metadata can support it reliably.
 - Oracle high-throughput write mode using array-loaded staging tables followed
   by one set-based merge into the destination table.
-- Oracle benchmark scripts that report publish, fetch, map, backend write,
-  commit, and ACK timing separately.
 - Postgres sink with `ON CONFLICT`-based idempotent `merge` and `insert_ignore`
   behavior.
 - HTTP sink idempotency-key support, retry safety guidance, and clear warnings
   for endpoints that cannot provide idempotent semantics.
 - S3 sink design with atomic object keys and safe duplicate overwrite/skip
   behavior.
+- Native Oracle Cloud Infrastructure Object Storage sink design with
+  deterministic object keys, OCI identity support, checksums, multipart upload,
+  and least-privilege bucket guidance.
 - Postgres sink.
 - HTTP sink.
 - Docker image.
-- Kubernetes examples.
-- Multiple NATS seed URLs for clustered deployments.
-- NATS reconnect tuning and connection event metrics.
-- Least-privilege NATS permissions templates for sink users.
 - Payload encryption key rotation guidance and multi-key decryption helper
   support.
 - Secret-manager integration patterns for encryption keys.
+- Expanded property-based or dedicated fuzz tooling if the deterministic
+  bounded generator suite reaches its limits or future parsers become more
+  complex.
+- Payload and metadata size policy controls for deployments that need stricter
+  runtime bounds than the default JetStream and destination limits.
+- Hash-verified installation guidance for high-trust environments.
 - Certified TLS certificate authentication guidance.
 - Certified NKEY with challenge authentication support.
 - Certified decentralized JWT authentication/authorization support.
@@ -65,7 +122,9 @@
 - Optional `AckSync` / double-ACK support after durable sink success.
 - Optional `InProgress` handling for long-running sink writes.
 - JetStream advisory consumption for operational events and max-deliver signals.
-- Prometheus or OpenTelemetry metrics export.
+- Richer observability policies for bounded subject-aware metrics, if future
+  operators need per-subject insight and can approve the information-sharing
+  risk.
 
 ## Phase 3
 
@@ -81,9 +140,8 @@
 - Headers-only delivery mode for metadata-only workflows.
 - Stream management helpers for retention, discard, storage, replicas, and
   duplicate-window documentation.
-- Stream mirror, source, subject transform, and republish documentation.
-- Stream compression, placement, and metadata guidance.
-- Server monitoring endpoint integration such as `/jsz`.
+- Stream mirror, source, subject transform, republish, compression, placement,
+  and metadata management helpers beyond the current documentation guidance.
 - `AckTerm` and `AckNext` evaluation for advanced failure and fetch workflows.
 - Optional no-echo connection setting.
 - Sink certification tests for future Postgres, HTTP, S3, and Kafka sinks.

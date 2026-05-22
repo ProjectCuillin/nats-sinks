@@ -1,4 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
+
 """Framework exception hierarchy.
 
 The runner needs to distinguish configuration problems, temporary sink

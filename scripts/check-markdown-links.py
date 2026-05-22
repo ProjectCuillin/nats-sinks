@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
+
 """Check Markdown links that must render correctly outside the repository.
 
 PyPI renders `README.md` as the package description. Relative links such as

@@ -1,0 +1,23 @@
+{
+  "id": "opentelemetry-otlp-metrics-connector",
+  "title": "[Feature]: Add an OpenTelemetry OTLP metrics connector",
+  "area": "Metrics and observability",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["observability"],
+  "problem": "Many production environments centralize telemetry through OpenTelemetry collectors. nats-sinks currently has local metrics snapshots, a metrics CLI, and a Prometheus textfile connector, but it does not provide an OTLP connector. Without this, operators using collectors must bridge data themselves, which risks inconsistent naming, uncontrolled metadata sharing, and duplicated operational code outside the project.",
+  "proposal": "Design and implement an optional OTLP metrics connector under the observability connector architecture. The connector should be disabled by default, depend on an optional extra if a runtime dependency is needed, read approved metrics from the shared metrics snapshot or provider abstraction, and export only policy-approved fields. It should support bounded retry, timeout, endpoint configuration, and clear failure behavior that never affects message delivery.",
+  "users": "Platform teams using OpenTelemetry collectors for fleet-wide operational insight, as well as maintainers who need a reusable pattern for future observability connectors.",
+  "delivery_semantics": "OTLP export must remain out of the delivery path. Export failures must be logged safely and counted but must not trigger ACK, NAK, DLQ, or sink retries. If the connector runs as a separate service, it should consume local snapshots only.",
+  "security": "The connector must not send payloads, secrets, subjects, table names, file paths, classification values, labels, usernames, or high-cardinality identifiers by default. Endpoint configuration must avoid secrets in command arguments and logs. All network calls need explicit timeouts and bounded retries.",
+  "acceptance": [
+    "OTLP support is optional and disabled by default.",
+    "The connector uses the observability policy model for metric allow lists.",
+    "Network errors, invalid policy, and collector unavailability fail safely.",
+    "Documentation includes operator examples without private infrastructure details.",
+    "Dependency additions are justified, optional, and reflected in dependency manifests."
+  ],
+  "tests": "Add unit tests for policy filtering, payload construction, timeout handling, disabled-by-default behavior, and failure logging. Add optional integration guidance for collector-based testing. Run scripts/check.sh and dependency manifest checks.",
+  "documentation": "Update docs/observability.md, docs/metrics.md, docs/configuration.md, docs/security.md, docs/dependency-management.md, ROADMAP.md, and CHANGELOG.md with OTLP configuration, threat model, and examples.",
+  "closeout": "Close after the release containing OTLP support is available. Include the release tag, dependency impact, exported metric examples, tests and checks run, and any follow-up connector issues."
+}

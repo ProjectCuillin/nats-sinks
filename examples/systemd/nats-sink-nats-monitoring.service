@@ -1,0 +1,21 @@
+[Unit]
+Description=nats-sinks NATS server monitoring snapshot
+Documentation=https://github.com/ProjectCuillin/nats-sinks/
+RequiresMountsFor=/var/lib/nats-sink
+
+[Service]
+Type=oneshot
+User=nats-sink
+Group=nats-sink
+ExecStart=/opt/nats-sinks/venv/bin/nats-sink-observe nats-monitoring-poll /etc/nats-sinks/observability.prometheus.json --output /var/lib/nats-sink/nats-monitoring.json
+ExecStart=/opt/nats-sinks/venv/bin/nats-sink-observe nats-monitoring-prometheus /var/lib/nats-sink/nats-monitoring.json /etc/nats-sinks/observability.prometheus.json --output /var/lib/node_exporter/textfile_collector/nats_sinks_nats_monitoring.prom
+WorkingDirectory=/var/lib/nats-sink
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadOnlyPaths=/etc/nats-sinks
+ReadWritePaths=/var/lib/nats-sink /var/lib/node_exporter/textfile_collector
+
+[Install]
+WantedBy=multi-user.target

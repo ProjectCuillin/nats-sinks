@@ -1,0 +1,23 @@
+{
+  "id": "oracle-per-route-idempotency-overrides",
+  "title": "[Feature]: Add Oracle idempotency overrides per route or table",
+  "area": "Oracle sink",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["sink-oracle"],
+  "problem": "The Oracle sink supports idempotency strategies at the sink level, while subject-to-table routing can send different message families to different tables. Some deployments may need one table to use stream sequence keys and another to use message identifiers or payload-field keys. Applying one idempotency policy to every route can force awkward table designs or multiple worker processes.",
+  "proposal": "Extend Oracle route configuration so each route or table can override the default idempotency strategy, idempotency columns, and merge behavior while preserving a safe global default. Validation should reject ambiguous combinations and make the effective route policy visible through config inspection without printing secrets.",
+  "users": "Oracle sink operators who route multiple subject families into different durable tables and need table-specific duplicate handling without running separate sink services.",
+  "delivery_semantics": "Per-route idempotency must continue to make duplicate redelivery safe. The core still ACKs only after OracleSink returns after commit. Tests must cover duplicate messages for every configured route shape and prove route-specific policy does not cause premature ACK.",
+  "security": "Route names, table names, column names, and payload-field paths must be strictly validated. SQL values must remain bind parameters. Effective config output must redact secrets and must not print payload examples or private deployment details.",
+  "acceptance": [
+    "Oracle routes can inherit the sink default idempotency policy.",
+    "Oracle routes can override the idempotency strategy and columns safely.",
+    "Invalid mixed policies fail configuration validation before processing starts.",
+    "Unit tests cover merge and insert-ignore decisions for route-specific policies.",
+    "Oracle documentation includes migration and configuration examples."
+  ],
+  "tests": "Add Oracle config, SQL, mapping, and commit-then-ACK tests for multiple routes with different idempotency policies. Run scripts/check-sinks.sh and scripts/check.sh.",
+  "documentation": "Update docs/oracle-sink.md, docs/configuration.md, docs/idempotency.md, examples/oracle-jetstream/config.json, ROADMAP.md, and CHANGELOG.md.",
+  "closeout": "Close after the release containing per-route Oracle idempotency is published. Include the release tag, supported override fields, tests run, documentation updated, and limitations."
+}

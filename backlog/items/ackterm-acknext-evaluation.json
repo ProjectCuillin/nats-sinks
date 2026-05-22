@@ -1,0 +1,23 @@
+{
+  "id": "ackterm-acknext-evaluation",
+  "title": "[Feature]: Evaluate AckTerm and AckNext for advanced workflows",
+  "area": "Core runtime and delivery semantics",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["nats"],
+  "problem": "JetStream supports advanced acknowledgement forms such as terminating delivery or requesting the next message. These behaviors can be useful in some workflows, but they can also conflict with nats-sinks safety expectations if they obscure durable success, DLQ publication, or retry behavior.",
+  "proposal": "Evaluate AckTerm and AckNext for advanced failure and fetch workflows. The evaluation should state whether either behavior belongs in production sink processing, inspection tooling, or not at all. Any implementation must be opt-in and backed by explicit delivery-contract tests.",
+  "users": "Maintainers assessing NATS compatibility, operators with advanced JetStream workflows, and reviewers protecting commit-then-ACK semantics.",
+  "delivery_semantics": "AckTerm and AckNext must not be introduced in a way that acknowledges uncommitted durable work. If AckTerm is used for permanent failures, it must preserve DLQ-before-terminal behavior or document why it is not suitable.",
+  "security": "Advanced ACK behavior should log only safe operational context. Misconfiguration must fail closed because wrong ACK behavior can create message loss.",
+  "acceptance": [
+    "A design decision documents AckTerm and AckNext suitability.",
+    "Any implementation is disabled by default and explicitly configured.",
+    "Tests prove no early ACK or terminal ACK before DLQ success.",
+    "Documentation explains when the feature should not be used.",
+    "Roadmap reflects the decision."
+  ],
+  "tests": "Add mocked message tests for any implemented behavior and run scripts/check.sh. For design-only work, run documentation checks.",
+  "documentation": "Update docs/commit-then-ack.md, docs/configuration.md, docs/dead-letter-queues.md, docs/nats-feature-gap-analysis.md, ROADMAP.md, and CHANGELOG.md.",
+  "closeout": "Close after released implementation or documented decision. Include release tag or decision evidence, tests, and safety notes."
+}

@@ -1,0 +1,40 @@
+{
+  "schema": "nats_sinks.observability.policy.v1",
+  "enabled": false,
+  "namespace": "nats_sinks",
+  "allowed_metrics": [],
+  "allowed_metric_patterns": [],
+  "denied_metrics": [],
+  "denied_metric_patterns": [],
+  "include_observations": false,
+  "include_legacy": false,
+  "subjects": [],
+  "prometheus": {
+    "enabled": false,
+    "output_file": "/var/lib/node_exporter/textfile_collector/nats_sinks.prom",
+    "include_help": true,
+    "include_type": true,
+    "stale_after_seconds": 60,
+    "http_endpoint": {
+      "enabled": false,
+      "host": "127.0.0.1",
+      "port": 9108,
+      "path": "/metrics",
+      "request_timeout_seconds": 5,
+      "response_max_bytes": 1048576
+    }
+  },
+  "nats_server_monitoring": {
+    "enabled": false,
+    "base_url": null,
+    "allowed_endpoints": [],
+    "allowed_fields": [],
+    "timeout_seconds": 2,
+    "max_response_bytes": 262144,
+    "verify_tls": true,
+    "ca_file": null,
+    "prometheus_enabled": false,
+    "include_help": true,
+    "include_type": true
+  }
+}

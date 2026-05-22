@@ -1,0 +1,26 @@
+{
+  "id": "retry-policy-negative-max-retries",
+  "title": "[Bug]: RetryPolicy direct construction accepts negative max_retries",
+  "area": "Core runtime and delivery semantics",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.0",
+  "labels": ["testing"],
+  "summary": "The public RetryPolicy dataclass can be constructed directly with a negative retry count even though configuration validation rejects it.",
+  "observed": "Direct Python API use can create a retry policy with a negative max_retries value.",
+  "expected": "RetryPolicy must validate its own invariants so direct API construction is as safe as configuration-driven construction.",
+  "reproduction": "Run the focused regression test that constructs RetryPolicy with a negative max_retries value.",
+  "failing_test": "tests/unit/test_bug_hunt_non_json_boundaries.py::test_retry_policy_rejects_negative_max_retries",
+  "impact": "Embedding applications can create inconsistent retry behavior if they bypass the JSON configuration model.",
+  "delivery_semantics": "The fix keeps retry policy bounded and explicit without changing ACK ordering.",
+  "security": "Validated public APIs reduce unsafe configuration drift in embedded deployments.",
+  "acceptance": [
+    "RetryPolicy rejects negative max_retries values during construction.",
+    "Configured retry behavior remains unchanged for valid values.",
+    "Existing retry tests continue to pass.",
+    "The focused regression test and full checks pass."
+  ],
+  "tests": "Run the focused regression test, retry tests, commit-then-ack tests, and the full local check script.",
+  "documentation": "Update retry documentation or release notes if public RetryPolicy validation is clarified.",
+  "closeout": "Close only after the release containing the fix is published with regression and verification evidence."
+}

@@ -1,0 +1,23 @@
+{
+  "id": "ordered-consumer-support",
+  "title": "[Feature]: Evaluate ordered-consumer support for replay and inspection",
+  "area": "Core runtime and delivery semantics",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["nats"],
+  "problem": "Ordered consumers are useful for inspection or replay workflows, but they are not the same as durable production sink processing. Adding support without clear boundaries could confuse users about durability, ACK behavior, and redelivery semantics.",
+  "proposal": "Evaluate ordered-consumer support for explicit inspection or replay workflows that are clearly separated from production durable sink processing. If implemented, the feature should be opt-in, named carefully, and documented as not replacing durable pull consumers for production sink workers.",
+  "users": "Operators performing controlled replay, maintainers troubleshooting stream content, and users who need inspection tooling around nats-sinks.",
+  "delivery_semantics": "Ordered-consumer workflows must not weaken production commit-then-ACK semantics. If they write to sinks, they must still use durable success before ACK, or they must be documented as inspection-only and not production sink processing.",
+  "security": "Replay and inspection can expose sensitive payloads and metadata. Output must be redacted by default and must not log payloads unless explicitly enabled in a safe local context.",
+  "acceptance": [
+    "Ordered-consumer support is evaluated with a clear production boundary.",
+    "Documentation explains when ordered consumers are appropriate.",
+    "Any implementation is opt-in and does not replace durable pull consumers.",
+    "Tests cover replay or inspection behavior without early ACKs.",
+    "Security guidance covers payload exposure risk."
+  ],
+  "tests": "Add unit and optional local NATS tests if implemented. Run scripts/check.sh.",
+  "documentation": "Update docs/architecture.md, docs/operations.md, docs/testing.md, docs/security.md, docs/nats-feature-gap-analysis.md, ROADMAP.md, and CHANGELOG.md.",
+  "closeout": "Close after released implementation or documented design decision. Include release tag or decision evidence, tests, and limitations."
+}

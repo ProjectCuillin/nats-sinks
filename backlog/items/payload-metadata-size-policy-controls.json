@@ -1,0 +1,23 @@
+{
+  "id": "payload-metadata-size-policy-controls",
+  "title": "[Feature]: Add configurable payload and metadata size policies",
+  "area": "Core runtime and delivery semantics",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "unscheduled",
+  "labels": ["security"],
+  "problem": "JetStream and downstream destinations impose their own size limits, but controlled deployments may need stricter application-level bounds for payloads, headers, metadata documents, labels, and batch operations. Without explicit size policy controls, oversized or adversarial messages may consume resources before a sink can reject them.",
+  "proposal": "Add core configuration for maximum payload size, header count, header value length, metadata document size, label count, label length, and possibly maximum normalized record size. The core should validate messages before sink delivery, classify violations as permanent processing failures, route them to DLQ when configured, and avoid logging full payloads.",
+  "users": "Operators in high-assurance environments, maintainers hardening message validation, and sink implementers who need consistent upstream bounds.",
+  "delivery_semantics": "Rejected messages should follow existing permanent-failure behavior. If DLQ is enabled, the original message may be ACKed only after DLQ publication succeeds. If DLQ publication fails, the original must not be ACKed.",
+  "security": "Size policies must fail closed, avoid payload logging, and prevent unbounded memory growth. Error messages should be human-readable without echoing sensitive values.",
+  "acceptance": [
+    "Core configuration exposes documented size policy fields with safe defaults.",
+    "Violations are classified as permanent failures and handled through existing DLQ rules.",
+    "Tests cover payload, header, metadata, and label bounds.",
+    "Sinks receive only messages that passed the core size policy.",
+    "Documentation explains operational tuning and failure behavior."
+  ],
+  "tests": "Add unit tests for every size policy field, DLQ-before-ACK behavior on policy violation, and no-payload-logging behavior. Run scripts/check.sh.",
+  "documentation": "Update docs/configuration.md, docs/security.md, docs/dead-letter-queues.md, docs/operations.md, docs/message-sizing.md, ROADMAP.md, and CHANGELOG.md.",
+  "closeout": "Close after the release with size policy controls is published. Include release tag, fields added, tests run, and migration guidance."
+}

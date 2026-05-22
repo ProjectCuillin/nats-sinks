@@ -1,0 +1,23 @@
+{
+  "id": "headers-only-delivery-mode",
+  "title": "[Feature]: Evaluate headers-only delivery mode for metadata workflows",
+  "area": "Core runtime and delivery semantics",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["nats"],
+  "problem": "Some workflows may need metadata-only processing, but nats-sinks is designed to persist message payloads and metadata safely. Headers-only delivery could reduce payload exposure for specific use cases, but it requires clear behavior for payload normalization, idempotency, DLQ content, and sink schemas.",
+  "proposal": "Evaluate headers-only delivery support as an explicit mode for metadata-only workflows. The design should state whether sinks receive empty payloads, placeholder envelopes, or a distinct mode flag, and how DLQ and idempotency behave when payload bytes are intentionally absent.",
+  "users": "Operators who need metadata-only custody workflows, maintainers evaluating NATS compatibility, and security reviewers interested in payload minimization.",
+  "delivery_semantics": "ACK still must occur only after the metadata workflow has durably succeeded. Empty or absent payloads must be handled without crashes and without implying that the original payload was stored.",
+  "security": "The feature may reduce payload exposure but metadata can still be sensitive. Documentation must avoid claiming full confidentiality and must explain what remains visible.",
+  "acceptance": [
+    "A design decision documents headers-only behavior.",
+    "If implemented, configuration is explicit and validated.",
+    "Sinks handle metadata-only envelopes safely.",
+    "DLQ behavior is documented.",
+    "Tests cover empty, absent, and metadata-only payload paths."
+  ],
+  "tests": "Add envelope, runner, sink contract, and DLQ tests if implemented. Run scripts/check-sinks.sh and scripts/check.sh.",
+  "documentation": "Update docs/architecture.md, docs/configuration.md, docs/security.md, docs/sink-framework.md, docs/nats-feature-gap-analysis.md, ROADMAP.md, and CHANGELOG.md.",
+  "closeout": "Close after release or documented decision. Include release tag or decision, tests, documentation updates, and limitations."
+}

@@ -1,0 +1,36 @@
+{
+  "schema": "nats_sinks.use_case.f2t2ea_message.v1",
+  "event": {
+    "event_id": "SYN-F2T2EA-0001",
+    "event_type": "synthetic-track-update",
+    "created_at": "2026-01-01T12:00:00Z"
+  },
+  "mission_metadata": {
+    "schema": "nats_sinks.use_case.mission_metadata.v1",
+    "profile": "f2t2ea-event-phase-tagging",
+    "profile_version": 1,
+    "f2t2ea": {
+      "phase": "track",
+      "phase_label": "Track",
+      "phase_source": "publisher",
+      "phase_asserted_at": "2026-01-01T12:00:00Z"
+    },
+    "handling": {
+      "priority": "immediate",
+      "classification": "NATO SECRET",
+      "labels": [
+        "synthetic",
+        "mission-test",
+        "f2t2ea-example"
+      ]
+    },
+    "correlation": {
+      "event_thread_id": "SYN-THREAD-0001",
+      "track_id": "SYN-TRACK-0001"
+    }
+  },
+  "payload": {
+    "summary": "Synthetic event used only for documentation and tests.",
+    "confidence": 0.82
+  }
+}

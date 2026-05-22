@@ -1,0 +1,23 @@
+{
+  "id": "oracle-duplicate-handling-controls",
+  "title": "[Feature]: Improve Oracle duplicate handling controls and visibility",
+  "area": "Oracle sink",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["sink-oracle"],
+  "problem": "Oracle duplicate and conflict metrics exist, but operators may need clearer control over which columns are updated during merge operations and what can be observed when a message matches an existing durable row. Without clearer controls, teams may either over-update stored records or lack enough visibility to understand duplicate redelivery behavior.",
+  "proposal": "Add explicit Oracle merge update controls, document insert-versus-match visibility, and expose safe duplicate outcome metrics where Oracle execution metadata supports it reliably. The feature should avoid fragile driver assumptions and should preserve current idempotent defaults.",
+  "users": "Oracle sink operators who use merge mode in high-volume or audited environments and need predictable behavior when redelivered messages match existing durable rows.",
+  "delivery_semantics": "Duplicate detection must remain a sink-level durable-write concern. A duplicate handled successfully in idempotent mode may return success only after the Oracle transaction has committed. Metrics and visibility must never decide ACK behavior.",
+  "security": "Metrics and logs must not expose table names, constraint names, subjects, message IDs, classifications, labels, or payloads by default. SQL identifiers must remain allow-list validated and values must remain bound.",
+  "acceptance": [
+    "Merge update behavior can be configured with clear defaults.",
+    "Duplicate and conflict visibility is documented with Oracle limitations.",
+    "Metrics remain low-cardinality and readable through the existing metrics CLI.",
+    "Tests cover duplicate, conflict, merge-match, and insert paths where practical.",
+    "Existing Oracle configurations continue to work without breaking changes."
+  ],
+  "tests": "Add Oracle SQL generation tests, mapping tests, duplicate metric tests, and optional integration coverage for merge-match behavior. Run scripts/check-sinks.sh and scripts/check.sh.",
+  "documentation": "Update docs/oracle-sink.md, docs/metrics.md, docs/idempotency.md, docs/configuration.md, ROADMAP.md, and CHANGELOG.md.",
+  "closeout": "Close after release publication. The close-out note must include the release tag, controls added, observable outcomes, tests run, and any Oracle metadata limitations."
+}

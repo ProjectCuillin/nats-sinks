@@ -19,12 +19,19 @@ messages into another durable system, such as a database.
 `nats-sinks` is a Python package for building outbound NATS JetStream sink consumers. It provides a reusable runtime that owns JetStream delivery semantics and delegates destination writes to sink implementations. The current production sinks are Oracle Database and local files.
 
 The project is intentionally suitable for mission-oriented environments such as
-defence logistics, operational reporting, secure platform telemetry, and other
-domains where event loss, premature acknowledgement, and unclear audit trails
-are unacceptable. The language throughout the documentation uses examples such
-as priority, classification, labels, DLQs, and encrypted payloads because those
-concepts map naturally to environments that must handle sensitive operational
-information with discipline.
+defence logistics, operational reporting, secure platform telemetry, and
+sensor-driven operational data flows where event loss, premature
+acknowledgement, and unclear audit trails are unacceptable. In defence and
+national-security settings, `nats-sinks` can be used as the durable event
+custody layer around command-and-control data fabrics, sensor-fusion pipelines,
+platform telemetry, weapon-system status events, sensor-to-shooter workflows,
+and kill-chain or kill-mesh style coordination messages. Its role is to
+preserve and persist operational events safely. It is not a targeting system,
+fire-control system, weapons-release mechanism, rules-of-engagement engine, or
+automation layer for lethal decision-making. The language throughout the
+documentation uses examples such as priority, classification, labels, DLQs, and
+encrypted payloads because those concepts map naturally to environments that
+must handle sensitive operational information with discipline.
 
 The package is designed as a production-ready foundation rather than a demo script. It includes a typed public API, JSON configuration, a CLI, security-conscious defaults, tests, documentation, CI configuration, and packaging metadata suitable for publishing to PyPI.
 
@@ -43,7 +50,7 @@ used immediately:
 
 - `JetStreamSinkRunner` for pull-based JetStream consumption with bounded
   batches, commit-then-acknowledge processing, DLQ handling, graceful shutdown,
-  logging hooks, metrics hooks, and safe redelivery behavior.
+  logging hooks, basic metrics hooks, and safe redelivery behavior.
 - `NatsEnvelope`, the immutable internal representation passed to sinks instead
   of raw NATS client messages.
 - Core-normalized message metadata fields for `priority`, `classification`,
@@ -53,6 +60,15 @@ used immediately:
   audit-relevant event streams without changing sink code.
 - `nats-sink`, the CLI for validating JSON configuration, showing redacted
   effective config, testing sinks, and running sink processes.
+- `nats-sink-metrics`, a separate CLI for reading a local JSON metrics snapshot
+  and rendering status as tables, JSON, JSONL, shell variables, metric names,
+  or Prometheus text output.
+- `nats-sink-observe`, a separate observability CLI for generating disabled
+  sharing policies, validating what may be exported, and producing
+  policy-filtered Prometheus textfile output for node_exporter or an optional
+  native Prometheus HTTP scrape endpoint. It also provides a disabled-by-default
+  NATS server monitoring connector for explicitly approved `/healthz`, `/jsz`,
+  and related endpoint fields.
 - Optional core payload encryption for AES-256-GCM and AES-256-CCM before
   envelopes are delivered to Oracle, file, or future sinks.
 - `nats_sinks.oracle.OracleSink`, the production Oracle Database sink with
@@ -64,6 +80,54 @@ used immediately:
   filenames, atomic temporary-file placement, optional `fsync`, duplicate
   handling, optional Python standard-library gzip compression, metadata
   persistence, and the same payload normalization contract used by Oracle.
+- Basic metrics counters and timing observations for fetched, prepared,
+  written, ACKed, NAKed, failed, DLQ, sink write, ACK error, and active batch
+  behavior. The built-in runtime can write a local JSON snapshot when
+  configured, and embedded applications can still supply their own metrics
+  recorder or exporter. External observability sharing is controlled by a
+  separate policy and is disabled by default, whether operators choose the
+  recommended textfile connector or the optional native HTTP endpoint.
+- NATS reconnect tuning for clustered or controlled-network deployments,
+  including multiple seed URLs, reconnect wait, maximum reconnect attempts,
+  ping behavior, pending buffer size, drain timeout, and connection event
+  metrics.
+- Exponential retry backoff with optional jitter for retryable failures, so
+  temporary destination outages can slow down without weakening the
+  commit-then-acknowledge invariant.
+- Optional priority-aware processing lanes for already-fetched bounded
+  batches, with weighted starvation controls, aggregate metrics, and explicit
+  warnings that this is not exactly-once processing or strict total ordering.
+  See
+  [Priority-Aware Processing Lanes](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/priority-lanes.md).
+- CycloneDX SBOM generation for release evidence, with JSON and XML SBOM files
+  generated during local checks, CI builds, and release workflows.
+- SHA-256 release checksum manifests and documented hash-verified installation
+  guidance for high-trust deployment workflows.
+- A deterministic synthetic mission scenario harness for generating fake
+  `NatsEnvelope` test data and running local file-sink smoke checks without
+  live NATS or Oracle services. See
+  [Synthetic Mission Testing](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/use-cases/defence/synthetic-mission-testing.md).
+- A use-case blueprint area that shows how generic features such as
+  commit-then-ACK, mission metadata, classification, labels, payload
+  encryption, Oracle storage, and file output can support mission-oriented
+  patterns without making the product defence-only. See
+  [Use Cases](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/use-cases/index.md).
+- Kubernetes deployment examples that show JSON ConfigMaps, Secret
+  references, mounted trust material, restrictive security contexts, resource
+  limits, graceful termination, and optional Prometheus observability sidecars.
+  See [Kubernetes Deployment](https://nats-sinks.readthedocs.io/en/latest/kubernetes/).
+- Mission-support operational examples that show complete patterns for
+  restricted event storage, disconnected file handoff, DLQ triage and replay
+  preparation, and destination outage recovery. See
+  [Mission-Support Operational Examples](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/use-cases/mission-support/index.md).
+- A generic mission metadata profile for carrying validated JSON context to
+  Oracle `MISSION_METADATA_JSON`, file-sink output records, and future sinks
+  without adding fixed columns for every use case. See
+  [Mission Metadata](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/mission-metadata.md).
+- F2T2EA event phase tagging guidance built on mission metadata as
+  metadata-only context, with explicit non-goals around targeting,
+  fire-control, weapons-release, and autonomous decision behavior. See
+  [F2T2EA Event Phase Tagging](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/use-cases/defence/f2t2ea-event-phase-tagging.md).
 
 Production sink modules shipped today:
 
@@ -72,7 +136,7 @@ Production sink modules shipped today:
 
 ## Status
 
-The current release is `0.3.0`.
+The current release is `0.4.0`.
 
 Included today:
 
@@ -86,6 +150,13 @@ Included today:
 - Optional AES-256-GCM and AES-256-CCM payload encryption in the core runner.
 - JSON configuration and redacted effective-config output.
 - CLI command named `nats-sink`.
+- Metrics inspection command named `nats-sink-metrics`.
+- Observability policy command named `nats-sink-observe`.
+- Synthetic mission scenario harness for core and file-sink smoke testing.
+- Generic mission metadata support with validated JSON context for Oracle,
+  file sink, and future sinks.
+- F2T2EA phase-tagging documentation as a use-case blueprint on top of mission
+  metadata, not runtime workflow automation.
 - Unit tests for ACK ordering, DLQ ordering, config loading, SQL generation, and Oracle mapping.
 - Integration test placeholders isolated behind `integration` markers.
 - MkDocs documentation, examples, GitHub Actions workflows, governance files, and security policy.
@@ -206,10 +277,14 @@ contains destination-specific fields documented on each sink page.
 {
   "nats": {
     "url": "nats://localhost:4222",
+    "urls": [],
     "stream": "ORDERS",
     "consumer": "file-orders-sink",
     "subject": "orders.*",
-    "durable": true
+    "durable": true,
+    "allow_reconnect": true,
+    "reconnect_time_wait_seconds": 2,
+    "max_reconnect_attempts": 60
   },
   "delivery": {
     "batch_size": 100,
@@ -218,6 +293,10 @@ contains destination-specific fields documented on each sink page.
     "ack_policy": "after_sink_commit",
     "max_retries": 5,
     "retry_backoff_ms": 1000,
+    "retry_backoff_max_ms": 60000,
+    "retry_backoff_mode": "exponential",
+    "retry_backoff_multiplier": 2.0,
+    "retry_jitter": "full",
     "prefer_safe_duplication": true
   },
   "dead_letter": {
@@ -233,7 +312,8 @@ contains destination-specific fields documented on each sink page.
   },
   "metrics": {
     "enabled": false,
-    "namespace": "nats_sinks"
+    "namespace": "nats_sinks",
+    "snapshot_file": null
   },
   "message_metadata": {
     "priority": {
@@ -266,6 +346,37 @@ Secret values should come from the environment or a secret manager. Use
 environment-backed fields such as `password_env` and `token_env` rather than
 storing credentials in config files.
 
+To write a local dependency-free metrics snapshot, enable metrics and set a
+snapshot path:
+
+```json
+{
+  "metrics": {
+    "enabled": true,
+    "namespace": "nats_sinks",
+    "snapshot_file": ".local/nats-sinks/metrics.json"
+  }
+}
+```
+
+Inspect the snapshot from another terminal:
+
+```bash
+nats-sink-metrics show .local/nats-sinks/metrics.json --format table
+nats-sink-metrics show .local/nats-sinks/metrics.json --format shell --kind counter
+nats-sink-metrics show .local/nats-sinks/metrics.json --metric "oracle_*"
+nats-sink-metrics get .local/nats-sinks/metrics.json messages_failed_total --default 0
+```
+
+The metrics CLI is documented in
+[Metrics](https://nats-sinks.readthedocs.io/en/latest/metrics/).
+Policy-controlled Prometheus export is documented in
+[Observability](https://nats-sinks.readthedocs.io/en/latest/observability/) and
+[Prometheus Integration](https://nats-sinks.readthedocs.io/en/latest/prometheus/).
+The NATS server monitoring connector and delivery-boundary decision for
+endpoints such as `/jsz` and `/healthz` are documented in
+[NATS Server Monitoring](https://nats-sinks.readthedocs.io/en/latest/nats-server-monitoring/).
+
 ## Payload Bodies
 
 NATS message bodies are bytes. The generic framework accepts bytes and does not
@@ -275,9 +386,14 @@ encrypted text, plain text, and opaque bytes.
 
 The default `payload_mode` is `json_or_envelope`:
 
-- valid JSON is stored unchanged,
+- standards-compliant JSON is stored unchanged,
 - non-JSON UTF-8 text is wrapped in a JSON envelope,
 - non-text bytes are wrapped as base64 in the same JSON envelope.
+
+Python-only JSON constants such as `NaN`, `Infinity`, and `-Infinity` are not
+treated as valid JSON. In `json_or_envelope` mode they are preserved as text in
+the payload envelope; in `json_only` mode they are permanent serialization
+failures that can follow the configured DLQ path.
 
 For encrypted text streams where the ciphertext may or may not decrypt to JSON
 later, use `payload_mode: "text_envelope"` to wrap every body as text and avoid
@@ -426,6 +542,13 @@ Do not embed credentials in `nats.url`; use environment-backed fields instead.
 See [NATS Connections And Authentication](https://nats-sinks.readthedocs.io/en/latest/nats-connections/) for
 configuration examples and secure deployment notes.
 
+Authentication is only half of the production story. The NATS runtime account
+should also have least-privilege subject permissions: fetch from the configured
+pull consumer, receive inbox replies, ACK received messages after durable sink
+success, and publish to the configured DLQ subject only when DLQ is enabled.
+See [NATS Least-Privilege Permissions](https://nats-sinks.readthedocs.io/en/latest/nats-permissions/) for
+templates and validation checklists.
+
 ## CLI
 
 ```bash
@@ -436,6 +559,11 @@ nats-sink validate examples/oracle-jetstream/config.json
 nats-sink show-effective-config examples/oracle-jetstream/config.json
 nats-sink test-sink examples/oracle-jetstream/config.json
 nats-sink run examples/oracle-jetstream/config.json
+nats-sink-metrics show .local/nats-sinks/metrics.json --format table
+nats-sink-metrics show .local/nats-sinks/metrics.json --metric "oracle_*"
+nats-sink-metrics get .local/nats-sinks/metrics.json messages_failed_total --default 0
+nats-sink-observe init-prometheus-policy examples/file-basic/config.json .local/observability.prometheus.json
+nats-sink-observe validate-policy .local/observability.prometheus.json
 ```
 
 The CLI:
@@ -445,6 +573,22 @@ The CLI:
 - prints the commit-then-acknowledge ACK policy,
 - renders effective configuration as redacted JSON,
 - never prints resolved passwords.
+
+The metrics CLI reads only a local JSON snapshot written by the runner when
+`metrics.enabled` and `metrics.snapshot_file` are configured. It supports
+table, JSON, JSONL, shell, names, and Prometheus text output so developers can
+pipe results into service checks and scripts. Oracle duplicate/conflict
+counters are visible through the same command with `--metric "oracle_*"`. See
+[Metrics](https://nats-sinks.readthedocs.io/en/latest/metrics/) for examples.
+
+The observability CLI manages external sharing policy. It can generate a
+disabled Prometheus policy from runtime config, list known metric names and
+subject hints, validate the policy, write policy-filtered Prometheus textfile
+output, and run a disabled-by-default native Prometheus HTTP endpoint. Metrics
+sharing remains off until the global policy and the selected connector are
+explicitly enabled. See
+[Prometheus Integration](https://nats-sinks.readthedocs.io/en/latest/prometheus/)
+for Linux service guidance.
 
 ## Python API
 
@@ -484,6 +628,11 @@ app.add_typer(nats_sink_cli, name="nats-sink")
 
 See [Python Usage](https://nats-sinks.readthedocs.io/en/latest/python-usage/) for embedded application patterns and
 the tradeoff between using the public runtime API and importing CLI internals.
+
+Documented imports and CLI entry points are protected by public API
+compatibility tests. See
+[Public API Compatibility](https://nats-sinks.readthedocs.io/en/latest/public-api/)
+for the supported import contract and release guard.
 
 ## Production Sinks
 
@@ -541,6 +690,9 @@ Important failure cases:
 - Unit tests must not make network calls.
 - Integration tests are isolated behind markers.
 - Use TLS and authenticated NATS connections in production.
+- Use least-privilege NATS permissions for the sink runtime account; avoid
+  broad publish, broad subscribe, stream administration, and source-subject
+  publish rights for ordinary workers.
 - Use core payload encryption when destination storage should retain encrypted
   message bodies while keeping routing metadata available.
 - Use least-privilege destination credentials with access only to the required
@@ -555,7 +707,9 @@ ruff check .
 mypy src
 pytest
 python -m build
-twine check dist/*
+python scripts/update-dependency-manifests.py --check
+scripts/sbom.sh
+twine check dist/*.whl dist/*.tar.gz
 ```
 
 Run only unit tests:
@@ -567,8 +721,12 @@ pytest -m "not integration"
 Build documentation:
 
 ```bash
-mkdocs build --strict
+scripts/check-docs.sh
 ```
+
+The docs helper builds the Read the Docs and GitHub Pages variants in isolated
+temporary directories. That prevents overlapping MkDocs runs from cleaning the
+same `site/` directory.
 
 Manual live NATS connection testing is documented in
 [NATS Connections And Authentication](https://nats-sinks.readthedocs.io/en/latest/nats-connections/) and
@@ -584,13 +742,49 @@ or sensitive payloads.
 
 To run `nats-sink` as a systemd service on Oracle Linux or Debian, see
 [Service Deployment](https://nats-sinks.readthedocs.io/en/latest/service-deployment/). The repository includes
-example service files and installer scripts under `examples/systemd/` and
-`scripts/`.
+example service files under `examples/systemd/` and a unified OS-detecting
+installer at `scripts/install-systemd.sh`. The documented one-command
+installer downloads the script from
+[ProjectCuillin/nats-sinks](https://github.com/ProjectCuillin/nats-sinks/) and
+runs it with `sudo`. When the script is not running inside a checkout, it
+fetches the required example configuration files and systemd unit files from
+the selected GitHub ref. Production operators should pin a release tag and
+inspect the script first when policy requires reviewed installation steps.
+
+Kubernetes deployment guidance is documented in
+[Kubernetes Deployment](https://nats-sinks.readthedocs.io/en/latest/kubernetes/).
+The tracked examples under `examples/kubernetes/` are public-safe starting
+points that operators must customize before use.
 
 Release and PyPI publishing instructions are documented in
 [Publishing Releases](https://nats-sinks.readthedocs.io/en/latest/publishing/). That guide covers version updates,
 tag pushes, GitHub release workflows, TestPyPI, PyPI trusted publishing, and
 manual fallback commands.
+
+Backlog and feature-request workflow is documented in
+[Backlog Management](https://nats-sinks.readthedocs.io/en/latest/backlog-management/).
+GitHub Issues are the live backlog; `CHANGELOG.md` records work that has
+shipped or is staged for the next release. Maintainers can define local
+backlog items as JSON files under `backlog/items/` and sync them to GitHub
+Issues with `scripts/sync-backlog-issues.py` or the `Backlog Sync` GitHub
+Actions workflow. The backlog tooling also validates target-release labels and
+rejects common public-leak patterns such as network locators, IP literals,
+credential assignments, token-like values, and certificate blocks before
+content is posted to GitHub Issues. Issue lifecycle tooling supports the
+standard maintainer flow: assign the issue, post a sanitized implementation
+plan, apply the release label, post sanitized test-plan and close-out evidence,
+tick acceptance criteria, and leave the issue open until release automation
+closes it after the associated GitHub Release exists.
+
+Dependency inventory guidance is documented in
+[Dependency Management](https://nats-sinks.readthedocs.io/en/latest/dependency-management/).
+`pyproject.toml` is the authoritative package metadata, and generated
+`requirements*.txt` manifests are kept in sync for GitHub Dependency Graph,
+Dependabot, and dependency review workflows.
+
+Hash-verified installation guidance for controlled deployment environments is
+documented in
+[Hash-Verified Installs](https://nats-sinks.readthedocs.io/en/latest/hash-verified-installs/).
 
 ## Repository Layout
 
@@ -617,6 +811,20 @@ Phase 1:
 - Core runtime.
 - Oracle sink.
 - File sink.
+- NATS reconnect tuning and connection event metrics.
+- Policy-controlled Prometheus textfile export and optional native Prometheus
+  HTTP scrape endpoint as separate observability services.
+- Disabled-by-default NATS server monitoring connector for approved endpoint
+  fields, implemented outside the delivery worker.
+- Kubernetes deployment examples with worker/observability separation,
+  security contexts, resource limits, graceful shutdown settings, and Secret
+  references.
+- Least-privilege NATS permissions templates for runtime workers, DLQ publish
+  rights, optional consumer management, and advisory readers.
+- Advanced JetStream topology guidance for mirrors, sources, subject
+  transforms, republish behavior, stream compression, placement, metadata, and
+  idempotency review.
+- CycloneDX SBOM generation for release evidence.
 - CLI.
 - Documentation.
 - Tests.
@@ -624,17 +832,16 @@ Phase 1:
 
 Phase 2:
 
-- Better metrics.
+- OpenTelemetry metrics connector.
 - More idempotency strategies.
 - Postgres sink.
 - HTTP sink.
 - S3 sink design with deterministic object keys.
+- Native OCI Object Storage sink design with deterministic object keys,
+  workload identity support, checksums, multipart upload, and least-privilege
+  bucket guidance.
 - Kafka and other backend evaluation through the sink framework.
 - Docker image.
-- Kubernetes examples.
-- Multiple NATS seed URLs for clustered deployments.
-- NATS reconnect tuning and connection event metrics.
-- Least-privilege NATS permissions templates for sink users.
 - Certified TLS certificate authentication guidance.
 - Certified NKEY with challenge authentication support.
 - Certified decentralized JWT authentication/authorization support.
@@ -648,11 +855,10 @@ Phase 3:
 - Plugin discovery.
 - Sink certification tests.
 - Helm chart.
-- Advanced observability.
+- Advanced observability connectors and bounded subject-aware metric policies.
 - WebSocket connection support.
 - Push and ordered consumer evaluation where compatible with project semantics.
-- Stream management helpers and documentation.
-- Server monitoring endpoint integration.
+- Stream management helpers beyond the current topology guidance.
 - Future sink certification tests.
 
 Not planned unless scope changes:
@@ -664,6 +870,12 @@ Not planned unless scope changes:
 
 See [NATS Feature Gap Analysis](https://nats-sinks.readthedocs.io/en/latest/nats-feature-gap-analysis/) for the
 detailed comparison.
+
+SBOM generation and release evidence are documented in
+[SBOM And Release Evidence](https://nats-sinks.readthedocs.io/en/latest/sbom/).
+Release asset checksums and hash-verified installation workflows are documented
+in
+[Hash-Verified Installs](https://nats-sinks.readthedocs.io/en/latest/hash-verified-installs/).
 
 ## License
 

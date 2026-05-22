@@ -1,19 +1,172 @@
-name: Feature request
-description: Suggest an improvement.
+name: Feature request or backlog item
+description: Propose a feature, roadmap item, sink capability, operational improvement, or documentation enhancement.
 title: "[Feature]: "
-labels: ["enhancement"]
+labels: ["enhancement", "backlog"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for backlog work that may become a future release item.
+
+        GitHub Issues are the live backlog for `nats-sinks`. `CHANGELOG.md` records what has actually shipped. A feature request should therefore be detailed enough that a maintainer can understand the operational value, security impact, acceptance criteria, test plan, and close-out evidence without relying on chat history.
+
+        Do not include secrets, credential values, certificate material, private operational details, live network locators, IP addresses, sensitive subjects, or payload examples in public feature requests.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of the project is primarily affected?
+      options:
+        - Core runtime and delivery semantics
+        - Oracle sink
+        - File sink
+        - Future sink
+        - CLI
+        - Configuration
+        - Metrics and observability
+        - Security
+        - Packaging and release
+        - Documentation
+        - CI and automation
+        - Operations and deployment
+        - Testing
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: Select the intended planning priority. Maintainers may adjust this during triage.
+      options:
+        - P1 - release blocker
+        - P2 - next minor release candidate
+        - P3 - backlog candidate
+        - P4 - research or design needed
+    validations:
+      required: true
+
+  - type: input
+    id: target_release
+    attributes:
+      label: Target release
+      description: Use `unscheduled` until a maintainer assigns the work to a concrete release tag such as `v0.4.0`.
+      value: "unscheduled"
+    validations:
+      required: true
+
   - type: textarea
     id: problem
     attributes:
-      label: Problem
-      description: What problem should this solve?
+      label: Problem statement
+      description: What operational, developer, security, reliability, or documentation problem should this solve?
+      placeholder: Describe the current limitation and why it matters.
     validations:
       required: true
+
   - type: textarea
     id: proposal
     attributes:
-      label: Proposal
-      description: What would you like to happen?
+      label: Proposed outcome
+      description: What should exist when this issue is complete?
+      placeholder: Describe the desired behavior, command, config field, sink capability, documentation page, or operator workflow.
     validations:
       required: true
+
+  - type: textarea
+    id: users
+    attributes:
+      label: Intended users and operational context
+      description: Who benefits from this? Include relevant deployment context without sharing secrets or sensitive infrastructure details.
+      placeholder: |
+        Example: operators running nats-sinks as systemd services, Oracle sink users, maintainers adding future sinks, mission-support deployments needing auditability.
+    validations:
+      required: true
+
+  - type: textarea
+    id: delivery_semantics
+    attributes:
+      label: Delivery semantics and idempotency impact
+      description: Explain how this preserves commit-then-acknowledge, at-least-once delivery, idempotency, DLQ behavior, and safe redelivery.
+      placeholder: State whether ACK ordering changes, whether duplicates remain safe, and which tests must prove it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: security
+    attributes:
+      label: Security and privacy considerations
+      description: Identify secrets, payloads, metadata, logging, authentication, filesystem, database, observability, or network concerns.
+      placeholder: State what must not be logged, exported, stored, or accepted from untrusted input.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: List concrete checks that prove this issue is done.
+      placeholder: |
+        - [ ] Public behavior is documented.
+        - [ ] Unit tests cover happy and unhappy paths.
+        - [ ] Integration or e2e tests are added or explicitly not applicable.
+        - [ ] `CHANGELOG.md` is updated.
+    validations:
+      required: true
+
+  - type: textarea
+    id: tests
+    attributes:
+      label: Test plan
+      description: Which unit, smoke, integration, e2e, security, documentation, or release checks should run before this can close?
+      placeholder: Include exact commands where known.
+    validations:
+      required: true
+
+  - type: textarea
+    id: documentation
+    attributes:
+      label: Documentation and release-note plan
+      description: Which docs, examples, README sections, release notes, or operator guides should change?
+      placeholder: Name the pages and explain what readers need to learn.
+    validations:
+      required: true
+
+  - type: textarea
+    id: closeout
+    attributes:
+      label: Close-out evidence required
+      description: What should be written when this issue is closed?
+      value: |
+        When closing this issue, include:
+
+        - the PR or commit that implemented it,
+        - a short summary of the shipped behavior,
+        - the release label that identifies where it will ship,
+        - checked acceptance criteria,
+        - the tests and checks that passed,
+        - sanitized test plan evidence,
+        - the documentation and changelog entries updated,
+        - sanitized close-out evidence,
+        - any known limitations or follow-up issues.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: invariants
+    attributes:
+      label: Required invariants
+      description: Confirm the core project constraints that apply to every backlog item.
+      options:
+        - label: This request must not weaken commit-then-acknowledge behavior.
+          required: true
+        - label: This request must not introduce silent message loss.
+          required: true
+        - label: This request must not log secrets, credentials, keys, sensitive payloads, or private operational details by default.
+          required: true
+        - label: This request must update documentation and `CHANGELOG.md` when public behavior changes.
+          required: true
+        - label: This request must remain open until the associated release has been published.
+          required: true

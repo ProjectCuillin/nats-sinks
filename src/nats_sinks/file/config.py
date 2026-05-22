@@ -1,4 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
+
 """Configuration models for the local filesystem sink.
 
 The file sink has no third-party runtime dependency, but it still needs strict

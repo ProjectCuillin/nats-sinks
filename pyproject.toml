@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "nats-sinks"
-version = "0.3.0"
+version = "0.4.0"
 description = "Production-ready outbound sink connectors for NATS JetStream."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -49,6 +49,7 @@ dev = [
   "bandit[toml]>=1.7,<2",
   "build>=1.2,<2",
   "cryptography>=42,<47",
+  "cyclonedx-bom>=6,<7",
   "mypy>=1.10,<3",
   "pytest>=8.2,<10",
   "pytest-asyncio>=0.23,<2",
@@ -75,6 +76,8 @@ Source = "https://github.com/ProjectCuillin/nats-sinks/"
 
 [project.scripts]
 nats-sink = "nats_sinks.cli.main:app"
+nats-sink-metrics = "nats_sinks.cli.metrics:app"
+nats-sink-observe = "nats_sinks.cli.observability:app"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/nats_sinks"]

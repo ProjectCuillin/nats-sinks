@@ -1,0 +1,27 @@
+{
+  "id": "nats-monitoring-nonfinite-json",
+  "title": "[Bug]: NATS monitoring connector accepts non-standard JSON constants",
+  "area": "Metrics and observability",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.0",
+  "labels": ["metrics", "observability", "security"],
+  "summary": "The optional NATS server monitoring connector parses endpoint responses with Python JSON defaults. Non-standard constants such as NaN and Infinity can be accepted even though the connector documents JSON snapshots and public-safe observability output.",
+  "observed": "A monitoring response containing NaN can be collected into a snapshot instead of being rejected as invalid JSON.",
+  "expected": "NATS monitoring endpoint responses and stored monitoring snapshots should use standards-compliant JSON only. Non-standard constants should be rejected with a clear NatsMonitoringError or snapshot validation error.",
+  "reproduction": "Run a focused regression test where the injected fetch function returns {\"jetstream\":{\"stats\":{\"messages\":NaN}}} and assert collection fails.",
+  "failing_test": "Add a focused regression test under tests/unit that proves NATS monitoring collection rejects non-standard JSON constants.",
+  "impact": "Invalid monitoring snapshots can break local observability tooling, produce non-portable release evidence, and hide malformed monitoring responses that operators should investigate.",
+  "delivery_semantics": "No delivery semantics are changed. The NATS monitoring connector remains separate from the JetStream delivery runner and must not affect ACK, NAK, DLQ, retry, or sink writes.",
+  "security": "The fix must preserve the existing endpoint and field allow lists and must not add base URLs, credentials, private topology values, payloads, or unapproved fields to snapshots or logs.",
+  "acceptance": [
+    "A focused regression test covers non-standard JSON constants in monitoring endpoint responses.",
+    "Collection raises NatsMonitoringError for non-standard constants.",
+    "Stored monitoring snapshot loading rejects non-standard constants.",
+    "Monitoring snapshot writing uses standards-compliant JSON output.",
+    "Existing NATS monitoring, observability, CLI, documentation, package, and release checks still pass."
+  ],
+  "tests": "Run the focused regression test, NATS monitoring tests, observability CLI tests, Prometheus observability tests, and the full local check script.",
+  "documentation": "Update CHANGELOG.md and NATS monitoring documentation to state that monitoring responses and snapshots must be standards-compliant JSON.",
+  "closeout": "Close only after the release containing the fix is published. Include the release tag, regression evidence, verification evidence, and any remaining limitations."
+}

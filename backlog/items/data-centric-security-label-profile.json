@@ -1,0 +1,23 @@
+{
+  "id": "data-centric-security-label-profile",
+  "title": "[Feature]: Add a data-centric security label profile",
+  "area": "Core runtime and delivery semantics",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["security", "documentation"],
+  "problem": "nats-sinks already stores classification and labels, but controlled data environments often need richer data-centric security attributes such as releasability, handling caveats, owner, originator, policy identifier, and retention category. Without a documented profile, deployments may invent incompatible metadata shapes and weaken downstream policy enforcement.",
+  "proposal": "Define an optional data-centric security label profile that extends existing priority, classification, and labels with structured JSON metadata. The profile should remain configurable and generic, while documentation can show defence-oriented examples such as NATO-style classification values and releasability lists. The profile should work consistently across Oracle, file, and future sinks.",
+  "users": "Security officers, data stewards, operators, public-sector integrators, mission-support teams, and future sink implementers who need consistent labels for routing, retention, audit, and access policy.",
+  "delivery_semantics": "Security labels are metadata and must be normalized before sink delivery. Strict-mode validation failures should follow permanent-failure handling and DLQ-before-ACK semantics. Label handling must not weaken idempotency, ACK order, or payload encryption behavior.",
+  "security": "Classification and label fields can be sensitive. Logs, metrics, public examples, and issue comments must avoid revealing real operational labels. The feature should enforce length limits, allowed values where configured, and safe defaults. It must avoid suggesting that labels alone enforce access control without downstream authorization.",
+  "acceptance": [
+    "A structured security label profile is documented with optional fields and validation behavior.",
+    "The profile can be stored in Oracle JSON metadata and file sink JSON records.",
+    "Examples include sanitized NATO-style classification and releasability values.",
+    "Documentation explains that labels inform policy but do not replace authorization.",
+    "Tests cover defaulting, strict validation, size limits, and redaction behavior."
+  ],
+  "tests": "Add unit tests for structured label parsing, configured allow lists, missing labels, oversized labels, file sink rendering, Oracle row mapping, and DLQ-before-ACK behavior on strict validation failure.",
+  "documentation": "Update docs/configuration.md, docs/security.md, docs/oracle-sink.md, docs/file-sink.md, docs/use-cases, ROADMAP.md, and CHANGELOG.md with examples and policy guidance.",
+  "closeout": "Close after the release containing the label profile is published. Include release tag, fields supported, tests run, documentation links, and migration notes."
+}

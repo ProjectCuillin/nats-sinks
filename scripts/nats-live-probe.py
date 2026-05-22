@@ -1,5 +1,7 @@
 #!/usr/bin/env python
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
+
 """Probe a live NATS server connection without committing secrets.
 
 This script is intended for manual operator validation, not CI. It can verify:

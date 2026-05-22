@@ -1,0 +1,26 @@
+{
+  "id": "bug-report-json-nonstandard-constants",
+  "title": "[Bug]: Bug-report sync accepts non-standard JSON constants",
+  "area": "CI and automation",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.0",
+  "labels": ["testing", "serialization"],
+  "summary": "The managed bug-report sync tool can parse local bug JSON containing non-standard constants such as NaN or Infinity when those values appear in ignored extra fields.",
+  "observed": "A bug report with an ignored NaN field can pass validation even though the source file is not standards-compliant JSON.",
+  "expected": "Bug-report sync should reject non-standard JSON constants at parse time regardless of whether the field is later used.",
+  "reproduction": "Run the focused regression test that adds an ignored NaN field to a bug report JSON document and calls load_bug_report.",
+  "failing_test": "tests/unit/test_bug_hunt_strict_json_boundaries.py::test_bug_report_sync_rejects_nonstandard_json_constants",
+  "impact": "Bug-report source files are public workflow inputs. Strict parsing keeps test evidence, acceptance criteria, and release-gated closure deterministic.",
+  "delivery_semantics": "No runtime delivery behavior changes. This fix hardens bug-management automation only.",
+  "security": "The fix must preserve existing secret, URL, and IP-address detection before GitHub comments or issues are published.",
+  "acceptance": [
+    "A focused regression test proves non-standard constants in bug-report JSON are rejected.",
+    "Valid bug reports continue to load.",
+    "The error message clearly identifies invalid JSON.",
+    "Existing bug sync tests and full checks still pass."
+  ],
+  "tests": "Run the focused regression test, bug-report sync tests, and the full local check script.",
+  "documentation": "Update CHANGELOG.md and bug workflow documentation if public behavior changes.",
+  "closeout": "Close only after the release containing the fix is published. Include the release tag, regression evidence, verification evidence, and any remaining limitations."
+}

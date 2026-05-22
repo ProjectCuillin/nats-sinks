@@ -67,3 +67,14 @@ Payload inclusion is configurable because source payloads may be sensitive.
 For restricted, classified, or otherwise sensitive streams, consider disabling
 payload inclusion in the DLQ and relying on message metadata, idempotency keys,
 and the original stream retention policy for investigation.
+
+DLQ publish permission is separate from source-subject permission. The sink
+runtime account does not need to publish to the source subject, and it does not
+need to subscribe to the DLQ subject. When DLQ is enabled, grant publish access
+only to the configured `dead_letter.subject`. The complete NATS permission
+templates are documented in
+[NATS Least-Privilege Permissions](nats-permissions.md).
+
+For a complete operational example of DLQ triage, replay preparation, and
+safe public reporting, see
+[DLQ Triage And Replay Preparation](use-cases/mission-support/dlq-triage-and-replay.md).

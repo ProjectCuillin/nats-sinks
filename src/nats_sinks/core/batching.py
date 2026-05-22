@@ -1,4 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
+
 """Batching utilities used by the pull-consumer runtime.
 
 Batching is one of the main backpressure controls in nats-sinks.  The runner

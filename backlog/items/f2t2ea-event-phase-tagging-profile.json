@@ -1,0 +1,23 @@
+{
+  "id": "f2t2ea-event-phase-tagging-profile",
+  "title": "[Docs]: Document F2T2EA event phase tagging as optional metadata",
+  "area": "Documentation",
+  "priority": "P3 - backlog candidate",
+  "target_release": "v0.4.0",
+  "labels": ["documentation", "security"],
+  "problem": "Defence users may want to preserve lifecycle context for events associated with find, fix, track, target-review, engage-report, and assess style workflows. Without careful documentation, this can be misunderstood as workflow automation or a weapons-related control path instead of metadata used for event custody, audit, routing, and later analysis.",
+  "proposal": "Document F2T2EA event phase tagging as an optional use-case profile carried inside the generic mission metadata JSON object. The guidance should explain recommended field names, allowed values, validation behavior, examples for Oracle and file sinks, and safe language around non-goals. The profile should avoid automating target selection, engagement decisions, or rules-of-engagement behavior.",
+  "users": "Defence-oriented integrators, security architects, auditors, operators, maintainers, and reviewers who need a clear pattern for lifecycle tagging without changing the core sink framework into a special-purpose defence workflow tool.",
+  "delivery_semantics": "The profile is metadata only. Invalid phase values should be handled through the same validation and DLQ-before-ACK behavior as other permanent metadata failures when strict validation is enabled. The phase value must not alter ACK order or bypass durable sink success.",
+  "security": "Examples must be sanitized and must avoid sensitive mission detail. The documentation must explicitly state that phase tagging is for custody, audit, routing, and analysis and is not a targeting system, fire-control system, release authority system, or autonomous decision mechanism.",
+  "acceptance": [
+    "A dedicated F2T2EA blueprint page explains the metadata-only scope and non-goals.",
+    "Allowed example values are documented with clear descriptions and safe use guidance.",
+    "Oracle examples show the phase inside a mission metadata JSON column.",
+    "File sink examples show the phase inside the wider JSON record.",
+    "Security notes explain how to keep public examples sanitized and operationally safe."
+  ],
+  "tests": "Run markdown checks and build documentation. If schema examples are introduced, add tests that validate example JSON and configured allowed phase values.",
+  "documentation": "Add a defence use-case page for F2T2EA metadata tagging and link it from the generic use-case index, metadata docs, Oracle docs, file sink docs, security docs, and roadmap.",
+  "closeout": "Close after the release containing the F2T2EA documentation is published. Include release tag, docs added, example files validated, and explicit non-goal language."
+}

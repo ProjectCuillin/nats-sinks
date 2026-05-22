@@ -1,0 +1,23 @@
+{
+  "id": "optional-inprogress-handling",
+  "title": "[Feature]: Evaluate optional InProgress handling for long sink writes",
+  "area": "Core runtime and delivery semantics",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["nats"],
+  "problem": "Long-running sink writes may exceed consumer ACK wait settings if the destination is slow but still making progress. JetStream supports progress-style signals, but adding them carelessly could hide stalled writes or make delivery semantics harder to reason about.",
+  "proposal": "Evaluate and possibly implement optional InProgress handling for long-running sink writes. The design should use bounded intervals, clear shutdown behavior, metrics, and tests proving that progress signals never replace durable success or final ACK.",
+  "users": "Operators with large batches or slow destinations, maintainers tuning backpressure and redelivery behavior, and reviewers assessing long-running transaction safety.",
+  "delivery_semantics": "InProgress signals, if implemented, must be advisory only. Final ACK still happens only after durable sink success. If a sink fails after progress signals, the message must remain eligible for redelivery or DLQ according to policy.",
+  "security": "Progress logs and metrics must not include payloads, message identifiers, or sensitive metadata by default. Intervals and counts must be bounded to avoid noisy or unbounded behavior.",
+  "acceptance": [
+    "The design documents when InProgress is appropriate and when it is unsafe.",
+    "Configuration is optional, bounded, and disabled by default.",
+    "Tests prove progress signals do not ACK messages.",
+    "Shutdown behavior is deterministic.",
+    "Metrics remain low-cardinality and safe."
+  ],
+  "tests": "Add mocked timing tests for progress intervals, sink success, sink failure, shutdown, and retry. Run scripts/check.sh.",
+  "documentation": "Update docs/commit-then-ack.md, docs/configuration.md, docs/operations.md, docs/metrics.md, ROADMAP.md, and CHANGELOG.md.",
+  "closeout": "Close after implemented release or documented no-go decision. Include release tag or decision evidence, tests, and operational caveats."
+}

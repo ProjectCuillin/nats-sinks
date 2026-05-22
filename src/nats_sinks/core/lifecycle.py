@@ -1,4 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
+
 """Lifecycle primitives.
 
 Long-running sink processes need cooperative shutdown rather than abrupt task

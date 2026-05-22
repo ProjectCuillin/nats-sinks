@@ -1,0 +1,63 @@
+{
+  "schema": "nats_sinks.file.message.v1",
+  "schema_version": 1,
+  "subject": "mission.synthetic.sensor.track.0001",
+  "stream": "MISSION_SYNTHETIC",
+  "stream_sequence": 1,
+  "consumer": "file-mission-sink",
+  "consumer_sequence": 1,
+  "message_id": "synthetic-f2t2ea-0001",
+  "priority": "immediate",
+  "classification": "NATO SECRET",
+  "labels": "synthetic;mission-test;f2t2ea-example",
+  "labels_list": [
+    "synthetic",
+    "mission-test",
+    "f2t2ea-example"
+  ],
+  "mission_metadata": {
+    "schema": "nats_sinks.use_case.mission_metadata.v1",
+    "profile": "f2t2ea-event-phase-tagging",
+    "profile_version": 1,
+    "f2t2ea": {
+      "phase": "track",
+      "phase_label": "Track",
+      "phase_source": "publisher",
+      "phase_asserted_at": "2026-01-01T12:00:00Z"
+    }
+  },
+  "payload": {
+    "event": {
+      "event_id": "SYN-F2T2EA-0001",
+      "event_type": "synthetic-track-update"
+    }
+  },
+  "payload_info": {
+    "original_format": "json",
+    "wrapped": false,
+    "sha256": "redacted-example",
+    "size_bytes": 512
+  },
+  "metadata": {
+    "message_metadata": {
+      "priority": "immediate",
+      "classification": "NATO SECRET",
+      "labels": [
+        "synthetic",
+        "mission-test",
+        "f2t2ea-example"
+      ]
+    },
+    "mission_metadata": {
+      "schema": "nats_sinks.use_case.mission_metadata.v1",
+      "profile": "f2t2ea-event-phase-tagging",
+      "profile_version": 1,
+      "f2t2ea": {
+        "phase": "track",
+        "phase_label": "Track",
+        "phase_source": "publisher",
+        "phase_asserted_at": "2026-01-01T12:00:00Z"
+      }
+    }
+  }
+}

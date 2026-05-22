@@ -1,0 +1,23 @@
+{
+  "id": "mission-focused-synthetic-test-harness",
+  "title": "[Testing]: Add a mission-focused synthetic test harness",
+  "area": "Testing",
+  "priority": "P3 - backlog candidate",
+  "target_release": "v0.4.0",
+  "labels": ["testing", "security"],
+  "problem": "The project has unit, smoke, and integration tests, but defence-style and mission-support scenarios need repeatable synthetic test data that exercises priority, classification, labels, encryption, malformed metadata, stale timestamps, duplicates, out-of-order events, DLQ handling, and sink-specific persistence without exposing real operational content.",
+  "proposal": "Create a synthetic scenario generator and test harness using sanitized fake subjects, payloads, and metadata. The harness should support Oracle and file sinks first, include configurable message counts, include malformed and edge-case messages, and generate sanitized test reports. It should be suitable for local development and CI where live services are mocked or gated.",
+  "users": "Maintainers, contributors, release engineers, security reviewers, mission-support integrators, and operators who need confidence that negative paths and edge cases remain stable across releases.",
+  "delivery_semantics": "The harness must verify ACK-after-durable-success, no ACK on sink failure, DLQ-before-ACK, duplicate redelivery handling, and safe behavior with malformed metadata. It must never publish to live systems unless explicitly configured through ignored local settings.",
+  "security": "All generated content must be fake and safe for public logs. Reports must redact destinations, credentials, private infrastructure details, and any configured secrets. Live integration settings must stay under ignored local directories.",
+  "acceptance": [
+    "A synthetic scenario generator can produce valid, invalid, duplicate, stale, encrypted, classified, labeled, and priority-tagged messages.",
+    "The harness can target file sink tests without external services.",
+    "Oracle and NATS live tests remain gated and use ignored local configuration.",
+    "Sanitized reports summarize results without secrets or live locators.",
+    "Documentation explains how to add new scenario profiles for future sinks."
+  ],
+  "tests": "Add unit tests for scenario generation, deterministic seeding, malformed cases, redaction, report rendering, and sink-specific test adapters. Add smoke tests for file sink scenarios and gated integration scripts for Oracle and NATS.",
+  "documentation": "Update docs/testing.md, docs/test-report.md, docs/use-cases, docs/development.md, ROADMAP.md, and CHANGELOG.md with commands, outputs, and safety guidance.",
+  "closeout": "Close after the release containing the synthetic test harness is published. Include release tag, scenario list, tests run, and report examples."
+}

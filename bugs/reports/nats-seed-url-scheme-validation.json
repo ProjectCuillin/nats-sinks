@@ -1,0 +1,26 @@
+{
+  "id": "nats-seed-url-scheme-validation",
+  "title": "[Bug]: NATS seed URLs accept unsupported schemes",
+  "area": "Configuration",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.0",
+  "labels": ["nats", "security", "testing"],
+  "summary": "The optional NATS seed URL list validates only blank values and control characters, allowing unsupported schemes to remain in configuration.",
+  "observed": "A multi-server configuration can include an unsupported seed URL scheme and still pass validation.",
+  "expected": "Every configured NATS seed URL must use an explicitly supported NATS client scheme.",
+  "reproduction": "Run the focused regression test that places an unsupported scheme in the NATS seed URL list.",
+  "failing_test": "tests/unit/test_bug_hunt_non_json_boundaries.py::test_nats_config_rejects_unsupported_seed_url_scheme",
+  "impact": "Operators can believe failover seed URLs are valid while the client receives an unsafe or unusable connection target.",
+  "delivery_semantics": "No ACK behavior changes. Invalid connection configuration fails before message consumption begins.",
+  "security": "The fix applies allow-list validation at the network configuration boundary.",
+  "acceptance": [
+    "Unsupported seed URL schemes are rejected during configuration validation.",
+    "Supported seed URL lists remain accepted.",
+    "The rejection identifies the seed URL list field.",
+    "The focused regression test and full checks pass."
+  ],
+  "tests": "Run the focused regression test, NATS connection option tests, configuration tests, and the full local check script.",
+  "documentation": "Update configuration and NATS connection documentation if accepted schemes are clarified.",
+  "closeout": "Close only after the release containing the fix is published with regression and verification evidence."
+}

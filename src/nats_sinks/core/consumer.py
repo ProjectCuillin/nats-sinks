@@ -1,4 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
+
 """NATS client message normalization.
 
 This module is the adapter between `nats-py` message objects and the stable
@@ -19,9 +21,10 @@ from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime
 from typing import Any, SupportsBytes, cast
 
-from nats_sinks.core.config import MessageMetadataConfig
+from nats_sinks.core.config import MessageMetadataConfig, MissionMetadataConfig
 from nats_sinks.core.envelope import NatsEnvelope
 from nats_sinks.core.message_metadata import resolve_metadata_field, resolve_metadata_labels
+from nats_sinks.core.mission_metadata import resolve_mission_metadata
 
 
 def _get_nested(value: object, *names: str) -> object | None:
@@ -39,12 +42,15 @@ def _get_nested(value: object, *names: str) -> object | None:
 def _as_int(value: object | None) -> int | None:
     if value is None:
         return None
-    if not isinstance(value, (str, bytes, bytearray, int)):
+    if isinstance(value, bool) or not isinstance(value, (str, bytes, bytearray, int)):
         return None
     try:
-        return int(value)
+        rendered = int(value)
     except (TypeError, ValueError):
         return None
+    if rendered < 0:
+        return None
+    return rendered
 
 
 def _safe_text(value: object, *, default: str = "") -> str:
@@ -132,6 +138,7 @@ def envelope_from_nats_message(
     raw_message: Any,
     *,
     message_metadata: MessageMetadataConfig | None = None,
+    mission_metadata: MissionMetadataConfig | None = None,
 ) -> NatsEnvelope:
     """Convert a nats-py message-like object into a stable envelope."""
 
@@ -139,6 +146,7 @@ def envelope_from_nats_message(
     metadata = _safe_getattr(raw_message, "metadata")
     headers = _headers(raw_message)
     metadata_config = message_metadata or MessageMetadataConfig()
+    mission_metadata_config = mission_metadata or MissionMetadataConfig()
 
     stream_sequence = _as_int(
         _get_nested(metadata, "sequence", "stream") or _safe_getattr(metadata, "stream_sequence")
@@ -164,7 +172,7 @@ def envelope_from_nats_message(
         consumer_sequence=consumer_sequence,
         timestamp=timestamp,
         message_id=None,
-        redelivered=None if delivered is None else delivered > 1,
+        redelivered=None if delivered is None or delivered <= 0 else delivered > 1,
         pending=_as_int(_safe_getattr(metadata, "num_pending")),
         priority=resolve_metadata_field(
             headers,
@@ -180,6 +188,11 @@ def envelope_from_nats_message(
             headers,
             header_name=metadata_config.labels.header,
             default=metadata_config.labels_default_for_subject(subject),
+        ),
+        mission_metadata=resolve_mission_metadata(
+            headers,
+            subject=subject,
+            config=mission_metadata_config,
         ),
         reply=_safe_optional_text(_safe_getattr(raw_message, "reply")),
         domain=_safe_optional_text(_safe_getattr(metadata, "domain")),

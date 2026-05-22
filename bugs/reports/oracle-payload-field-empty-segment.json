@@ -1,0 +1,26 @@
+{
+  "id": "oracle-payload-field-empty-segment",
+  "title": "[Bug]: Oracle payload_field idempotency accepts empty path segments",
+  "area": "Oracle sink",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.0",
+  "labels": ["sink-oracle", "testing"],
+  "summary": "Oracle payload-field idempotency configuration accepts dotted paths with empty segments.",
+  "observed": "A payload_field value with an empty path segment validates but cannot resolve to a clear payload key.",
+  "expected": "payload_field configuration must reject empty path segments and control characters during validation.",
+  "reproduction": "Run the focused regression test that configures payload_field with an empty dotted path segment.",
+  "failing_test": "tests/unit/test_bug_hunt_non_json_boundaries.py::test_oracle_payload_field_rejects_empty_path_segments",
+  "impact": "Misconfigured idempotency can be discovered only during message processing rather than during validation.",
+  "delivery_semantics": "The fix fails invalid Oracle sink configuration before messages are fetched or ACKed.",
+  "security": "Clear allow-list validation reduces ambiguous idempotency-key extraction.",
+  "acceptance": [
+    "Oracle payload_field rejects empty path segments.",
+    "Oracle payload_field rejects control characters.",
+    "Valid dotted payload fields continue to work.",
+    "The focused regression test and full checks pass."
+  ],
+  "tests": "Run the focused regression test, Oracle mapping tests, Oracle sink contract tests, and the full local check script.",
+  "documentation": "Update Oracle idempotency documentation or release notes if payload_field validation is clarified.",
+  "closeout": "Close only after the release containing the fix is published with regression and verification evidence."
+}

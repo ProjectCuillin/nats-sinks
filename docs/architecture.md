@@ -36,6 +36,7 @@ flowchart TB
         Runner[JetStreamSinkRunner]
         Envelope[NatsEnvelope]
         Encrypt[Optional payload encryption]
+        Priority[Optional priority lanes]
         DLQ[DLQ publisher]
         Metrics[Metrics hooks]
     end
@@ -52,7 +53,7 @@ flowchart TB
     end
 
     Stream --> Consumer --> Runner
-    Runner --> Envelope --> Encrypt --> Protocol
+    Runner --> Envelope --> Encrypt --> Priority --> Protocol
     Protocol --> Oracle
     Protocol --> File
     Protocol --> Future
@@ -73,6 +74,7 @@ JetStream stream
   -> durable consumer
   -> nats-sinks core runner
   -> optional payload encryption
+  -> optional in-batch priority lane ordering
   -> sink.write_batch(...)
   -> durable destination commit
   -> JetStream ACK
@@ -87,6 +89,7 @@ The core runtime handles:
 - Bounded batch fetching.
 - Conversion from raw NATS messages to `NatsEnvelope`.
 - Optional payload encryption before sink delivery.
+- Optional priority-lane ordering for already-fetched bounded batches.
 - Sink lifecycle.
 - Temporary versus permanent failure handling.
 - DLQ publication.
@@ -105,6 +108,23 @@ Destination sinks handle:
 Mission-oriented deployments should treat this split as an accountability
 boundary. The core provides a consistent delivery contract, while each sink
 documents exactly what counts as durable success for its destination.
+
+## JetStream Topology Boundary
+
+The runner binds to the stream, durable consumer, and subject declared in
+configuration. Advanced JetStream topology that exists before that point, such
+as mirrors, sources, subject transforms, republish rules, stream compression,
+placement, and stream metadata, remains a NATS platform concern.
+
+Those choices can still affect the envelope the runner receives. A transform
+may change the subject used by sink routing. A source or mirror may change how
+operators interpret stream and sequence identity. Placement can affect latency
+and reconnect behavior. The core does not hide these concerns; it keeps them
+outside the delivery-control boundary so they can be reviewed as platform
+architecture.
+
+See [Advanced JetStream Topology](jetstream-topology.md) for the detailed
+operator guidance.
 
 ## Why Raw NATS Messages Are Not Passed To Sinks
 

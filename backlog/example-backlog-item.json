@@ -1,0 +1,21 @@
+{
+  "id": "example-backlog-item",
+  "title": "[Feature]: Example backlog item title",
+  "area": "Documentation",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["documentation"],
+  "problem": "Describe the operational, developer, security, reliability, or documentation problem in enough detail for a maintainer to understand why the work matters.",
+  "proposal": "Describe the behavior, documentation, command, config field, sink capability, or operator workflow that should exist when this item is complete.",
+  "users": "Describe who benefits from the work. Do not include private infrastructure, credentials, server addresses, sensitive subjects, or payload examples.",
+  "delivery_semantics": "Explain whether the change touches commit-then-acknowledge behavior, idempotency, DLQ behavior, retry behavior, or safe redelivery. If it does not, say so explicitly.",
+  "security": "Identify secrets, payloads, metadata, logging, authentication, filesystem, database, observability, or network concerns. State what must not be logged, exported, or accepted from untrusted input.",
+  "acceptance": [
+    "Public behavior is documented.",
+    "Unit tests cover relevant happy and unhappy paths.",
+    "CHANGELOG.md is updated when user-visible behavior changes."
+  ],
+  "tests": "List exact checks expected before close-out, for example: pytest tests/unit/test_example.py, python scripts/check-markdown-links.py, mkdocs build --strict.",
+  "documentation": "List the README, docs pages, examples, release notes, or operator guides that should change.",
+  "closeout": "When this issue closes, include the implementing PR or commit, shipped behavior, tests/checks run, docs and changelog updates, limitations, and follow-up issues."
+}

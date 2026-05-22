@@ -120,6 +120,72 @@ it lets redelivery land on the same operational event row instead of producing
 an extra record. Use `append` only when duplicate rows are acceptable under the
 destination's audit and reconciliation rules.
 
+### Duplicate And Conflict Metrics
+
+Oracle idempotency should be visible to operators. A redelivery that is safely
+absorbed by Oracle is a healthy at-least-once behavior; a duplicate-key conflict
+in a strict write mode may indicate a publisher, configuration, or schema issue
+that needs investigation.
+
+`OracleSink` therefore emits low-cardinality Oracle counters through the same
+metrics recorder used by the core runner:
+
+| Metric suffix | Meaning |
+| --- | --- |
+| `oracle_conflicts_total` | Oracle write conflicts observed by the sink, such as `ORA-00001` duplicate-key conflicts. |
+| `oracle_duplicates_total` | Rows identified as duplicate prior processing through idempotent Oracle handling. |
+| `oracle_duplicate_ignored_total` | Duplicate rows safely ignored by `insert_ignore` mode. |
+
+When the sink is created by `nats-sink run` and `metrics.snapshot_file` is
+enabled, these counters are written to the same local JSON snapshot as the core
+delivery counters:
+
+```json
+{
+  "metrics": {
+    "enabled": true,
+    "namespace": "nats_sinks",
+    "snapshot_file": ".local/nats-sinks/metrics.json"
+  },
+  "sink": {
+    "type": "oracle",
+    "dsn": "localhost:1521/FREEPDB1",
+    "user": "app_user",
+    "password_env": "ORACLE_PASSWORD",
+    "table": "NATS_SINK_EVENTS",
+    "mode": "insert_ignore"
+  }
+}
+```
+
+Inspect Oracle duplicate/conflict counters:
+
+```bash
+nats-sink-metrics show .local/nats-sinks/metrics.json --metric "oracle_*"
+```
+
+Example output:
+
+```text
+KIND     METRIC                           VALUE  DESCRIPTION
+counter  oracle_conflicts_total               1  Oracle write conflicts observed by OracleSink, such as duplicate-key conflicts.
+counter  oracle_duplicate_ignored_total       7  Oracle duplicate rows safely ignored by insert_ignore mode.
+counter  oracle_duplicates_total              7  Oracle rows identified as duplicate prior processing through idempotent handling.
+```
+
+For `insert_ignore`, nats-sinks counts ignored duplicates when Oracle reports
+that fewer rows were affected than attempted, or when `ORA-00001` is observed
+and treated as safe prior processing. For `insert`, the same `ORA-00001`
+increments `oracle_conflicts_total` and remains a failure. For `merge`, Oracle
+does not expose reliable per-row "inserted versus matched" counts through the
+current batch execution path, so the sink does not guess. This preserves metric
+accuracy and avoids overclaiming duplicate visibility.
+
+These metrics do not include table names, subjects, message IDs,
+classification values, labels, payloads, or Oracle constraint names. They must
+not be used as part of idempotency decisions and they never change ACK
+ordering.
+
 ### Idempotency Configuration
 
 ```json
@@ -135,7 +201,7 @@ destination's audit and reconciliation rules.
 | --- | --- | --- | --- | --- |
 | `strategy` | no | `stream_sequence` | `stream_sequence`, `message_id`, `payload_field` | Selects where the idempotency key comes from. |
 | `columns` | no | `["STREAM_NAME", "STREAM_SEQUENCE"]` | List of valid Oracle column identifiers. | Columns used in generated idempotency predicates and constraints. |
-| `payload_field` | required when strategy is `payload_field` | `null` | JSON field name. | Field extracted from the normalized JSON payload when using `payload_field`. |
+| `payload_field` | required when strategy is `payload_field` | `null` | Dotted JSON field path with no empty segments or control characters. | Scalar field extracted from the normalized JSON payload when using `payload_field`. |
 
 Strategy details:
 
@@ -143,10 +209,16 @@ Strategy details:
 | --- | --- | --- | --- |
 | `stream_sequence` | JetStream stream name and stream sequence. | `STREAM_NAME`, `STREAM_SEQUENCE` | Recommended for JetStream-backed sinks because the key is stable and unique inside a stream. |
 | `message_id` | `Nats-Msg-Id` or equivalent message ID metadata. | `MESSAGE_ID` when columns are not explicitly set. | Use only when publishers reliably set unique message IDs. Missing message IDs become permanent failures. |
-| `payload_field` | A stable field in the normalized JSON payload. | `MESSAGE_ID` when columns are not explicitly set. | Use for application-defined keys only when the payload contract is strict and documented. |
+| `payload_field` | A stable scalar field in the normalized JSON payload. | `MESSAGE_ID` when columns are not explicitly set. | Use for application-defined keys only when the payload contract is strict and documented. Objects and arrays are rejected as ambiguous keys. |
 
 For encrypted text or opaque bytes, prefer `stream_sequence` or `message_id`.
 The payload may not contain a meaningful JSON field until after decryption.
+
+The `payload_field` strategy is intentionally strict. A path such as
+`order.id` is valid, but empty path segments, control characters, missing
+fields, null values, objects, and arrays are rejected before Oracle commit.
+That keeps the idempotency key stable and prevents language-specific string
+representations from becoming durable database keys.
 
 ### Column Mapping
 
@@ -175,6 +247,7 @@ separate so downstream controls can reason about each class of data.
 | `payload` | `PAYLOAD_JSON` | Normalized payload JSON value. |
 | `headers` | `HEADERS_JSON` | Message headers as JSON. |
 | `metadata` | `METADATA_JSON` | Full generic metadata snapshot. |
+| `mission_metadata` | `MISSION_METADATA_JSON` | Optional validated mission metadata JSON object resolved by the core runtime. Missing mission metadata is stored as JSON `null`. |
 
 Example:
 
@@ -252,6 +325,37 @@ you want `OracleSink.start()` to create the recommended table if it is missing.
 If the table already exists, the sink ignores Oracle `ORA-00955`. Production
 deployments should normally keep `auto_create` disabled and manage schema
 changes through database migration tooling.
+
+The repeatable live e2e tests are stricter than normal sink startup. They check
+that the retained test table has every column required by the current test
+contract before publishing messages. If an old retained table is missing
+columns such as `PRIORITY`, `CLASSIFICATION`, `LABELS`, timestamp fields, or
+`METADATA_JSON` and `MISSION_METADATA_JSON`, the test fails fast and leaves the
+table untouched. Use a fresh test table, an explicit test-only drop-before flag,
+or a normal migration
+instead of silently writing current test data into an older shape.
+
+The failure message is intentionally written for operators. A stale or
+incorrectly constructed retained e2e table produces a message like:
+
+```text
+Oracle e2e table 'NATS_SINKS_E2E_EVENTS_V2' is missing required columns
+['CLASSIFICATION', 'LABELS', 'MISSION_METADATA_JSON', 'PRIORITY'].
+The retained table is likely stale or incorrectly constructed for the current
+nats-sinks Oracle schema contract.
+Use NATS_SINKS_E2E_DROP_TABLE_BEFORE=true or choose a fresh
+NATS_SINKS_E2E_ORACLE_TABLE.
+```
+
+Normal runtime writes also translate common Oracle schema and privilege errors
+into framework errors that appear in the runner logs. For example,
+`ORA-00904` is reported as an invalid Oracle identifier with a hint that the
+configured table may be missing columns expected by nats-sinks or that the
+configured column mapping may not match the table shape. `ORA-00942` is
+reported as a missing or inaccessible table/view with guidance to check the
+schema owner, grants, migrations, and `auto_create` setting. The logs do not
+print SQL bind values, payloads, passwords, wallet passwords, or connection
+secrets.
 
 ### Autonomous Database With Walletless TLS
 
@@ -394,6 +498,7 @@ create table nats_sink_events (
     payload_json      json,
     headers_json      json,
     metadata_json     json,
+    mission_metadata_json json,
     constraint nats_sink_events_pk
         primary key (stream_name, stream_sequence)
 );
@@ -429,9 +534,20 @@ The epoch columns use Unix epoch nanoseconds:
 `metadata_json` stores the generic nats-sinks metadata snapshot. It includes
 all message headers, known `Nats-` reserved headers that are present, JetStream
 stream/consumer/sequence values, optional reply subject, the normalized
-`priority`, `classification`, and `labels` fields, and the timing fields.
-Missing optional headers such as `Nats-Msg-Id` or `Nats-Expected-Stream` remain
-absent/null and do not cause processing failures.
+`priority`, `classification`, and `labels` fields, optional
+`mission_metadata`, and the timing fields. Missing optional headers such as
+`Nats-Msg-Id` or `Nats-Expected-Stream` remain absent/null and do not cause
+processing failures.
+
+`mission_metadata_json` stores the optional validated mission metadata object
+resolved by the core runtime from the configured header or defaults. This keeps
+richer operational context in one JSON column instead of adding fixed Oracle
+columns for every possible mission, platform, sensor, track, or lifecycle
+field. See [Mission Metadata](mission-metadata.md) and
+[F2T2EA Event Phase Tagging](use-cases/defence/f2t2ea-event-phase-tagging.md).
+For broader examples that combine Oracle columns, mission metadata, custody,
+classification, labels, and audit-oriented query patterns, see
+[Defence And Mission Support](use-cases/defence/index.md).
 
 Examples of NATS-reserved headers captured when present include
 `Nats-Msg-Id`, `Nats-Expected-Stream`, `Nats-Expected-Last-Msg-Id`,
@@ -515,6 +631,12 @@ organization.
 | `PAYLOAD_JSON` | JSON object containing `_nats_sinks_encryption` with `algorithm`, `key_id`, `nonce`, `ciphertext`, `tag_length`, `plaintext_sha256`, and `plaintext_size_bytes`. |
 | `HEADERS_JSON` | Headers such as `Nats-Msg-Id`, `Nats-Sinks-Priority`, `Nats-Sinks-Classification`, and `Nats-Sinks-Labels` when present. |
 | `METADATA_JSON` | Full metadata document including `message_metadata.priority`, `message_metadata.classification`, and `message_metadata.labels`. |
+| `MISSION_METADATA_JSON` | Optional validated JSON object such as `{"profile":"mission-event-v1","mission_id":"SYN-MISSION-001","f2t2ea_phase":"track"}` when mission metadata is enabled. |
+
+For F2T2EA-style phase tagging, keep phase values metadata-only and do not use
+them to change ACK behavior, idempotency keys, or sink write ordering. The
+Oracle sink stores the generic mission metadata object; it does not interpret
+the semantics of any domain-specific field inside that object.
 
 The encrypted payload column would contain a JSON value shaped like this:
 
@@ -615,8 +737,8 @@ Use `payload_mode` to choose the storage behavior:
 
 | Mode | Behavior | Typical use |
 | --- | --- | --- |
-| `json_or_envelope` | Keep valid JSON as-is, wrap text and bytes when needed. | Mixed streams and general default. |
-| `json_only` | Require valid JSON and treat non-JSON as `SerializationError`. | Strict data contracts. |
+| `json_or_envelope` | Keep standards-compliant JSON as-is, wrap text and bytes when needed. Python-only constants such as `NaN`, `Infinity`, and `-Infinity` are wrapped as text rather than stored as JSON. | Mixed streams and general default. |
+| `json_only` | Require standards-compliant JSON and treat non-JSON or Python-only constants as `SerializationError`. | Strict data contracts. |
 | `text_envelope` | Wrap every payload as UTF-8 text without attempting JSON parsing. | High-volume encrypted text streams. |
 | `bytes_envelope` | Wrap every payload as base64 bytes. | Opaque binary or compressed payloads. |
 
@@ -741,7 +863,7 @@ sequenceDiagram
     O->>DB: commit
     DB-->>O: durable success
     O-->>R: return success
-    R->>R: record batch_write_seconds
+    R->>R: record sink_batch_write_seconds
     R->>R: ACK after Oracle success
 ```
 
@@ -755,6 +877,60 @@ For larger Oracle volumes, a future staging-table path may be useful:
 That can reduce per-row `merge` overhead while keeping idempotency and
 commit-then-acknowledge intact. It should be added as an explicit Oracle write
 mode only after benchmarks and integration tests prove the behavior.
+
+## Oracle Benchmark Script
+
+Use `scripts/run-oracle-benchmark.sh` when you need phase-level timing for a
+non-production Oracle sink deployment. The benchmark reports publish, fetch,
+map, Oracle write execution, Oracle commit, JetStream ACK, retry-delay
+observation, and shutdown phases separately.
+
+```bash
+scripts/run-oracle-benchmark.sh \
+  --message-count 256 \
+  --batch-size 64 \
+  --stream auto \
+  --payload-shape mixed \
+  --sink-mode merge \
+  --format markdown
+```
+
+The wrapper sources ignored local environment files:
+
+- `.local/nats-live/nats-sink.env`
+- `.local/oracle-adb/integration.env`
+- `.local/nats-oracle-e2e/integration.env`
+- `.local/oracle-benchmark/integration.env`
+
+Keep NATS URLs, Oracle DSNs, usernames, passwords, wallet paths, CA
+certificates, and key material in those ignored files or in a secret manager.
+The rendered benchmark report deliberately excludes those values.
+
+`--stream auto` asks JetStream to resolve the stream that owns the configured
+subject. This is useful in shared non-production environments where creating a
+second stream with the same subject would be rejected. If you pass an explicit
+stream name, the benchmark validates that the stream includes the subject
+before publishing.
+
+Example output shape:
+
+```text
+| Phase | Count | Total seconds | Average seconds | Max seconds | Messages/sec |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| publish | 1 | 0.400000 | 0.400000 | 0.400000 | 640.00 |
+| fetch | 4 | 0.200000 | 0.050000 | 0.070000 | 1280.00 |
+| map | 4 | 0.050000 | 0.012500 | 0.020000 | 5120.00 |
+| write | 4 | 0.700000 | 0.175000 | 0.210000 | 365.71 |
+| commit | 4 | 0.100000 | 0.025000 | 0.040000 | 2560.00 |
+| ack | 4 | 0.030000 | 0.007500 | 0.010000 | 8533.33 |
+| retry | 0 | 0.000000 | 0.000000 | 0.000000 | n/a |
+| shutdown | 1 | 0.020000 | 0.020000 | 0.020000 | 12800.00 |
+```
+
+Timing observations are environment-specific. They depend on payload shape,
+encryption mode, Oracle service class, table indexes, network latency, batch
+size, sink mode, and database load. Do not compare benchmark output across
+environments unless those inputs are controlled.
 
 ## Modes
 
@@ -905,6 +1081,7 @@ create table nats_sink_events (
     payload_json      json,
     headers_json      json,
     metadata_json     json,
+    mission_metadata_json json,
     constraint nats_sink_events_pk
         primary key (stream_name, stream_sequence)
 );
@@ -942,6 +1119,11 @@ Configure the sink to use the fully qualified table name:
 The runtime user does not need `drop table`, `delete`, `alter any table`,
 `create any table`, DBA roles, or ownership of the table. Do not grant those
 permissions to the service account.
+
+For a complete operational example that combines Oracle storage, encrypted
+payloads, priority/classification/labels, mission metadata, and
+commit-before-ACK behavior, see
+[Restricted Event Storage](use-cases/mission-support/restricted-event-storage.md).
 
 ### Option B: Single Application User For Controlled Test Environments
 

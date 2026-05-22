@@ -1,4 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
+
 """NATS subject pattern helpers shared by core and sink implementations.
 
 NATS subjects are dot-separated names such as `orders.created`.  Subscription

@@ -1,0 +1,23 @@
+{
+  "id": "kubernetes-examples",
+  "title": "[Docs]: Add Kubernetes deployment examples",
+  "area": "Operations and deployment",
+  "priority": "P3 - backlog candidate",
+  "target_release": "v0.4.0",
+  "labels": ["deployment", "documentation"],
+  "problem": "Kubernetes users need examples for running nats-sinks with configuration, secrets, readiness checks, graceful shutdown, resource limits, and observability separation. The current deployment guidance focuses on local and systemd operation.",
+  "proposal": "Add Kubernetes examples for the sink worker and optional observability service. The examples should show ConfigMaps for non-secret JSON configuration, Secret references for credentials, mounted certificate or wallet material when needed, resource limits, termination grace periods, service accounts, and optional Prometheus textfile or future endpoint integration.",
+  "users": "Platform teams deploying nats-sinks in Kubernetes, security reviewers checking least privilege, and maintainers supporting production deployments.",
+  "delivery_semantics": "The examples must preserve graceful shutdown and commit-then-ACK behavior. Pods should stop accepting new work before termination and allow in-flight batches to finish or time out according to configuration.",
+  "security": "Examples must use fake names only, avoid real endpoints or credentials, run with least privilege, and document secret handling without embedding private material. Network and filesystem permissions should be narrow.",
+  "acceptance": [
+    "Kubernetes manifests or templates are added as examples.",
+    "Examples separate sink worker and observability concerns.",
+    "Resource limits, security context, and graceful shutdown settings are documented.",
+    "Examples avoid secrets and private operational values.",
+    "Docs explain which values users must customize."
+  ],
+  "tests": "Run YAML or manifest linting if tooling is introduced, plus mkdocs builds and scripts/check.sh. Do not require a live cluster in unit or CI checks.",
+  "documentation": "Update docs/operations.md, docs/security.md, docs/observability.md, README.md, examples, ROADMAP.md, and CHANGELOG.md.",
+  "closeout": "Close after the release containing the examples is published. Include release tag, files added, checks run, and follow-up work such as Helm chart support."
+}

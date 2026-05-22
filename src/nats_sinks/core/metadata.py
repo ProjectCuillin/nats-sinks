@@ -1,4 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
+
 """Generic NATS metadata capture for all destination sinks.
 
 The core runtime normalizes NATS messages before any sink sees them.  This
@@ -129,6 +131,7 @@ def build_nats_metadata_snapshot(
             "classification": envelope.classification,
             "labels": list(envelope.labels),
         },
+        "mission_metadata": envelope.mission_metadata_for_json_storage(),
         "headers": headers,
         "nats": {
             "reserved_headers": reserved_headers,

@@ -23,7 +23,7 @@ The release workflow in this repository is `.github/workflows/release.yml`.
 It is designed to publish on tags named `v*` and uses the `pypi` GitHub
 environment. After PyPI publication succeeds, the same workflow creates or
 updates the GitHub Release for the tag and attaches the built source
-distribution and wheel.
+distribution, wheel, checksum manifest, and SBOM evidence.
 
 ## One-Time PyPI Setup
 
@@ -53,7 +53,8 @@ flowchart TD
     Verify --> Env[GitHub pypi environment approval]
     Env --> Publish[Publish to PyPI via trusted publishing]
     Publish --> GHRelease[Create GitHub Release from tag]
-    GHRelease --> Assets[Attach sdist and wheel assets]
+    GHRelease --> Assets[Attach sdist, wheel, checksums, and SBOM assets]
+    Assets --> CloseIssues[Close release-labeled backlog issues]
 ```
 
 ## Step 1: Prepare The Release
@@ -75,10 +76,15 @@ pytest
 scripts/check-sinks.sh
 bandit -q -r src
 python -m build
-twine check dist/*
-mkdocs build --strict
-NATS_SINKS_DOCS_SITE_URL="https://projectcuillin.github.io/nats-sinks/" mkdocs build --strict
+scripts/sbom.sh
+python scripts/generate-checksums.py dist
+twine check dist/*.whl dist/*.tar.gz
+scripts/check-docs.sh
 ```
+
+The docs helper builds both canonical documentation targets in isolated
+temporary output directories. That avoids collisions between overlapping
+MkDocs runs that would otherwise clean the same `site/` directory.
 
 Also confirm that local GitHub CLI authentication is valid before pushing tags:
 
@@ -170,6 +176,32 @@ nats-sink --help
 deactivate
 ```
 
+## Step 2a: Generate Release SBOM And Checksum Evidence
+
+Before pushing a release tag, generate CycloneDX SBOM files and the checksum
+manifest from the validated build environment:
+
+```bash
+python -m build
+scripts/sbom.sh
+python scripts/generate-checksums.py dist
+twine check dist/*.whl dist/*.tar.gz
+```
+
+The generated files are:
+
+```text
+dist/sbom/nats-sinks-<version>.cyclonedx.json
+dist/sbom/nats-sinks-<version>.cyclonedx.xml
+dist/SHA256SUMS
+```
+
+The GitHub release workflow generates the same files automatically and attaches
+them to the GitHub Release. SBOM files and `SHA256SUMS` are not uploaded to
+PyPI. See [SBOM And Release Evidence](sbom.md) and
+[Hash-Verified Installs](hash-verified-installs.md) for the purpose,
+limitations, and security notes.
+
 ## Step 3: Push The Release Tag
 
 Use annotated tags:
@@ -204,8 +236,9 @@ Manual TestPyPI fallback:
 
 ```bash
 python -m build
-twine check dist/*
-twine upload --repository testpypi dist/*
+scripts/sbom.sh
+twine check dist/*.whl dist/*.tar.gz
+twine upload --repository testpypi dist/*.whl dist/*.tar.gz
 ```
 
 Then test install:
@@ -227,14 +260,20 @@ Preferred path:
 3. Approve the `pypi` environment if required.
 4. Let `pypa/gh-action-pypi-publish` publish with trusted publishing.
 5. Let the `github-release` job create or update the GitHub Release and attach
-   the built artifacts.
+   the built artifacts, checksum manifest, and SBOM evidence.
+6. Let the release workflow close managed backlog issues labeled for the
+   release tag after the GitHub Release exists. The workflow closes only issues
+   whose Acceptance Criteria are checked and whose comments include sanitized
+   test-plan evidence and close-out evidence.
 
 Manual PyPI fallback:
 
 ```bash
 python -m build
-twine check dist/*
-twine upload dist/*
+scripts/sbom.sh
+python scripts/generate-checksums.py dist
+twine check dist/*.whl dist/*.tar.gz
+twine upload dist/*.whl dist/*.tar.gz
 ```
 
 Manual publishing requires a PyPI API token. Prefer trusted publishing for
@@ -244,20 +283,24 @@ normal releases.
 
 After PyPI publication, `.github/workflows/release.yml` automatically creates
 or updates the GitHub Release for the pushed tag. It uses GitHub's generated
-release notes and attaches the built `dist/*` files.
+release notes and attaches the built wheel, source distribution, and SBOM
+evidence files plus `SHA256SUMS`.
 
 Verify:
 
 1. The GitHub Release exists for the tag, for example `v0.1.0`.
-2. The source distribution and wheel are attached.
+2. The source distribution, wheel, `SHA256SUMS`, and CycloneDX SBOM files are attached.
 3. The generated notes are accurate enough for external readers.
 4. The release links clearly to the PyPI package page or project homepage.
+5. Open managed backlog issues labeled for the release tag have been closed
+   by release automation only when acceptance criteria and evidence comments
+   were present.
 
 If the automatic GitHub Release step fails after PyPI publication, create it
 manually:
 
 ```bash
-gh release create v0.1.0 dist/* \
+gh release create v0.1.0 dist/*.whl dist/*.tar.gz dist/SHA256SUMS dist/sbom/* \
   --repo ProjectCuillin/nats-sinks \
   --title v0.1.0 \
   --generate-notes \
@@ -267,9 +310,19 @@ gh release create v0.1.0 dist/* \
 If the release already exists but assets need to be replaced:
 
 ```bash
-gh release upload v0.1.0 dist/* \
+gh release upload v0.1.0 dist/*.whl dist/*.tar.gz dist/SHA256SUMS dist/sbom/* \
   --repo ProjectCuillin/nats-sinks \
   --clobber
+```
+
+If release-labeled backlog issues need manual close-out after a fallback
+release, first confirm the issue has checked Acceptance Criteria plus
+sanitized `Test Plan Evidence` and `Close-Out Evidence` comments. Then run:
+
+```bash
+python scripts/close-released-backlog-issues.py \
+  --repo ProjectCuillin/nats-sinks \
+  --release v0.1.0
 ```
 
 ## Rollback Guidance

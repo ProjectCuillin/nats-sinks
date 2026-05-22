@@ -1,0 +1,26 @@
+{
+  "id": "nats-creds-auth-conflict",
+  "title": "[Bug]: NATS credentials-file authentication can be combined with other auth modes",
+  "area": "Configuration",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.0",
+  "labels": ["nats", "security", "testing"],
+  "summary": "The NATS credentials-file option can be configured alongside token or username/password authentication.",
+  "observed": "A configuration with a credentials file and another credential mode validates successfully.",
+  "expected": "Credentials-file authentication must be treated as its own mutually exclusive NATS authentication mode.",
+  "reproduction": "Run the focused regression test that combines a credentials file with token authentication.",
+  "failing_test": "tests/unit/test_bug_hunt_non_json_boundaries.py::test_nats_config_rejects_creds_file_combined_with_token",
+  "impact": "Ambiguous authentication settings make deployments harder to audit and can lead to unexpected client behavior.",
+  "delivery_semantics": "No ACK behavior changes. The fix stops invalid configuration before message consumption.",
+  "security": "The fix prevents unnecessary credential surfaces from being configured together.",
+  "acceptance": [
+    "Credentials-file authentication cannot be combined with token authentication.",
+    "Credentials-file authentication cannot be combined with username/password authentication.",
+    "Standalone credentials-file authentication remains valid.",
+    "The focused regression test and full checks pass."
+  ],
+  "tests": "Run the focused regression test, NATS connection option tests, configuration tests, and the full local check script.",
+  "documentation": "Update NATS authentication documentation if authentication-mode exclusivity is clarified.",
+  "closeout": "Close only after the release containing the fix is published with regression and verification evidence."
+}

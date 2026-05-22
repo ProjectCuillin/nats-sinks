@@ -1,0 +1,23 @@
+{
+  "id": "load-test-profiles",
+  "title": "[Testing]: Add load-test profiles for sink runtime behavior",
+  "area": "Testing",
+  "priority": "P3 - backlog candidate",
+  "target_release": "v0.4.0",
+  "labels": ["testing"],
+  "problem": "The project has unit, smoke, and environment-gated e2e tests, but repeatable load-test profiles are needed to understand behavior under larger batches, dependency latency, retries, DLQ load, and shutdown pressure. Without profiles, performance work risks being based on guesses rather than measurements.",
+  "proposal": "Add load-test profiles that cover NATS fetch, payload normalization, encryption, metadata resolution, backend write, commit, ACK, retry, DLQ, observability snapshot writing, and graceful shutdown. The profiles should be explicit about environment assumptions and should produce sanitized summaries suitable for local reports.",
+  "users": "Maintainers evaluating performance changes, operators tuning deployments, and reviewers checking whether new features preserve throughput and failure behavior.",
+  "delivery_semantics": "Load tests must use real commit-then-ACK behavior and must not bypass durable sink success. Failure profiles should prove retry, DLQ, and shutdown behavior remain safe under pressure.",
+  "security": "Profiles must use generated test data, avoid private deployment details, redact output, and clean up temporary files by default. Any preserved artifacts must require explicit local flags.",
+  "acceptance": [
+    "Load-test profiles are documented and runnable locally.",
+    "Profiles cover normal, retry, DLQ, and shutdown behavior.",
+    "Output is sanitized and bounded.",
+    "Tests or smoke checks validate profile argument handling.",
+    "Performance documentation explains how to interpret results."
+  ],
+  "tests": "Add unit tests for profile configuration and sanitized output. Add optional live profiles behind markers. Run scripts/check.sh.",
+  "documentation": "Update docs/performance.md, docs/testing.md, docs/operations.md, docs/test-report.md guidance, ROADMAP.md, and CHANGELOG.md.",
+  "closeout": "Close after the release containing load-test profiles is published. Include release tag, profile list, checks run, and caveats."
+}

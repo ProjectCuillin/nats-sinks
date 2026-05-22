@@ -1,0 +1,27 @@
+{
+  "id": "test-file-language-fence",
+  "title": "[Bug]: Attached bug regression test files always use a Python code fence",
+  "area": "Testing",
+  "severity": "low",
+  "priority": "P3 - backlog candidate",
+  "target_release": "v0.4.0",
+  "labels": ["testing", "documentation"],
+  "summary": "The managed bug workflow accepts `--test-file` paths under both `tests/` and `scripts/`, but the attached public comment always renders the file content with a Python Markdown code fence.",
+  "observed": "A shell script attached with `scripts/comment-bug-issue.py --test-file` is rendered as a Python code block. This makes public regression evidence harder to read and can confuse maintainers reviewing shell-based bug reproducers.",
+  "expected": "The bug comment helper should choose a Markdown code fence language that matches the attached file extension. Shell scripts should render with a shell-oriented fence, Python tests should render with a Python fence, and unknown extensions should use a plain text fence.",
+  "reproduction": "Run a focused unit test that calls the test-file attachment helper with an existing shell script under `scripts/` and asserts that the generated Markdown uses a shell code fence.",
+  "failing_test": "Add a focused regression test to `tests/unit/test_bug_comment.py` that proves shell script attachments are rendered with the wrong code fence before the fix.",
+  "impact": "This is a low-severity documentation and workflow correctness issue. It does not affect runtime delivery, ACK ordering, sink writes, or package execution, but it weakens the clarity of public bug evidence.",
+  "delivery_semantics": "No delivery semantics are affected. The fix must not change NATS, JetStream, ACK, DLQ, retry, idempotency, Oracle, or file sink behavior.",
+  "security": "The existing public-safety validation for attached files must remain in place. The fix must not allow attachments outside approved repository paths and must not weaken secret, locator, token, certificate, or credential validation.",
+  "acceptance": [
+    "A focused regression test is committed before the fix.",
+    "Shell script attachments render with a shell-oriented Markdown code fence.",
+    "Python attachments continue to render with a Python Markdown code fence.",
+    "Unknown attachment extensions render as plain text.",
+    "Bug comment public-safety validation remains unchanged."
+  ],
+  "tests": "Run `pytest tests/unit/test_bug_comment.py`, targeted Ruff checks for the changed script and test file, and local bug report validation.",
+  "documentation": "Update CHANGELOG.md and docs/backlog-management.md if the public bug workflow documentation needs clarification.",
+  "closeout": "Close only after the release containing the fix is published. Include the release tag, focused regression evidence, verification evidence, and any limitations."
+}

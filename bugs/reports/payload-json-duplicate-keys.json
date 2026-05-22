@@ -1,0 +1,26 @@
+{
+  "id": "payload-json-duplicate-keys",
+  "title": "[Bug]: Payload normalization silently accepts duplicate JSON keys",
+  "area": "Core runtime and delivery semantics",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.0",
+  "labels": ["security", "serialization"],
+  "summary": "Payload normalization rejects non-standard constants but still accepts duplicate JSON object keys because the shared JSON parser uses default duplicate-key behavior.",
+  "observed": "A payload such as {\"kind\":\"first\",\"kind\":\"second\"} can be preserved as JSON with only the final value retained.",
+  "expected": "Duplicate keys should be treated as ambiguous JSON. json_only mode should raise SerializationError, while json_or_envelope mode should preserve the original text envelope instead of silently dropping information.",
+  "reproduction": "Run the focused regression test that normalizes a payload with duplicate JSON keys in json_only and json_or_envelope modes.",
+  "failing_test": "tests/unit/test_bug_hunt_strict_json_boundaries.py::test_payload_normalization_treats_duplicate_keys_as_ambiguous_json",
+  "impact": "The defect can affect all JSON-capable sinks because duplicate-key payloads may be persisted after losing one of the original values.",
+  "delivery_semantics": "Commit-then-ACK behavior must not change. The fix only changes how ambiguous JSON is classified before sink storage.",
+  "security": "The fix must not log raw payload bodies. Error messages may include the subject but not payload content.",
+  "acceptance": [
+    "A focused regression test proves duplicate payload JSON keys are treated as ambiguous.",
+    "json_only mode raises SerializationError.",
+    "json_or_envelope mode preserves the original text in the standard payload envelope.",
+    "Existing Oracle and file sink mapping tests still pass."
+  ],
+  "tests": "Run the focused regression test, payload normalization tests, envelope tests, Oracle mapping tests, file mapping tests, and the full local check script.",
+  "documentation": "Update CHANGELOG.md and payload documentation to mention duplicate-key handling.",
+  "closeout": "Close only after the release containing the fix is published. Include the release tag, regression evidence, verification evidence, and any remaining limitations."
+}

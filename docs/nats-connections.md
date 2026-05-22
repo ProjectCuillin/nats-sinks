@@ -27,6 +27,13 @@ The current release supports these production-use connection patterns:
   self-signed NATS server CAs,
 - optional TLS client certificate/key transport settings passed through to
   `nats-py`.
+- optional multiple NATS seed URLs for clustered deployments,
+- reconnect tuning for connection timeout, reconnect wait, maximum reconnect
+  attempts, ping behavior, pending buffer size, and drain timeout,
+- connection event metrics for disconnect, reconnect, close, discovered-server,
+  and asynchronous error callbacks, and
+- least-privilege NATS permission templates for runtime workers, DLQ publish
+  rights, optional consumer management, and advisory readers.
 
 Advanced identity models such as TLS certificate authentication policy, NKEY
 challenge authentication, and decentralized JWT authentication/authorization are
@@ -47,8 +54,10 @@ sequenceDiagram
     CLI->>CLI: validate with Pydantic
     CLI->>Env: resolve token_env or password_env when needed
     CLI->>TLS: build SSLContext when tls:// or TLS files are configured
-    CLI->>NP: nats.connect(url, options)
+    CLI->>NP: nats.connect(servers, options)
     NP->>NS: authenticate and establish connection
+    NP-->>CLI: connection event callbacks
+    CLI->>CLI: increment connection metrics
 ```
 
 The resolved token or password is never included in redacted config output. If
@@ -100,6 +109,11 @@ export NATS_TOKEN='example-client-token'
 Direct `token` values are supported for tests and disposable local examples, but
 should not be committed to repository files.
 
+Token authentication is mutually exclusive with the other client
+authentication methods. A configuration that combines `token` or `token_env`
+with username/password, `creds_file`, or `nkey_seed_file` fails validation
+before any connection attempt is made.
+
 ## Plain Username/Password Authentication
 
 Plain username/password authentication uses `user` plus either `password_env` or
@@ -127,6 +141,10 @@ export NATS_PASSWORD='example-client-password'
 
 Use TLS for username/password authentication in production. Without TLS, the
 client credential can be exposed to the network path.
+
+The username and password source must be configured together. A password source
+without `user`, or a `user` without `password` or `password_env`, is rejected as
+an incomplete authentication mode.
 
 ## Bcrypted Username/Password Credentials
 
@@ -168,6 +186,9 @@ Do not put the bcrypt hash in the `nats-sinks` client config. The hash belongs
 on the NATS server. The client receives the clear-text password through
 `NATS_PASSWORD`, and TLS protects that secret in transit.
 
+Do not combine `creds_file` with token or username/password fields. The
+credentials file is treated as a complete NATS authentication mode.
+
 ## TLS With A Local CA Certificate
 
 Private NATS deployments often use a private CA or self-signed development CA.
@@ -206,6 +227,120 @@ the service configuration over weakening TLS verification. A local CA is a
 normal pattern for internal infrastructure; disabling verification should not
 become the workaround for certificate lifecycle issues.
 
+## Multiple Seed URLs
+
+NATS clients can receive more than one server URL. This helps the client reach
+a clustered deployment when one server is temporarily unavailable. Configure
+`nats.urls` when you want an explicit seed list:
+
+```json
+{
+  "nats": {
+    "urls": [
+      "tls://nats-a.internal.example:4222",
+      "tls://nats-b.internal.example:4222",
+      "tls://nats-c.internal.example:4222"
+    ],
+    "stream": "ORDERS",
+    "consumer": "orders-file-sink",
+    "subject": "orders.*",
+    "token_env": "NATS_TOKEN",
+    "tls_ca_file": "/etc/nats/certs/root-ca.crt"
+  }
+}
+```
+
+When `urls` is present, it is passed to `nats-py` as the `servers` option and
+takes precedence over the single `url` value. Keep the single `url` field for
+simple local development or single-endpoint deployments.
+
+Every URL in `urls` is validated with the same scheme allow list as `url`:
+`nats`, `tls`, `ws`, or `wss`. If any configured seed URL uses `tls://`,
+`nats-sinks` builds a TLS context and passes it to `nats-py`, even when the
+fallback `url` field remains at its default value.
+
+Do not embed credentials in any URL. Use `token_env` or `password_env` so
+secrets stay out of configuration files, process listings, logs, and support
+bundles.
+
+## Reconnect Tuning
+
+Automatic reconnect is enabled by default. The defaults are intentionally close
+to the `nats-py` client defaults so a basic deployment does not need to tune
+anything immediately:
+
+```json
+{
+  "nats": {
+    "url": "tls://nats.internal.example:4222",
+    "stream": "ORDERS",
+    "consumer": "orders-file-sink",
+    "subject": "orders.*",
+    "allow_reconnect": true,
+    "connect_timeout_seconds": 2,
+    "reconnect_time_wait_seconds": 2,
+    "max_reconnect_attempts": 60,
+    "ping_interval_seconds": 120,
+    "max_outstanding_pings": 2,
+    "pending_size_bytes": 2097152,
+    "drain_timeout_seconds": 30
+  }
+}
+```
+
+| Field | Passed to `nats-py` | Default | Guidance |
+| --- | --- | --- | --- |
+| `allow_reconnect` | `allow_reconnect` | `true` | Keep enabled for production unless a supervisor should fail fast and restart the process. |
+| `connect_timeout_seconds` | `connect_timeout` | `2` | Increase when connecting across slower controlled networks. |
+| `reconnect_time_wait_seconds` | `reconnect_time_wait` | `2` | Increase to reduce retry pressure during planned outages. |
+| `max_reconnect_attempts` | `max_reconnect_attempts` | `60` | Use a bounded value for fail-fast service supervision, or `-1` for unlimited attempts when the process should wait for NATS to return. |
+| `ping_interval_seconds` | `ping_interval` | `120` | Lower values detect broken connections sooner, at the cost of more heartbeat traffic. |
+| `max_outstanding_pings` | `max_outstanding_pings` | `2` | Controls how many unanswered pings are tolerated before the client treats the connection as unhealthy. |
+| `pending_size_bytes` | `pending_size` | `2097152` | Bounds client pending bytes. Increase carefully for high-throughput deployments after measuring memory growth. |
+| `drain_timeout_seconds` | `drain_timeout` | `30` | Bounds client drain behavior during shutdown. |
+
+For operational or mission-support deployments, reconnect settings should be
+chosen together with service manager restart policy, JetStream consumer
+`AckWait`, destination write latency, and alerting. A reconnect does not weaken
+commit-then-ACK: messages that were not ACKed remain eligible for redelivery.
+
+## Connection Event Metrics
+
+The runner installs `nats-py` connection callbacks and increments metrics when
+the client reports connection state changes:
+
+| Metric suffix | Meaning |
+| --- | --- |
+| `nats_connection_disconnected_total` | The client reported a disconnect. |
+| `nats_connection_reconnected_total` | The client successfully reconnected. |
+| `nats_connection_closed_total` | The client reported the connection closed. |
+| `nats_discovered_servers_total` | The client discovered an additional server. |
+| `nats_async_errors_total` | The client reported an asynchronous connection/client error. |
+
+These metrics appear in any configured metrics recorder, including the local
+JSON snapshot inspected by `nats-sink-metrics`:
+
+```bash
+nats-sink-metrics show .local/nats-sinks/metrics.json \
+  --kind counter \
+  --metric "nats_*"
+```
+
+Example output:
+
+```text
+KIND     METRIC                              VALUE  DESCRIPTION
+counter  nats_async_errors_total                0  NATS asynchronous error callback events observed by the runner.
+counter  nats_connection_disconnected_total     1  NATS client disconnect events observed by the runner.
+counter  nats_connection_reconnected_total      1  NATS client reconnect events observed by the runner.
+```
+
+Embedding applications can still provide their own `nats-py` callbacks in
+`nats_options`. The runner wraps those callbacks instead of replacing them:
+metrics are recorded first, then the application callback runs. If the
+application callback raises, the runner logs that callback failure without
+printing secrets.
+
 ## Optional Client Certificate Files
 
 The config model includes:
@@ -221,8 +356,27 @@ The config model includes:
 
 When present, the CLI loads the certificate chain into the Python SSL context
 and passes it to `nats-py`. Full TLS certificate identity mapping and
-authorization guidance is not yet certified as a `nats-sinks` production auth
-mode; it is tracked on the roadmap.
+certificate-auth-specific authorization guidance are not yet certified as a
+`nats-sinks` production auth mode; they are tracked on the roadmap.
+
+## Least-Privilege NATS Permissions
+
+Authentication proves which client is connecting. Authorization decides which
+subjects that client may publish or subscribe to. Production sink workers
+should use both: strong authentication for identity and narrow subject
+permissions for blast-radius control.
+
+The recommended production pattern is to pre-create the stream and durable
+consumer with an administrative account, then run `nats-sinks` with a runtime
+account that can only:
+
+- request batches from `$JS.API.CONSUMER.MSG.NEXT.<STREAM>.<CONSUMER>`,
+- receive request/reply responses on the configured inbox pattern,
+- publish ACK/NAK responses under `$JS.ACK.<STREAM>.<CONSUMER>.>`, and
+- publish to the configured DLQ subject only when DLQ is enabled.
+
+Full templates, diagrams, and validation checklists are documented in
+[NATS Least-Privilege Permissions](nats-permissions.md).
 
 ## Secret Redaction
 
@@ -339,5 +493,6 @@ For a compact walkthrough, see the tracked
 - [NATS Authentication](https://docs.nats.io/running-a-nats-service/configuration/securing_nats/auth_intro)
 - [NATS Token Authentication](https://docs.nats.io/running-a-nats-service/configuration/securing_nats/auth_intro/tokens)
 - [NATS TLS](https://docs.nats.io/using-nats/developer/connecting/tls)
+- [NATS Authorization](https://docs.nats.io/running-a-nats-service/configuration/securing_nats/authorization)
 - [NATS NKEY Authentication](https://docs.nats.io/running-a-nats-service/configuration/securing_nats/auth_intro/nkey_auth)
 - [NATS Decentralized JWT Authentication/Authorization](https://docs.nats.io/running-a-nats-service/configuration/securing_nats/auth_intro/jwt)

@@ -1,0 +1,26 @@
+{
+  "id": "mission-metadata-json-nonstandard-constants",
+  "title": "[Bug]: Mission metadata header parser accepts non-standard JSON constants",
+  "area": "Core runtime and delivery semantics",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.0",
+  "labels": ["security", "serialization"],
+  "summary": "Mission metadata headers reject non-finite float values during validation, but the parser still initially accepts Python-specific JSON constants such as NaN.",
+  "observed": "A mission metadata header containing NaN is parsed before validation rejects the resulting float value.",
+  "expected": "Mission metadata headers should reject non-standard constants as invalid JSON at the parsing boundary.",
+  "reproduction": "Run the focused regression test that passes a mission metadata header with NaN to parse_mission_metadata_header.",
+  "failing_test": "tests/unit/test_bug_hunt_strict_json_boundaries.py::test_mission_metadata_rejects_nonstandard_json_constants_at_parse_boundary",
+  "impact": "Mission metadata is a cross-sink trust-boundary feature. Rejecting ambiguous JSON early keeps DLQ diagnostics clearer and prevents parser-specific behavior from leaking into sinks.",
+  "delivery_semantics": "Invalid mission metadata remains a permanent validation failure. The core must still publish to DLQ before ACK when DLQ is configured.",
+  "security": "The fix must not log the full header value, payload content, credentials, or private mission details.",
+  "acceptance": [
+    "A focused regression test proves mission metadata rejects non-standard constants at parse time.",
+    "Duplicate-key rejection remains in place.",
+    "Valid mission metadata headers continue to work.",
+    "Existing mission metadata and sink mapping tests still pass."
+  ],
+  "tests": "Run the focused regression test, mission metadata tests, Oracle mapping tests, file mapping tests, and the full local check script.",
+  "documentation": "Update CHANGELOG.md and mission metadata documentation to clarify standards-compliant JSON parsing.",
+  "closeout": "Close only after the release containing the fix is published. Include the release tag, regression evidence, verification evidence, and any remaining limitations."
+}

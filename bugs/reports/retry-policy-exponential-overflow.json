@@ -1,0 +1,26 @@
+{
+  "id": "retry-policy-exponential-overflow",
+  "title": "[Bug]: Exponential retry backoff can overflow before applying the cap",
+  "area": "Core runtime and delivery semantics",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.0",
+  "labels": ["testing"],
+  "summary": "Very large retry attempts can raise an overflow before RetryPolicy applies the configured maximum backoff cap.",
+  "observed": "An extreme delivery attempt in exponential mode can raise OverflowError while computing the uncapped delay.",
+  "expected": "RetryPolicy should return the configured maximum delay for extreme exponential attempts instead of raising.",
+  "reproduction": "Run the focused regression test that asks RetryPolicy for a very large exponential retry attempt.",
+  "failing_test": "tests/unit/test_bug_hunt_non_json_boundaries.py::test_retry_policy_caps_extreme_exponential_attempts_without_overflow",
+  "impact": "A malformed or unexpectedly high delivery attempt value can destabilize retry handling.",
+  "delivery_semantics": "The fix keeps retry handling bounded and prefers redelivery over process failure.",
+  "security": "Bounding arithmetic prevents hostile or corrupted metadata from triggering avoidable runtime errors.",
+  "acceptance": [
+    "Extreme exponential attempts return the configured maximum backoff.",
+    "Normal exponential backoff values remain unchanged.",
+    "Retry tests continue to pass.",
+    "The focused regression test and full checks pass."
+  ],
+  "tests": "Run the focused regression test, retry tests, runner failure-path tests, and the full local check script.",
+  "documentation": "Update retry documentation or release notes if overflow hardening is mentioned.",
+  "closeout": "Close only after the release containing the fix is published with regression and verification evidence."
+}

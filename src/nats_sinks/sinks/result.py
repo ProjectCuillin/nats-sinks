@@ -1,4 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
+
 """Result models reserved for future sink extensions.
 
 The first sink contract returns `None` from `write_batch` on success because

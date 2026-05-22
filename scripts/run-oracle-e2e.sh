@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
+
 #
 # Run the live NATS-to-Oracle end-to-end test using local, ignored environment
 # files. This script deliberately does not contain server names, usernames,

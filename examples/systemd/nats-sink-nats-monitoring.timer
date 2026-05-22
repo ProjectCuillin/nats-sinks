@@ -1,0 +1,12 @@
+[Unit]
+Description=Run nats-sinks NATS server monitoring snapshot periodically
+Documentation=https://github.com/ProjectCuillin/nats-sinks/
+
+[Timer]
+OnBootSec=45s
+OnUnitActiveSec=30s
+AccuracySec=5s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

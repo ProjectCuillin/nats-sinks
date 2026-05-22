@@ -1,0 +1,26 @@
+{
+  "id": "mkdocs-shared-site-build-collision",
+  "title": "[Bug]: Parallel MkDocs checks can collide in the shared site directory",
+  "area": "Packaging and release",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.0",
+  "labels": ["documentation", "testing", "release"],
+  "summary": "Documentation validation can fail when two MkDocs builds run at the same time against the default shared output directory.",
+  "observed": "A concurrent documentation check can make one MkDocs process clean the shared output directory while another process is still traversing that directory.",
+  "expected": "Release, CI, and local documentation checks should use isolated output directories so overlapping documentation builds cannot delete each other's files.",
+  "reproduction": "Run two documentation builds at the same time against the default output directory, or run the focused regression test that verifies release automation uses isolated site directories.",
+  "failing_test": "tests/unit/test_docs_build_isolation.py::test_release_and_ci_checks_use_docs_wrapper",
+  "impact": "A release engineer can see a false documentation-build failure during release preparation even though the documentation content is valid.",
+  "delivery_semantics": "The fix affects release validation only and does not change NATS delivery behavior, sink writes, or ACK ordering.",
+  "security": "The fix keeps generated documentation output in ignored temporary directories and does not expose secrets or live environment details.",
+  "acceptance": [
+    "Release and CI documentation checks use a collision-safe docs wrapper.",
+    "The docs wrapper builds Read the Docs and GitHub Pages variants into isolated temporary directories.",
+    "The GitHub Pages publishing workflow still produces a single uploadable site artifact.",
+    "Focused regression tests and documentation checks pass."
+  ],
+  "tests": "Run the focused docs-build isolation test, bug report validation, documentation checks, and the full local check script before release.",
+  "documentation": "Update development, release, publishing, Read the Docs, GitHub Pages, README, changelog, and the latest test report.",
+  "closeout": "Close only after the release containing the collision-safe docs build wrapper is published with regression and verification evidence."
+}

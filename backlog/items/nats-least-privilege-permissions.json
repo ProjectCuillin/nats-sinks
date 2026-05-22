@@ -1,0 +1,23 @@
+{
+  "id": "nats-least-privilege-permissions",
+  "title": "[Docs]: Add least-privilege NATS permissions templates",
+  "area": "Security",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.0",
+  "labels": ["security", "nats", "documentation"],
+  "problem": "The project documents authentication modes and secure connection practices, but users also need concrete guidance for least-privilege NATS permissions. Without templates, deployments may over-grant publish or subscribe rights, especially around DLQ subjects, JetStream API access, and operational advisory streams.",
+  "proposal": "Document least-privilege permission templates for typical sink workers, including pull consumer access, subscribed subject families, DLQ publish rights, and optional advisory consumption. The examples should be generic and use placeholders only. They should explain what each permission enables and which permissions are not required by default.",
+  "users": "NATS administrators, platform security teams, and operators preparing production service accounts for nats-sinks.",
+  "delivery_semantics": "Permissions must allow the runner to fetch, process, publish to DLQ when configured, and ACK only after durable success. Insufficient permissions should fail visibly and must not result in early ACKs.",
+  "security": "Templates must not include real account names, network details, or credential values. They should reinforce least privilege, separate runtime and administrative rights, and avoid granting broad publish or subscribe access.",
+  "acceptance": [
+    "Permission templates are documented for common sink worker scenarios.",
+    "DLQ permissions are explained separately from source-subject permissions.",
+    "Optional advisory and management permissions are clearly marked.",
+    "Examples use placeholders only.",
+    "Security documentation links to the templates."
+  ],
+  "tests": "Run markdown link checks and mkdocs builds. Add config or documentation validation tests only if machine-readable templates are committed. Run scripts/check.sh.",
+  "documentation": "Update docs/security.md, docs/configuration.md, docs/operations.md, docs/dead-letter-queues.md, README.md, ROADMAP.md, and CHANGELOG.md.",
+  "closeout": "Close after the release containing the templates is published. Include release tag, templates added, checks run, and any follow-up work for certified auth modes."
+}

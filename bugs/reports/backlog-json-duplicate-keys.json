@@ -1,0 +1,26 @@
+{
+  "id": "backlog-json-duplicate-keys",
+  "title": "[Bug]: Backlog sync accepts duplicate JSON keys",
+  "area": "CI and automation",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.0",
+  "labels": ["testing", "serialization"],
+  "summary": "The local backlog-to-GitHub sync tool parses backlog item JSON with default json.loads behavior, which silently keeps the last value when duplicate keys are present.",
+  "observed": "A backlog item with duplicate title or metadata keys can be accepted with only the final value preserved.",
+  "expected": "Duplicate keys in backlog JSON must be rejected as ambiguous before an issue body can be generated.",
+  "reproduction": "Run the focused regression test that writes a valid backlog item with a duplicate title key and calls load_backlog_item.",
+  "failing_test": "tests/unit/test_bug_hunt_strict_json_boundaries.py::test_backlog_sync_rejects_duplicate_json_keys",
+  "impact": "Backlog files become public GitHub issues. Ambiguous JSON could make local review differ from the final published issue and weaken the audit trail.",
+  "delivery_semantics": "No runtime delivery behavior changes. This fix hardens project-management automation only.",
+  "security": "The fix must preserve existing public-issue leak prevention and must not publish secrets, URLs, IP addresses, or private environment details.",
+  "acceptance": [
+    "A focused regression test proves duplicate backlog JSON keys are rejected.",
+    "Valid backlog JSON files continue to sync.",
+    "The rejection message is clear for maintainers.",
+    "Existing backlog sync tests and full checks still pass."
+  ],
+  "tests": "Run the focused regression test, backlog sync tests, and the full local check script.",
+  "documentation": "Update CHANGELOG.md and backlog workflow documentation if public behavior changes.",
+  "closeout": "Close only after the release containing the fix is published. Include the release tag, regression evidence, verification evidence, and any remaining limitations."
+}

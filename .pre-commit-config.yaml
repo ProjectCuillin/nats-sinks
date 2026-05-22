@@ -11,3 +11,30 @@ repos:
       - id: mypy
         additional_dependencies:
           - pydantic
+  - repo: local
+    hooks:
+      - id: nats-sinks-secret-scan
+        name: nats-sinks secret scan
+        entry: scripts/secret-scan.sh
+        language: system
+        pass_filenames: false
+      - id: nats-sinks-version-consistency
+        name: nats-sinks version consistency
+        entry: python scripts/check-version-consistency.py
+        language: system
+        pass_filenames: false
+      - id: nats-sinks-dependency-manifests
+        name: nats-sinks dependency manifest consistency
+        entry: python scripts/update-dependency-manifests.py --check
+        language: system
+        pass_filenames: false
+      - id: nats-sinks-local-backlog
+        name: nats-sinks local backlog validation
+        entry: python scripts/sync-backlog-issues.py --check
+        language: system
+        pass_filenames: false
+      - id: nats-sinks-local-bug-reports
+        name: nats-sinks local bug report validation
+        entry: python scripts/sync-bug-reports.py --check
+        language: system
+        pass_filenames: false

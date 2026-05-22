@@ -1,0 +1,26 @@
+{
+  "id": "encryption-envelope-json-nonstandard-constants",
+  "title": "[Bug]: Encryption envelope parser accepts non-standard JSON constants",
+  "area": "Security",
+  "severity": "high",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.0",
+  "labels": ["security", "serialization"],
+  "summary": "The encryption envelope parser accepts Python-specific constants such as NaN in otherwise ignored fields, allowing non-standard JSON envelopes through decryption helpers.",
+  "observed": "An encrypted payload envelope with an extra NaN field can be parsed and decrypted because the extra field is ignored after parsing.",
+  "expected": "Encrypted payload envelopes should reject non-standard JSON constants at parse time even when those fields are not used by the current schema.",
+  "reproduction": "Run the focused regression test that adds an ignored NaN field to a valid encrypted payload envelope and calls decrypt_payload.",
+  "failing_test": "tests/unit/test_bug_hunt_strict_json_boundaries.py::test_encryption_payload_rejects_nonstandard_json_constants",
+  "impact": "Encrypted payload envelopes must remain portable and unambiguous across databases, files, and future sinks. Non-standard JSON weakens that contract.",
+  "delivery_semantics": "The fix must not change ACK ordering or sink writes. It only hardens explicit decrypt and verification tooling.",
+  "security": "The fix must keep crypto material out of logs and exception messages.",
+  "acceptance": [
+    "A focused regression test proves non-standard constants in encryption envelopes are rejected.",
+    "Valid encrypted payloads still decrypt successfully.",
+    "The error remains a framework serialization error.",
+    "Existing encryption tests still pass."
+  ],
+  "tests": "Run the focused regression test, encryption tests, payload tests, and the full local check script.",
+  "documentation": "Update CHANGELOG.md and encryption documentation to mention strict envelope parsing.",
+  "closeout": "Close only after the release containing the fix is published. Include the release tag, regression evidence, verification evidence, and any remaining limitations."
+}

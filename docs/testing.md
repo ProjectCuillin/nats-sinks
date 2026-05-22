@@ -27,6 +27,9 @@ Unit tests cover:
 - envelope creation,
 - idempotency key generation,
 - JSON configuration loading,
+- strict JSON boundary handling for configuration, automation manifests,
+  payloads, mission metadata, encryption envelopes, observability policy
+  files, NATS monitoring responses, and public timing evidence,
 - secret redaction,
 - batch creation,
 - retry policy,
@@ -45,6 +48,85 @@ Unit tests cover:
 - DLQ-before-ACK ordering,
 - no ACK on sink failure,
 - no payload logging by default.
+
+## Bounded Property-Style Tests
+
+The repository uses deterministic bounded generator tests for security-sensitive
+validators and normalizers. These tests provide many of the benefits of
+property-based testing without adding a new dependency or introducing
+non-determinism into CI. The generators are deliberately small, explicit, and
+reviewable so a failing case is easy to understand.
+
+Run the focused generator suite with:
+
+```bash
+pytest tests/unit/test_property_generators.py
+```
+
+The current generator suite covers:
+
+- NATS subject pattern validation and wildcard matching invariants;
+- payload normalization into JSON-compatible storage values;
+- message metadata normalization for priority, classification, and labels;
+- mission metadata JSON validation, freezing, and duplicate-key rejection;
+- file sink path sanitization for traversal-like, control-character, Unicode,
+  oversized, and hostile string-conversion values.
+
+The file path generator found and now guards a real hardening case: a hostile
+object whose string conversion raises must not crash path sanitization. The
+sanitizer now falls back to a deterministic safe component derived from type
+metadata rather than using a raw object representation.
+
+These tests are intentionally payload-safe. Error assertions check that invalid
+payload content is not echoed back in exception text. Generated values are fake
+and must not include credentials, private infrastructure details, real
+operational subjects, or sensitive payload fragments.
+
+If a future maintainer adds Hypothesis or another property-based testing tool,
+it must be a development-only dependency, documented in `CHANGELOG.md`, and
+reflected in the generated dependency manifests.
+
+## Oracle Benchmark Tests
+
+Oracle benchmark tooling is split into two layers:
+
+- unit tests for command validation, report redaction, phase rendering, and
+  public-output safety;
+- a live benchmark script for non-production NATS and Oracle environments.
+
+The unit tests run in normal CI and do not connect to NATS or Oracle:
+
+```bash
+pytest tests/unit/test_oracle_benchmark.py
+```
+
+The live benchmark is opt-in and must use ignored local environment files:
+
+```bash
+scripts/run-oracle-benchmark.sh \
+  --message-count 256 \
+  --batch-size 64 \
+  --payload-shape mixed \
+  --sink-mode merge \
+  --format markdown \
+  --report-file .local/oracle-benchmark/report.md
+```
+
+The script reports publish, fetch, map, write, commit, ACK, retry, and shutdown
+phases separately. It uses the real `OracleSink` and `JetStreamSinkRunner`, so
+Oracle commit still happens before JetStream ACK. The script must not be used
+against production streams or production tables unless an operator has reviewed
+retention, duplicate handling, table cleanup flags, and the impact of synthetic
+messages.
+
+Benchmark reports are sanitized by default. They are suitable for summaries in
+`docs/test-report.md`, but maintainers must still inspect them before copying
+them into public issues or release notes.
+
+The benchmark report helpers reject non-finite phase timings before JSON or
+Markdown evidence is rendered. This keeps public reports standards-compliant
+and avoids accidentally publishing `NaN` or `Infinity` in issue comments,
+release notes, or retained test reports.
 
 ## Local File Sink End-To-End Test
 
@@ -78,6 +160,169 @@ pytest tests/integration/test_file_sink_e2e.py
 The test creates a unique child directory under `NATS_SINKS_FILE_E2E_DIRECTORY`
 for each run. Keep that directory under `.local/` or another ignored location
 when retaining files.
+
+## Synthetic Mission Scenario Harness
+
+The repository includes a synthetic scenario harness for repeatable
+mission-style testing without real operational content. The harness generates
+immutable `NatsEnvelope` objects with fake subjects, payloads, metadata, and
+JetStream sequence values. It is safe for unit tests, smoke tests, release
+evidence, and public issue comments because generated reports exclude payload
+contents, service locators, usernames, passwords, certificates, keys, wallet
+material, local paths, and private infrastructure details.
+
+The harness currently covers these scenario cases:
+
+- `valid_json`, a normal JSON payload that should pass through every
+  JSON-capable sink.
+- `malformed_json_text`, text that looks like JSON but is intentionally
+  incomplete. Default payload handling wraps it as text instead of crashing.
+- `duplicate`, a redelivery-style message that reuses the previous message's
+  stream sequence, subject, message ID, and payload so idempotent sinks can
+  treat the duplicate as already processed.
+- `stale`, a message with an older event timestamp so future freshness checks
+  and operators can test delayed-event behavior.
+- `encrypted_marker`, a fake encrypted-payload envelope shape that proves
+  sinks can persist encryption-envelope-like JSON without exposing real key
+  material.
+- `classified`, `priority`, and `labeled`, which exercise NATO-style
+  classification values, urgency values, and semicolon-compatible labels.
+- `empty`, an empty message body that must be persisted safely rather than
+  causing a hard crash.
+
+Generate a destination-neutral sanitized JSON report:
+
+```bash
+python scripts/run-synthetic-harness.py --message-count 18
+```
+
+Example output:
+
+```json
+{
+  "classification_values": {
+    "NATO RESTRICTED": 16,
+    "NATO SECRET": 2
+  },
+  "duplicate_messages": 2,
+  "encrypted_marker_messages": 2,
+  "file_count": null,
+  "generated_messages": 18,
+  "malformed_json_text_messages": 2,
+  "profile": "mission-smoke",
+  "sink": "core",
+  "stale_messages": 2,
+  "unique_idempotency_keys": 16
+}
+```
+
+Run the same scenario through the file sink without external services:
+
+```bash
+python scripts/run-synthetic-harness.py \
+  --sink file \
+  --message-count 18 \
+  --output-dir .local/synthetic-file-smoke \
+  --format markdown \
+  --report-file .local/synthetic-file-smoke-report.md
+```
+
+By default the script deletes file-sink output after the run. Add
+`--preserve-files` when you intentionally want to inspect generated records
+under an ignored local directory:
+
+```bash
+python scripts/run-synthetic-harness.py \
+  --sink file \
+  --message-count 18 \
+  --output-dir .local/synthetic-file-smoke \
+  --preserve-files
+```
+
+The file-sink adapter also supports gzip output through Python's
+standard-library `gzip` module:
+
+```bash
+python scripts/run-synthetic-harness.py \
+  --sink file \
+  --compression gzip \
+  --message-count 18
+```
+
+Python projects can import the harness directly:
+
+```python
+from nats_sinks.testing import SyntheticScenarioProfile, generate_synthetic_scenario
+
+profile = SyntheticScenarioProfile(message_count=18, seed=7)
+messages = generate_synthetic_scenario(profile)
+
+for synthetic in messages:
+    envelope = synthetic.envelope
+    assert envelope.subject.startswith("mission.synthetic.")
+```
+
+Future sink adapters should reuse the same generated `NatsEnvelope` objects and
+produce sanitized reports with the same shape. Live NATS and Oracle execution
+must remain gated behind ignored `.local/` configuration files and explicit
+environment flags; the synthetic harness should never connect to live systems
+unless a separate, opt-in integration wrapper is added for that purpose.
+
+## Synthetic Load Profile Tests
+
+Load profiles are local, deterministic pressure rehearsals for runtime behavior.
+They are separate from the live Oracle benchmark and from the local file-sink
+e2e test. Their job is to make normal, retry, DLQ, and shutdown behavior
+repeatable without contacting private infrastructure.
+
+Run the unit coverage for the profile API and CLI argument handling:
+
+```bash
+pytest tests/unit/test_load_profiles.py
+```
+
+Run a normal profile and write a sanitized Markdown report under an ignored
+local path:
+
+```bash
+mkdir -p .local/load-profile
+python scripts/run-load-profile.py \
+  --profile normal \
+  --message-count 256 \
+  --batch-size 64 \
+  --with-encryption \
+  --format markdown \
+  --report-file .local/load-profile/normal.md
+```
+
+Run the failure-oriented profiles:
+
+```bash
+python scripts/run-load-profile.py --profile retry --message-count 256 --batch-size 64
+python scripts/run-load-profile.py --profile dlq --message-count 256 --batch-size 64
+python scripts/run-load-profile.py --profile shutdown --message-count 250 --batch-size 64
+```
+
+The `shutdown` example intentionally uses a message count that is not a clean
+multiple of the batch size. That keeps partial-batch behavior visible while the
+profile models stop-fetch behavior and leaves unfetched messages outside the
+ACK boundary.
+
+Load-profile phase rates use phase-specific completed-work counters. For
+example, fetch timing uses `messages_fetched`, backend-write timing uses
+`messages_written`, DLQ timing uses `messages_dlq`, and ACK timing uses
+`messages_acked`. This prevents a shutdown or DLQ rehearsal from reporting
+inflated throughput by dividing every phase by the total generated message
+count.
+
+The profile output is public-safe by design. It contains only generated counts,
+aggregate timings, selected retry and DLQ counters, and optional metrics
+snapshot data. It must not be edited to include real subjects, server
+addresses, usernames, passwords, wallet locations, certificate material, table
+names, or payload bodies.
+
+For operational interpretation guidance, see
+[Performance](performance.md#synthetic-load-profiles).
 
 ## Payload Encryption Test Matrix
 
@@ -336,7 +581,9 @@ The unit and integration tests intentionally exercise common non-happy paths:
 - an empty message body is wrapped and stored instead of crashing,
 - malformed JSON-looking text is preserved as text unless `payload_mode` is
   explicitly `json_only`,
-- non-UTF-8 bytes are base64-wrapped so opaque payloads remain durable.
+- non-UTF-8 bytes are base64-wrapped so opaque payloads remain durable,
+- invalid mission metadata is treated as a permanent validation failure and
+  follows DLQ-before-ACK behavior when DLQ is configured.
 
 ## Live NATS To Oracle End-To-End Test
 
@@ -491,14 +738,49 @@ table lets operators inspect stored payloads, metadata, and timing columns
 after the test. If the table has an older layout and you want the test to
 recreate it, set `NATS_SINKS_E2E_DROP_TABLE_BEFORE=true` for that run.
 
+### Retained Oracle Table Schema Drift
+
+Retained test tables are useful because they let you inspect rows after a live
+run, but they can outlive schema changes. When the project adds columns such as
+`PRIORITY`, `CLASSIFICATION`, `LABELS`, timestamp fields, `METADATA_JSON`, or
+`MISSION_METADATA_JSON`, an older retained table may no longer match the
+current e2e contract.
+
+This is handled deliberately. The e2e test checks the table shape before it
+publishes messages or starts the runner. If required columns are missing, the
+test fails fast with a clear schema message and does not process messages
+against that table. Treat that result as a safety guard, not as a delivery
+failure.
+
+You have three safe options:
+
+1. Choose a fresh table name for the run, letting `OracleSink.ensure_schema()`
+   create the current test layout.
+2. Set `NATS_SINKS_E2E_DROP_TABLE_BEFORE=true` only for an isolated test table
+   that may be destroyed and recreated.
+3. Migrate the retained table manually through your normal database change
+   process, then rerun the e2e test.
+
+For example, this command keeps the table after the run while avoiding any
+older retained table:
+
+```bash
+scripts/run-oracle-e2e.sh --table NATS_SINKS_E2E_METRICS --message-count 256 --batch-size 64
+```
+
+Do not use `--drop-table-before` or `--drop-table-after` on a table that holds
+evidence, audit records, production data, or data that another test still needs.
+
 Set `NATS_SINKS_E2E_SUBJECT` to a wildcard such as `example.test.*` and
 `NATS_SINKS_E2E_PUBLISH_SUBJECT` to a concrete matching subject such as
 `example.test.subject` when you want the e2e test to prove wildcard subscription
 behavior.
 
 When `NATS_SINKS_E2E_PRINT_TIMINGS=true`, the test prints a backend write timing
-summary based on the runner's `batch_write_seconds` observations. This measures
-the duration of `sink.write_batch(...)`, including the Oracle write and commit.
+summary based on the runner's `sink_batch_write_seconds` observations. This
+measures the duration of `sink.write_batch(...)`, including the Oracle write
+and commit. The older `batch_write_seconds` alias remains available for
+compatibility with earlier local reports.
 
 Run it with:
 

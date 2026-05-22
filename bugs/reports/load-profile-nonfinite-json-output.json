@@ -1,0 +1,26 @@
+{
+  "id": "load-profile-nonfinite-json-output",
+  "title": "[Bug]: Load-profile reports can render non-standard JSON values",
+  "area": "Testing",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.0",
+  "labels": ["testing", "serialization"],
+  "summary": "Synthetic load-profile phase timing objects can carry non-finite values and the JSON report renderer uses default json.dumps behavior, allowing NaN or Infinity in public evidence.",
+  "observed": "A load-profile phase containing NaN can be represented and rendered as non-standard JSON.",
+  "expected": "Load-profile timing objects should reject non-finite values before report rendering.",
+  "reproduction": "Run the focused regression test that constructs a load-profile phase with NaN timing data.",
+  "failing_test": "tests/unit/test_bug_hunt_strict_json_boundaries.py::test_load_profile_rejects_nonfinite_phase_timings",
+  "impact": "Synthetic load reports are used as public release and issue evidence. They should stay standards-compliant and deterministic.",
+  "delivery_semantics": "No runtime delivery behavior changes. This fix affects local test evidence generation only.",
+  "security": "The fix must preserve public-safe report output and must not expose private service locators, credentials, payloads, or filesystem details.",
+  "acceptance": [
+    "A focused regression test proves non-finite load-profile phase timings are rejected.",
+    "Valid load-profile reports still render as JSON and Markdown.",
+    "JSON report rendering remains standards-compliant.",
+    "Existing load-profile tests still pass."
+  ],
+  "tests": "Run the focused regression test, load-profile tests, synthetic harness tests, and the full local check script.",
+  "documentation": "Update CHANGELOG.md and testing documentation to mention strict load-profile evidence output.",
+  "closeout": "Close only after the release containing the fix is published. Include the release tag, regression evidence, verification evidence, and any remaining limitations."
+}

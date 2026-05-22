@@ -1,0 +1,23 @@
+{
+  "id": "helm-chart",
+  "title": "[Feature]: Add a Helm chart for Kubernetes deployments",
+  "area": "Operations and deployment",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["deployment"],
+  "problem": "Kubernetes examples help users understand deployment shape, but teams operating many environments often need a Helm chart with configurable values, documented defaults, and upgrade behavior. A chart must not hide security-sensitive defaults or make it easy to deploy unsafe configurations accidentally.",
+  "proposal": "Create a Helm chart after the plain Kubernetes examples are stable. The chart should expose sink worker configuration, optional observability service configuration, secret references, resource limits, security context, graceful shutdown settings, and optional extras in a predictable values schema.",
+  "users": "Kubernetes operators who need repeatable deployment, environment-specific values, and controlled upgrades for nats-sinks.",
+  "delivery_semantics": "The chart must preserve graceful shutdown and must not change runner delivery semantics. Values that affect batch size, retries, ACK timing, and shutdown should be documented clearly.",
+  "security": "The chart should default to least privilege, avoid embedding secrets in values examples, avoid privileged containers, and keep observability sharing disabled unless explicitly enabled.",
+  "acceptance": [
+    "A Helm chart is added with documented values.",
+    "Template output includes secure defaults and resource limits.",
+    "Chart validation is included in local or CI checks where practical.",
+    "Upgrade notes explain how to preserve configuration and secrets.",
+    "Documentation links Kubernetes examples and Helm usage."
+  ],
+  "tests": "Add chart template validation and documentation checks. Run scripts/check.sh and any Helm lint command if Helm becomes a documented development tool.",
+  "documentation": "Update docs/operations.md, docs/security.md, docs/release.md, examples, ROADMAP.md, and CHANGELOG.md.",
+  "closeout": "Close only after the Helm chart ships in a release. Include release tag, chart version, validation checks, and known limitations."
+}

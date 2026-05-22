@@ -1,0 +1,26 @@
+{
+  "id": "bug-report-json-duplicate-keys",
+  "title": "[Bug]: Bug-report sync accepts duplicate JSON keys",
+  "area": "CI and automation",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.0",
+  "labels": ["testing", "serialization"],
+  "summary": "The managed bug-report sync tool uses default JSON parsing and can silently accept duplicate keys when preparing public GitHub bug issues.",
+  "observed": "A bug report JSON document with duplicate observed or title fields can be loaded with only the final value retained.",
+  "expected": "Duplicate keys in bug-report JSON should be rejected before a public issue body or lifecycle comment is generated.",
+  "reproduction": "Run the focused regression test that writes a bug report with a duplicate title key and calls load_bug_report.",
+  "failing_test": "tests/unit/test_bug_hunt_strict_json_boundaries.py::test_bug_report_sync_rejects_duplicate_json_keys",
+  "impact": "Bug reports are public audit records for test-driven fixes. Ambiguous local JSON can make the evidence trail harder to trust.",
+  "delivery_semantics": "No runtime delivery behavior changes. This fix hardens bug-management automation only.",
+  "security": "The fix must retain existing public-issue leak prevention and must not publish private locators, credentials, or payload details.",
+  "acceptance": [
+    "A focused regression test proves duplicate bug-report JSON keys are rejected.",
+    "Valid bug reports continue to sync.",
+    "The error message is clear for maintainers.",
+    "Existing bug sync tests and full checks still pass."
+  ],
+  "tests": "Run the focused regression test, bug-report sync tests, and the full local check script.",
+  "documentation": "Update CHANGELOG.md and bug workflow documentation if public behavior changes.",
+  "closeout": "Close only after the release containing the fix is published. Include the release tag, regression evidence, verification evidence, and any remaining limitations."
+}

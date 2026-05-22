@@ -1,4 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
+
 """Oracle idempotency helpers.
 
 At-least-once delivery means Oracle writes must tolerate duplicate processing.
@@ -13,6 +15,8 @@ but both require more discipline from upstream publishers.
 
 from __future__ import annotations
 
+import math
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from nats_sinks.core.envelope import NatsEnvelope
@@ -30,7 +34,19 @@ def extract_payload_field(payload: Any, path: str) -> str:
         current = current[part]
     if current is None:
         raise ValidationError(f"idempotency payload field {path!r} is null")
-    return str(current)
+    if isinstance(current, Mapping) or (
+        isinstance(current, Sequence) and not isinstance(current, str | bytes | bytearray)
+    ):
+        raise ValidationError(f"idempotency payload field {path!r} must resolve to a scalar")
+    if isinstance(current, float) and not math.isfinite(current):
+        raise ValidationError(f"idempotency payload field {path!r} must be finite")
+    try:
+        rendered = str(current).strip()
+    except Exception as exc:
+        raise ValidationError(f"idempotency payload field {path!r} cannot be rendered") from exc
+    if not rendered:
+        raise ValidationError(f"idempotency payload field {path!r} is empty")
+    return rendered
 
 
 def validate_envelope_idempotency(

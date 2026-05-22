@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
+
 #
 # Validate local GitHub CLI authentication before a maintainer release.
 #

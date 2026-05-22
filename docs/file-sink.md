@@ -141,8 +141,8 @@ original NATS message body is not JSON.
 
 | Value | Behavior | When to use it |
 | --- | --- | --- |
-| `json_or_envelope` | Attempts to parse the body as JSON. Valid JSON is stored as the original JSON value. UTF-8 text that is not JSON is wrapped in a text envelope. Non-text bytes are base64-wrapped in a bytes envelope. | Recommended default for mixed streams. |
-| `json_only` | Requires every body to be valid JSON. Invalid JSON, text, bytes, and malformed JSON become permanent serialization failures. | Strict data contracts where non-JSON messages should be sent to DLQ. |
+| `json_or_envelope` | Attempts to parse the body as standards-compliant JSON. Valid JSON is stored as the original JSON value. UTF-8 text that is not JSON, including Python-only constants such as `NaN`, is wrapped in a text envelope. Non-text bytes are base64-wrapped in a bytes envelope. | Recommended default for mixed streams. |
+| `json_only` | Requires every body to be standards-compliant JSON. Invalid JSON, text, bytes, malformed JSON, and Python-only constants such as `NaN` become permanent serialization failures. | Strict data contracts where non-JSON messages should be sent to DLQ. |
 | `text_envelope` | Treats every body as UTF-8 text and wraps it in the standard text envelope without attempting JSON parsing. Non-UTF-8 bytes fail serialization. | Encrypted text or log streams where parsing as JSON would waste CPU or create ambiguity. |
 | `bytes_envelope` | Treats every body as opaque bytes and stores base64 text inside the standard bytes envelope. | Binary, compressed, encrypted, or otherwise opaque payloads. |
 
@@ -239,6 +239,12 @@ Each uncompressed file contains a single JSON document:
   "classification": "NATO SECRET",
   "labels": "mission-report;coalition;watch-floor",
   "labels_list": ["mission-report", "coalition", "watch-floor"],
+  "mission_metadata": {
+    "profile": "mission-event-v1",
+    "profile_version": 1,
+    "mission_id": "SYN-MISSION-001",
+    "f2t2ea_phase": "track"
+  },
   "payload": {
     "report_id": "R-1001",
     "status": "received"
@@ -267,6 +273,16 @@ classification is missing, the file sink writes JSON `null` rather than the
 literal string `"null"`. When labels are missing, the scalar `labels` field is
 JSON `null` and `labels_list` is an empty JSON array.
 
+When the core `mission_metadata` feature is enabled, the file sink writes the
+validated object as top-level `mission_metadata` and also includes it in
+`metadata.mission_metadata`. If mission metadata is absent, both locations use
+JSON `null`. This is the recommended pattern for optional F2T2EA phase tagging
+and other mission-support context that should not become fixed generic
+framework fields. See [Mission Metadata](mission-metadata.md) and
+[F2T2EA Event Phase Tagging](use-cases/defence/f2t2ea-event-phase-tagging.md).
+For broader file-based handoff, edge operation, classification, labels, and
+audit examples, see [Defence And Mission Support](use-cases/defence/index.md).
+
 ### Output Shape With Payload Encryption
 
 When top-level payload encryption is enabled, the top-level operational fields
@@ -287,6 +303,11 @@ the visible effect of enabling encryption for the same message:
   "classification": "NATO SECRET",
   "labels": "mission-report;coalition;watch-floor",
   "labels_list": ["mission-report", "coalition", "watch-floor"],
+  "mission_metadata": {
+    "profile": "mission-event-v1",
+    "mission_id": "SYN-MISSION-001",
+    "f2t2ea_phase": "track"
+  },
   "payload": {
     "_nats_sinks_encryption": {
       "schema": "nats_sinks.encrypted_payload.v1",
@@ -605,6 +626,10 @@ nats stream add ORDERS --subjects "orders.*"
 nats-sink run examples/file-basic/config.json
 nats pub orders.created '{"order_id":"O-1001","amount":42.50}'
 ```
+
+For a complete mission-support file handoff pattern, including compression,
+duplicate handling, failure behavior, and test guidance, see
+[Disconnected File Handoff](use-cases/mission-support/disconnected-file-handoff.md).
 
 ## Production Recommendations
 

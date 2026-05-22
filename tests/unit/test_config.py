@@ -1,4 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
+
 from __future__ import annotations
 
 import os
@@ -6,7 +8,12 @@ from pathlib import Path
 
 import pytest
 
-from nats_sinks.core.config import ConfigurationError, load_config, redacted_config
+from nats_sinks.core.config import (
+    MAX_CONFIG_BYTES,
+    ConfigurationError,
+    load_config,
+    redacted_config,
+)
 
 
 def test_load_valid_config_with_env_override(
@@ -47,6 +54,74 @@ def test_invalid_json_root_raises(tmp_path: Path) -> None:
 
     with pytest.raises(ConfigurationError, match="root must be a mapping"):
         load_config(path)
+
+
+def test_null_json_root_raises(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text("null\n", encoding="utf-8")
+
+    with pytest.raises(ConfigurationError, match="root must be a mapping"):
+        load_config(path)
+
+
+def test_duplicate_json_keys_are_rejected(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "stream": "ORDERS_DUPLICATE",
+    "consumer": "oracle-orders-sink",
+    "subject": "orders.*"
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/tmp/nats-sinks-test"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError, match="duplicate JSON object key: stream"):
+        load_config(path, env_overrides=False)
+
+
+def test_oversized_config_is_rejected_before_parsing(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(" " * (MAX_CONFIG_BYTES + 1), encoding="utf-8")
+
+    with pytest.raises(ConfigurationError, match=r"exceeds the .* byte limit"):
+        load_config(path, env_overrides=False)
+
+
+def test_unknown_logging_level_fails_closed(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "oracle-orders-sink",
+    "subject": "orders.*"
+  },
+  "logging": {
+    "level": "TRACE"
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/tmp/nats-sinks-test"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError, match=r"logging\.level must be one of"):
+        load_config(path, env_overrides=False)
 
 
 def test_redacted_config_hides_secrets(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -201,6 +276,205 @@ def test_logging_level_can_be_set_to_debug(tmp_path: Path) -> None:
     config = load_config(path, env_overrides=False)
 
     assert config.logging.level == "DEBUG"
+
+
+def test_delivery_retry_backoff_controls_are_validated(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*"
+  },
+  "delivery": {
+    "max_retries": 8,
+    "retry_backoff_ms": 500,
+    "retry_backoff_max_ms": 30000,
+    "retry_backoff_mode": "exponential",
+    "retry_backoff_multiplier": 2.5,
+    "retry_jitter": "equal"
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/var/lib/nats-sinks/events"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(path, env_overrides=False)
+
+    assert config.delivery.max_retries == 8
+    assert config.delivery.retry_backoff_ms == 500
+    assert config.delivery.retry_backoff_max_ms == 30_000
+    assert config.delivery.retry_backoff_mode == "exponential"
+    assert config.delivery.retry_backoff_multiplier == 2.5
+    assert config.delivery.retry_jitter == "equal"
+
+
+def test_delivery_retry_backoff_cap_must_cover_base_delay(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*"
+  },
+  "delivery": {
+    "retry_backoff_ms": 5000,
+    "retry_backoff_max_ms": 1000
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/var/lib/nats-sinks/events"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError, match="retry_backoff_max_ms"):
+        load_config(path, env_overrides=False)
+
+
+def test_delivery_priority_lanes_are_validated_and_normalized(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*"
+  },
+  "delivery": {
+    "priority_lanes": {
+      "enabled": true,
+      "default_lane": "Routine",
+      "unknown_priority_action": "default_lane",
+      "max_priority_value_length": 32,
+      "lanes": [
+        {
+          "name": "Urgent",
+          "priorities": ["URGENT", "immediate"],
+          "weight": 3
+        },
+        {
+          "name": "routine",
+          "priorities": ["normal", "routine"],
+          "weight": 1
+        }
+      ]
+    }
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/tmp/nats-sinks-test"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(path, env_overrides=False)
+
+    assert config.delivery.priority_lanes.enabled is True
+    assert config.delivery.priority_lanes.default_lane == "routine"
+    assert config.delivery.priority_lanes.lanes[0].name == "urgent"
+    assert config.delivery.priority_lanes.lanes[0].priorities == ("urgent", "immediate")
+    assert config.delivery.priority_lanes.lanes[0].weight == 3
+
+
+def test_delivery_priority_lanes_reject_ambiguous_priority_values(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*"
+  },
+  "delivery": {
+    "priority_lanes": {
+      "enabled": true,
+      "default_lane": "routine",
+      "lanes": [
+        {
+          "name": "urgent",
+          "priorities": ["urgent"],
+          "weight": 3
+        },
+        {
+          "name": "routine",
+          "priorities": ["URGENT"],
+          "weight": 1
+        }
+      ]
+    }
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/tmp/nats-sinks-test"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError, match="assigned to both"):
+        load_config(path, env_overrides=False)
+
+
+def test_delivery_priority_lanes_reject_control_characters_in_config(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*"
+  },
+  "delivery": {
+    "priority_lanes": {
+      "enabled": true,
+      "default_lane": "routine",
+      "lanes": [
+        {
+          "name": "urgent",
+          "priorities": ["urgent\\tspoof"],
+          "weight": 3
+        },
+        {
+          "name": "routine",
+          "priorities": ["routine"],
+          "weight": 1
+        }
+      ]
+    }
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/tmp/nats-sinks-test"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError, match="control characters"):
+        load_config(path, env_overrides=False)
 
 
 def test_oracle_payload_mode_can_be_configured_for_encrypted_text(tmp_path: Path) -> None:

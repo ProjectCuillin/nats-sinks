@@ -1,0 +1,29 @@
+{
+  "id": "load-profile-phase-rate-counts",
+  "title": "[Bug]: Synthetic load-profile phase rates can use the wrong message count",
+  "area": "Testing",
+  "severity": "low",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.0",
+  "labels": ["testing", "metrics"],
+  "summary": "Synthetic load-profile reports calculate messages-per-second for every phase from the total generated message count. Profiles such as shutdown, retry, and DLQ can process fewer messages in specific phases, so the rendered phase rates can overstate throughput.",
+  "observed": "A shutdown load profile may fetch and process only part of the generated workload, but phase timing rates are still divided using the full generated message count.",
+  "expected": "Each phase should calculate messages-per-second from the counter that best represents work completed in that phase. Fetch should use fetched messages, backend write should use written records, ACK should use acknowledged messages, DLQ should use DLQ messages, and shutdown should not imply that unfetched messages were processed.",
+  "reproduction": "Run a shutdown synthetic load profile with a message count that spans multiple batches. Compare the fetch phase messages-per-second with messages_fetched divided by fetch total_seconds.",
+  "failing_test": "Add a focused regression test under tests/unit that proves shutdown fetch phase rate uses messages_fetched instead of total generated messages.",
+  "impact": "This is a low-severity reporting accuracy issue. It does not change JetStream ACK ordering, sink writes, encryption, Oracle behavior, file sink behavior, or idempotency. It can mislead maintainers who use load-profile reports as release evidence.",
+  "delivery_semantics": "No delivery semantics are changed. The fix must keep commit-then-acknowledge behavior untouched and only correct synthetic report calculations.",
+  "security": "The fix must keep reports sanitized and must not add service endpoints, usernames, passwords, wallet paths, certificates, private subjects, or payload bodies to load-profile output.",
+  "acceptance": [
+    "A focused regression test covers shutdown profile phase-rate calculation.",
+    "Fetch phase rate uses messages_fetched rather than total generated messages.",
+    "Backend write phase rate uses messages_written rather than total generated messages.",
+    "ACK phase rate uses messages_acked rather than total generated messages.",
+    "DLQ phase rate uses messages_dlq when DLQ work is recorded.",
+    "Synthetic load-profile reports remain sanitized and deterministic.",
+    "Existing unit, smoke, documentation, package, and release checks still pass."
+  ],
+  "tests": "Run the focused regression test, synthetic load-profile tests, metrics tests, smoke tests, and the full local check script.",
+  "documentation": "Update CHANGELOG.md, docs/load-testing.md, and the sanitized test report if the fix changes release evidence.",
+  "closeout": "Close only after the release containing the fix is published. Include the release tag, regression evidence, verification evidence, and any remaining limitations."
+}

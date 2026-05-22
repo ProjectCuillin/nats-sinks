@@ -1,0 +1,23 @@
+{
+  "id": "native-prometheus-http-endpoint",
+  "title": "[Feature]: Add an optional native Prometheus scrape endpoint",
+  "area": "Metrics and observability",
+  "priority": "P3 - backlog candidate",
+  "target_release": "v0.4.0",
+  "labels": ["observability"],
+  "problem": "The current Prometheus support is intentionally least-privileged and file based. That is safe for many Linux service deployments, but some operators prefer a native scrape endpoint because their observability platform expects services to expose metrics directly. The project needs a carefully scoped design before adding a listener so the observability path does not become part of the delivery-critical sink runner or accidentally expose sensitive operational metadata.",
+  "proposal": "Add an optional Prometheus scrape endpoint as an observability connector, not as a required part of the core runner. The endpoint should read bounded local metrics snapshots or an approved in-process metrics provider, apply the same explicit allow policy used by the textfile connector, and expose only approved low-cardinality metrics. It should be disabled by default, documented as separate from commit-then-acknowledge processing, and configurable with clear host, port, timeout, and metric allow-list controls.",
+  "users": "Operators who already run Prometheus-style scraping and want direct endpoint integration while preserving the existing security posture. Maintainers benefit from a connector boundary that allows native scraping without binding future observability decisions into the sink runtime.",
+  "delivery_semantics": "This feature must not affect ACK, NAK, retry, DLQ, batching, or sink write behavior. Metrics export is observational only. If the endpoint fails, the sink worker must continue processing messages according to existing delivery rules. Tests must prove that endpoint errors cannot ACK messages or block durable sink commits.",
+  "security": "The endpoint must be disabled by default, must not export payloads, secrets, subjects, file paths, table names, classification values, labels, or high-cardinality identifiers by default, and must fail closed when policy is invalid. Configuration must be validated with explicit bounds for listener settings, scrape output size, and allowed metric names.",
+  "acceptance": [
+    "A native scrape endpoint can be enabled only through explicit observability configuration.",
+    "Metric sharing still uses an allow-list policy and exports no sensitive labels by default.",
+    "Endpoint failures are isolated from sink delivery and do not change ACK behavior.",
+    "Unit and smoke tests cover disabled, enabled, invalid-policy, and output-format paths.",
+    "Documentation compares the native endpoint with the existing textfile connector."
+  ],
+  "tests": "Add unit tests for policy filtering and endpoint rendering, smoke tests for startup and shutdown, and runner tests proving metrics export failure does not change commit-then-ACK behavior. Run scripts/check.sh before close-out.",
+  "documentation": "Update docs/metrics.md, docs/observability.md, docs/configuration.md, docs/operations.md, README.md, ROADMAP.md, and CHANGELOG.md with configuration, examples, service guidance, security notes, and migration advice from textfile export.",
+  "closeout": "Close only after a release containing the endpoint has been published. The closing note must include the release tag, implementation reference, metrics exposed, tests run, documentation updated, known limitations, and any follow-up issues for authentication or advanced deployment modes."
+}
