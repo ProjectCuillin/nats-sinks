@@ -167,16 +167,18 @@ includes:
   guarded non-main approval. The standalone `scripts/sync-pr-labels.py` helper
   supports dry-run diagnostics, de-duplicates labels across multiple source
   issues, validates issue and PR numbers, rejects control characters in label
-  names, and leaves the official GitHub Issue Priority field on the issue
+  names, removes stale project-managed PR labels while preserving manual
+  labels, and leaves the official GitHub Issue Priority field on the issue
   rather than translating it into a PR label. The change is tracked in issue
-  `#209`. Development testing found and fixed two workflow bugs: issue `#211`
-  changed label application from `gh pr edit` to `gh issue edit` to avoid an
-  unrelated GitHub CLI GraphQL `projectCards` failure, and issue `#212`
-  stopped Markdown code-span placeholders from being treated as real source
-  issue references. Pull request `#210` was refreshed and its labels now match
-  issue `#209`. Full local validation after this workflow change passed with
-  `685 passed, 8 skipped` in the main pytest run, `121 passed` in the
-  encryption and sink contract suite, and `104 passed` in the sink-focused
+  `#209`. Development testing found and fixed eight workflow bugs: issue
+  `#211` changed label application from `gh pr edit` to `gh issue edit`;
+  issue `#212` stopped Markdown code-span placeholders from being treated as
+  real source issue references; issues `#213` through `#218` hardened
+  existing-PR refresh, explicit `--issue` body rendering, source issue
+  detection, dry-run wording, malformed GitHub JSON handling, and stale
+  managed-label cleanup. Full local validation after these workflow changes
+  passed with `691 passed, 8 skipped` in the main pytest run, `121 passed` in
+  the encryption and sink contract suite, and `104 passed` in the sink-focused
   suite; Ruff, mypy, documentation builds, CLI smoke checks,
   high-confidence secret scan, Bandit, package build, SBOM/checksum
   generation, and Twine metadata checks also passed,

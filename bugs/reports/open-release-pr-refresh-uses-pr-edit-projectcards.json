@@ -1,0 +1,27 @@
+{
+  "id": "open-release-pr-refresh-uses-pr-edit-projectcards",
+  "title": "[Bug]: open-release-pr should avoid gh pr edit when refreshing existing PR bodies",
+  "area": "CI and automation",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": ["release", "testing", "completed"],
+  "summary": "The local pull request helper still refreshes existing PR title and body text through gh pr edit, which can fail with an unrelated GitHub GraphQL projectCards deprecation warning.",
+  "observed": "A live PR refresh continued after gh pr edit failed, but the pull request body was not updated through the intended command path.",
+  "expected": "Existing pull request title and body refresh should use the GitHub issue edit path against the PR number, matching the safer label synchronization path.",
+  "reproduction": "Run scripts/open-release-pr.sh for an existing pull request in a repository where gh pr edit title/body refresh hits the GraphQL projectCards deprecation failure.",
+  "failing_test": "Add a shell-helper regression test proving existing PR refresh uses gh issue edit rather than gh pr edit.",
+  "impact": "PR metadata can become stale even though the helper continues. Runtime package behavior, NATS delivery, sink writes, DLQ handling, and ACK ordering are unaffected.",
+  "delivery_semantics": "This bug is limited to GitHub workflow metadata automation and cannot affect commit-then-ACK behavior.",
+  "security": "The fix must keep PR body content sanitized and must not introduce secrets, private endpoints, payloads, or token values into generated PR text.",
+  "acceptance": [
+    "Existing pull request refresh uses gh issue edit against the PR number.",
+    "The helper no longer depends on gh pr edit for title and body refresh.",
+    "A deterministic fake-gh shell regression covers the existing PR path.",
+    "The PR helper still refuses to run from main.",
+    "CHANGELOG.md records the bug fix."
+  ],
+  "tests": "Run python -m pytest tests/unit/test_pr_auto_approval.py tests/unit/test_pr_label_sync.py -q and scripts/check.sh.",
+  "documentation": "No new public documentation is required beyond keeping workflow notes and release notes accurate.",
+  "closeout": "Close after the bug branch merges into the release branch and release-gated closure confirms the release has shipped."
+}

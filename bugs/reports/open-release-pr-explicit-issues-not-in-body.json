@@ -1,0 +1,27 @@
+{
+  "id": "open-release-pr-explicit-issues-not-in-body",
+  "title": "[Bug]: open-release-pr explicit issues should be written into the PR body",
+  "area": "CI and automation",
+  "severity": "low",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": ["release", "testing", "completed"],
+  "summary": "The --issue arguments used for label synchronization are not currently written into the generated pull request body as Related issue references.",
+  "observed": "A maintainer can pass --issue 209 and labels are copied, but the generated PR body still contains only general instructions instead of a concrete Related issue line.",
+  "expected": "Explicit issue numbers should appear in a dedicated Related Issues section so reviewers can see the managed issue links without inferring them from labels or branch names.",
+  "reproduction": "Run scripts/open-release-pr.sh with --issue NUMBER and inspect the generated PR body.",
+  "failing_test": "Add a shell-helper regression test proving explicit issue arguments are rendered into the PR body.",
+  "impact": "Review traceability is weaker and source issue detection relies more heavily on command arguments. Runtime package behavior is unaffected.",
+  "delivery_semantics": "This bug is limited to GitHub workflow metadata automation and cannot affect message delivery semantics.",
+  "security": "Only numeric issue references should be written. The helper must not copy free-form private text, endpoints, or payloads into the PR body.",
+  "acceptance": [
+    "Explicit --issue values are rendered as Related issue lines in the PR body.",
+    "Multiple explicit issues are rendered deterministically.",
+    "The generated instructions no longer contain a literal numeric placeholder issue.",
+    "A fake-gh shell regression covers the behavior.",
+    "CHANGELOG.md records the bug fix."
+  ],
+  "tests": "Run python -m pytest tests/unit/test_pr_auto_approval.py tests/unit/test_pr_label_sync.py -q and scripts/check.sh.",
+  "documentation": "Update workflow documentation only if command examples need clarification.",
+  "closeout": "Close after the bug branch merges into the release branch and release-gated closure confirms the release has shipped."
+}

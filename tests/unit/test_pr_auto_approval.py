@@ -305,3 +305,94 @@ exit 1
     assert (state_dir / "created").exists()
     assert (state_dir / "reviewed").exists()
     assert (state_dir / "labeled").exists(), (state_dir / "gh-calls").read_text(encoding="utf-8")
+
+
+def test_open_release_pr_refreshes_existing_pr_with_issue_edit_and_related_issues(
+    tmp_path: Path,
+) -> None:
+    """Existing PR refresh should avoid ``gh pr edit`` and render issue links."""
+
+    bin_dir = tmp_path / "bin"
+    state_dir = tmp_path / "state"
+    bin_dir.mkdir()
+    state_dir.mkdir()
+    fake_git = bin_dir / "git"
+    fake_gh = bin_dir / "gh"
+    fake_git.write_text(
+        """#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$1" == "branch" && "$2" == "--show-current" ]]; then
+  echo "bug-213-example"
+  exit 0
+fi
+if [[ "$1" == "push" ]]; then
+  exit 0
+fi
+echo "unexpected git command: $*" >&2
+exit 1
+""",
+        encoding="utf-8",
+    )
+    fake_gh.write_text(
+        f"""#!/usr/bin/env bash
+set -euo pipefail
+STATE_DIR={state_dir}
+printf '%s\n' "$*" >> "$STATE_DIR/gh-calls"
+if [[ "$1 $2" == "pr list" ]]; then
+  printf '321\\n'
+  exit 0
+fi
+if [[ "$1 $2" == "issue edit" ]]; then
+  body_file=""
+  while [[ $# -gt 0 ]]; do
+    if [[ "$1" == "--body-file" ]]; then
+      body_file="$2"
+      break
+    fi
+    shift
+  done
+  cp "$body_file" "$STATE_DIR/body"
+  touch "$STATE_DIR/refreshed"
+  exit 0
+fi
+echo "unexpected gh command: $*" >&2
+exit 1
+""",
+        encoding="utf-8",
+    )
+    fake_git.chmod(0o755)
+    fake_gh.chmod(0o755)
+    bash_path = shutil.which("bash")
+    if bash_path is None:  # pragma: no cover - platform guard
+        pytest.skip("bash is required for the shell helper regression test")
+
+    result = subprocess.run(  # noqa: S603 - fixed shell executable and local helper path.
+        [
+            bash_path,
+            str(ROOT / "scripts" / "open-release-pr.sh"),
+            "--repo",
+            "ProjectCuillin/nats-sinks",
+            "--base",
+            "release-v0.4.1",
+            "--issue",
+            "213",
+            "--issue",
+            "214",
+            "--no-copy-issue-labels-to-pr",
+        ],
+        cwd=ROOT,
+        env={**os.environ, "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"},
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert (state_dir / "refreshed").exists()
+    calls = (state_dir / "gh-calls").read_text(encoding="utf-8")
+    assert "issue edit 321" in calls
+    assert "pr edit" not in calls
+    body = (state_dir / "body").read_text(encoding="utf-8")
+    assert "- Related #213" in body
+    assert "- Related #214" in body

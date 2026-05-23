@@ -1,0 +1,27 @@
+{
+  "id": "pr-label-sync-invalid-gh-json",
+  "title": "[Bug]: PR label sync should report malformed GitHub JSON without a traceback",
+  "area": "CI and automation",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": ["release", "testing", "completed"],
+  "summary": "The pull request label synchronization helper can surface raw JSON parsing failures if GitHub CLI returns malformed JSON or unexpected output.",
+  "observed": "Malformed JSON from a GitHub CLI call can escape as a JSONDecodeError-style traceback instead of the helper's controlled error type.",
+  "expected": "Malformed GitHub JSON should be reported as a PullRequestLabelSyncError with a clear human-readable message.",
+  "reproduction": "Simulate gh returning non-JSON output for a JSON-capturing call in the label synchronization helper.",
+  "failing_test": "Add a focused unit test for the JSON decoding helper or _run_gh capture path.",
+  "impact": "Operators get noisier diagnostics during workflow failures. Runtime package behavior is unaffected.",
+  "delivery_semantics": "This bug is limited to local GitHub workflow diagnostics and cannot affect sink writes or ACK behavior.",
+  "security": "The error message should not echo large raw GitHub output, secrets, token values, private endpoints, or payload data.",
+  "acceptance": [
+    "Malformed GitHub JSON is converted into PullRequestLabelSyncError.",
+    "The error message is concise and human-readable.",
+    "The message does not echo the raw malformed output.",
+    "A unit test covers the failure mode.",
+    "CHANGELOG.md records the bug fix."
+  ],
+  "tests": "Run python -m pytest tests/unit/test_pr_label_sync.py -q and scripts/check.sh.",
+  "documentation": "No public documentation update is required.",
+  "closeout": "Close after the bug branch merges into the release branch and release-gated closure confirms the release has shipped."
+}

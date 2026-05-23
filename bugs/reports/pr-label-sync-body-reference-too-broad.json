@@ -1,0 +1,27 @@
+{
+  "id": "pr-label-sync-body-reference-too-broad",
+  "title": "[Bug]: PR label sync should only infer source issues from Related body references",
+  "area": "CI and automation",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": ["release", "testing", "completed"],
+  "summary": "The label synchronization helper scans every non-code issue reference in a PR body, so ordinary prose can accidentally become a source issue for label copying.",
+  "observed": "Any body text that contains a non-code #123 style reference can be treated as a source issue, even when the line does not identify managed implementation work.",
+  "expected": "Body scanning should infer source issues only from explicit Related-style lines while still honoring explicit --issue arguments and branch-derived issue numbers.",
+  "reproduction": "Run the label helper against a PR body that mentions an unrelated issue number in prose and label synchronization enabled.",
+  "failing_test": "Add a unit test proving arbitrary prose references are ignored while Related #... lines are detected.",
+  "impact": "Pull requests can inherit unrelated labels, reducing review and release filtering accuracy. Runtime delivery behavior is unaffected.",
+  "delivery_semantics": "This bug is limited to GitHub workflow metadata automation and cannot affect sink commit or ACK behavior.",
+  "security": "The fix should reduce accidental metadata propagation and must continue to ignore Markdown code spans and fenced code blocks.",
+  "acceptance": [
+    "Arbitrary body prose such as See #123 is ignored for label source detection.",
+    "Related #123 body lines are detected.",
+    "Related #123, #456 lines support multiple issue references.",
+    "Explicit issue arguments and branch-derived issues still work.",
+    "Unit tests cover the corrected detection policy."
+  ],
+  "tests": "Run python -m pytest tests/unit/test_pr_label_sync.py -q and scripts/check.sh.",
+  "documentation": "Update workflow documentation only if source issue syntax needs clarification.",
+  "closeout": "Close after the bug branch merges into the release branch and release-gated closure confirms the release has shipped."
+}

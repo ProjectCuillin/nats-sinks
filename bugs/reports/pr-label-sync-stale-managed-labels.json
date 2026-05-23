@@ -1,0 +1,27 @@
+{
+  "id": "pr-label-sync-stale-managed-labels",
+  "title": "[Bug]: PR label sync should remove stale managed labels",
+  "area": "CI and automation",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": ["release", "testing", "completed"],
+  "summary": "The pull request label synchronization helper adds source issue labels but does not remove stale managed labels copied from earlier or accidental source issues.",
+  "observed": "After a source issue detection mistake, the PR kept labels from the wrong issue until they were removed manually.",
+  "expected": "Label synchronization should remove known managed labels that are no longer present in the current source issue label union while preserving unknown manual labels.",
+  "reproduction": "Run label synchronization once with an accidental source issue and then again with the correct source issue only.",
+  "failing_test": "Add a unit test proving stale managed labels are removed while unknown manual labels are preserved.",
+  "impact": "Pull requests can appear in the wrong release, sink, security, or testing filters. Runtime package behavior is unaffected.",
+  "delivery_semantics": "This bug is limited to GitHub workflow metadata automation and cannot affect commit-then-ACK behavior.",
+  "security": "The fix must remove only known project-managed labels and must not remove unrelated maintainer labels accidentally.",
+  "acceptance": [
+    "Known managed labels not present in the source issue label union are removed from the PR.",
+    "Unknown manual labels are preserved.",
+    "Missing desired labels are added.",
+    "The helper supports an opt-out for stale-label removal if needed.",
+    "Unit tests cover stale-label removal."
+  ],
+  "tests": "Run python -m pytest tests/unit/test_pr_label_sync.py tests/unit/test_pr_auto_approval.py -q and scripts/check.sh.",
+  "documentation": "Update workflow documentation to mention stale managed label cleanup.",
+  "closeout": "Close after the bug branch merges into the release branch and release-gated closure confirms the release has shipped."
+}
