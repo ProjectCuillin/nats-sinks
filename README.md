@@ -459,13 +459,15 @@ nats-sink-metrics get .local/nats-sinks/metrics.json messages_failed_total --def
 The metrics CLI is documented in
 [Metrics](https://nats-sinks.readthedocs.io/en/latest/metrics/).
 Policy-controlled Prometheus and OpenTelemetry export are part of the
-observability documentation:
+observability documentation, including the Elastic Observability profile:
 start with
 [Observability](https://nats-sinks.readthedocs.io/en/latest/observability/) and
 then use the
 [Prometheus Integration](https://nats-sinks.readthedocs.io/en/latest/prometheus/)
-or
+,
 [OpenTelemetry OTLP Integration](https://nats-sinks.readthedocs.io/en/latest/otlp/)
+or
+[Elastic Observability Profile](https://nats-sinks.readthedocs.io/en/latest/elastic-observability/)
 sub-pages for connector details.
 The NATS server monitoring connector and delivery-boundary decision for
 endpoints such as `/jsz` and `/healthz` are documented in
@@ -776,13 +778,15 @@ The observability CLI manages external sharing policy. It can generate a
 disabled Prometheus policy from runtime config, list known metric names and
 subject hints, validate the policy, write policy-filtered Prometheus textfile
 output, run a disabled-by-default native Prometheus HTTP endpoint, and export
-approved metrics to an OpenTelemetry Collector through OTLP/HTTP JSON. Metrics
-sharing remains off until the global policy and the selected connector are
-explicitly enabled. See
+approved metrics to an OpenTelemetry Collector through OTLP/HTTP JSON,
+including an Elastic Observability profile that reuses the shared OTLP core.
+Metrics sharing remains off until the global policy and the selected connector
+are explicitly enabled. See
 [Observability](https://nats-sinks.readthedocs.io/en/latest/observability/),
 [Prometheus Integration](https://nats-sinks.readthedocs.io/en/latest/prometheus/),
+[OpenTelemetry OTLP Integration](https://nats-sinks.readthedocs.io/en/latest/otlp/),
 and
-[OpenTelemetry OTLP Integration](https://nats-sinks.readthedocs.io/en/latest/otlp/)
+[Elastic Observability Profile](https://nats-sinks.readthedocs.io/en/latest/elastic-observability/)
 for connector guidance.
 
 ## Python API

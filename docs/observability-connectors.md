@@ -57,7 +57,7 @@ flowchart LR
 | StatsD | Medium | Lightweight UDP or Unix-socket style connector for counters, gauges, and timings. | Useful in older or constrained environments with existing StatsD aggregation. | UDP can drop data and has limited metadata structure; avoid pretending it is reliable. | New separate feature request. |
 | Datadog | Medium | Prefer DogStatsD through the local Datadog Agent; evaluate HTTP API only when an Agent path is unavailable. | Datadog is widely used for hosted operational dashboards and alerting. | Tags and custom metrics can create cost, cardinality, and confidentiality risk. | New separate feature request. |
 | Splunk HEC | Medium | HTTPS event or metric payloads sent through Splunk HTTP Event Collector. | Valuable for security operations, incident response, and SIEM-adjacent environments. | HEC tokens are sensitive and payload shaping must avoid event-style leakage of operational metadata. | New separate feature request. |
-| Elastic Observability | Medium | Prefer OpenTelemetry or Elastic-supported ingestion patterns rather than inventing a custom Elasticsearch writer first. | Useful for organizations that standardize on Elasticsearch-backed observability. | Index fields and labels can expose sensitive operational detail or create high cardinality. | New separate feature request. |
+| Elastic Observability | Implemented | Elastic profile over the shared OTLP connector, intended for a local or gateway OpenTelemetry Collector that forwards to Elastic. | Useful for organizations that standardize on Elasticsearch-backed observability while keeping nats-sinks on the shared policy model. | Index fields and labels can expose sensitive operational detail or create high cardinality. | See [Elastic Observability Profile](elastic-observability.md). |
 | Grafana Alloy | Medium | Treat as an Alloy profile using OTLP or Prometheus-compatible handoff rather than a bespoke vendor API. | Alloy is a collector distribution that can bridge to the Grafana LGTM ecosystem. | Avoid duplicating the OTLP connector while still documenting Alloy-specific deployment examples. | New separate feature request. |
 | OCI Monitoring | High | OCI-native connector using Monitoring custom metrics with instance principals, resource principals, or configured OCI identity. | Natural fit for Oracle Cloud deployments and Oracle-heavy nats-sinks users. | Compartments, dimensions, tenancy metadata, and signer configuration require least-privilege review. | New separate feature request. |
 | Amazon CloudWatch | Medium | AWS SDK based connector using custom metrics. | Useful for AWS deployments that use CloudWatch as the operational source of truth. | IAM permissions, namespace design, dimensions, and API cost controls need careful bounds. | New separate feature request. |
@@ -117,7 +117,7 @@ Before any connector ships, the implementation issue must prove:
 
 ## Implementation Order Guidance
 
-The recommended order after the implemented Prometheus, OTLP, and NATS
+The recommended order after the implemented Prometheus, OTLP, Elastic, and NATS
 monitoring connectors is:
 
 1. OCI Monitoring, because it fits the Oracle-oriented user base.
@@ -125,7 +125,7 @@ monitoring connectors is:
    security-operations workflows.
 3. CloudWatch and Azure Monitor, because they matter for cloud-specific
    deployments but should follow the same connector core.
-4. Elastic and Grafana Alloy, likely as profiles that reuse OTLP behavior.
+4. Grafana Alloy, likely as a profile that reuses OTLP behavior.
 5. StatsD and syslog, because they are useful for constrained or legacy
    environments but have weaker reliability and structure than modern
    collector APIs.

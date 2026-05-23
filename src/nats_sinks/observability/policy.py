@@ -50,6 +50,83 @@ NATS_MONITORING_ALLOWED_ENDPOINTS = {
 }
 HTTP_HEADER_NAME_RE = re.compile(r"^[A-Za-z0-9!#$%&'*+.^_`|~-]+$")
 ENVIRONMENT_VARIABLE_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+ELASTIC_DATA_STREAM_COMPONENT_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$")
+
+
+def _validate_otlp_http_endpoint(value: str | None, *, field_name: str) -> str | None:
+    """Validate an OTLP/HTTP endpoint without accepting embedded secrets."""
+
+    if value is None:
+        return None
+    rendered = value.strip()
+    if not rendered:
+        raise ValueError(f"{field_name} must not be empty")
+    if len(rendered) > OTLP_ENDPOINT_MAX_LENGTH:
+        raise ValueError(f"{field_name} must be at most {OTLP_ENDPOINT_MAX_LENGTH} characters")
+    if any(character in rendered for character in "\x00\n\r\t "):
+        raise ValueError(f"{field_name} must not contain whitespace or control characters")
+
+    parsed = urlsplit(rendered)
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError(f"{field_name} must use http or https")
+    if not parsed.netloc:
+        raise ValueError(f"{field_name} must include a host")
+    if parsed.username is not None or parsed.password is not None:
+        raise ValueError(f"{field_name} must not contain credentials")
+    if parsed.query or parsed.fragment:
+        raise ValueError(f"{field_name} must not include query strings or fragments")
+    if not parsed.path.startswith("/"):
+        raise ValueError(f"{field_name} must include an HTTP path")
+
+    host = parsed.hostname or ""
+    if parsed.scheme == "http" and host.lower() not in {"localhost", "127.0.0.1", "::1"}:
+        raise ValueError(f"{field_name} may use plain http only for loopback collectors")
+    return rendered
+
+
+def _validate_http_headers_env(value: dict[str, str], *, field_name: str) -> dict[str, str]:
+    """Validate HTTP header names and environment-variable sources."""
+
+    rendered: dict[str, str] = {}
+    seen_lower: set[str] = set()
+    for header_name, env_name in value.items():
+        header = header_name.strip()
+        source = env_name.strip()
+        if not header:
+            raise ValueError(f"{field_name} header names must not be empty")
+        if len(header) > OTLP_HEADER_NAME_MAX_LENGTH:
+            raise ValueError(f"{field_name} header names are too long")
+        if not HTTP_HEADER_NAME_RE.fullmatch(header):
+            raise ValueError(f"{field_name} header names are not valid HTTP field names")
+        lowered = header.lower()
+        if lowered in seen_lower:
+            raise ValueError(f"{field_name} header names must be unique ignoring case")
+        seen_lower.add(lowered)
+
+        if not source:
+            raise ValueError(f"{field_name} values must not be empty")
+        if len(source) > OTLP_HEADER_ENV_MAX_LENGTH:
+            raise ValueError(f"{field_name} environment variable names are too long")
+        if not ENVIRONMENT_VARIABLE_NAME_RE.fullmatch(source):
+            raise ValueError(f"{field_name} values must be environment variable names")
+        rendered[header] = source
+    return rendered
+
+
+def _validate_elastic_data_stream_component(value: str, *, field_name: str) -> str:
+    """Validate Elastic data stream routing components as bounded names."""
+
+    rendered = value.strip()
+    if not rendered:
+        raise ValueError(f"{field_name} must not be empty")
+    if not ELASTIC_DATA_STREAM_COMPONENT_RE.fullmatch(rendered):
+        raise ValueError(
+            f"{field_name} may contain only letters, digits, underscores, dots, and hyphens, "
+            "and must start with a letter, digit, or underscore"
+        )
+    if rendered in {".", ".."}:
+        raise ValueError(f"{field_name} must not be a relative path marker")
+    return rendered
 
 
 class ObservabilitySubjectPolicy(BaseModel):
@@ -200,62 +277,14 @@ class OtlpMetricsPolicy(BaseModel):
     def validate_endpoint(cls, value: str | None) -> str | None:
         """Validate an OTLP/HTTP endpoint without accepting embedded secrets."""
 
-        if value is None:
-            return None
-        rendered = value.strip()
-        if not rendered:
-            raise ValueError("otlp.endpoint must not be empty")
-        if len(rendered) > OTLP_ENDPOINT_MAX_LENGTH:
-            raise ValueError(f"otlp.endpoint must be at most {OTLP_ENDPOINT_MAX_LENGTH} characters")
-        if any(character in rendered for character in "\x00\n\r\t "):
-            raise ValueError("otlp.endpoint must not contain whitespace or control characters")
-
-        parsed = urlsplit(rendered)
-        if parsed.scheme not in {"http", "https"}:
-            raise ValueError("otlp.endpoint must use http or https")
-        if not parsed.netloc:
-            raise ValueError("otlp.endpoint must include a host")
-        if parsed.username is not None or parsed.password is not None:
-            raise ValueError("otlp.endpoint must not contain credentials")
-        if parsed.query or parsed.fragment:
-            raise ValueError("otlp.endpoint must not include query strings or fragments")
-        if not parsed.path.startswith("/"):
-            raise ValueError("otlp.endpoint must include an HTTP path")
-
-        host = parsed.hostname or ""
-        if parsed.scheme == "http" and host.lower() not in {"localhost", "127.0.0.1", "::1"}:
-            raise ValueError("otlp.endpoint may use plain http only for loopback collectors")
-        return rendered
+        return _validate_otlp_http_endpoint(value, field_name="otlp.endpoint")
 
     @field_validator("headers_env")
     @classmethod
     def validate_headers_env(cls, value: dict[str, str]) -> dict[str, str]:
         """Validate collector header names and their environment-variable sources."""
 
-        rendered: dict[str, str] = {}
-        seen_lower: set[str] = set()
-        for header_name, env_name in value.items():
-            header = header_name.strip()
-            source = env_name.strip()
-            if not header:
-                raise ValueError("otlp.headers_env header names must not be empty")
-            if len(header) > OTLP_HEADER_NAME_MAX_LENGTH:
-                raise ValueError("otlp.headers_env header names are too long")
-            if not HTTP_HEADER_NAME_RE.fullmatch(header):
-                raise ValueError("otlp.headers_env header names are not valid HTTP field names")
-            lowered = header.lower()
-            if lowered in seen_lower:
-                raise ValueError("otlp.headers_env header names must be unique ignoring case")
-            seen_lower.add(lowered)
-
-            if not source:
-                raise ValueError("otlp.headers_env values must not be empty")
-            if len(source) > OTLP_HEADER_ENV_MAX_LENGTH:
-                raise ValueError("otlp.headers_env environment variable names are too long")
-            if not ENVIRONMENT_VARIABLE_NAME_RE.fullmatch(source):
-                raise ValueError("otlp.headers_env values must be environment variable names")
-            rendered[header] = source
-        return rendered
+        return _validate_http_headers_env(value, field_name="otlp.headers_env")
 
     @model_validator(mode="after")
     def validate_enabled_endpoint(self) -> OtlpMetricsPolicy:
@@ -263,6 +292,73 @@ class OtlpMetricsPolicy(BaseModel):
 
         if self.enabled and self.endpoint is None:
             raise ValueError("otlp.endpoint is required when otlp.enabled is true")
+        return self
+
+
+class ElasticObservabilityPolicy(BaseModel):
+    """Elastic Observability profile over the shared OTLP connector.
+
+    The first Elastic implementation intentionally sends policy-approved
+    metrics to an explicitly configured OTLP Collector or Elastic-managed OTLP
+    endpoint shape.  It does not write directly to Elasticsearch indices, does
+    not use the Bulk API, and does not add labels derived from subjects,
+    payloads, message IDs, file paths, table names, or mission metadata values.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    ingestion_path: Literal["otlp_collector"] = "otlp_collector"
+    endpoint: str | None = None
+    timeout_seconds: float = Field(default=5.0, gt=0, le=60)
+    max_retries: int = Field(default=0, ge=0, le=10)
+    retry_backoff_seconds: float = Field(default=0.25, ge=0, le=60)
+    stale_after_seconds: float | None = Field(default=None, gt=0, le=86_400)
+    max_request_bytes: int = Field(default=1_048_576, ge=1024, le=10_485_760)
+    headers_env: dict[str, str] = Field(default_factory=dict)
+    data_stream_dataset: str = "nats_sinks.metrics"
+    data_stream_namespace: str = "default"
+
+    @field_validator("endpoint")
+    @classmethod
+    def validate_endpoint(cls, value: str | None) -> str | None:
+        """Validate the Elastic profile OTLP endpoint."""
+
+        return _validate_otlp_http_endpoint(value, field_name="elastic.endpoint")
+
+    @field_validator("headers_env")
+    @classmethod
+    def validate_headers_env(cls, value: dict[str, str]) -> dict[str, str]:
+        """Validate Elastic profile header names and env-var sources."""
+
+        return _validate_http_headers_env(value, field_name="elastic.headers_env")
+
+    @field_validator("data_stream_dataset")
+    @classmethod
+    def validate_data_stream_dataset(cls, value: str) -> str:
+        """Validate the low-cardinality Elastic data stream dataset hint."""
+
+        return _validate_elastic_data_stream_component(
+            value,
+            field_name="elastic.data_stream_dataset",
+        )
+
+    @field_validator("data_stream_namespace")
+    @classmethod
+    def validate_data_stream_namespace(cls, value: str) -> str:
+        """Validate the low-cardinality Elastic data stream namespace hint."""
+
+        return _validate_elastic_data_stream_component(
+            value,
+            field_name="elastic.data_stream_namespace",
+        )
+
+    @model_validator(mode="after")
+    def validate_enabled_endpoint(self) -> ElasticObservabilityPolicy:
+        """Require an explicit endpoint only when Elastic export is enabled."""
+
+        if self.enabled and self.endpoint is None:
+            raise ValueError("elastic.endpoint is required when elastic.enabled is true")
         return self
 
 
@@ -420,6 +516,7 @@ class ObservabilityPolicy(BaseModel):
     subjects: list[ObservabilitySubjectPolicy] = Field(default_factory=list)
     prometheus: PrometheusTextfilePolicy = Field(default_factory=PrometheusTextfilePolicy)
     otlp: OtlpMetricsPolicy = Field(default_factory=OtlpMetricsPolicy)
+    elastic: ElasticObservabilityPolicy = Field(default_factory=ElasticObservabilityPolicy)
     nats_server_monitoring: NatsServerMonitoringPolicy = Field(
         default_factory=NatsServerMonitoringPolicy
     )

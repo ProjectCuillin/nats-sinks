@@ -23,6 +23,9 @@ Observability is documented as a small set of focused pages:
   Prometheus textfile connector and optional native HTTP scrape endpoint.
 - [OpenTelemetry OTLP Integration](otlp.md): explains policy-controlled export
   to an OpenTelemetry Collector using OTLP/HTTP JSON.
+- [Elastic Observability Profile](elastic-observability.md): explains the
+  Elastic-specific profile that reuses the OTLP connector and avoids direct
+  Elasticsearch writes.
 - [NATS Server Monitoring Integration](nats-server-monitoring.md): explains the
   disabled-by-default connector for selected NATS monitoring endpoint fields.
 - Optional JetStream advisory observation is configured in
@@ -35,6 +38,8 @@ Prometheus export can be reviewed, enabled, disabled, and operated separately
 from message processing.
 OTLP export follows the same separation: it is a connector under
 observability, not a delivery feature.
+The Elastic profile follows the same rule and is implemented as an
+Elastic-oriented OTLP profile under observability.
 
 ## Design Goals
 
@@ -231,6 +236,19 @@ Generated policies are disabled by default:
     "max_request_bytes": 1048576,
     "headers_env": {}
   },
+  "elastic": {
+    "enabled": false,
+    "ingestion_path": "otlp_collector",
+    "endpoint": null,
+    "timeout_seconds": 5,
+    "max_retries": 0,
+    "retry_backoff_seconds": 0.25,
+    "stale_after_seconds": null,
+    "max_request_bytes": 1048576,
+    "headers_env": {},
+    "data_stream_dataset": "nats_sinks.metrics",
+    "data_stream_namespace": "default"
+  },
   "nats_server_monitoring": {
     "enabled": false,
     "base_url": null,
@@ -262,6 +280,12 @@ default and requires both `enabled=true` and `otlp.enabled=true`. Non-loopback
 collector endpoints must use HTTPS, credentials in endpoint URLs are rejected,
 and optional HTTP header values are sourced from environment variables.
 
+The `elastic` object controls the Elastic Observability profile. It is disabled
+by default and requires both `enabled=true` and `elastic.enabled=true`. The
+profile renders the same policy-approved metrics through the OTLP connector and
+adds only static, low-cardinality Elastic data stream hints. It does not write
+directly to Elasticsearch and does not use the Bulk API.
+
 The `nats_server_monitoring` object controls the optional NATS monitoring
 connector. It is also disabled by default. When enabled, it polls only the
 approved NATS server monitoring endpoint paths and extracts only the approved
@@ -285,6 +309,7 @@ topology fields unless an operator has selected those exact fields.
 | `subjects` | `[]` | Subject patterns discovered from the core config for operator review and future subject-aware metrics. Current exporters do not share these as labels. |
 | `prometheus` | object | Prometheus connector settings. |
 | `otlp` | object | OpenTelemetry OTLP connector settings. |
+| `elastic` | object | Elastic Observability profile settings over the OTLP connector. |
 | `nats_server_monitoring` | object | Optional connector settings for selected NATS server monitoring endpoint values. |
 
 The deny list wins over the allow list. This lets a broad allow rule such as
@@ -323,6 +348,25 @@ for a particular environment.
 
 See [OpenTelemetry OTLP Integration](otlp.md) for full examples, dry-run output,
 failure behavior, and service guidance.
+
+## Elastic Observability Profile Fields
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `elastic.enabled` | `false` | Enables Elastic Observability export when the top-level policy is also enabled. |
+| `elastic.ingestion_path` | `otlp_collector` | Current profile mode. The connector emits OTLP metrics to a Collector-style endpoint and does not write directly to Elasticsearch. |
+| `elastic.endpoint` | `null` | OTLP/HTTP metrics endpoint. Local collectors may use loopback `http`; non-loopback endpoints must use `https`. |
+| `elastic.timeout_seconds` | `5` | Per-request timeout, validated from greater than `0` through `60` seconds. |
+| `elastic.max_retries` | `0` | Bounded retries after the initial attempt. |
+| `elastic.retry_backoff_seconds` | `0.25` | Delay between retry attempts. |
+| `elastic.stale_after_seconds` | `null` | Optional maximum snapshot age before export fails closed unless `--allow-stale` is used. |
+| `elastic.max_request_bytes` | `1048576` | Maximum rendered OTLP JSON request body size. |
+| `elastic.headers_env` | `{}` | Mapping of HTTP header names to environment variable names. Resolved header values are not stored in policy JSON and are not printed. |
+| `elastic.data_stream_dataset` | `nats_sinks.metrics` | Static Elastic data stream dataset hint. Keep it low-cardinality and non-sensitive. |
+| `elastic.data_stream_namespace` | `default` | Static Elastic data stream namespace hint. Keep it low-cardinality and non-sensitive. |
+
+See [Elastic Observability Profile](elastic-observability.md) for full
+examples, Collector guidance, non-goals, and test coverage.
 
 ## NATS Server Monitoring Fields
 
@@ -451,6 +495,7 @@ enabled=false
 namespace=nats_sinks
 prometheus_enabled=false
 otlp_enabled=false
+elastic_enabled=false
 nats_server_monitoring_enabled=false
 nats_server_monitoring_prometheus_enabled=false
 allowed_metrics=0
@@ -656,13 +701,13 @@ labels, or classified mission details.
 ## Future Connectors
 
 The observability core is intentionally connector-neutral. Prometheus textfile,
-Prometheus HTTP, OTLP, and NATS monitoring connectors are implemented today.
+Prometheus HTTP, OTLP, Elastic Observability, and NATS monitoring connectors are
+implemented today.
 Future connectors may include:
 
 - StatsD for lightweight counter/timer forwarding,
 - Datadog for hosted operational dashboards,
 - Splunk HEC for security operations and incident-response workflows,
-- Elastic Observability for Elasticsearch-backed operations platforms,
 - Grafana Alloy or Grafana Agent for unified collection pipelines,
 - Oracle Cloud Infrastructure Monitoring for OCI-native deployments,
 - Amazon CloudWatch for AWS deployments,

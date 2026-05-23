@@ -262,6 +262,8 @@ operations without hunting through a long flat list.
   textfile connector or optional native HTTP endpoint.
 - [OpenTelemetry OTLP Integration](otlp.md): export approved metrics to an
   OpenTelemetry Collector through OTLP/HTTP JSON.
+- [Elastic Observability Profile](elastic-observability.md): export approved
+  metrics through an Elastic-oriented profile over the OTLP connector.
 - [NATS Server Monitoring](nats-server-monitoring.md): understand why endpoints
   such as `/jsz` and `/healthz` stay outside the delivery worker.
 - [Future Observability Connectors](observability-connectors.md): review the

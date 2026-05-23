@@ -18,6 +18,12 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   DLQ-before-ACK rejection handling, aggregate authenticity metrics, public
   producer helper APIs, configuration validation, tests, and operator
   documentation.
+- Added an Elastic Observability profile connector over the shared OTLP
+  observability core, including disabled-by-default policy controls,
+  Elastic-safe data stream routing hints, environment-sourced header values,
+  dry-run rendering, bounded retries and request sizes, CLI support through
+  `nats-sink-observe elastic-export`, focused tests, and an Observability
+  documentation sub-page.
 - Added centralized NATS authentication and TLS connection option construction
   for username/password, token, credentials-file, NKEY seed-file, local CA TLS,
   and TLS client certificate workflows, including identity-path redaction,

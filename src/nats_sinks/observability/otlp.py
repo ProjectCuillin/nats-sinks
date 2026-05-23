@@ -22,7 +22,7 @@ import json
 import math
 import os
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 from urllib import error, request
@@ -130,15 +130,42 @@ def _row_to_otlp_metric(
     }
 
 
+def _resource_attributes(
+    policy: ObservabilityPolicy,
+    *,
+    extra_resource_attributes: Mapping[str, str] | None = None,
+) -> list[dict[str, object]]:
+    """Return low-cardinality resource attributes for an OTLP document."""
+
+    attributes: list[dict[str, object]] = [
+        {"key": "service.name", "value": {"stringValue": "nats-sinks"}},
+        {
+            "key": "nats_sinks.namespace",
+            "value": {"stringValue": policy.namespace},
+        },
+    ]
+    if extra_resource_attributes is None:
+        return attributes
+    for key, value in extra_resource_attributes.items():
+        attributes.append({"key": key, "value": {"stringValue": value}})
+    return attributes
+
+
 def build_otlp_metrics_document(
     snapshot: dict[str, object],
     policy: ObservabilityPolicy,
+    *,
+    scope_name: str = OTLP_SCOPE_NAME,
+    extra_resource_attributes: Mapping[str, str] | None = None,
 ) -> dict[str, object]:
     """Build an OTLP/HTTP JSON metrics request body.
 
     The function builds only low-cardinality, policy-approved metric series. It
     does not add subject labels, table names, file paths, payload snippets,
-    usernames, collector endpoints, or other sensitive operational details.
+    usernames, collector endpoints, or other sensitive operational details. The
+    optional resource attributes are intended for connector profiles that need
+    static routing hints, such as Elastic data stream names; callers must keep
+    those values bounded and free of secrets before passing them here.
     """
 
     ensure_otlp_enabled(policy)
@@ -151,17 +178,14 @@ def build_otlp_metrics_document(
         "resourceMetrics": [
             {
                 "resource": {
-                    "attributes": [
-                        {"key": "service.name", "value": {"stringValue": "nats-sinks"}},
-                        {
-                            "key": "nats_sinks.namespace",
-                            "value": {"stringValue": policy.namespace},
-                        },
-                    ]
+                    "attributes": _resource_attributes(
+                        policy,
+                        extra_resource_attributes=extra_resource_attributes,
+                    )
                 },
                 "scopeMetrics": [
                     {
-                        "scope": {"name": OTLP_SCOPE_NAME},
+                        "scope": {"name": scope_name},
                         "metrics": metrics,
                     }
                 ],
@@ -173,10 +197,18 @@ def build_otlp_metrics_document(
 def render_otlp_metrics_json(
     snapshot: dict[str, object],
     policy: ObservabilityPolicy,
+    *,
+    scope_name: str = OTLP_SCOPE_NAME,
+    extra_resource_attributes: Mapping[str, str] | None = None,
 ) -> bytes:
     """Render a bounded OTLP/HTTP JSON request body."""
 
-    document = build_otlp_metrics_document(snapshot, policy)
+    document = build_otlp_metrics_document(
+        snapshot,
+        policy,
+        scope_name=scope_name,
+        extra_resource_attributes=extra_resource_attributes,
+    )
     rendered = json.dumps(document, separators=(",", ":"), sort_keys=True, allow_nan=False).encode(
         "utf-8"
     )
@@ -225,6 +257,9 @@ def export_otlp_metrics(
     *,
     opener: Callable[..., Any] | None = None,
     sleep: Callable[[float], None] = time.sleep,
+    scope_name: str = OTLP_SCOPE_NAME,
+    extra_resource_attributes: Mapping[str, str] | None = None,
+    connector_name: str = "OTLP",
 ) -> OtlpExportResult:
     """Send policy-approved metrics to an OTLP collector.
 
@@ -256,7 +291,12 @@ def export_otlp_metrics(
     if endpoint is None:
         raise ConfigurationError("OTLP endpoint is required when OTLP export is enabled")
 
-    body = render_otlp_metrics_json(snapshot, policy)
+    body = render_otlp_metrics_json(
+        snapshot,
+        policy,
+        scope_name=scope_name,
+        extra_resource_attributes=extra_resource_attributes,
+    )
     headers = resolve_otlp_headers(policy)
     selected_opener = opener or request.urlopen  # nosec B310
     max_attempts = policy.otlp.max_retries + 1
@@ -282,7 +322,7 @@ def export_otlp_metrics(
                         delivered=True,
                         attempts=attempt,
                         status_code=status_code,
-                        message="OTLP export delivered",
+                        message=f"{connector_name} export delivered",
                     )
         except (error.HTTPError, error.URLError, TimeoutError, OSError) as exc:
             last_status, last_message = _safe_failure_message(exc)

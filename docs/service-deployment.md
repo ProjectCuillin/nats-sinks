@@ -129,9 +129,9 @@ service user, installs the main `nats-sink.service`, installs the disabled
 Prometheus textfile service/timer assets, installs the disabled native
 Prometheus HTTP service asset, installs the disabled OTLP service/timer assets,
 installs the disabled NATS monitoring service/timer assets, and enables only
-the main sink service. Prometheus, OTLP, and NATS monitoring sharing remain
-disabled until the observability policy and the selected observability service
-are explicitly enabled.
+the main sink service. Prometheus, OTLP, Elastic Observability, and NATS
+monitoring sharing remain disabled until the observability policy and the
+selected observability service are explicitly enabled.
 
 The installer works in two modes. When it is run from a local git checkout, it
 copies tracked example configuration files and systemd unit files from that
