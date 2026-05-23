@@ -38,7 +38,14 @@ from nats_sinks.core.stream_management import (
     build_stream_management_plan,
 )
 from nats_sinks.file import FileSink
-from nats_sinks.oracle import OracleSink
+from nats_sinks.oracle import (
+    OracleLineageReader,
+    OracleSink,
+    OracleSinkConfig,
+    build_oracle_lineage_query,
+    render_lineage_result_text,
+    resolve_lineage_table,
+)
 from nats_sinks.sinks.base import HealthCheckableSink, Sink
 from nats_sinks.sinks.connectors import SinkConnector, load_entry_point_connectors
 from nats_sinks.sinks.registry import SinkRegistry
@@ -124,6 +131,18 @@ def _build_sink(config: AppConfig) -> Sink:
     raw_sink = _raw_sink_config(config)
     sink_type = str(raw_sink.get("type", ""))
     return _registry(config.plugins).create(sink_type, raw_sink)
+
+
+def _oracle_sink_config(config: AppConfig) -> OracleSinkConfig:
+    """Return validated Oracle config for read-only Oracle helper commands."""
+
+    raw_sink = _raw_sink_config(config)
+    if raw_sink.get("type") != "oracle":
+        raise ConfigurationError("lineage queries currently require sink.type 'oracle'")
+    try:
+        return OracleSinkConfig.model_validate(raw_sink)
+    except PydanticValidationError as exc:
+        raise ConfigurationError(str(exc)) from exc
 
 
 def _attach_metrics_to_sink(sink: Sink, metrics: MetricsRecorder | None) -> None:
@@ -310,6 +329,130 @@ def stream_plan(
     else:
         typer.echo("Configuration error: --format must be text or json", err=True)
         raise typer.Exit(2)
+
+
+@app.command("query-lineage")
+def query_lineage(
+    config: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    field: Annotated[
+        str,
+        typer.Option(
+            "--field",
+            help=(
+                "Allow-listed lineage field: correlation_id, causation_id, mission_id, "
+                "tasking_id, track_id, message_id, or subject."
+            ),
+        ),
+    ],
+    value: Annotated[
+        str,
+        typer.Option("--value", help="Identifier value to look up using a bind variable."),
+    ],
+    table: Annotated[
+        str | None,
+        typer.Option(
+            "--table",
+            help=(
+                "Optional configured Oracle table to query. Must be sink.table or one of "
+                "sink.table_routes[].table."
+            ),
+        ),
+    ] = None,
+    limit: Annotated[
+        int,
+        typer.Option("--limit", help="Maximum records to return, from 1 to 1000."),
+    ] = 50,
+    output_format: Annotated[
+        str,
+        typer.Option("--format", help="Output format: text or json."),
+    ] = "text",
+    include_payload: Annotated[
+        bool,
+        typer.Option(
+            "--include-payload",
+            help="Explicitly include the payload column in output. Disabled by default.",
+        ),
+    ] = False,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="Validate and print the generated query without connecting to Oracle.",
+        ),
+    ] = False,
+) -> None:
+    """Query persisted Oracle lineage records through a read-only helper.
+
+    The command is intended for operators and auditors who need bounded,
+    script-friendly inspection of already persisted records.  It does not
+    connect to NATS, does not ACK messages, does not write to Oracle, and does
+    not print payloads unless `--include-payload` is explicitly provided.
+    """
+
+    loaded = _load_or_exit(config)
+    try:
+        oracle_config = _oracle_sink_config(loaded)
+        table_name = resolve_lineage_table(oracle_config, table)
+        query = build_oracle_lineage_query(
+            table=table_name,
+            columns=oracle_config.columns,
+            field=field,
+            value=value,
+            limit=limit,
+            include_payload=include_payload,
+        )
+    except NatsSinksError as exc:
+        typer.echo(f"Configuration error: {exc}", err=True)
+        raise typer.Exit(2) from exc
+
+    normalized_format = output_format.strip().casefold()
+    if normalized_format not in {"text", "json"}:
+        typer.echo("Configuration error: --format must be text or json", err=True)
+        raise typer.Exit(2)
+
+    if dry_run:
+        bind_names = sorted(query.binds)
+        safe_plan = {
+            "field": query.field,
+            "table": query.table_name,
+            "limit": query.limit,
+            "payload_included": query.include_payload,
+            "binds": bind_names,
+            "sql": query.sql,
+        }
+        if normalized_format == "json":
+            typer.echo(json.dumps(safe_plan, indent=2, sort_keys=False))
+        else:
+            typer.echo("Oracle lineage query dry run")
+            typer.echo(f"field={safe_plan['field']}")
+            typer.echo(f"table={safe_plan['table']}")
+            typer.echo(f"limit={safe_plan['limit']}")
+            typer.echo(f"payload_included={safe_plan['payload_included']}")
+            typer.echo(f"binds={','.join(bind_names)}")
+            typer.echo(query.sql)
+        return
+
+    try:
+        result = asyncio.run(
+            OracleLineageReader(oracle_config).query(
+                field=field,
+                value=value,
+                table=table,
+                limit=limit,
+                include_payload=include_payload,
+            )
+        )
+    except NatsSinksError as exc:
+        typer.echo(f"Lineage query failed: {exc}", err=True)
+        raise typer.Exit(1) from exc
+    except Exception as exc:
+        typer.echo(f"Unexpected lineage query failure: {type(exc).__name__}", err=True)
+        raise typer.Exit(1) from exc
+
+    if normalized_format == "json":
+        typer.echo(json.dumps(result.to_dict(), indent=2, sort_keys=False, allow_nan=False))
+    else:
+        typer.echo(render_lineage_result_text(result))
 
 
 @app.command()

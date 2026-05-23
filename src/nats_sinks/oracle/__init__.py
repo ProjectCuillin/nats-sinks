@@ -15,6 +15,27 @@ maps Oracle driver errors into framework error categories.
 """
 
 from nats_sinks.oracle.config import OracleSinkConfig
+from nats_sinks.oracle.lineage import (
+    LINEAGE_FIELD_SPECS,
+    OracleLineageQuery,
+    OracleLineageReader,
+    OracleLineageRecord,
+    OracleLineageResult,
+    build_oracle_lineage_query,
+    render_lineage_result_text,
+    resolve_lineage_table,
+)
 from nats_sinks.oracle.sink import OracleSink
 
-__all__ = ["OracleSink", "OracleSinkConfig"]
+__all__ = [
+    "LINEAGE_FIELD_SPECS",
+    "OracleLineageQuery",
+    "OracleLineageReader",
+    "OracleLineageRecord",
+    "OracleLineageResult",
+    "OracleSink",
+    "OracleSinkConfig",
+    "build_oracle_lineage_query",
+    "render_lineage_result_text",
+    "resolve_lineage_table",
+]

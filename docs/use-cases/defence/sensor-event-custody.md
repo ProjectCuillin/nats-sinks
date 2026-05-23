@@ -30,6 +30,25 @@ sequenceDiagram
     Audit->>Store: inspect custody record
 ```
 
+## Lineage Inspection
+
+After custody records are persisted, operators may need to inspect related
+events by mission, correlation, causation, tasking, or track identifier. The
+Oracle lineage helper supports this without changing sink behavior:
+
+```bash
+nats-sink query-lineage /etc/nats-sinks/oracle.json \
+  --field track_id \
+  --value TRACK-9001 \
+  --limit 25
+```
+
+The helper is read-only, bounded, and redacted by default. It prints core row
+identity, handling metadata, timing fields, and mission metadata key names, but
+omits payload values unless `--include-payload` is explicitly supplied. See
+[Lineage Query Helpers](../../lineage-query-helpers.md) for the complete
+security model and Oracle-specific SQL pattern.
+
 ## What To Preserve
 
 A custody record should preserve enough context to prove what was handled,

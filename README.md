@@ -66,7 +66,9 @@ used immediately:
   file sink writes it as `security_labels`, and future sinks can use the same
   core-normalized profile.
 - `nats-sink`, the CLI for validating JSON configuration, showing redacted
-  effective config, testing sinks, and running sink processes.
+  effective config, testing sinks, running sink processes, and performing
+  bounded read-only Oracle lineage queries by allow-listed mission metadata or
+  message identity fields.
 - `nats-sink-metrics`, a separate CLI for reading a local JSON metrics snapshot
   and rendering status as tables, JSON, JSONL, shell variables, metric names,
   or Prometheus text output.
@@ -691,6 +693,7 @@ nats-sink test-sink examples/file-basic/config.json
 nats-sink validate examples/oracle-jetstream/config.json
 nats-sink show-effective-config examples/oracle-jetstream/config.json
 nats-sink stream-plan examples/oracle-jetstream/config.json
+nats-sink query-lineage examples/oracle-jetstream/config.json --field mission_id --value MISSION-ALPHA --dry-run
 nats-sink test-sink examples/oracle-jetstream/config.json
 nats-sink run examples/oracle-jetstream/config.json
 nats-sink-metrics show .local/nats-sinks/metrics.json --format table
@@ -708,6 +711,9 @@ The CLI:
 - prints the commit-then-acknowledge ACK policy,
 - renders effective configuration as redacted JSON,
 - never prints resolved passwords.
+
+Read-only Oracle lineage query helpers are documented in
+[Lineage Query Helpers](https://nats-sinks.readthedocs.io/en/latest/lineage-query-helpers/).
 
 The metrics CLI reads only a local JSON snapshot written by the runner when
 `metrics.enabled` and `metrics.snapshot_file` are configured. It supports

@@ -2,11 +2,11 @@
   "id": "lineage-correlation-query-helpers",
   "title": "[Feature]: Add lineage and correlation query helpers",
   "area": "CLI",
-  "priority": "P4 - research or design needed",
-  "target_release": "unscheduled",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
   "labels": ["documentation", "security"],
   "problem": "Once mission or operational metadata is persisted, operators may need safe ways to inspect related records by correlation identifier, causation identifier, mission identifier, tasking identifier, or track identifier. nats-sinks currently focuses on writing events and does not provide query helpers or documented patterns for reconstructing event lineage.",
-  "proposal": "Research and design read-only lineage helpers that can query supported destinations using strict allow-listed fields and redacted output. The first deliverable may be documentation and Oracle examples, followed later by a CLI helper that can print sanitized lineage trees or JSON summaries.",
+  "proposal": "Implement read-only Oracle lineage helpers that query supported persisted fields using strict allow-listed field names, configured table allow lists, parameterized lookup values, redacted output, and bounded result limits. Include a CLI helper that can dry-run the generated query, print script-friendly JSON, or print concise text without payloads by default.",
   "users": "Operators, auditors, incident responders, mission-support teams, platform engineers, and maintainers troubleshooting event flows after persistence.",
   "delivery_semantics": "Lineage helpers are read-only and must not affect JetStream ACKs, sink writes, retries, DLQs, or delivery semantics. They should operate on already persisted data and fail safely when query configuration is incomplete.",
   "security": "Query helpers must use parameterized SQL, strict field allow lists, output redaction, bounded result limits, and no dynamic query language from untrusted input. They must avoid leaking sensitive payloads, private metadata, credentials, or full operational records by default.",
@@ -17,7 +17,7 @@
     "Tests cover field allow-listing, result limits, no payload output by default, and malformed identifiers.",
     "Documentation explains privacy and authorization responsibilities."
   ],
-  "tests": "Add unit tests for query construction, field allow-listing, redacted output, result limit enforcement, malformed identifiers, and no raw payload printing. Add integration tests only behind explicit environment controls.",
-  "documentation": "Update docs/oracle-sink.md, docs/security.md, docs/cli.md, docs/use-cases, ROADMAP.md, and CHANGELOG.md with examples and non-goals.",
+  "tests": "Add unit tests for query construction, field allow-listing, table allow-listing, redacted output, result limit enforcement, malformed identifiers, CLI dry-run behavior, and no raw payload printing. Keep live Oracle integration tests behind explicit environment controls.",
+  "documentation": "Add a dedicated lineage helper design page and update docs/oracle-sink.md, docs/security.md, docs/cli.md, docs/use-cases, ROADMAP.md, and CHANGELOG.md with examples and non-goals.",
   "closeout": "Close after the release containing the design or helper is published. Include release tag, supported destinations, tests run, and limitations."
 }
