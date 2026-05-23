@@ -1,0 +1,27 @@
+{
+  "id": "pr-label-sync-gh-pr-edit-projectcards",
+  "title": "[Bug]: PR label sync should avoid gh pr edit projectCards failure",
+  "area": "CI and automation",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": ["release", "testing", "completed"],
+  "summary": "The new pull request label synchronization helper attempted to apply labels through gh pr edit. In live testing, GitHub CLI returned a GraphQL projectCards deprecation failure before labels were applied.",
+  "observed": "Opening a ready issue branch pull request created the PR successfully, but label synchronization failed with a GitHub CLI GraphQL error before the PR inherited the source issue labels.",
+  "expected": "The helper should use a stable GitHub CLI path for applying labels to pull requests. Because GitHub pull requests are also issues, applying labels through gh issue edit should avoid the projectCards failure and keep issue and PR labels aligned.",
+  "reproduction": "Run scripts/open-release-pr.sh for an issue branch with label synchronization enabled and an explicit source issue on a GitHub repository where gh pr edit label application triggers the projectCards deprecation failure.",
+  "failing_test": "Update the focused PR label synchronization unit test so the expected GitHub CLI command uses gh issue edit for label application instead of gh pr edit.",
+  "impact": "The development workflow loses label parity between issues and pull requests, making release and review filtering less reliable. Runtime package behavior, NATS processing, sink writes, DLQ handling, and ACK ordering are unaffected.",
+  "delivery_semantics": "This defect is limited to GitHub workflow metadata automation and cannot change message delivery semantics.",
+  "security": "The fix must continue copying label names only, reject control characters, avoid secrets in logs or comments, and keep the official GitHub Issue Priority field on the issue rather than converting it into a label.",
+  "acceptance": [
+    "PR label synchronization applies labels with gh issue edit against the pull request number.",
+    "Unit tests expect gh issue edit rather than gh pr edit.",
+    "The shell helper still copies labels before guarded non-main auto-approval.",
+    "The open issue branch PR can be refreshed successfully with labels copied from issue #209.",
+    "CHANGELOG.md and test evidence stay accurate."
+  ],
+  "tests": "Run python -m pytest tests/unit/test_pr_label_sync.py tests/unit/test_pr_auto_approval.py -q and scripts/check.sh after the fix.",
+  "documentation": "No additional user-facing documentation is required beyond the existing PR label synchronization documentation. Keep the bug evidence sanitized.",
+  "closeout": "Close after the bug branch has merged back into the feature branch and the fix has passing test evidence."
+}

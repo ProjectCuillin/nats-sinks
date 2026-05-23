@@ -66,7 +66,7 @@ def test_sync_pr_labels_copies_deduplicated_labels_from_all_source_issues(
                     {"name": "security"},
                 ]
             }
-        if args[:3] == ["pr", "edit", "77"]:
+        if args[:3] == ["issue", "edit", "77"]:
             return None
         raise AssertionError(f"unexpected gh call: {args}")
 
@@ -76,7 +76,7 @@ def test_sync_pr_labels_copies_deduplicated_labels_from_all_source_issues(
 
     assert copied == ("bug", "release-v0.4.1", "security")
     assert calls[-1] == [
-        "pr",
+        "issue",
         "edit",
         "77",
         "--repo",

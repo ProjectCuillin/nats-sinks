@@ -8,7 +8,10 @@ The repository workflow keeps feature, bug, and release planning metadata on
 GitHub Issues. Pull requests should carry the same searchable labels so
 maintainers can filter work consistently while it moves through branch review.
 This helper reads one or more source issues, collects their labels, and applies
-those labels to the pull request with `gh pr edit --add-label`.
+those labels to the pull request with `gh issue edit --add-label`. GitHub pull
+requests are issue records for label purposes, and the issue-oriented command
+avoids unrelated pull request GraphQL fields that are not needed for label
+management.
 
 The helper intentionally copies labels only. GitHub Issue fields, such as the
 official Priority field, are not pull request labels and remain managed by the
@@ -190,7 +193,7 @@ def apply_pr_labels(
         return unique_labels
 
     args = [
-        "pr",
+        "issue",
         "edit",
         str(_validate_number(pr_number, field="pull request number")),
         "--repo",
