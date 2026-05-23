@@ -311,7 +311,7 @@ Planned areas include:
 - additional idempotency strategies,
 - HTTP, S3, Kafka, OCI Object Storage, Oracle MySQL, and other sink modules,
 - Docker and Kubernetes deployment assets,
-- more certified NATS authentication options,
+- more live certification runbooks for secure NATS authentication deployments,
 - more JetStream consumer tuning options,
 - sink certification tests for future backends.
 

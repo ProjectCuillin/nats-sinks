@@ -3,10 +3,10 @@
   "title": "[Feature]: Certify additional NATS authentication workflows",
   "area": "Security",
   "priority": "P2 - next minor release candidate",
-  "target_release": "unscheduled",
+  "target_release": "v0.4.1",
   "labels": ["security", "nats"],
-  "problem": "The project documents basic NATS authentication and local CA certificate support, but the roadmap still includes certified TLS certificate authentication, NKEY challenge authentication, decentralized JWT authentication and authorization, and credentials-file workflows. These modes are important for controlled deployments but need tests and documentation before they are represented as certified project capabilities.",
-  "proposal": "Add explicit configuration support, validation, and documentation for each additional NATS authentication workflow in a staged way. The implementation should centralize NATS connection option construction, preserve redaction, and provide environment-gated integration tests or documented manual validation for each mode.",
+  "problem": "The project documents basic NATS authentication and local CA certificate support, and controlled deployments also need certified client-side workflows for TLS client certificates, NKEY challenge authentication, decentralized JWT authentication, and credentials-file authentication. These modes must share validation, redaction, and option construction so secure deployments do not depend on scattered CLI-only behavior.",
+  "proposal": "Centralize NATS connection option construction and certify the client-side configuration path for username/password, token, credentials-file, NKEY seed-file, local CA TLS, and TLS client certificate workflows. Preserve redaction, validate identity-material path fields, and provide environment-gated integration tests or documented manual validation for each mode.",
   "users": "NATS administrators, operators in secure environments, and maintainers responsible for connection security.",
   "delivery_semantics": "Authentication affects whether the runner can connect and fetch messages, but it must not alter commit-then-ACK behavior. Authentication failures must fail startup or reconnect safely without ACKing unprocessed messages.",
   "security": "Certificate material, credentials files, seed material, and identity files must never be committed, logged, or included in issue comments. TLS verification must remain enabled by default. Configuration must fail closed when required material is missing.",
@@ -18,6 +18,6 @@
     "Integration tests are gated and never run in unit test paths."
   ],
   "tests": "Add unit tests for option construction and redaction. Add environment-gated integration checks where practical. Run scripts/check.sh and relevant live connection tests when safe credentials are available.",
-  "documentation": "Update docs/security.md, docs/configuration.md, docs/operations.md, examples, ROBOTS.md, AGENTS.md, ROADMAP.md, and CHANGELOG.md.",
+  "documentation": "Update docs/nats-connections.md, docs/security.md, docs/configuration.md, docs/operations.md, examples, ROBOTS.md, AGENTS.md, ROADMAP.md, docs/roadmap.md, and CHANGELOG.md.",
   "closeout": "Close after a release certifies the workflows. Include release tag, modes certified, tests run, documentation updated, and any remaining non-certified modes."
 }

@@ -580,6 +580,8 @@ network connection. It is useful for validating:
 - TLS connection setup,
 - local CA certificate trust,
 - token or username/password authentication,
+- credentials-file, NKEY seed-file, and TLS client certificate workflows when
+  the target NATS deployment is configured for them,
 - subscribing to a subject,
 - optionally publishing and receiving a test message.
 
@@ -623,6 +625,23 @@ python scripts/nats-live-probe.py \
 
 Only use `--publish` with an explicitly approved test subject. The probe does
 not print payload contents by default.
+
+For client-side authentication workflow certification, use the gated pytest
+module instead of adding live credentials to unit tests:
+
+```bash
+export NATS_SINKS_NATS_AUTH_INTEGRATION=1
+export NATS_SINKS_AUTH_MODE=nkey_seed_file
+export NATS_SINKS_AUTH_URL=tls://nats.example.com:4222
+export NATS_SINKS_AUTH_NKEY_SEED_FILE=/run/secrets/nats/orders-sink.nk
+export NATS_SINKS_AUTH_TLS_CA_FILE=/etc/nats/certs/root-ca.crt
+python -m pytest tests/integration/test_nats_auth_workflows.py -q
+```
+
+Supported modes are `none`, `username_password`, `token`,
+`credentials_file`, `nkey_seed_file`, and `tls_client_certificate`. Keep all
+real endpoints and identity files in ignored local configuration or runtime
+secret mounts.
 
 ## Ordering Tests
 

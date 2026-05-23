@@ -9,8 +9,14 @@ from typing import Any
 import pytest
 
 from nats_sinks.cli import main as cli_main
-from nats_sinks.core.config import AppConfig
+from nats_sinks.core import nats_options
+from nats_sinks.core.config import AppConfig, redacted_config
 from nats_sinks.core.errors import ConfigurationError
+from nats_sinks.core.nats_options import (
+    build_nats_connect_options,
+    describe_nats_connection,
+    nats_auth_mode,
+)
 
 
 def app_config(nats: dict[str, Any]) -> AppConfig:
@@ -44,18 +50,22 @@ def test_nats_options_resolve_username_password_from_environment(
 
     assert options["user"] == "sink_user"
     assert options["password"] == "plain-client-secret"  # noqa: S105
+    assert nats_auth_mode(config.nats) == "username_password"
 
 
 def test_nats_options_allows_connection_without_authentication() -> None:
     config = app_config({})
 
     options = cli_main._nats_options(config)
+    summary = describe_nats_connection(config.nats)
 
     assert options["servers"] == ["nats://localhost:4222"]
     assert options["no_echo"] is False
     assert "user" not in options
     assert "password" not in options
     assert "token" not in options
+    assert summary.auth_mode == "none"
+    assert summary.seed_count == 1
 
 
 def test_nats_options_passes_no_echo_when_enabled() -> None:
@@ -75,6 +85,33 @@ def test_nats_options_resolve_token_from_environment(
     options = cli_main._nats_options(config)
 
     assert options["token"] == "client-token"  # noqa: S105
+    assert nats_auth_mode(config.nats) == "token"
+
+
+def test_nats_options_support_credentials_file_authentication() -> None:
+    config = app_config({"creds_file": "/run/secrets/nats/user.creds"})
+
+    options = build_nats_connect_options(config.nats)
+    summary = describe_nats_connection(config.nats)
+
+    assert options["user_credentials"] == "/run/secrets/nats/user.creds"
+    assert "user" not in options
+    assert "password" not in options
+    assert "token" not in options
+    assert "nkeys_seed" not in options
+    assert summary.auth_mode == "credentials_file"
+
+
+def test_nats_options_support_nkey_seed_file_authentication() -> None:
+    config = app_config({"nkey_seed_file": "/run/secrets/nats/user.nk"})
+
+    options = build_nats_connect_options(config.nats)
+    summary = describe_nats_connection(config.nats)
+
+    assert options["nkeys_seed"] == "/run/secrets/nats/user.nk"
+    assert "user_credentials" not in options
+    assert "token" not in options
+    assert summary.auth_mode == "nkey_seed_file"
 
 
 def test_nats_options_support_multiple_seed_urls_and_reconnect_tuning() -> None:
@@ -157,7 +194,7 @@ def test_nats_options_uses_local_ca_file_for_tls(
         captured["cafile"] = cafile
         return FakeContext()
 
-    monkeypatch.setattr(cli_main.ssl, "create_default_context", fake_create_default_context)
+    monkeypatch.setattr(nats_options.ssl, "create_default_context", fake_create_default_context)
     config = app_config(
         {
             "url": "tls://nats.example:4222",
@@ -170,6 +207,7 @@ def test_nats_options_uses_local_ca_file_for_tls(
     options = cli_main._nats_options(config)
 
     assert options["tls"].check_hostname is True
+    assert describe_nats_connection(config.nats).tls_client_certificate is True
     assert captured == {
         "cafile": "/etc/nats/ca.crt",
         "certfile": "/etc/nats/client.crt",
@@ -190,7 +228,7 @@ def test_nats_options_builds_tls_context_for_wss(
         captured["cafile"] = cafile
         return FakeContext()
 
-    monkeypatch.setattr(cli_main.ssl, "create_default_context", fake_create_default_context)
+    monkeypatch.setattr(nats_options.ssl, "create_default_context", fake_create_default_context)
     config = app_config(
         {
             "url": "wss://nats.example:8443",
@@ -202,7 +240,31 @@ def test_nats_options_builds_tls_context_for_wss(
 
     assert options["servers"] == ["wss://nats.example:8443"]
     assert options["tls"].check_hostname is True
+    assert describe_nats_connection(config.nats).websocket is True
     assert captured == {"cafile": "/etc/nats/websocket-ca.crt"}
+
+
+def test_nats_options_allows_tls_verification_to_be_disabled_explicitly(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, Any] = {}
+
+    class FakeContext:
+        check_hostname = True
+        verify_mode = ssl.CERT_REQUIRED
+
+    def fake_create_default_context(*, cafile: str | None = None) -> FakeContext:
+        captured["cafile"] = cafile
+        return FakeContext()
+
+    monkeypatch.setattr(nats_options.ssl, "create_default_context", fake_create_default_context)
+    config = app_config({"url": "tls://nats.example:4222", "tls_verify": False})
+
+    options = build_nats_connect_options(config.nats)
+
+    assert options["tls"].check_hostname is False
+    assert options["tls"].verify_mode == ssl.CERT_NONE
+    assert captured == {"cafile": None}
 
 
 def test_nats_options_passes_validated_websocket_headers(
@@ -260,3 +322,27 @@ def test_nats_options_missing_websocket_header_environment_variable_raises() -> 
 
     with pytest.raises(ConfigurationError, match="MISSING_NATS_WS_AUTHORIZATION"):
         cli_main._nats_options(config)
+
+
+def test_nats_identity_file_paths_reject_control_characters() -> None:
+    with pytest.raises(ValueError, match=r"nats\.nkey_seed_file"):
+        app_config({"nkey_seed_file": "/run/secrets/nats/user.nk\n"})
+
+
+def test_redacted_config_hides_identity_and_secret_material_paths() -> None:
+    config = app_config(
+        {
+            "url": "tls://nats.example:4222",
+            "creds_file": "/run/secrets/nats/user.creds",
+            "tls_cert_file": "/run/secrets/nats/client.crt",
+            "tls_key_file": "/run/secrets/nats/client.key",
+            "tls_ca_file": "/run/config/nats/root-ca.crt",
+        }
+    )
+
+    rendered = redacted_config(config)["nats"]
+
+    assert rendered["creds_file"] == "********"
+    assert rendered["tls_cert_file"] == "********"
+    assert rendered["tls_key_file"] == "********"
+    assert rendered["tls_ca_file"] == "/run/config/nats/root-ca.crt"

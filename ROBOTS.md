@@ -295,6 +295,18 @@ code:
   only when the corresponding header is absent. Test first-match-wins behavior,
   unmatched fallback, explicit null defaults, and empty headers whenever rules
   change.
+- NATS authentication option construction belongs in
+  `nats_sinks.core.nats_options`. Do not add separate CLI-only, runner-only, or
+  test-only paths for resolving passwords, tokens, credentials files, NKEY seed
+  files, TLS contexts, WebSocket headers, or reconnect settings.
+- Treat NATS credentials files, NKEY seed files, TLS private keys, and client
+  certificate paths as sensitive identity material. Redact them from
+  `show-effective-config`, logs, issue comments, test reports, and examples;
+  use safe placeholder paths in public documentation.
+- Keep live NATS authentication workflow tests explicitly environment-gated.
+  Unit tests may verify option construction and redaction, but they must not
+  require real credentials, private endpoints, seed files, certificate files, or
+  a live NATS server.
 - Redact secrets in CLI output, logs, exceptions, reports, and test snapshots.
 - Do not dump complete process environments, complete connection strings, or
   raw headers that may contain credentials.

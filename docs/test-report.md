@@ -14,15 +14,25 @@ logs from live systems.
 | Field | Value |
 | --- | --- |
 | Overall result | Pass |
-| Report generated | 2026-05-23 local Docker image and NATS stack validation |
+| Report generated | 2026-05-23 certified NATS authentication workflow validation |
 | Project version | `0.4.0` post-release development |
 | Python version | 3.12.4 |
-| Git revision checked | Issue `#12` workspace based on `release-v0.4.1` |
-| Worktree state | Active workspace adding a local Docker image, JSON Compose NATS JetStream stack, Docker smoke-test runner, Docker documentation, follow-up Docker backlog issues, and a regression fix for bug `#222`, while preserving data-centric security labels, encrypted edge spool-and-forward sink work, GoldenGate-inspired sink candidate backlog research, stream planning, branch workflow automation, connector framework, WebSocket guardrails, Oracle high-throughput staging, custody metadata, advisory observation, durable consumer management, richer consumer policy controls, NATS no-echo, OTLP export, secure-development hardening, strict JSON config loading, log-injection sanitization, secret scanning, public API compatibility tests, GitHub Dependency Graph manifests, sanitized backlog tooling, release-gated close automation, standardized SPDX headers, metrics snapshots and CLI, observability policy core, Prometheus and NATS monitoring connectors, Kubernetes examples, systemd installer, NATS reconnect tuning, least-privilege NATS permission templates, JetStream topology guidance, retry backoff with jitter, priority-aware lanes, synthetic mission testing, mission-support examples, SBOM generation, release checksums, hash-verified installation guidance, property-style tests, defence and mission-support blueprints, generic mission metadata, payload encryption, and Oracle/file/spool sink support |
+| Git revision checked | Issue `#11` workspace based on `release-v0.4.1` |
+| Worktree state | Active workspace certifying client-side NATS authentication option construction for username/password, token, credentials-file, NKEY seed-file, local CA TLS, and TLS client certificate workflows, while preserving local Docker image work, data-centric security labels, encrypted edge spool-and-forward sink work, GoldenGate-inspired sink candidate backlog research, stream planning, branch workflow automation, connector framework, WebSocket guardrails, Oracle high-throughput staging, custody metadata, advisory observation, durable consumer management, richer consumer policy controls, NATS no-echo, OTLP export, secure-development hardening, strict JSON config loading, log-injection sanitization, secret scanning, public API compatibility tests, GitHub Dependency Graph manifests, sanitized backlog tooling, release-gated close automation, standardized SPDX headers, metrics snapshots and CLI, observability policy core, Prometheus and NATS monitoring connectors, Kubernetes examples, systemd installer, NATS reconnect tuning, least-privilege NATS permission templates, JetStream topology guidance, retry backoff with jitter, priority-aware lanes, synthetic mission testing, mission-support examples, SBOM generation, release checksums, hash-verified installation guidance, property-style tests, defence and mission-support blueprints, generic mission metadata, payload encryption, and Oracle/file/spool sink support |
 | Live NATS details | Redacted |
 | Live Oracle details | Redacted |
 
-This refresh also included live WebSocket/NATS and NATS-to-Oracle validation.
+This refresh covered issue `#11`, centralizing NATS connection option
+construction in `nats_sinks.core.nats_options`, validating identity-material
+path fields, redacting credentials-file, NKEY seed-file, TLS client
+certificate, and TLS private-key paths from effective configuration output, and
+adding an environment-gated live authentication workflow test that is skipped
+unless explicitly enabled. The focused authentication suite passed with
+`85 passed, 1 skipped`, and the full `scripts/check.sh` run passed with
+`712 passed, 9 skipped` in the main pytest run.
+
+This refresh also preserved prior live WebSocket/NATS and NATS-to-Oracle
+validation evidence.
 The first Oracle e2e attempt intentionally kept the retained test table and
 failed closed because that table was stale and missing newer metadata columns.
 That was treated as an environment/schema hygiene finding rather than a product
@@ -625,13 +635,13 @@ ordering, DLQ-before-ACK ordering, and deterministic unhappy-path handling.
 
 | Check | Command | Result | Sanitized outcome |
 | --- | --- | --- | --- |
-| Formatting | `ruff format --check .` | Pass | 146 files already formatted |
+| Formatting | `ruff format --check .` | Pass | 175 files already formatted |
 | Linting | `ruff check .` | Pass | All checks passed, including synthetic harness and load-profile source, scripts, and tests |
-| Type checking | `mypy src` | Pass | No type issues in 56 source files |
+| Type checking | `mypy src` | Pass | No type issues in 67 source files |
 | Version consistency | `python scripts/check-version-consistency.py` | Pass | Package metadata, runtime `__version__`, README, docs home page, and changelog all report `0.4.0` |
 | Dependency manifest consistency | `python scripts/update-dependency-manifests.py --check` | Pass | Generated `requirements*.txt` files are in sync with `pyproject.toml` for GitHub Dependency Graph and Dependabot visibility |
-| Local backlog validation | `python scripts/sync-backlog-issues.py --check` | Pass | Validated 136 local backlog item JSON files; validation rejects common public-leak patterns before issue bodies are generated |
-| Local bug report validation | `python scripts/sync-bug-reports.py --check` | Pass | Validated 42 local bug report JSON files, including the file path sanitizer, synthetic reporting, metrics, NATS monitoring, payload serialization, NATS auth, retry-policy, Oracle idempotency, MkDocs build isolation, metrics CLI CI repair, release workflow artifact separation, Dependency Review Node.js 24 runtime hygiene, and other regression reports |
+| Local backlog validation | `python scripts/sync-backlog-issues.py --check` | Pass | Validated 140 local backlog item JSON files; validation rejects common public-leak patterns before issue bodies are generated |
+| Local bug report validation | `python scripts/sync-bug-reports.py --check` | Pass | Validated 65 local bug report JSON files, including the file path sanitizer, synthetic reporting, metrics, NATS monitoring, payload serialization, NATS auth, retry-policy, Oracle idempotency, MkDocs build isolation, metrics CLI CI repair, release workflow artifact separation, Dependency Review Node.js 24 runtime hygiene, and other regression reports |
 | Dependency Review workflow runtime check | `python -m pytest tests/unit/test_dependency_review_workflow.py -q` | Pass | 2 passed, covering the Node.js 24-compatible Dependency Review action reference and least-privilege workflow permissions |
 | OCI Object Storage backlog sync | `python scripts/sync-backlog-issues.py --directory /private/tmp/nats-sinks-oci-backlog-sync` | Pass | Created GitHub issue `#47` from the scoped validated backlog item without publishing secrets or private service details |
 | GoldenGate-inspired sink backlog sync | `python scripts/sync-backlog-issues.py --directory /private/tmp/nats-sinks-goldengate-backlog-sync --issue-priority-field Priority --issue-priority-field-id 41029122` | Pass | Created managed GitHub issues `#158` through `#190` from 33 scoped validated backlog items without publishing secrets, private service addresses, credentials, or payload material |
@@ -641,7 +651,7 @@ ordering, DLQ-before-ACK ordering, and deterministic unhappy-path handling.
 | JetStream topology documentation | `scripts/check-docs.sh` through `scripts/check.sh` | Pass | Added and built advanced topology guidance for mirrors, sources, transforms, republish, compression, placement, metadata, and idempotency review |
 | NATS server monitoring connector | `pytest tests/unit/test_nats_monitoring.py tests/unit/test_observability_cli.py` and `scripts/check-docs.sh` through `scripts/check.sh` | Pass | Added and built the server monitoring connector docs; tests cover disabled policy behavior, endpoint validation, malformed JSON handling, sanitized snapshots, optional Prometheus rendering, and CLI behavior without live network calls |
 | Security rule review count | `rg -c "^\\| SD-" docs/security-rule-review.md` | Pass | 316 controls recorded |
-| Unit and gated test suite | `pytest` through `scripts/check.sh` | Pass | 557 passed, 8 skipped |
+| Unit and gated test suite | `pytest` through `scripts/check.sh` | Pass | 712 passed, 9 skipped |
 | JetStream advisory focused checks | `pytest tests/unit/test_advisory.py tests/unit/test_config.py tests/unit/test_commit_then_ack_contract.py tests/unit/test_metrics.py tests/unit/test_public_api.py` | Pass | 101 passed, covering advisory parsing, subject filtering, safe parse failures, metrics, monitor lifecycle, configuration validation, public exports, and isolation from sink ACK behavior |
 | Consumer policy focused checks | `pytest tests/unit/test_consumer_management.py tests/unit/test_config.py tests/unit/test_commit_then_ack_contract.py tests/unit/test_public_api.py` | Pass | 93 passed, covering bind-only, create-if-missing, compatible existing consumers, incompatible drift, reconcile behavior, richer policy fields, plural filter subjects, BackOff validation, consumer metadata validation, runner startup ordering, configuration validation, and public API compatibility |
 | MkDocs build isolation regression | `pytest tests/unit/test_docs_build_isolation.py -q` and two parallel `scripts/check-docs.sh` runs | Pass | 3 focused tests passed; two overlapping docs helper runs built isolated Read the Docs and GitHub Pages output directories without colliding in `site/` |
@@ -655,7 +665,8 @@ ordering, DLQ-before-ACK ordering, and deterministic unhappy-path handling.
 | Encryption capability suite | `scripts/check-encryption.sh` through `scripts/check.sh` | Pass | 108 encryption-focused and runner-ordering tests passed with generated temporary AES-256 key material that was deleted after the run |
 | Sink capability suite | `scripts/check-sinks.sh` | Pass | 85 sink-focused tests passed plus file, encrypted file, and Oracle CLI smoke checks |
 | Retry backoff focused checks | `pytest tests/unit/test_retry.py tests/unit/test_commit_then_ack_contract.py tests/unit/test_config.py` | Pass | 49 passed, covering fixed, linear, exponential, capped, jitter, no-jitter, active retry exhaustion, and config validation paths |
-| NATS connection option and event metrics checks | `pytest tests/unit/test_nats_connection_options.py tests/unit/test_nats_connection_events.py tests/unit/test_metrics.py tests/unit/test_metrics_cli.py` | Pass | 35 passed, covering seed URLs, reconnect tuning, connection callback metrics, callback preservation, and metrics CLI behavior |
+| NATS connection option and event metrics checks | `pytest tests/unit/test_nats_connection_options.py tests/unit/test_nats_connection_events.py tests/unit/test_metrics.py tests/unit/test_metrics_cli.py` through `scripts/check.sh` | Pass | Covered centralized option construction, seed URLs, reconnect tuning, credentials-file auth, NKEY seed-file auth, TLS client certificates, local CA TLS, redaction, connection callback metrics, callback preservation, and metrics CLI behavior |
+| NATS authentication focused checks | `python -m pytest tests/unit/test_config.py tests/unit/test_nats_connection_options.py tests/unit/test_bug_hunt_non_json_boundaries.py tests/integration/test_nats_auth_workflows.py -q` | Pass | 85 passed, 1 skipped; the skipped test is the explicit live authentication workflow certification test gated by `NATS_SINKS_NATS_AUTH_INTEGRATION=1` |
 | Oracle benchmark unit checks | `pytest tests/unit/test_bug_64_oracle_benchmark_phase_rates.py tests/unit/test_oracle_benchmark.py` | Pass | 7 passed, covering option validation, public redaction, phase rendering, live opt-in protection, shell wrapper syntax, and timing-only retry/shutdown phase reporting |
 | Synthetic load-profile checks | `pytest tests/unit/test_bug_63_load_profile_phase_rates.py tests/unit/test_load_profiles.py tests/unit/test_metrics.py` | Pass | 25 passed, covering option bounds, normal/retry/DLQ/shutdown counters, phase-specific throughput rates, sanitized Markdown output, report-file writing, metrics snapshot cleanup, metrics helpers, and shell wrapper syntax |
 | Metrics non-finite JSON regression | `pytest tests/unit/test_bug_65_metrics_nonfinite_values.py tests/unit/test_metrics.py tests/unit/test_metrics_cli.py tests/unit/test_observability_cli.py tests/unit/test_prometheus_observability.py -q` | Pass | 52 passed, covering finite-only metrics snapshots, strict snapshot loading, valid metrics CLI reads, observability policy rendering, and Prometheus output paths |

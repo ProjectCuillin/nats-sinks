@@ -647,8 +647,12 @@ inside `metadata.security_labels`. With Oracle, the profile is stored in
 - username/password authentication with `user` and `password_env` or `password`,
 - server-side bcrypted username/password credentials using the same client-side
   `user` and `password_env` settings,
+- NATS credentials-file and decentralized JWT user workflows through
+  `creds_file`,
+- NKEY challenge authentication through `nkey_seed_file`,
 - TLS server verification with `tls_ca_file`, including private or self-signed
   NATS server CAs,
+- TLS client certificate/key transport settings for mutual TLS deployments,
 - optional `no_echo` connection behavior for reviewed same-connection
   publish/subscribe policies.
 
@@ -1003,9 +1007,8 @@ Phase 2:
 - Kafka, search, warehouse, document database, key-value, and wide-column
   backend evaluation through the sink framework.
 - Hardened public Docker image and release publication automation.
-- Certified TLS certificate authentication guidance.
-- Certified NKEY with challenge authentication support.
-- Certified decentralized JWT authentication/authorization support.
+- Expanded live certification runbooks for NATS TLS certificate, NKEY, and
+  decentralized JWT deployments across representative server policies.
 - Deeper sequence-based and timestamp-based JetStream replay-start controls.
 - Optional confirmed ACK and `InProgress` support.
 - Payload-presence metadata and sink certification for headers-only delivery.

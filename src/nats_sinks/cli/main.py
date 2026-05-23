@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import ssl
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -31,6 +30,7 @@ from nats_sinks.core.config import AppConfig, SinkPluginConfig, load_config, red
 from nats_sinks.core.errors import ConfigurationError, NatsSinksError
 from nats_sinks.core.logging import configure_logging
 from nats_sinks.core.metrics import JsonFileMetrics, MetricsRecorder
+from nats_sinks.core.nats_options import build_nats_connect_options
 from nats_sinks.core.runner import JetStreamSinkRunner
 from nats_sinks.core.stream_management import (
     StreamManagementOptions,
@@ -182,71 +182,9 @@ def _print_stream_plan_text(plan: StreamManagementPlan) -> None:
 
 
 def _nats_options(config: AppConfig) -> dict[str, Any]:
-    """Convert validated JSON config into `nats-py` connection options.
+    """Convert validated JSON config into `nats-py` connection options."""
 
-    Secret values are resolved at this final boundary rather than during config
-    loading so validation and redacted config rendering can run without reading
-    secret environment variables.  The returned dictionary is passed directly to
-    `nats.connect`, so option names intentionally match `nats-py` keywords.
-    """
-
-    password = config.nats.resolve_password()
-    token = config.nats.resolve_token()
-    websocket_headers = config.nats.resolve_websocket_headers()
-    servers = config.nats.urls or [config.nats.url]
-    options: dict[str, Any] = {
-        key: value
-        for key, value in {
-            "servers": servers,
-            "user": config.nats.user,
-            "password": password,
-            "token": token,
-            "name": config.nats.name,
-            "user_credentials": config.nats.creds_file,
-            "nkeys_seed": config.nats.nkey_seed_file,
-            # `no_echo` asks the NATS server not to echo messages published by
-            # this same connection back to subscriptions on the same
-            # connection. nats-sinks primarily uses pull consumers and only
-            # publishes DLQ messages, so the default remains explicit and off.
-            "no_echo": config.nats.no_echo,
-            "allow_reconnect": config.nats.allow_reconnect,
-            "connect_timeout": config.nats.connect_timeout_seconds,
-            "reconnect_time_wait": config.nats.reconnect_time_wait_seconds,
-            "max_reconnect_attempts": config.nats.max_reconnect_attempts,
-            "ping_interval": config.nats.ping_interval_seconds,
-            "max_outstanding_pings": config.nats.max_outstanding_pings,
-            "pending_size": config.nats.pending_size_bytes,
-            "drain_timeout": config.nats.drain_timeout_seconds,
-            "ws_connection_headers": websocket_headers or None,
-        }.items()
-        if value is not None
-    }
-
-    if any(
-        (
-            config.nats.tls_ca_file,
-            config.nats.tls_cert_file,
-            config.nats.tls_key_file,
-            any(server.startswith("tls://") for server in servers),
-            any(server.startswith("wss://") for server in servers),
-        )
-    ):
-        # A local CA file lets operators trust a private or self-signed NATS
-        # server CA without disabling certificate verification globally.
-        context = ssl.create_default_context(cafile=config.nats.tls_ca_file)
-        context.check_hostname = config.nats.tls_verify
-        if not config.nats.tls_verify:
-            context.verify_mode = ssl.CERT_NONE
-        if config.nats.tls_cert_file:
-            # Client certificates are passed through for deployments that use
-            # mutual TLS transport. Full certificate-identity authorization is
-            # tracked as a roadmap item because it needs more acceptance tests.
-            context.load_cert_chain(
-                certfile=config.nats.tls_cert_file,
-                keyfile=config.nats.tls_key_file,
-            )
-        options["tls"] = context
-    return options
+    return build_nats_connect_options(config.nats)
 
 
 def _metrics_recorder(config: AppConfig) -> MetricsRecorder | None:

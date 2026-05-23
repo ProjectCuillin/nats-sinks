@@ -185,10 +185,9 @@ release, and closed only after the containing release is published.
 - Expanded mission metadata schema policy controls for deployments that need
   stricter validation than the current root-key allow list and size policy.
 - Hash-verified installation guidance for high-trust environments.
-- Certified TLS certificate authentication guidance.
-- Certified NKEY with challenge authentication support.
-- Certified decentralized JWT authentication/authorization support.
-- Certified NATS credentials-file workflows.
+- Expanded live certification runbooks for NATS TLS certificate, NKEY,
+  credentials-file, and decentralized JWT deployments across representative
+  server policies.
 - Deeper replay-start options for sequence or timestamp-based delivery
   policies.
 - Optional confirmed ACK support after durable sink success.

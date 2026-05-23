@@ -12,6 +12,11 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Added
 
+- Added centralized NATS authentication and TLS connection option construction
+  for username/password, token, credentials-file, NKEY seed-file, local CA TLS,
+  and TLS client certificate workflows, including identity-path redaction,
+  focused unit coverage, and an environment-gated live authentication
+  integration test scaffold.
 - Added Oracle Linux 9 slim as the required base image for the local
   `nats-sinks` Docker image, replacing the previous Debian-based
   `python:3.12-slim` base while preserving the non-root entry point and local

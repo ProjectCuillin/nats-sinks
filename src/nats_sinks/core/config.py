@@ -80,6 +80,9 @@ SENSITIVE_KEY_PARTS = (
     "private_key",
     "credentials",
     "creds",
+    "cert_file",
+    "key_file",
+    "nkey_seed",
     "key_b64",
     "key_material",
 )
@@ -169,6 +172,31 @@ def _validate_nats_server_url(value: str, *, field: str) -> str:
             f"{field} must not include credentials; use nats.user, nats.password_env, "
             "nats.token_env, nats.creds_file, or nats.nkey_seed_file instead"
         )
+    return rendered
+
+
+def _validate_nats_identity_path(value: str | None, *, field: str) -> str | None:
+    """Validate file path fields that point at NATS identity or TLS material.
+
+    The configuration loader intentionally does not require these files to
+    exist.  In Kubernetes, systemd, and container deployments the files may be
+    mounted only at runtime.  The boundary still validates the string shape so
+    control characters, invisible whitespace, and empty paths cannot flow into
+    TLS or authentication setup.
+    """
+
+    if value is None:
+        return None
+    rendered = value.strip()
+    if not rendered:
+        raise ValueError(f"{field} must not be empty")
+    if rendered != value:
+        raise ValueError(f"{field} must not have surrounding whitespace")
+    if any(
+        ord(character) <= ASCII_CONTROL_MAX or ord(character) == ASCII_DELETE
+        for character in rendered
+    ):
+        raise ValueError(f"{field} must not contain control characters")
     return rendered
 
 
@@ -464,6 +492,25 @@ class NatsConfig(BaseModel):
         for item in value:
             rendered_urls.append(_validate_nats_server_url(item, field="nats.urls"))
         return rendered_urls
+
+    @field_validator(
+        "creds_file",
+        "nkey_seed_file",
+        "tls_ca_file",
+        "tls_cert_file",
+        "tls_key_file",
+    )
+    @classmethod
+    def validate_identity_file_path(cls, value: str | None, info: Any) -> str | None:
+        """Validate optional paths to NATS identity and TLS files.
+
+        File existence is checked later by `nats-py` or `ssl` when a live
+        connection is opened.  Keeping path validation here still gives users a
+        deterministic configuration error for malformed values while allowing
+        runtime-mounted secret files.
+        """
+
+        return _validate_nats_identity_path(value, field=f"nats.{info.field_name}")
 
     @field_validator("websocket_headers", mode="before")
     @classmethod
