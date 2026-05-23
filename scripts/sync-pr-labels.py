@@ -33,6 +33,8 @@ ISSUE_REFERENCE_RE = re.compile(r"(?<![\w/])#(?P<number>[1-9][0-9]{0,8})(?![\w-]
 BRANCH_ISSUE_RE = re.compile(
     r"^(?:issue|feature|bug|bugfix|hotfix)-(?P<number>[1-9][0-9]{0,8})(?:-|$)"
 )
+FENCED_CODE_RE = re.compile(r"```.*?```", re.DOTALL)
+INLINE_CODE_RE = re.compile(r"`[^`\n]*`")
 ASCII_CONTROL_MAX = 31
 ASCII_DELETE = 127
 MAX_GITHUB_NUMBER = 999_999_999
@@ -88,6 +90,13 @@ def _validate_number(value: int, *, field: str) -> int:
     if value <= 0 or value > MAX_GITHUB_NUMBER:
         raise PullRequestLabelSyncError(f"{field} must be between 1 and 999999999.")
     return value
+
+
+def _strip_markdown_code(text: str) -> str:
+    """Remove Markdown code blocks before scanning for issue references."""
+
+    without_fenced_blocks = FENCED_CODE_RE.sub("", text)
+    return INLINE_CODE_RE.sub("", without_fenced_blocks)
 
 
 def _label_names(raw_labels: object) -> tuple[str, ...]:
@@ -149,7 +158,8 @@ def detect_source_issues(
     if branch_match is not None:
         issues.append(int(branch_match.group("number")))
 
-    for match in ISSUE_REFERENCE_RE.finditer(context.body):
+    searchable_body = _strip_markdown_code(context.body)
+    for match in ISSUE_REFERENCE_RE.finditer(searchable_body):
         issues.append(int(match.group("number")))
 
     return tuple(dict.fromkeys(issues))

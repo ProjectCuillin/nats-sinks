@@ -38,6 +38,17 @@ def test_detect_source_issues_uses_explicit_branch_and_body_references() -> None
     assert script.detect_source_issues(context, [99]) == (99, 123, 456)
 
 
+def test_detect_source_issues_ignores_markdown_code_placeholders() -> None:
+    script = _load_script()
+    context = script.PullRequestContext(
+        number=77,
+        head_ref_name="maintenance-branch",
+        body=("Use `Related #123` as an example.\n```text\nRelated #234\n```\nRelated #456"),
+    )
+
+    assert script.detect_source_issues(context, []) == (456,)
+
+
 def test_sync_pr_labels_copies_deduplicated_labels_from_all_source_issues(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

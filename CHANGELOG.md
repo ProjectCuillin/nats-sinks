@@ -220,6 +220,9 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   `gh issue edit` against the pull request number instead of `gh pr edit`,
   avoiding an unrelated GitHub CLI GraphQL `projectCards` failure observed
   during live PR creation.
+- Fixed pull request label source detection so Markdown inline code spans and
+  fenced code blocks do not turn instructional placeholders such as
+  `Related #123` into real source issues.
 - Fixed metadata trust-boundary validation so message metadata headers,
   configured priority/classification defaults, configured labels, mission
   metadata profile allow lists, and security-label vocabularies reject ASCII

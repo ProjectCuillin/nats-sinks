@@ -189,8 +189,8 @@ target `main` only when the maintainer has explicitly decided to release.
 - [ ] No secrets, credentials, private endpoints, payload dumps, or local paths are included.
 - [ ] Maintainer review has approved the merge.
 
-Use `Related #123` for managed issues. Release automation closes those issues
-only after the associated GitHub Release exists.
+Use a `Related #<issue-number>` line for managed issues. Release automation
+closes those issues only after the associated GitHub Release exists.
 PR_BODY
 
 git push -u origin "$BRANCH"

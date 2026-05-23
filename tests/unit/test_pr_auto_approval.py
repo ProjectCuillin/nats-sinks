@@ -249,7 +249,7 @@ if [[ "$1 $2" == "pr view" ]]; then
   "isDraft": false,
   "author": {{"login": "louwersj"}},
   "url": "https://github.com/ProjectCuillin/nats-sinks/pull/321",
-  "body": "Related #123"
+  "body": "Use `Related #123` as an example."
 }}
 JSON
   exit 0
