@@ -34,6 +34,7 @@ nats-sink validate config.json
 nats-sink show-effective-config config.json
 nats-sink test-sink config.json
 nats-sink stream-plan config.json
+nats-sink query-lineage config.json --field mission_id --value MISSION-ALPHA --dry-run
 nats-sink replay-spool spool-config.json target-config.json --dry-run
 nats-sink-metrics show .local/nats-sinks/metrics.json
 nats-sink-observe init-prometheus-policy config.json observability.prometheus.json
@@ -130,6 +131,42 @@ Example JSON excerpt:
 
 See [JetStream Stream Management Planning](stream-management.md) for the full
 operator guide and permission discussion.
+
+### `nats-sink query-lineage`
+
+Queries already persisted Oracle rows by a small set of allow-listed lineage
+fields. This command is read-only: it does not connect to NATS, does not ACK
+messages, does not write to Oracle, and does not alter sink state.
+
+Start with dry-run mode to validate the configured table, field, limit, and SQL
+shape without opening an Oracle connection:
+
+```bash
+nats-sink query-lineage examples/oracle-jetstream/config.json \
+  --field mission_id \
+  --value MISSION-ALPHA \
+  --limit 10 \
+  --format json \
+  --dry-run
+```
+
+The dry-run output prints bind names but not the lookup value:
+
+```json
+{
+  "field": "mission_id",
+  "table": "NATS_SINK_EVENTS",
+  "limit": 10,
+  "payload_included": false,
+  "binds": ["lineage_value"],
+  "sql": "select ... where json_value(MISSION_METADATA_JSON, '$.mission_id') = :lineage_value ... fetch first 10 rows only"
+}
+```
+
+Supported fields are `correlation_id`, `causation_id`, `mission_id`,
+`tasking_id`, `track_id`, `message_id`, and `subject`. Payload output is
+omitted by default. See [Lineage Query Helpers](lineage-query-helpers.md) for
+the security model, Oracle examples, and output reference.
 
 ### `nats-sink replay-spool`
 

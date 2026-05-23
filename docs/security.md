@@ -150,6 +150,13 @@ Use this baseline for code review and future releases:
   permissions, exclude spool paths from source control, monitor disk usage,
   rotate keys with care, and avoid exposing directory listings because wrapper
   metadata can still reveal record counts and rough priority ordering.
+- Treat read-only lineage helpers as an information-access boundary. Even when
+  they do not modify data, they can reveal operational relationships between
+  mission identifiers, tracks, tasking identifiers, subjects, and event timing.
+  Use least-privilege database accounts, bounded result limits, allow-listed
+  query fields, and redacted output. Do not paste raw lineage output containing
+  operational identifiers into public issues, tickets, CI logs, or shared
+  documentation.
 - Prefer least privilege for NATS accounts, Oracle users, service accounts,
   CI jobs, containers, cloud identities, filesystems, and documentation
   examples.

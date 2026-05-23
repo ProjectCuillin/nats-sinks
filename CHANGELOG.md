@@ -105,6 +105,11 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   metrics remain observational only and are available through the local metrics
   snapshot, `nats-sink-metrics`, Prometheus policy allow lists, and OTLP policy
   allow lists without changing ACK behavior.
+- Added read-only Oracle lineage query helpers and the `nats-sink query-lineage`
+  command for bounded, redacted inspection of persisted events by allow-listed
+  mission metadata fields, message ID, or subject. The helper uses bind
+  variables for lookup values, validates configured tables and columns, omits
+  payload output by default, and does not affect sink writes or ACK behavior.
 - Added a researched backlog item for a future Oracle MySQL sink, including
   initial design direction for MySQL Connector/Python, idempotent upserts,
   TLS, least-privilege access, test planning, and documentation scope.

@@ -67,6 +67,9 @@ release, and closed only after the containing release is published.
   the same metrics snapshot and `nats-sink-metrics` CLI.
 - Oracle subject-to-table routes with optional per-route idempotency overrides
   for stream sequence, message ID, and payload-field keys.
+- Read-only Oracle lineage query helpers for allow-listed mission metadata,
+  message ID, and subject lookups, with bounded result limits, parameterized
+  values, redacted output, and no effect on sink writes or ACK behavior.
 - Multiple NATS seed URLs, reconnect tuning, and connection event metrics for
   clustered or controlled-network deployments.
 - WebSocket connection guardrails for explicit `ws://` and `wss://` transport,

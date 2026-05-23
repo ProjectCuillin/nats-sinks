@@ -56,6 +56,7 @@ from nats_sinks.oracle.config import (
     OracleTableRoute,
     OracleWriteMode,
 )
+from nats_sinks.oracle.connection import build_oracle_pool_options
 from nats_sinks.oracle.ddl import create_events_table_ddl, create_staging_events_table_ddl
 from nats_sinks.oracle.errors import is_duplicate_error, oracle_error_code
 from nats_sinks.oracle.mapping import envelope_to_row
@@ -354,31 +355,7 @@ class OracleSink:
     def _pool_options(self) -> dict[str, Any]:
         """Build `oracledb.create_pool` options without logging resolved secrets."""
 
-        optional_options = {
-            "config_dir": self.config.config_dir,
-            "wallet_location": self.config.wallet_location,
-            "wallet_password": self.config.resolve_wallet_password(),
-            "ssl_server_dn_match": self.config.ssl_server_dn_match,
-            "ssl_server_cert_dn": self.config.ssl_server_cert_dn,
-            "tcp_connect_timeout": self.config.tcp_connect_timeout,
-            "retry_count": self.config.retry_count,
-            "retry_delay": self.config.retry_delay,
-            "https_proxy": self.config.https_proxy,
-            "https_proxy_port": self.config.https_proxy_port,
-        }
-        return {
-            key: value
-            for key, value in {
-                "user": self.config.user,
-                "password": self.config.resolve_password(),
-                "dsn": self.config.dsn,
-                "min": self.config.pool_min,
-                "max": self.config.pool_max,
-                "increment": self.config.pool_increment,
-                **optional_options,
-            }.items()
-            if value is not None
-        }
+        return build_oracle_pool_options(self.config)
 
     def _healthcheck_sync(self) -> None:
         pool = self._require_pool()

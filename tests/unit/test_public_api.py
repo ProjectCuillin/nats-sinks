@@ -181,8 +181,16 @@ PUBLIC_API_CONTRACT: dict[str, tuple[str, ...]] = {
         "FileWriteMode",
     ),
     "nats_sinks.oracle": (
+        "LINEAGE_FIELD_SPECS",
+        "OracleLineageQuery",
+        "OracleLineageReader",
+        "OracleLineageRecord",
+        "OracleLineageResult",
         "OracleSink",
         "OracleSinkConfig",
+        "build_oracle_lineage_query",
+        "render_lineage_result_text",
+        "resolve_lineage_table",
     ),
     "nats_sinks.spool": (
         "SPOOL_RECORD_SCHEMA",

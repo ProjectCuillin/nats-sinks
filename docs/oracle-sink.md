@@ -395,6 +395,47 @@ Per-route overrides are intentionally conservative:
 - if several routes target the same table, nats-sinks rejects conflicting
   effective policies at startup.
 
+## Read-Only Lineage Queries
+
+The Oracle sink stores enough metadata for read-only lineage inspection after
+events have been persisted. The `nats-sink query-lineage` command can query a
+configured Oracle event table by exact values in a small allow list:
+
+- `correlation_id`
+- `causation_id`
+- `mission_id`
+- `tasking_id`
+- `track_id`
+- `message_id`
+- `subject`
+
+Mission-oriented fields are read from `MISSION_METADATA_JSON` with Oracle
+`json_value`. Message ID and subject are read from the configured Oracle
+columns. Values are passed as bind variables, result limits are bounded, and
+payload output is omitted by default.
+
+```bash
+nats-sink query-lineage /etc/nats-sinks/oracle.json \
+  --field mission_id \
+  --value MISSION-ALPHA \
+  --limit 25
+```
+
+When `table_routes` are configured, `--table` may name only the default
+`sink.table` or one of the configured route tables. This keeps the helper from
+becoming an arbitrary database query tool:
+
+```bash
+nats-sink query-lineage /etc/nats-sinks/oracle.json \
+  --table NATS_EVENTS_SECRET \
+  --field track_id \
+  --value TRACK-9001 \
+  --limit 20
+```
+
+See [Lineage Query Helpers](lineage-query-helpers.md) for the full design,
+security controls, dry-run examples, and script-friendly JSON output shape.
+
 ## Choosing An Oracle Connection Type
 
 `OracleSink` uses `python-oracledb` connection pooling. The same sink supports
