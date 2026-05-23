@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
@@ -21,6 +22,7 @@ from nats_sinks.core.config import (
     DeliveryConfig,
     JetStreamAdvisoryConfig,
     MessageMetadataConfig,
+    MetricsConfig,
     MissionMetadataConfig,
     PreSinkPolicyConfig,
     PriorityLaneConfig,
@@ -359,6 +361,55 @@ async def test_successful_batch_records_clear_metrics_without_affecting_ack_orde
     assert metrics.gauges[MetricNames.LEGACY_CURRENT_BATCH_SIZE] == 1.0
     assert MetricNames.LAST_SINK_SUCCESS_EPOCH_SECONDS in metrics.gauges
     assert MetricNames.LEGACY_LAST_SUCCESS_TIMESTAMP in metrics.gauges
+
+
+@pytest.mark.asyncio
+async def test_successful_batch_records_freshness_metrics_before_ack_without_changing_order() -> (
+    None
+):
+    events: list[str] = []
+    message = FakeMessage(events)
+    message.headers = {"Nats-Time-Stamp": "2020-01-01T00:00:00Z"}
+    metrics = InMemoryMetrics()
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=RecordingSink(events),
+        metrics=metrics,
+        metrics_config=MetricsConfig(event_stale_after_seconds=1.0),
+    )
+
+    await runner.process_raw_batch([message])
+
+    assert events == ["write", "commit", "ack"]
+    assert metrics.observations[MetricNames.EVENT_AGE_AT_RECEIVE_SECONDS]
+    assert metrics.observations[MetricNames.EVENT_AGE_AT_STORE_SECONDS]
+    assert metrics.counters[MetricNames.EVENTS_STALE_AT_RECEIVE_TOTAL] == 1
+
+
+@pytest.mark.asyncio
+async def test_disabled_freshness_metrics_do_not_emit_runner_freshness_values() -> None:
+    events: list[str] = []
+    message = FakeMessage(events)
+    message.metadata.timestamp = datetime(2026, 5, 23, 10, 0, tzinfo=UTC)
+    metrics = InMemoryMetrics()
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=RecordingSink(events),
+        metrics=metrics,
+        metrics_config=MetricsConfig(event_freshness_enabled=False),
+    )
+
+    await runner.process_raw_batch([message])
+
+    assert events == ["write", "commit", "ack"]
+    assert MetricNames.EVENT_AGE_AT_RECEIVE_SECONDS not in metrics.observations
+    assert MetricNames.EVENT_CREATION_TIMESTAMP_MISSING_TOTAL not in metrics.counters
 
 
 @pytest.mark.asyncio

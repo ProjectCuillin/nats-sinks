@@ -130,6 +130,14 @@ class MetricNames:
     SIZE_POLICY_BATCHES_PASSED_TOTAL = "size_policy_batches_passed_total"
     SIZE_POLICY_BATCHES_REJECTED_TOTAL = "size_policy_batches_rejected_total"
     SIZE_POLICY_EVALUATION_ERRORS_TOTAL = "size_policy_evaluation_errors_total"
+    EVENT_AGE_AT_RECEIVE_SECONDS = "event_age_at_receive_seconds"
+    EVENT_AGE_AT_STORE_SECONDS = "event_age_at_store_seconds"
+    EVENTS_STALE_AT_RECEIVE_TOTAL = "events_stale_at_receive_total"
+    EVENTS_STALE_AT_STORE_TOTAL = "events_stale_at_store_total"
+    EVENT_CREATION_TIMESTAMP_MISSING_TOTAL = "event_creation_timestamp_missing_total"
+    EVENT_CREATION_TIMESTAMP_MALFORMED_TOTAL = "event_creation_timestamp_malformed_total"
+    EVENT_CREATION_TIMESTAMP_FUTURE_TOTAL = "event_creation_timestamp_future_total"
+    EVENT_SOURCE_CLOCK_SKEW_SECONDS = "event_source_clock_skew_seconds"
     ORACLE_CONFLICTS_TOTAL = "oracle_conflicts_total"
     ORACLE_DUPLICATES_TOTAL = "oracle_duplicates_total"
     ORACLE_DUPLICATE_IGNORED_TOTAL = "oracle_duplicate_ignored_total"
@@ -439,6 +447,46 @@ METRIC_SPECS: tuple[MetricSpec, ...] = (
         MetricNames.SIZE_POLICY_EVALUATION_ERRORS_TOTAL,
         "counter",
         "Messages left redeliverable because size-policy evaluation failed unexpectedly.",
+    ),
+    MetricSpec(
+        MetricNames.EVENT_AGE_AT_RECEIVE_SECONDS,
+        "histogram",
+        "Observed event age in seconds when the runner received the message.",
+    ),
+    MetricSpec(
+        MetricNames.EVENT_AGE_AT_STORE_SECONDS,
+        "histogram",
+        "Observed event age in seconds after the sink reported durable success.",
+    ),
+    MetricSpec(
+        MetricNames.EVENTS_STALE_AT_RECEIVE_TOTAL,
+        "counter",
+        "Events older than the configured stale threshold at runner receive time.",
+    ),
+    MetricSpec(
+        MetricNames.EVENTS_STALE_AT_STORE_TOTAL,
+        "counter",
+        "Events older than the configured stale threshold after durable sink success.",
+    ),
+    MetricSpec(
+        MetricNames.EVENT_CREATION_TIMESTAMP_MISSING_TOTAL,
+        "counter",
+        "Messages without a usable publisher or JetStream creation timestamp.",
+    ),
+    MetricSpec(
+        MetricNames.EVENT_CREATION_TIMESTAMP_MALFORMED_TOTAL,
+        "counter",
+        "Messages with a malformed publisher creation timestamp header.",
+    ),
+    MetricSpec(
+        MetricNames.EVENT_CREATION_TIMESTAMP_FUTURE_TOTAL,
+        "counter",
+        "Messages whose creation timestamp is beyond the configured future-skew tolerance.",
+    ),
+    MetricSpec(
+        MetricNames.EVENT_SOURCE_CLOCK_SKEW_SECONDS,
+        "histogram",
+        "Positive source clock skew seconds observed for future-dated messages.",
     ),
     MetricSpec(
         MetricNames.ORACLE_CONFLICTS_TOTAL,

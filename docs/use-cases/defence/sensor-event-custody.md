@@ -40,6 +40,9 @@ where it came from, and how it moved through the sink:
 - stream and consumer sequence numbers when available;
 - message ID when the publisher supplied one;
 - creation, receive, and store timestamps when available;
+- aggregate freshness metrics that show event age at receive and store time,
+  stale-event counts, and positive source clock skew without exposing subject or
+  sensor labels;
 - priority, classification, and labels;
 - validated `mission_metadata`;
 - payload or encrypted payload envelope;
@@ -131,3 +134,5 @@ as normal top-level and metadata fields:
 - Keep examples synthetic in documentation and GitHub Issues.
 - Treat custody metadata as sensitive when it reveals mission tempo, platform
   behavior, or sensor coverage.
+- Allow freshness metrics only after reviewing whether event-age and source
+  clock-skew timing can be shared with the intended observability system.

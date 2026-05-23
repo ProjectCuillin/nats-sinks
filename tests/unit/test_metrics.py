@@ -48,6 +48,10 @@ def test_metric_specs_have_unique_names_and_kinds() -> None:
     assert MetricNames.SIZE_POLICY_MESSAGES_PASSED_TOTAL in names
     assert MetricNames.SIZE_POLICY_MESSAGES_REJECTED_TOTAL in names
     assert MetricNames.SIZE_POLICY_EVALUATION_ERRORS_TOTAL in names
+    assert MetricNames.EVENT_AGE_AT_RECEIVE_SECONDS in names
+    assert MetricNames.EVENT_AGE_AT_STORE_SECONDS in names
+    assert MetricNames.EVENT_CREATION_TIMESTAMP_MISSING_TOTAL in names
+    assert MetricNames.EVENT_SOURCE_CLOCK_SKEW_SECONDS in names
     assert MetricNames.ORACLE_DUPLICATES_TOTAL in names
     assert MetricNames.ORACLE_DUPLICATE_NOOP_TOTAL in names
     assert MetricNames.ORACLE_MERGE_ROWS_TOTAL in names
@@ -107,6 +111,23 @@ def test_metrics_config_validates_snapshot_file() -> None:
 
     with pytest.raises(ValueError, match="snapshot_file"):
         MetricsConfig(snapshot_file="\n")
+
+
+def test_metrics_config_validates_freshness_thresholds() -> None:
+    config = MetricsConfig(
+        event_freshness_enabled=True,
+        event_stale_after_seconds=120.0,
+        event_future_skew_tolerance_seconds=10.0,
+    )
+
+    assert config.event_stale_after_seconds == 120.0
+    assert config.event_future_skew_tolerance_seconds == 10.0
+
+    with pytest.raises(ValueError, match="event_stale_after_seconds"):
+        MetricsConfig(event_stale_after_seconds=-1)
+
+    with pytest.raises(ValueError, match="event_future_skew_tolerance_seconds"):
+        MetricsConfig(event_future_skew_tolerance_seconds=-1)
 
 
 def test_in_memory_metrics_records_canonical_names_and_legacy_aliases() -> None:

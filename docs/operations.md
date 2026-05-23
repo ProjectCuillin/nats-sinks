@@ -228,13 +228,17 @@ then inspect that snapshot without connecting to NATS or a destination backend.
   "metrics": {
     "enabled": true,
     "namespace": "nats_sinks",
-    "snapshot_file": ".local/nats-sinks/metrics.json"
+    "snapshot_file": ".local/nats-sinks/metrics.json",
+    "event_freshness_enabled": true,
+    "event_stale_after_seconds": 300,
+    "event_future_skew_tolerance_seconds": 5
   }
 }
 ```
 
 ```bash
 nats-sink-metrics show .local/nats-sinks/metrics.json --format table
+nats-sink-metrics show .local/nats-sinks/metrics.json --metric "event_*" --metric "events_*"
 nats-sink-metrics get .local/nats-sinks/metrics.json messages_failed_total --default 0
 ```
 
@@ -372,6 +376,14 @@ The preferred basic metric set is:
 | `dlq_publish_errors_total` | counter | Messages whose DLQ publication failed, leaving the original message unacked. |
 | `ack_errors_total` | counter | Messages whose JetStream ACK failed after durable success. |
 | `term_errors_total` | counter | Messages whose JetStream terminal acknowledgement failed after successful DLQ publication. |
+| `event_age_at_receive_seconds` | histogram/observation | Aggregate event age when messages are received by the runner. |
+| `event_age_at_store_seconds` | histogram/observation | Aggregate event age after the sink reports durable success. |
+| `events_stale_at_receive_total` | counter | Events older than the configured stale threshold at receive time. |
+| `events_stale_at_store_total` | counter | Events older than the configured stale threshold after durable sink success. |
+| `event_creation_timestamp_missing_total` | counter | Messages without a usable publisher or JetStream creation timestamp. |
+| `event_creation_timestamp_malformed_total` | counter | Messages with malformed publisher creation timestamp headers. |
+| `event_creation_timestamp_future_total` | counter | Messages beyond the configured future-skew tolerance. |
+| `event_source_clock_skew_seconds` | histogram/observation | Positive source clock skew observed for future-dated messages. |
 | `nats_connection_disconnected_total` | counter | NATS client disconnect events observed by the runner. |
 | `nats_connection_reconnected_total` | counter | NATS client reconnect events observed by the runner. |
 | `nats_connection_closed_total` | counter | NATS client closed events observed by the runner. |

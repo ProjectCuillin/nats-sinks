@@ -1144,13 +1144,22 @@ class LoggingConfig(BaseModel):
 
 
 class MetricsConfig(BaseModel):
-    """Metrics settings."""
+    """Metrics settings.
+
+    Runtime metrics are local operational evidence by default.  Snapshot and
+    freshness settings deliberately avoid subject or source labels because those
+    values can expose mission, tenant, or topology information when exported to
+    observability systems.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     enabled: bool = False
     namespace: str = "nats_sinks"
     snapshot_file: str | None = None
+    event_freshness_enabled: bool = True
+    event_stale_after_seconds: float | None = Field(default=300.0, ge=0, le=31_536_000)
+    event_future_skew_tolerance_seconds: float = Field(default=5.0, ge=0, le=86_400)
 
     @field_validator("namespace")
     @classmethod

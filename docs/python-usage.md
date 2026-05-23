@@ -194,10 +194,15 @@ written = metrics.counters[MetricNames.MESSAGES_WRITTEN_TOTAL]
 Write a local snapshot for the standalone metrics CLI:
 
 ```python
-from nats_sinks import JsonFileMetrics, JetStreamSinkRunner
+from nats_sinks import JsonFileMetrics, JetStreamSinkRunner, MetricsConfig
 from nats_sinks.file import FileSink
 
 metrics = JsonFileMetrics(".local/nats-sinks/metrics.json", namespace="nats_sinks")
+metrics_config = MetricsConfig(
+    event_freshness_enabled=True,
+    event_stale_after_seconds=300,
+    event_future_skew_tolerance_seconds=5,
+)
 sink = FileSink(directory="/var/lib/nats-sinks/events")
 
 runner = JetStreamSinkRunner(
@@ -207,6 +212,7 @@ runner = JetStreamSinkRunner(
     subject="orders.*",
     sink=sink,
     metrics=metrics,
+    metrics_config=metrics_config,
 )
 ```
 

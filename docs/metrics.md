@@ -100,7 +100,10 @@ Add `metrics.snapshot_file` to the same JSON config used by `nats-sink run`:
   "metrics": {
     "enabled": true,
     "namespace": "nats_sinks",
-    "snapshot_file": ".local/nats-sinks/metrics.json"
+    "snapshot_file": ".local/nats-sinks/metrics.json",
+    "event_freshness_enabled": true,
+    "event_stale_after_seconds": 300,
+    "event_future_skew_tolerance_seconds": 5
   }
 }
 ```
@@ -154,6 +157,86 @@ snapshot bounded and avoids writing unbounded timing history to disk.
 The snapshot should not contain secrets or payload bodies. It can still reveal
 operational tempo, failure rates, and batch sizes, so store it in a local path
 with appropriate filesystem permissions.
+
+## Event Freshness And Staleness Metrics
+
+Event freshness metrics show how old a message was when the runner received it
+and how old it was after the sink reported durable success. This is useful when
+operators need to distinguish a healthy high-volume backlog replay from a
+fresh operational feed, or when delayed sensor or platform telemetry must be
+investigated without reading message bodies.
+
+Freshness is resolved in this order:
+
+1. A valid `Nats-Time-Stamp` header supplied by the publisher.
+2. The JetStream server timestamp exposed by `nats-py` metadata.
+3. No creation timestamp, recorded as a missing-timestamp counter.
+
+Malformed `Nats-Time-Stamp` values are counted and then fall back to the
+JetStream timestamp when one is available. Future-dated timestamps are accepted
+as observations, not rejected. The runner records positive source clock skew,
+clamps negative age observations to zero, and increments a future-timestamp
+counter when the skew exceeds `metrics.event_future_skew_tolerance_seconds`.
+
+The freshness metrics are:
+
+| Metric suffix | Type | Meaning |
+| --- | --- | --- |
+| `event_age_at_receive_seconds` | observation | Event age when the runner received the message. |
+| `event_age_at_store_seconds` | observation | Event age after the sink reported durable success. |
+| `events_stale_at_receive_total` | counter | Events older than `metrics.event_stale_after_seconds` at receive time. |
+| `events_stale_at_store_total` | counter | Events older than `metrics.event_stale_after_seconds` after durable sink success. |
+| `event_creation_timestamp_missing_total` | counter | Messages without a usable publisher or JetStream creation timestamp. |
+| `event_creation_timestamp_malformed_total` | counter | Messages with a malformed publisher timestamp header. |
+| `event_creation_timestamp_future_total` | counter | Messages beyond the configured future-skew tolerance. |
+| `event_source_clock_skew_seconds` | observation | Positive clock skew seconds for future-dated events. |
+
+These metrics are observational only. They do not change ACK behavior, do not
+reject stale events, and do not affect DLQ routing. The commit-then-acknowledge
+rule remains unchanged: the sink must report durable success before the runner
+ACKs JetStream.
+
+Example shell inspection:
+
+```bash
+nats-sink-metrics show .local/nats-sinks/metrics.json \
+  --format shell \
+  --metric "event_*" \
+  --metric "events_*"
+```
+
+Example output:
+
+```text
+EVENT_AGE_AT_RECEIVE_SECONDS_COUNT=256
+EVENT_AGE_AT_RECEIVE_SECONDS_MAX=12.428
+EVENT_AGE_AT_RECEIVE_SECONDS_SUM=972.511
+EVENT_AGE_AT_STORE_SECONDS_COUNT=256
+EVENTS_STALE_AT_RECEIVE_TOTAL=3
+EVENTS_STALE_AT_STORE_TOTAL=4
+EVENT_CREATION_TIMESTAMP_MISSING_TOTAL=0
+EVENT_CREATION_TIMESTAMP_MALFORMED_TOTAL=1
+EVENT_CREATION_TIMESTAMP_FUTURE_TOTAL=0
+```
+
+For Prometheus or OTLP export, keep freshness sharing explicitly allow-listed:
+
+```json
+{
+  "enabled": true,
+  "allowed_metric_patterns": ["event_*", "events_*"],
+  "include_observations": true,
+  "prometheus": {
+    "enabled": true
+  }
+}
+```
+
+Freshness metrics intentionally do not include labels for subject, stream,
+source system, sensor, table, sink name, or hostname. Those values can be
+sensitive and can create unbounded cardinality. Use aggregate counters first,
+then investigate individual records through approved operational tooling when a
+metric indicates delayed, missing, malformed, or skewed event timestamps.
 
 ## CLI Commands
 
@@ -882,6 +965,14 @@ The preferred metric suffixes are:
 | `size_policy_batches_passed_total` | counter | Batches with at least one message accepted by the core size policy. |
 | `size_policy_batches_rejected_total` | counter | Batches with at least one message rejected by the core size policy. |
 | `size_policy_evaluation_errors_total` | counter | Messages affected by unexpected size-policy evaluation errors. |
+| `event_age_at_receive_seconds` | observation | Event age in seconds when the runner received the message. |
+| `event_age_at_store_seconds` | observation | Event age in seconds after the sink reported durable success. |
+| `events_stale_at_receive_total` | counter | Events older than the configured stale threshold at receive time. |
+| `events_stale_at_store_total` | counter | Events older than the configured stale threshold after durable sink success. |
+| `event_creation_timestamp_missing_total` | counter | Messages without a usable publisher or JetStream creation timestamp. |
+| `event_creation_timestamp_malformed_total` | counter | Messages with a malformed publisher creation timestamp header. |
+| `event_creation_timestamp_future_total` | counter | Messages whose creation timestamp is beyond the configured future-skew tolerance. |
+| `event_source_clock_skew_seconds` | observation | Positive source clock skew seconds observed for future-dated messages. |
 | `nats_connection_disconnected_total` | counter | NATS client disconnect events observed by the runner. |
 | `nats_connection_reconnected_total` | counter | NATS client reconnect events observed by the runner. |
 | `nats_connection_closed_total` | counter | NATS client closed events observed by the runner. |

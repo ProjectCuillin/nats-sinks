@@ -23,6 +23,7 @@ import inspect
 import logging
 import time
 from collections.abc import Mapping, Sequence
+from datetime import UTC, datetime
 from typing import Any
 
 from nats_sinks.core.advisory import JetStreamAdvisoryMonitor
@@ -34,6 +35,7 @@ from nats_sinks.core.config import (
     EncryptionConfig,
     JetStreamAdvisoryConfig,
     MessageMetadataConfig,
+    MetricsConfig,
     MissionMetadataConfig,
     PreSinkPolicyConfig,
     SecurityLabelProfileConfig,
@@ -53,6 +55,7 @@ from nats_sinks.core.errors import (
     SinkError,
     TemporarySinkError,
 )
+from nats_sinks.core.freshness import record_event_freshness_metrics
 from nats_sinks.core.metrics import (
     MetricNames,
     MetricsRecorder,
@@ -107,6 +110,7 @@ class JetStreamSinkRunner:
         size_policy: SizePolicyConfig | None = None,
         pre_sink_policy: PreSinkPolicyConfig | None = None,
         metrics: MetricsRecorder | None = None,
+        metrics_config: MetricsConfig | None = None,
         nats_options: Mapping[str, Any] | None = None,
         jetstream: Any | None = None,
         nats_connection: Any | None = None,
@@ -138,6 +142,7 @@ class JetStreamSinkRunner:
         self.size_policy = size_policy or SizePolicyConfig()
         self.pre_sink_policy = pre_sink_policy or PreSinkPolicyConfig()
         self.metrics = metrics or NoopMetrics()
+        self.metrics_config = metrics_config or MetricsConfig()
         self.nats_options = dict(nats_options or {})
         self._payload_encryptor = (
             payload_encryptor
@@ -560,9 +565,18 @@ class JetStreamSinkRunner:
             return
 
         elapsed = time.perf_counter() - started
+        stored_at = datetime.now(UTC)
         observe_metric(self.metrics, MetricNames.SINK_BATCH_WRITE_SECONDS, elapsed)
         increment_metric(self.metrics, MetricNames.SINK_BATCHES_WRITTEN_TOTAL)
         increment_metric(self.metrics, MetricNames.MESSAGES_WRITTEN_TOTAL, len(envelopes))
+        record_event_freshness_metrics(
+            self.metrics,
+            envelopes,
+            stored_at=stored_at,
+            enabled=self.metrics_config.event_freshness_enabled,
+            stale_after_seconds=self.metrics_config.event_stale_after_seconds,
+            future_skew_tolerance_seconds=self.metrics_config.event_future_skew_tolerance_seconds,
+        )
         ack_started = time.perf_counter()
         await self._ack_all(raw_message_list)
         observe_metric(
