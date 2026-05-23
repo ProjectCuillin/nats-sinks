@@ -1,0 +1,27 @@
+{
+  "id": "pr-label-sync-dry-run-past-tense",
+  "title": "[Bug]: PR label sync dry-run output should not claim labels were copied",
+  "area": "CI and automation",
+  "severity": "low",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": ["release", "testing", "completed"],
+  "summary": "The pull request label synchronization helper can print copied-style summary text during dry runs, which is misleading in release evidence.",
+  "observed": "Dry-run diagnostics can say that labels were copied even when no GitHub mutation was performed.",
+  "expected": "Dry-run diagnostics should use future-tense wording such as would copy and should clearly distinguish planned operations from completed GitHub writes.",
+  "reproduction": "Run python scripts/sync-pr-labels.py --dry-run for a PR with source issue labels.",
+  "failing_test": "Add a unit test proving dry-run output uses would-copy wording and does not claim a completed mutation.",
+  "impact": "Release evidence can become ambiguous. Runtime package behavior is unaffected.",
+  "delivery_semantics": "This bug is limited to local GitHub workflow diagnostics and cannot affect message delivery semantics.",
+  "security": "The fix must keep output sanitized and should not print payloads, secrets, private endpoints, or token values.",
+  "acceptance": [
+    "Dry-run output uses would-copy wording.",
+    "Non-dry-run output uses copied wording.",
+    "Unit tests cover dry-run output.",
+    "No sensitive details are printed.",
+    "CHANGELOG.md records the bug fix."
+  ],
+  "tests": "Run python -m pytest tests/unit/test_pr_label_sync.py -q and scripts/check.sh.",
+  "documentation": "No public documentation update is required.",
+  "closeout": "Close after the bug branch merges into the release branch and release-gated closure confirms the release has shipped."
+}

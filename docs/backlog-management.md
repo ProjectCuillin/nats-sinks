@@ -396,8 +396,8 @@ published. Release automation closes managed issues at that boundary.
 Pull requests should also carry the same searchable labels as the source
 issue. `scripts/open-release-pr.sh` copies labels by default after it creates
 or refreshes the pull request. It discovers source issues from branch names
-such as `issue-123-short-name`, from `Related #123` references in the pull
-request body, and from explicit `--issue` arguments:
+such as `issue-123-short-name`, from dedicated `Related #123` lines in the
+pull request body, and from explicit `--issue` arguments:
 
 ```bash
 scripts/open-release-pr.sh \
@@ -412,6 +412,14 @@ the PR intentionally has no source issue. Label synchronization copies GitHub
 labels only. The official GitHub Issue `Priority` field is issue metadata, not
 a pull request label, so priority remains managed by the backlog and bug sync
 tooling on the issue itself.
+
+The label synchronization helper also removes stale project-managed labels from
+the pull request by default. For example, if an issue moves from
+`release-unscheduled` to `release-v0.4.1`, the PR should not keep both labels.
+Automation preserves manual labels that it does not own, such as temporary
+reviewer labels. Use `--no-remove-stale-pr-labels` only for deliberate
+repository maintenance where a stale managed label must remain visible for a
+short period.
 
 Issue, feature, and development bug pull requests use guarded non-main
 auto-approval after implementation evidence is complete and the pull request

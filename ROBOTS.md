@@ -52,11 +52,12 @@ This repository is safety-sensitive infrastructure code. Follow these rules:
   approval. Release pull requests into `main` remain manual.
 - Pull requests should carry the same searchable labels as their managed
   source issues. Use `scripts/open-release-pr.sh --issue <number>` when the
-  branch name or PR body does not make the source issue obvious. The helper
-  copies issue labels onto the PR by default and supports
-  `--no-copy-issue-labels-to-pr` only for exceptional maintenance work. Do not
-  recreate the GitHub Issue `Priority` field as a pull request label; priority
-  remains managed on the issue itself.
+  branch name or a dedicated `Related #123` PR body line does not make the
+  source issue obvious. The helper copies issue labels onto the PR by default,
+  removes stale project-managed labels while preserving manual labels, and
+  supports `--no-copy-issue-labels-to-pr` only for exceptional maintenance
+  work. Do not recreate the GitHub Issue `Priority` field as a pull request
+  label; priority remains managed on the issue itself.
 - The `Branch Pull Request` workflow is manual and token-gated. Do not
   re-enable push-triggered pull request creation unless the maintainer
   explicitly changes the release policy.

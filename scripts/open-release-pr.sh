@@ -17,6 +17,7 @@ DRAFT=true
 AUTO_APPROVE_NON_MAIN="${NATS_SINKS_AUTO_APPROVE_NON_MAIN_PR:-true}"
 AUTO_APPROVE_EXPLICIT=false
 COPY_ISSUE_LABELS="${NATS_SINKS_COPY_ISSUE_LABELS_TO_PR:-true}"
+REMOVE_STALE_PR_LABELS="${NATS_SINKS_REMOVE_STALE_PR_LABELS:-true}"
 PR_ISSUES=()
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
@@ -25,6 +26,7 @@ usage() {
   cat <<'USAGE'
 Usage: scripts/open-release-pr.sh [--repo OWNER/REPO] [--base BRANCH] [--ready]
                                   [--issue NUMBER] [--copy-issue-labels-to-pr|--no-copy-issue-labels-to-pr]
+                                  [--remove-stale-pr-labels|--no-remove-stale-pr-labels]
                                   [--auto-approve-non-main|--no-auto-approve-non-main]
 
 Run from a branch named release-*, issue-*, feature-*, bug-*, bugfix-*, or
@@ -53,6 +55,11 @@ or bug-123-..., scans Related #123 references in the PR body, and accepts
 --issue NUMBER for branches that intentionally cover one or more issues.
 Use --no-copy-issue-labels-to-pr or NATS_SINKS_COPY_ISSUE_LABELS_TO_PR=false
 to disable this behavior for an exceptional branch.
+
+Project-managed labels that are no longer present on the source issue are
+removed from the pull request by default. Use --no-remove-stale-pr-labels or
+NATS_SINKS_REMOVE_STALE_PR_LABELS=false only when intentionally preserving
+legacy labels during manual repository maintenance.
 USAGE
 }
 
@@ -80,6 +87,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --no-copy-issue-labels-to-pr)
       COPY_ISSUE_LABELS=false
+      shift
+      ;;
+    --remove-stale-pr-labels)
+      REMOVE_STALE_PR_LABELS=true
+      shift
+      ;;
+    --no-remove-stale-pr-labels)
+      REMOVE_STALE_PR_LABELS=false
       shift
       ;;
     --auto-approve-non-main)
@@ -193,6 +208,15 @@ Use a `Related #<issue-number>` line for managed issues. Release automation
 closes those issues only after the associated GitHub Release exists.
 PR_BODY
 
+if [[ ${#PR_ISSUES[@]} -gt 0 ]]; then
+  {
+    printf '\n## Related Issues\n\n'
+    for issue_number in "${PR_ISSUES[@]}"; do
+      printf -- '- Related #%s\n' "$issue_number"
+    done
+  } >>"$body_file"
+fi
+
 git push -u origin "$BRANCH"
 
 existing_pr="$(
@@ -206,11 +230,11 @@ existing_pr="$(
 )"
 
 if [[ -n "$existing_pr" ]]; then
-  if ! gh pr edit "$existing_pr" \
+  if ! gh issue edit "$existing_pr" \
     --repo "$REPO" \
     --title "$title" \
     --body-file "$body_file"; then
-    echo "Unable to refresh pull request title/body through gh pr edit." >&2
+    echo "Unable to refresh pull request title/body through gh issue edit." >&2
     echo "Continuing because the existing pull request can still be reviewed." >&2
   fi
   if [[ "$DRAFT" == "false" ]]; then
@@ -256,6 +280,9 @@ if [[ "$COPY_ISSUE_LABELS" == "true" ]]; then
     for issue_number in "${PR_ISSUES[@]}"; do
       label_command+=("--issue" "$issue_number")
     done
+  fi
+  if [[ "$REMOVE_STALE_PR_LABELS" == "false" ]]; then
+    label_command+=("--no-remove-stale")
   fi
   if ! "${label_command[@]}"; then
     echo "Unable to copy source issue labels to pull request #$pr_number." >&2

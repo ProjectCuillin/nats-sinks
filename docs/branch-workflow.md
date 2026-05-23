@@ -119,8 +119,9 @@ and the required evidence is present.
 
 Pull requests should carry the same searchable labels as the managed source
 issue. The local helper copies labels onto the PR by default. It detects issue
-numbers from branch names such as `issue-123-short-name`, from `Related #123`
-references in the pull request body, and from explicit `--issue` arguments.
+numbers from branch names such as `issue-123-short-name`, from dedicated
+`Related #123` lines in the pull request body, and from explicit `--issue`
+arguments.
 This keeps GitHub issue and PR views aligned for release labels, sink labels,
 bug labels, documentation labels, and the `completed` lifecycle label. The
 official GitHub Issue `Priority` field is not copied because it is issue-field
@@ -247,9 +248,13 @@ The label sync helper is intentionally conservative:
 
 - it copies labels only from GitHub Issues that are explicitly or safely
   detected;
+- it treats only branch names, explicit `--issue` arguments, and dedicated
+  `Related #123` lines as source issue references;
 - it validates issue and pull request numbers before calling GitHub;
 - it rejects label names containing ASCII control characters before printing or
   applying them;
+- it removes stale project-managed pull request labels by default while
+  preserving manual labels that automation does not own;
 - it does not copy secrets, payloads, subjects, or any issue-field values;
 - it leaves the official GitHub Issue `Priority` field on the issue instead of
   inventing a PR priority label.
@@ -278,7 +283,14 @@ Example output:
 
 ```text
 would add PR labels: enhancement, release-v0.4.1, completed
-Copied 3 label(s) from issue(s) #123 to PR #456.
+Would copy 3 label(s) from issue(s) #123 to PR #456.
+```
+
+If a pull request has stale project-managed labels, a dry-run also shows the
+planned removal:
+
+```text
+would remove stale PR labels: release-unscheduled
 ```
 
 Disable label synchronization only for exceptional maintenance work:
@@ -288,6 +300,15 @@ scripts/open-release-pr.sh \
   --repo ProjectCuillin/nats-sinks \
   --base release-v0.4.1 \
   --no-copy-issue-labels-to-pr
+```
+
+Disable stale-label removal only during deliberate repository maintenance:
+
+```bash
+scripts/open-release-pr.sh \
+  --repo ProjectCuillin/nats-sinks \
+  --base release-v0.4.1 \
+  --no-remove-stale-pr-labels
 ```
 
 The repository also includes a manual `.github/workflows/auto-pr.yml` workflow

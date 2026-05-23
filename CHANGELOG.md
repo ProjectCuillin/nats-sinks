@@ -223,6 +223,20 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 - Fixed pull request label source detection so Markdown inline code spans and
   fenced code blocks do not turn instructional placeholders such as
   `Related #123` into real source issues.
+- Fixed pull request label source detection so ordinary body references such
+  as `See #123` are not treated as source issues; only branch names, explicit
+  `--issue` arguments, and dedicated `Related #123` lines are used.
+- Fixed `scripts/open-release-pr.sh --issue` so explicit issue numbers are
+  rendered into a `Related Issues` section in the pull request body, keeping
+  issue linkage visible even when it cannot be inferred from the branch name.
+- Fixed pull request label sync dry-run output so it reports "Would copy"
+  instead of implying labels were already copied.
+- Fixed malformed GitHub CLI JSON handling in pull request label sync so the
+  helper raises a controlled workflow error instead of leaking a raw JSON
+  decoding traceback.
+- Fixed stale project-managed pull request labels so old release, severity,
+  sink, lifecycle, and workflow labels are removed when the source issue no
+  longer carries them, while manual reviewer labels are preserved.
 - Fixed metadata trust-boundary validation so message metadata headers,
   configured priority/classification defaults, configured labels, mission
   metadata profile allow lists, and security-label vocabularies reject ASCII
