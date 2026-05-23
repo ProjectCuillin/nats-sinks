@@ -76,6 +76,9 @@ release, and closed only after the containing release is published.
   `SinkRegistry` resolution, first-party Oracle and FileSink descriptors, and
   disabled-by-default allow-listed entry-point discovery for reviewed external
   connectors.
+- Encrypted edge spool-and-forward sink for disconnected operation, with
+  bounded local custody, deterministic duplicate handling, priority-aware
+  replay, and explicit forwarding into a final destination sink.
 - Documented sink certification contract with reusable test helpers for
   lifecycle, durable write success, duplicate redelivery, ACK-boundary
   protection, and log-redaction checks across current and future production
@@ -91,6 +94,10 @@ release, and closed only after the containing release is published.
   bounded low-sensitivity consumer metadata.
 - Least-privilege NATS permissions templates for runtime workers, DLQ publish
   rights, optional consumer management, and advisory readers.
+- Offline JetStream stream-management planning helper for retention, discard,
+  storage, replicas, duplicate-window, and runtime-versus-administration
+  permission review without granting the sink worker broad stream-management
+  authority.
 - Advanced JetStream topology guidance for mirrors, sources, subject
   transforms, republish behavior, stream compression, placement, metadata, and
   idempotency review.
@@ -150,12 +157,24 @@ release, and closed only after the containing release is published.
   TLS verification, and least-privilege account guidance.
 - Oracle Berkeley DB, Oracle NoSQL Database, and OCI Streaming sink evaluations
   as first-party Oracle-family connector candidates.
+- GoldenGate-inspired sink candidate tracking for additional Oracle-family
+  connector opportunities such as Oracle Autonomous AI Lakehouse, Oracle AI
+  Data Platform, Oracle JSON document stores, OCI Cache Cluster, WebLogic JMS,
+  Oracle TimesTen, Oracle Spatial and Graph profiles, Oracle application
+  connector families, and OCI PostgreSQL profile decisions.
 - Palantir Foundry and Palantir Gotham sink evaluations with local fake-client
   or contract-harness testing before any live certification claim.
 - Elasticsearch or OpenSearch, Snowflake, BigQuery, Azure object storage,
   Kafka, MongoDB, Redis, and Cassandra-compatible sink evaluations at low
   priority so the project can learn from common Kafka-style connector patterns
   without prematurely broadening the production surface.
+- Additional external connector evaluations informed by GoldenGate target
+  coverage, including AWS streaming and warehouse targets, Azure Event Hubs and
+  Microsoft Fabric, Google Cloud Storage and Pub/Sub, Databricks, Apache
+  Iceberg and Hadoop ecosystem targets, JMS, JDBC, SQL Server, Db2, SAP HANA,
+  specialty warehouses, distributed SQL systems, legacy database families,
+  Solace, managed Kafka compatibility profiles, Cosmos DB profiles, and
+  MariaDB.
 - HTTP sink.
 - Docker image.
 - Optional dedicated secret-manager connectors for encryption keys when a
@@ -203,8 +222,6 @@ release, and closed only after the containing release is published.
   consumers rather than ordered inspection consumers.
 - Payload-presence metadata and sink certification for headers-only
   metadata-only workflows.
-- Stream management helpers for retention, discard, storage, replicas, and
-  duplicate-window documentation.
 - Stream mirror, source, subject transform, republish, compression, placement,
   and metadata management helpers beyond the current documentation guidance.
 - Sink certification tests for future HTTP, S3, Kafka, and other active sink

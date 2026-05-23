@@ -129,8 +129,11 @@ The current release provides the following production-ready foundation:
   file placement, deterministic filenames, duplicate handling, optional gzip
   compression, metadata persistence, and the same payload normalization contract
   used by Oracle.
-- A safe sink connector framework with first-party Oracle and file connector
-  descriptors, explicit registry resolution, public connector metadata, and
+- `nats_sinks.spool.SpoolSink`, a production-oriented encrypted edge spool sink
+  for disconnected operation, bounded local custody, deterministic idempotency,
+  priority-aware replay, and forwarding into a final destination sink.
+- A safe sink connector framework with first-party Oracle, file, and spool
+  connector descriptors, explicit registry resolution, public connector metadata, and
   disabled-by-default allow-listed entry-point discovery for reviewed external
   connectors.
 - Tests and documentation for the commit-then-acknowledge invariant across the
@@ -150,9 +153,10 @@ metadata for routing and audit.
 | --- | --- | --- | --- |
 | Oracle Database | `from nats_sinks.oracle import OracleSink` | Persist JetStream messages into Oracle tables with idempotent writes. | Oracle transaction committed. |
 | Local files | `from nats_sinks.file import FileSink` | Write one JSON or gzip-compressed JSON document per message for local handoff, audit, development, or simple archival flows. | Final file atomically placed after flush and optional `fsync`. |
+| Edge spool | `from nats_sinks.spool import SpoolSink` | Commit encrypted local custody during disconnected operation, then replay later to Oracle, file, or another sink. | Encrypted spool record atomically placed after flush and optional `fsync`. |
 
-Both sinks follow the same framework rule: the sink writes durably and returns
-success; the core runner ACKs JetStream messages afterward.
+All built-in sinks follow the same framework rule: the sink writes durably and
+returns success; the core runner ACKs JetStream messages afterward.
 
 ## High-Level Flow
 
@@ -206,6 +210,10 @@ operations without hunting through a long flat list.
   and reconnect behavior.
 - [NATS Least-Privilege Permissions](nats-permissions.md): prepare runtime,
   DLQ, management, and advisory-reader accounts.
+- [JetStream Stream Management Planning](stream-management.md): generate
+  offline retention, discard, storage, replica, duplicate-window, and
+  permission-review guidance without giving the sink worker stream-admin
+  authority.
 - [Advanced JetStream Topology](jetstream-topology.md): review mirrors, sources,
   transforms, republish behavior, placement, compression, metadata, and
   idempotency implications.
@@ -221,6 +229,8 @@ operations without hunting through a long flat list.
   merge mode, metadata columns, Autonomous Database, and transactions.
 - [File Sink](file-sink.md): atomic local files, deterministic filenames,
   duplicate handling, gzip compression, and handoff patterns.
+- [Edge Spool Sink](spool-sink.md): encrypted local custody for disconnected
+  operation and controlled replay into a final destination sink.
 
 ### Data Handling
 

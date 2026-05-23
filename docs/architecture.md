@@ -136,6 +136,35 @@ architecture.
 See [Advanced JetStream Topology](jetstream-topology.md) for the detailed
 operator guidance.
 
+## Stream Administration Boundary
+
+The core runner is not a stream administration engine. It may bind to or
+prepare its configured durable pull consumer according to
+`consumer_management.mode`, but broad stream creation, stream update, stream
+retention policy, discard policy, storage type, replica count, and duplicate
+window choices remain NATS control-plane decisions.
+
+The optional `nats-sink stream-plan` command lives on the safe side of this
+boundary. It reads local JSON configuration and generates an offline plan that
+operators can review, but it does not connect to NATS and does not mutate
+stream state.
+
+```mermaid
+flowchart LR
+    Config[Runtime JSON config] --> Plan[nats-sink stream-plan]
+    Plan --> Review[Operator review]
+    Review --> Admin[Separate NATS admin identity]
+    Admin --> Stream[Create or update JetStream stream]
+    Stream --> Consumer[Durable pull consumer]
+    Consumer --> Runner[JetStreamSinkRunner]
+    Runner --> Sink[Destination sink]
+```
+
+This split keeps elevated stream-management permissions out of the ordinary
+sink worker. It also prevents stream planning from becoming a hidden runtime
+side effect that could change retention or replay behavior during message
+processing. See [JetStream Stream Management Planning](stream-management.md).
+
 ## Durable Consumer Management
 
 Before a runner fetches messages, it can now explicitly check the configured

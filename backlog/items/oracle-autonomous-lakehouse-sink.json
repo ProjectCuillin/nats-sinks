@@ -1,0 +1,23 @@
+{
+  "id": "oracle-autonomous-lakehouse-sink",
+  "title": "[Feature]: Evaluate an Oracle Autonomous AI Lakehouse sink",
+  "area": "Future sink",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "sink-oracle", "security", "testing"],
+  "problem": "Oracle GoldenGate lists Oracle Autonomous AI Lakehouse as a target-capable Oracle platform. nats-sinks currently has an Oracle Database sink, but it does not yet define whether Autonomous AI Lakehouse should be handled through the existing OracleSink contract or through a dedicated Oracle-family sink profile.",
+  "proposal": "Research and define a first-party Oracle Autonomous AI Lakehouse sink or profile. The work should determine whether the existing Oracle Database connection, transaction, and idempotency model is sufficient, or whether lakehouse-specific write patterns, object/table layout, staging, schema evolution, or Oracle AI Data Platform integration require a dedicated connector. The feature request must preserve commit-then-acknowledge behavior, support deterministic idempotency, and explain how mission metadata, labels, classification, and encrypted payload envelopes are represented.",
+  "users": "Oracle Cloud architects, data platform teams, lakehouse operators, and mission-support teams that want to persist NATS JetStream events into Oracle lakehouse environments without weakening event custody.",
+  "delivery_semantics": "The sink or profile may return success only after the lakehouse write, staging transaction, or accepted durable handoff has completed according to the documented Oracle service boundary. Duplicate redelivery must be safe and testable.",
+  "security": "Authentication must use Oracle-supported secure runtime credentials or workload identity where available. Payloads, metadata, object locations, table names, and service identifiers must not be logged by default. Least-privilege IAM and database grants must be documented before implementation.",
+  "acceptance": [
+    "Research identifies whether a dedicated sink or OracleSink profile is the correct design.",
+    "The selected design documents durable commit boundaries, idempotency keys, and duplicate handling.",
+    "Configuration remains explicit, fail-closed, and compatible with existing core encryption and metadata handling.",
+    "Unit tests use mocks and perform no network calls.",
+    "Documentation explains limitations and avoids claiming exactly-once delivery."
+  ],
+  "tests": "Add design-level tests for config validation and idempotency planning. If implemented, add unit tests with mocked Oracle clients and optional live tests gated behind ignored local configuration.",
+  "documentation": "Add a dedicated Oracle lakehouse section or page under the sink documentation tree. Update README.md, docs/sink-framework.md, docs/configuration.md, docs/security.md, docs/idempotency.md, ROADMAP.md, docs/roadmap.md, and CHANGELOG.md.",
+  "closeout": "Close only after the research or implementation release is published. Include release tag, design decision, tests run, and known limitations."
+}

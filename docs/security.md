@@ -63,8 +63,8 @@ treated as a supply-chain trust decision.
 
 Secure defaults:
 
-- Oracle Database and FileSink are first-party built-in connectors and do not
-  require plugin discovery.
+- Oracle Database, FileSink, and SpoolSink are first-party built-in connectors
+  and do not require plugin discovery.
 - Optional third-party discovery is disabled by default.
 - When discovery is enabled, `plugins.allowed_sinks` must explicitly list each
   external connector name.
@@ -144,6 +144,11 @@ Use this baseline for code review and future releases:
   disabled by default, subscribes only to configured advisory subjects, parses
   bounded JSON payloads, and emits aggregate counters without exporting stream
   names, consumer names, sequence numbers, or advisory payload bodies.
+- Treat local spool directories as protected custody locations. Spool records
+  are encrypted by default, but operators must still restrict filesystem
+  permissions, exclude spool paths from source control, monitor disk usage,
+  rotate keys with care, and avoid exposing directory listings because wrapper
+  metadata can still reveal record counts and rough priority ordering.
 - Prefer least privilege for NATS accounts, Oracle users, service accounts,
   CI jobs, containers, cloud identities, filesystems, and documentation
   examples.
@@ -414,6 +419,16 @@ separate administrative identity creating or updating consumers. If
 consumer-management permissions required for the configured stream and durable
 consumer. Do not give the sink worker account broad stream-management or
 account-management authority.
+
+Stream creation and retention planning are separate administrative concerns.
+The `nats-sink stream-plan` helper is safe to run with ordinary local access
+because it is offline: it does not connect to NATS, does not resolve
+credentials, and does not mutate streams. Treat its output as a review artifact
+for a separate NATS administrator or platform automation identity. That
+administrative identity may need permissions such as
+`$JS.API.STREAM.CREATE.<STREAM>` or `$JS.API.STREAM.UPDATE.<STREAM>`, but the
+long-running sink worker should not receive those grants by default. See
+[JetStream Stream Management Planning](stream-management.md).
 
 Richer consumer policy fields are also security-relevant. Multiple
 `filter_subjects` can widen what the worker receives, so nats-sinks requires

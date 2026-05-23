@@ -1,0 +1,23 @@
+{
+  "id": "oracle-weblogic-jms-sink",
+  "title": "[Feature]: Evaluate an Oracle WebLogic JMS sink",
+  "area": "Future sink",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "sink-oracle", "security", "testing"],
+  "problem": "OCI GoldenGate lists Oracle WebLogic JMS as a Big Data connection. nats-sinks does not yet define how events should be written into Oracle WebLogic JMS or how that differs from a future generic JMS sink.",
+  "proposal": "Research a first-party Oracle WebLogic JMS sink profile and a relationship to a generic JMS sink. The design should cover JNDI configuration, TLS, authentication, message properties, payload envelope format, idempotency limitations, persistent delivery mode, transactions, acknowledgements, and durable handoff semantics.",
+  "users": "Oracle WebLogic operators, integration teams, and application owners who need NATS JetStream events delivered into existing JMS estates.",
+  "delivery_semantics": "ACK-gated success requires persistent JMS delivery and a documented transaction or send-commit boundary. Non-persistent or best-effort JMS modes must be disabled by default or clearly marked unsafe for durable processing.",
+  "security": "Credentials, JNDI endpoints, queue names, and payloads must be redacted. TLS verification must be enabled by default. Queue and topic names must be allow-listed and bounded.",
+  "acceptance": [
+    "Research identifies supported Python/JMS bridge options and their operational cost.",
+    "The design documents durable send semantics and duplicate-handling limits.",
+    "Persistent delivery is the secure default.",
+    "Unit tests use fakes and do not require WebLogic.",
+    "Documentation explains the relationship with a future generic JMS connector."
+  ],
+  "tests": "Add fake JMS client contract tests, config validation tests, and optional integration guidance for a controlled WebLogic environment.",
+  "documentation": "Add Oracle WebLogic JMS sink research documentation and update sink framework and roadmap pages.",
+  "closeout": "Close after the research or implementation release is published."
+}

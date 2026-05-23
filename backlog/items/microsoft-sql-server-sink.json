@@ -1,0 +1,23 @@
+{
+  "id": "microsoft-sql-server-sink",
+  "title": "[Feature]: Evaluate a Microsoft SQL Server sink",
+  "area": "Future sink",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "security", "testing"],
+  "problem": "OCI GoldenGate supports Microsoft SQL Server, Azure SQL Database, Azure SQL Managed Instance, Amazon RDS for SQL Server, and Google Cloud SQL for SQL Server. nats-sinks does not yet have a SQL Server sink.",
+  "proposal": "Research a SQL Server sink using a maintained Python driver with parameterized SQL, connection pooling, explicit transactions, `MERGE` or upsert alternatives, insert-ignore style duplicate handling where safe, and strict identifier validation. The design should cover cloud-hosted SQL Server variants without creating separate connectors for every hosting provider.",
+  "users": "Microsoft data platform operators and cross-cloud teams that need NATS events stored in SQL Server-compatible databases.",
+  "delivery_semantics": "Success may be returned only after the SQL Server transaction commits. Redelivery must be idempotent through unique constraints and safe upsert or duplicate-ignore modes.",
+  "security": "Connection strings, credentials, table names, query fragments, and payloads must be redacted. TLS verification, bind parameters, and least-privilege grants are mandatory.",
+  "acceptance": [
+    "Research selects a supported Python driver and async strategy.",
+    "The design documents idempotent insert and merge behavior.",
+    "Identifier validation and parameter binding are mandatory.",
+    "Unit tests use fakes and do not require SQL Server.",
+    "Documentation covers Azure SQL and managed SQL Server variants."
+  ],
+  "tests": "Add SQL generation tests, driver fake tests, error classification tests, and optional gated SQL Server integration tests.",
+  "documentation": "Add SQL Server sink documentation if accepted and update roadmap.",
+  "closeout": "Close after release of the research or implementation."
+}

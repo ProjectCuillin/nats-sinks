@@ -32,11 +32,17 @@ from nats_sinks.core.errors import ConfigurationError, NatsSinksError
 from nats_sinks.core.logging import configure_logging
 from nats_sinks.core.metrics import JsonFileMetrics, MetricsRecorder
 from nats_sinks.core.runner import JetStreamSinkRunner
+from nats_sinks.core.stream_management import (
+    StreamManagementOptions,
+    StreamManagementPlan,
+    build_stream_management_plan,
+)
 from nats_sinks.file import FileSink
 from nats_sinks.oracle import OracleSink
 from nats_sinks.sinks.base import HealthCheckableSink, Sink
 from nats_sinks.sinks.connectors import SinkConnector, load_entry_point_connectors
 from nats_sinks.sinks.registry import SinkRegistry
+from nats_sinks.spool import SpoolSink, replay_spool_to_sink
 
 app = typer.Typer(help="Run NATS JetStream sink connectors.")
 
@@ -79,6 +85,18 @@ def _registry(plugins: SinkPluginConfig | None = None) -> SinkRegistry:
             requires_extra="oracle",
             documentation="docs/oracle-sink.md",
             certification=("commit-then-ack", "unit", "integration", "live-e2e"),
+        )
+    )
+    registry.register_connector(
+        SinkConnector(
+            name="spool",
+            factory=SpoolSink.from_mapping,
+            summary="Built-in encrypted local edge spool sink.",
+            built_in=True,
+            production_ready=True,
+            requires_extra="crypto",
+            documentation="docs/spool-sink.md",
+            certification=("commit-then-ack", "unit", "replay"),
         )
     )
     if plugins is not None and plugins.enabled:
@@ -124,6 +142,43 @@ def _attach_metrics_to_sink(sink: Sink, metrics: MetricsRecorder | None) -> None
 
 def _print_redacted(config: AppConfig) -> None:
     typer.echo(json.dumps(redacted_config(config), indent=2, sort_keys=False))
+
+
+def _print_stream_plan_text(plan: StreamManagementPlan) -> None:
+    """Render a stream management plan for human terminal review.
+
+    The text intentionally contains stream and subject names because the command
+    is an operator-facing local helper.  It never prints credentials, server
+    URLs, IP addresses, payloads, or certificate material.
+    """
+
+    typer.echo("JetStream stream management plan")
+    typer.echo(f"Stream: {plan.stream}")
+    typer.echo(f"Durable consumer: {plan.durable_consumer}")
+    typer.echo("Subjects:")
+    for subject in plan.subjects:
+        typer.echo(f"  - {subject}")
+    typer.echo("Recommended stream settings:")
+    typer.echo(f"  retention: {plan.settings.retention}")
+    typer.echo(f"  discard: {plan.settings.discard}")
+    typer.echo(f"  storage: {plan.settings.storage}")
+    typer.echo(f"  replicas: {plan.settings.replicas}")
+    typer.echo(f"  duplicate_window_seconds: {plan.settings.duplicate_window_seconds}")
+    typer.echo("Runtime permissions to keep narrow:")
+    for permission in plan.runtime_permissions:
+        typer.echo(f"  - {permission}")
+    typer.echo("Administrative permissions for a separate setup identity:")
+    for permission in plan.administration_permissions:
+        typer.echo(f"  - {permission}")
+    typer.echo("NATS CLI example:")
+    typer.echo(f"  {plan.nats_cli_example}")
+    typer.echo("Notes:")
+    for note in plan.notes:
+        typer.echo(f"  - {note}")
+    if plan.warnings:
+        typer.echo("Warnings:")
+        for warning in plan.warnings:
+            typer.echo(f"  - {warning}")
 
 
 def _nats_options(config: AppConfig) -> dict[str, Any]:
@@ -252,6 +307,73 @@ def show_effective_config(
     _print_redacted(loaded)
 
 
+@app.command("stream-plan")
+def stream_plan(
+    config: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    retention: Annotated[
+        str,
+        typer.Option(
+            "--retention",
+            help="Planned stream retention policy: limits, interest, or workqueue.",
+        ),
+    ] = "limits",
+    discard: Annotated[
+        str,
+        typer.Option("--discard", help="Planned stream discard policy: old or new."),
+    ] = "old",
+    storage: Annotated[
+        str,
+        typer.Option("--storage", help="Planned stream storage type: file or memory."),
+    ] = "file",
+    replicas: Annotated[
+        int,
+        typer.Option("--replicas", help="Planned stream replica count, from 1 to 5."),
+    ] = 1,
+    duplicate_window_seconds: Annotated[
+        int,
+        typer.Option(
+            "--duplicate-window-seconds",
+            help="Planned JetStream duplicate detection window in seconds.",
+        ),
+    ] = 120,
+    output_format: Annotated[
+        str,
+        typer.Option("--format", help="Output format: text or json."),
+    ] = "text",
+) -> None:
+    """Generate an offline JetStream stream-management plan.
+
+    This command is intentionally separate from `nats-sink run`. It does not
+    connect to NATS, does not create streams, does not update consumers, and
+    does not require administrative credentials. Operators can use the output as
+    a review artifact before applying changes with their approved NATS
+    administration process.
+    """
+
+    loaded = _load_or_exit(config)
+    try:
+        options = StreamManagementOptions(
+            retention=retention,
+            discard=discard,
+            storage=storage,
+            replicas=replicas,
+            duplicate_window_seconds=duplicate_window_seconds,
+        )
+        plan = build_stream_management_plan(loaded, options)
+    except NatsSinksError as exc:
+        typer.echo(f"Configuration error: {exc}", err=True)
+        raise typer.Exit(2) from exc
+
+    normalized_format = output_format.strip().casefold()
+    if normalized_format == "json":
+        typer.echo(json.dumps(plan.to_dict(), indent=2, sort_keys=False))
+    elif normalized_format == "text":
+        _print_stream_plan_text(plan)
+    else:
+        typer.echo("Configuration error: --format must be text or json", err=True)
+        raise typer.Exit(2)
+
+
 @app.command()
 def run(
     config: Annotated[Path, typer.Argument(exists=True, readable=True)],
@@ -342,3 +464,75 @@ def test_sink(
         typer.echo(f"Unexpected sink test failure: {type(exc).__name__}", err=True)
         raise typer.Exit(1) from exc
     typer.echo("Sink test succeeded.")
+
+
+@app.command("replay-spool")
+def replay_spool(
+    spool_config: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    target_config: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    max_records: Annotated[
+        int | None,
+        typer.Option(
+            "--max-records",
+            help="Maximum committed spool records to replay during this invocation.",
+        ),
+    ] = None,
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
+) -> None:
+    """Replay committed spool records into a configured target sink.
+
+    Both arguments are normal nats-sinks JSON configuration files.  The first
+    must select `sink.type: "spool"` and points at the local spool directory.
+    The second selects the final destination sink, such as `file` or `oracle`.
+    Replay never ACKs JetStream messages because the original ACK boundary was
+    the local spool commit performed by `nats-sink run`.
+    """
+
+    if max_records is not None and max_records < 1:
+        typer.echo("Configuration error: --max-records must be greater than zero", err=True)
+        raise typer.Exit(2)
+
+    loaded_spool = _load_or_exit(spool_config)
+    loaded_target = _load_or_exit(target_config)
+    spool_sink = _build_sink(loaded_spool)
+    target_sink = _build_sink(loaded_target)
+    if not isinstance(spool_sink, SpoolSink):
+        typer.echo("Configuration error: first config must use sink.type 'spool'", err=True)
+        raise typer.Exit(2)
+    if isinstance(target_sink, SpoolSink):
+        typer.echo("Configuration error: target config must not use sink.type 'spool'", err=True)
+        raise typer.Exit(2)
+
+    async def _replay() -> None:
+        await spool_sink.start()
+        if dry_run:
+            entries = await asyncio.to_thread(spool_sink.committed_entries)
+            limited = entries if max_records is None else entries[:max_records]
+            typer.echo(f"Dry run complete; {len(limited)} committed spool record(s) eligible.")
+            return
+
+        await target_sink.start()
+        try:
+            result = await replay_spool_to_sink(
+                spool_sink,
+                target_sink,
+                max_records=max_records,
+            )
+        finally:
+            await target_sink.stop()
+        typer.echo(
+            "Replay complete: "
+            f"scanned={result.scanned_records} "
+            f"replayed={result.replayed_records} "
+            f"deleted={result.deleted_records} "
+            f"failed={result.failed_records}"
+        )
+
+    try:
+        asyncio.run(_replay())
+    except NatsSinksError as exc:
+        typer.echo(f"Replay failed: {exc}", err=True)
+        raise typer.Exit(1) from exc
+    except Exception as exc:
+        typer.echo(f"Unexpected replay failure: {type(exc).__name__}", err=True)
+        raise typer.Exit(1) from exc

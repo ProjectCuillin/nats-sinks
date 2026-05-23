@@ -29,6 +29,7 @@ nav:
   - NATS:
       - Connections: nats-connections.md
       - Permissions: nats-permissions.md
+      - Stream Management Planning: stream-management.md
       - JetStream Topology: jetstream-topology.md
       - WebSocket Connection Evaluation: websocket-connection-evaluation.md
       - Acknowledgement Confirmation Evaluation: acknowledgement-confirmation.md
@@ -40,6 +41,8 @@ nav:
   - Sinks:
       - Oracle Sink: oracle-sink.md
       - File Sink: file-sink.md
+      - Edge Spool Sink: spool-sink.md
+      - GoldenGate-Inspired Sink Candidates: goldengate-sink-candidate-research.md
   - Data Handling:
       - Payload Encryption: payload-encryption.md
       - Tamper-Evident Custody: tamper-evident-custody.md

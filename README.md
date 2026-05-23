@@ -99,8 +99,12 @@ used immediately:
   filenames, atomic temporary-file placement, optional `fsync`, duplicate
   handling, optional Python standard-library gzip compression, metadata
   persistence, and the same payload normalization contract used by Oracle.
-- A safe sink connector framework with first-party Oracle and file connectors,
-  stable `SinkConnector` metadata, explicit `SinkRegistry` resolution, and
+- `nats_sinks.spool.SpoolSink`, the production-oriented encrypted edge spool
+  sink for disconnected operation, bounded local custody, deterministic
+  idempotency, priority-aware replay, and explicit replay into a final
+  destination sink when connectivity returns.
+- A safe sink connector framework with first-party Oracle, file, and spool
+  connectors, stable `SinkConnector` metadata, explicit `SinkRegistry` resolution, and
   disabled-by-default allow-listed entry-point discovery for reviewed external
   connectors.
 - Basic metrics counters and timing observations for fetched, prepared,
@@ -178,6 +182,7 @@ Production sink modules shipped today:
 
 - `nats_sinks.oracle`
 - `nats_sinks.file`
+- `nats_sinks.spool`
 
 ## Status
 
@@ -192,6 +197,7 @@ Included today:
 - Oracle sink with idempotent production modes.
 - File sink with atomic local JSON file writes and deterministic duplicate
   handling.
+- Edge spool sink with encrypted local records and replay into a final sink.
 - Optional AES-256-GCM and AES-256-CCM payload encryption in the core runner.
 - Multi-key payload decryption helper for controlled key-rotation, replay, and
   verification workflows.
@@ -653,6 +659,12 @@ success, and publish to the configured DLQ subject only when DLQ is enabled.
 See [NATS Least-Privilege Permissions](https://nats-sinks.readthedocs.io/en/latest/nats-permissions/) for
 templates and validation checklists.
 
+For stream setup review, `nats-sink stream-plan` can generate an offline
+JetStream planning report for retention, discard policy, storage, replicas,
+duplicate-window settings, and runtime versus administration permissions. It
+does not connect to NATS or modify stream state. See
+[JetStream Stream Management Planning](https://nats-sinks.readthedocs.io/en/latest/stream-management/).
+
 ## CLI
 
 ```bash
@@ -661,6 +673,7 @@ nats-sink validate examples/file-basic/config.json
 nats-sink test-sink examples/file-basic/config.json
 nats-sink validate examples/oracle-jetstream/config.json
 nats-sink show-effective-config examples/oracle-jetstream/config.json
+nats-sink stream-plan examples/oracle-jetstream/config.json
 nats-sink test-sink examples/oracle-jetstream/config.json
 nats-sink run examples/oracle-jetstream/config.json
 nats-sink-metrics show .local/nats-sinks/metrics.json --format table
@@ -754,15 +767,19 @@ Destination-specific details are split into dedicated pages:
   local file output, atomic write behavior, deterministic file names, duplicate
   policies, gzip compression, filesystem safety, and file-specific performance
   guidance.
+- [Edge Spool Sink](https://nats-sinks.readthedocs.io/en/latest/spool-sink/)
+  covers encrypted local custody for disconnected operation, bounded spool
+  directories, deterministic duplicate handling, priority-aware replay, and
+  forwarding into a final destination sink.
 
 The generic sink framework is documented separately in
 [Sink Framework](https://nats-sinks.readthedocs.io/en/latest/sink-framework/)
 and the reusable release gate is documented in
 [Sink Certification](https://nats-sinks.readthedocs.io/en/latest/sink-certification/).
-That boundary is deliberate: Oracle and file sinks use the same core delivery
-semantics, the same envelope contract, and the same commit-then-acknowledge
-rule. Future sinks must provide comparable certification evidence before they
-are described as production-ready.
+That boundary is deliberate: Oracle, file, and spool sinks use the same core
+delivery semantics, the same envelope contract, and the same
+commit-then-acknowledge rule. Future sinks must provide comparable
+certification evidence before they are described as production-ready.
 
 Generic data-handling features such as
 [payload encryption](https://nats-sinks.readthedocs.io/en/latest/payload-encryption/),
@@ -955,6 +972,8 @@ Phase 1:
   references.
 - Least-privilege NATS permissions templates for runtime workers, DLQ publish
   rights, optional consumer management, and advisory readers.
+- Offline JetStream stream-management planning helper for retention, discard,
+  storage, replicas, duplicate-window, and permission review.
 - Advanced JetStream topology guidance for mirrors, sources, subject
   transforms, republish behavior, stream compression, placement, metadata, and
   idempotency review.

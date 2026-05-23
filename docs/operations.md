@@ -107,6 +107,37 @@ features are managed outside `nats-sinks`, but they can change the subject,
 stream sequence, replay path, and operator context that the worker observes.
 See [Advanced JetStream Topology](jetstream-topology.md).
 
+## Stream Management Planning
+
+`nats-sinks` includes an offline stream-planning helper for operators who need
+to prepare JetStream streams before a worker starts:
+
+```bash
+nats-sink stream-plan /etc/nats-sinks/config.json \
+  --retention limits \
+  --discard old \
+  --storage file \
+  --replicas 3 \
+  --duplicate-window-seconds 600
+```
+
+The command reads the same JSON configuration as the runtime, but it does not
+connect to NATS and does not mutate stream or consumer state. It prints the
+configured stream, subject set, durable consumer, recommended stream settings,
+runtime permission subjects, administration permission subjects, warnings, and
+a NATS CLI example for review.
+
+Use this helper during deployment preparation, not inside the long-running sink
+service. Stream creation and updates should be handled by a separate
+administrative identity or platform automation. The runtime identity should
+keep only the permissions needed to fetch from its durable pull consumer, ACK
+messages after durable success, receive inbox responses, and publish to the
+configured DLQ subject when enabled.
+
+See [JetStream Stream Management Planning](stream-management.md) for detailed
+guidance on retention policies, discard behavior, storage, replicas,
+duplicate-window sizing, and permission separation.
+
 ## Runtime Lifecycle
 
 ```mermaid
@@ -127,6 +158,37 @@ stateDiagram-v2
     Shutdown --> StopSink
     StopSink --> [*]
 ```
+
+## Disconnected Edge Spooling
+
+The [Edge Spool Sink](spool-sink.md) can be used when a node must keep local
+custody of messages during disconnected or degraded operation. In that mode,
+the durable success boundary is the encrypted local spool record, not the final
+remote database or object store. The runner ACKs JetStream only after the spool
+record is atomically committed.
+
+```mermaid
+flowchart LR
+    JS[JetStream] --> R[nats-sinks runner]
+    R --> S[Encrypted local spool]
+    S --> ACK[ACK after local commit]
+    S -. later replay .-> O[Oracle, file, or future sink]
+```
+
+Use this deliberately. Local spool directories need capacity monitoring,
+restricted permissions, backup and retention decisions, and an operator replay
+procedure. If the spool reaches its configured record or byte limit, writes
+fail closed and the runner does not ACK affected JetStream messages.
+
+Replay is an explicit operator action:
+
+```bash
+nats-sink replay-spool /etc/nats-sinks/spool.json /etc/nats-sinks/oracle.json --max-records 100
+```
+
+That command reconstructs the original `NatsEnvelope` from encrypted local
+custody and calls the target sink. Spool files are deleted only after the
+target sink returns success and `delete_after_replay` is enabled.
 
 ## Logging
 

@@ -1,0 +1,23 @@
+{
+  "id": "azure-synapse-fabric-sink",
+  "title": "[Feature]: Evaluate Azure Synapse and Microsoft Fabric sinks",
+  "area": "Future sink",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "security", "testing"],
+  "problem": "Oracle GoldenGate lists Azure Synapse Analytics, Microsoft Fabric Eventstream, Fabric Lakehouse, and Fabric Mirror targets. nats-sinks does not yet have a Microsoft analytics-platform sink strategy.",
+  "proposal": "Research whether Synapse and Microsoft Fabric should be separate sinks, shared analytics-lakehouse profiles, or built on Azure Data Lake/Event Hubs primitives. The design should cover staging files, SQL pools, lakehouse tables, eventstream ingestion, commit boundaries, idempotency keys, and Microsoft identity integration.",
+  "users": "Microsoft analytics teams, cross-cloud data engineers, and operators who need auditable NATS event handoff into Synapse or Fabric.",
+  "delivery_semantics": "ACK-gated success requires a documented durable acceptance boundary, such as committed table rows, accepted eventstream messages, or durable staged files plus ingestion confirmation.",
+  "security": "Use managed identity where possible. Redact tenant IDs, workspace names, connection strings, SAS tokens, table names, and payloads. Document least privilege for storage, warehouse, and eventstream paths.",
+  "acceptance": [
+    "Research separates Synapse, Fabric Eventstream, Fabric Lakehouse, and Fabric Mirror use cases.",
+    "The design chooses dedicated sinks or shared Azure analytics profiles.",
+    "Idempotency and duplicate handling are specified for each path.",
+    "Unit tests use fakes and no live Azure calls.",
+    "Documentation explains what is and is not durable enough for ACK gating."
+  ],
+  "tests": "Research-only initially. Future implementation needs mocked SDK tests and gated live tests for the selected platform.",
+  "documentation": "Add Microsoft analytics sink research under future sink docs and update roadmap.",
+  "closeout": "Close after the research decision or implementation is released."
+}

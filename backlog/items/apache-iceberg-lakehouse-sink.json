@@ -1,0 +1,23 @@
+{
+  "id": "apache-iceberg-lakehouse-sink",
+  "title": "[Feature]: Evaluate an Apache Iceberg lakehouse sink",
+  "area": "Future sink",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "security", "testing"],
+  "problem": "Oracle GoldenGate Big Data targets include Apache Iceberg and S3 Tables. nats-sinks does not yet have a table-format sink for open lakehouse storage.",
+  "proposal": "Research an Apache Iceberg sink that can persist normalized event envelopes into Iceberg tables through a safe Python-supported path, likely object storage plus catalog integration. The design should cover transaction commits, snapshot semantics, schema evolution, partitioning, duplicate handling, compaction, and how to avoid ACK before an Iceberg commit is visible.",
+  "users": "Lakehouse operators and open-table-format users who need NATS event persistence with queryable history.",
+  "delivery_semantics": "ACK-gated success requires a committed Iceberg snapshot or a documented durable staging handoff that will not be lost. Duplicate redelivery must be addressed by deterministic event keys and merge/compaction strategy.",
+  "security": "Catalog credentials, object storage prefixes, table names, and payloads must be redacted. IAM and catalog permissions must be least privileged.",
+  "acceptance": [
+    "Research identifies viable Python libraries and catalog support.",
+    "The design documents snapshot commit boundaries and duplicate behavior.",
+    "Configuration validates table identifiers, partitions, catalog, and storage settings.",
+    "Unit tests avoid live object stores and catalogs.",
+    "Documentation explains limitations for high-throughput small-file workloads."
+  ],
+  "tests": "Add unit tests for partitioning, staging file naming, catalog commit fakes, duplicate handling, and error classification. Gate integration tests.",
+  "documentation": "Add Iceberg sink documentation and roadmap updates if accepted.",
+  "closeout": "Close after the research or implementation release is published."
+}

@@ -74,6 +74,9 @@
   `create_if_missing`, and `reconcile` modes, plus safe drift validation for
   delivery-sensitive settings such as filter subject, ACK policy, AckWait,
   MaxDeliver, MaxAckPending, and headers-only state.
+- Encrypted edge spool-and-forward sink for disconnected operation, with
+  bounded local custody, deterministic duplicate handling, priority-aware
+  replay, and explicit forwarding into a final destination sink.
 - Richer durable pull-consumer policy configuration for plural filter subjects,
   server-side BackOff, MaxWaiting, consumer replicas, memory-storage state, and
   bounded low-sensitivity consumer metadata.
@@ -138,12 +141,24 @@
   TLS verification, and least-privilege account guidance.
 - Oracle Berkeley DB, Oracle NoSQL Database, and OCI Streaming sink evaluations
   as first-party Oracle-family connector candidates.
+- GoldenGate-inspired sink candidate tracking for additional Oracle-family
+  connector opportunities such as Oracle Autonomous AI Lakehouse, Oracle AI
+  Data Platform, Oracle JSON document stores, OCI Cache Cluster, WebLogic JMS,
+  Oracle TimesTen, Oracle Spatial and Graph profiles, Oracle application
+  connector families, and OCI PostgreSQL profile decisions.
 - Palantir Foundry and Palantir Gotham sink evaluations with local fake-client
   or contract-harness testing before any live certification claim.
 - Elasticsearch or OpenSearch, Snowflake, BigQuery, Azure object storage,
   Kafka, MongoDB, Redis, and Cassandra-compatible sink evaluations at low
   priority so the project can learn from common Kafka-style connector patterns
   without prematurely broadening the production surface.
+- Additional external connector evaluations informed by GoldenGate target
+  coverage, including AWS streaming and warehouse targets, Azure Event Hubs and
+  Microsoft Fabric, Google Cloud Storage and Pub/Sub, Databricks, Apache
+  Iceberg and Hadoop ecosystem targets, JMS, JDBC, SQL Server, Db2, SAP HANA,
+  specialty warehouses, distributed SQL systems, legacy database families,
+  Solace, managed Kafka compatibility profiles, Cosmos DB profiles, and
+  MariaDB.
 - HTTP sink.
 - Docker image.
 - Optional dedicated secret-manager connectors for encryption keys when a

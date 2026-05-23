@@ -1,0 +1,23 @@
+{
+  "id": "databricks-sink",
+  "title": "[Feature]: Evaluate a Databricks sink",
+  "area": "Future sink",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "security", "testing"],
+  "problem": "OCI GoldenGate lists Databricks as a target-only connection. nats-sinks does not yet define a Databricks or Delta Lake write path.",
+  "proposal": "Research a Databricks sink that writes normalized event envelopes through a supported ingestion path such as cloud object staging, Delta tables, SQL warehouses, or Databricks APIs. The design should define idempotent merge behavior, staged file cleanup, batch sizing, schema evolution, and how payload encryption and metadata columns are represented.",
+  "users": "Lakehouse teams, analytics engineers, and operators who need durable NATS event custody in Databricks.",
+  "delivery_semantics": "Success may be returned only after Databricks has committed target rows or durably accepted staged ingestion artifacts under a documented process. Fire-and-forget jobs are not sufficient for ACK gating.",
+  "security": "Tokens, workspace URLs, cluster IDs, table names, and payloads must be redacted. Prefer cloud-native identity and least-privilege storage/table permissions.",
+  "acceptance": [
+    "Research chooses the safest Databricks ingestion pattern.",
+    "Idempotent merge and duplicate handling are documented.",
+    "Configuration validates workspace, catalog, schema, table, and staging settings.",
+    "Unit tests use fakes and make no network calls.",
+    "Documentation explains operational cost and failure recovery."
+  ],
+  "tests": "Add mocked API or staging tests for config, idempotent key mapping, job/result handling, and error classification. Gate live Databricks tests.",
+  "documentation": "Add Databricks sink documentation and update roadmap and operations guidance.",
+  "closeout": "Close after release of the research or implementation."
+}

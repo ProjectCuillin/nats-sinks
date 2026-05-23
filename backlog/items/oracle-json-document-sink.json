@@ -1,0 +1,23 @@
+{
+  "id": "oracle-json-document-sink",
+  "title": "[Feature]: Add an Oracle JSON document sink profile",
+  "area": "Future sink",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "sink-oracle", "security", "testing"],
+  "problem": "Oracle GoldenGate lists Oracle Autonomous AI JSON Database, Oracle JSON Collection, and Oracle API for MongoDB target capabilities. nats-sinks can store JSON payload envelopes in Oracle Database tables today, but it does not yet define a document-oriented Oracle JSON collection profile.",
+  "proposal": "Design a first-party Oracle JSON document sink profile that writes normalized message envelopes to Oracle JSON collections or Autonomous JSON Database using supported Oracle APIs. The profile should preserve payload normalization for malformed or non-JSON payloads, support encrypted payload envelopes, use deterministic document identifiers derived from idempotency keys, and expose duplicate policies equivalent to `merge` or `insert_ignore` without relying on unsafe append behavior.",
+  "users": "Teams using Oracle JSON-native services, document-oriented storage patterns, and operational event custody where schema flexibility is important.",
+  "delivery_semantics": "A batch is successful only after Oracle has durably accepted the document writes. Redelivery must resolve to the same document identifier or a documented duplicate decision.",
+  "security": "Document IDs, collection names, and metadata fields must be allow-listed and bounded. Payloads and document contents must not be logged by default. Least-privilege Oracle grants and OCI policies must be documented.",
+  "acceptance": [
+    "The design identifies supported Oracle JSON APIs and Python dependencies.",
+    "Document identifier generation is deterministic and idempotent.",
+    "Malformed, encrypted, binary, and empty payload cases are covered by tests.",
+    "Configuration validation rejects unsafe collection names and unknown modes.",
+    "Documentation explains how this differs from table-oriented OracleSink storage."
+  ],
+  "tests": "Add unit tests for document key construction, collection-name validation, duplicate policies, metadata mapping, and error classification. Optional live tests require ignored local Oracle JSON configuration.",
+  "documentation": "Add Oracle JSON document sink documentation and update Oracle sink, configuration, security, idempotency, and roadmap pages.",
+  "closeout": "Close after the release containing the profile or implementation is published."
+}

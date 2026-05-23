@@ -1,0 +1,23 @@
+{
+  "id": "oci-postgresql-sink-profile",
+  "title": "[Feature]: Evaluate an OCI PostgreSQL sink profile",
+  "area": "Future sink",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "sink-oracle", "security", "testing"],
+  "problem": "OCI GoldenGate lists OCI PostgreSQL and other PostgreSQL-compatible targets. The general Postgres sink is currently marked not planned unless scope changes, but OCI Database with PostgreSQL may deserve a separate Oracle Cloud profile decision.",
+  "proposal": "Evaluate whether an OCI PostgreSQL sink profile should remain covered by the general Postgres backlog item, become an Oracle Cloud specific profile, or stay not planned. The evaluation should consider Oracle Cloud identity, networking, certificate handling, driver choice, SQL dialect, upsert behavior, and whether Oracle-centric users need this separately from a community Postgres connector.",
+  "users": "OCI PostgreSQL users, Oracle Cloud platform teams, and maintainers deciding how broad the first-party Oracle sink family should become.",
+  "delivery_semantics": "If implemented, success may be returned only after a PostgreSQL transaction commits. Idempotency must use unique keys, `ON CONFLICT`, or equivalent safe duplicate handling.",
+  "security": "TLS verification, secret loading, least-privilege grants, query parameterization, identifier allow-listing, and error redaction must be mandatory.",
+  "acceptance": [
+    "Research explains whether OCI PostgreSQL remains under the not-planned Postgres item or becomes an Oracle profile.",
+    "The decision is reflected in roadmap documentation.",
+    "No implementation starts without a separate accepted feature request.",
+    "If accepted later, tests must cover SQL injection resistance and duplicate handling.",
+    "Documentation explains the relationship to the existing Postgres backlog item."
+  ],
+  "tests": "Research-only initially. Any implementation needs unit tests with a fake driver and gated live tests.",
+  "documentation": "Update roadmap and sink framework guidance with the decision.",
+  "closeout": "Close after the evaluation release is published."
+}

@@ -1,0 +1,23 @@
+{
+  "id": "azure-event-hubs-sink",
+  "title": "[Feature]: Evaluate an Azure Event Hubs sink",
+  "area": "Future sink",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "security", "testing"],
+  "problem": "Oracle GoldenGate lists Azure Event Hubs as a source and target. nats-sinks does not yet have an Azure streaming handoff sink.",
+  "proposal": "Research an Azure Event Hubs sink using the Azure SDK with explicit namespace/event-hub validation, managed identity support, deterministic partition-key options, bounded batch publishing, partial-failure handling, and payload encryption compatibility.",
+  "users": "Azure platform teams and cross-cloud operators who need NATS JetStream events delivered to Event Hubs for analytics, Functions, or downstream processing.",
+  "delivery_semantics": "ACK-gated success requires confirmed Event Hubs batch send for every required message. Partial send failures must prevent ACK for failed records.",
+  "security": "Prefer managed identity or workload identity. Connection strings, SAS tokens, namespace names, payloads, and partition keys must be redacted by default.",
+  "acceptance": [
+    "Research documents Event Hubs batch size, partitioning, and retry behavior.",
+    "The design handles partial failures and duplicate delivery.",
+    "Configuration supports secure identity defaults.",
+    "Unit tests use Azure SDK fakes and no network calls.",
+    "Documentation covers least privilege and operational limitations."
+  ],
+  "tests": "Add unit tests for partition strategy, batch construction, error translation, and ACK ordering. Gate live Azure tests behind explicit environment variables.",
+  "documentation": "Add Azure Event Hubs sink documentation if implemented and update roadmap and security guidance.",
+  "closeout": "Close after the research or implementation release is published."
+}

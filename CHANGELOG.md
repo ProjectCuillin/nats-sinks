@@ -137,6 +137,11 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   `$JS.EVENT.ADVISORY...` subjects, including validated advisory configuration,
   bounded JSON parsing, low-cardinality advisory counters, runner lifecycle
   isolation from sink ACK behavior, tests, and operator documentation.
+- Added an offline `nats-sink stream-plan` helper for JetStream stream
+  management planning, including retention, discard, storage, replicas,
+  duplicate-window, runtime permission, administration permission, NATS CLI
+  example, and JSON output guidance without connecting to NATS or mutating
+  stream state.
 - Added explicit durable pull-consumer management with `bind_only`,
   `create_if_missing`, and `reconcile` modes, including safe startup drift
   validation for filter subject, explicit ACK policy, pull-consumer shape,
@@ -160,6 +165,16 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   fan-out, including route matching by subject and metadata, named sink
   instances, optional ACK-gating wait policy, partial-failure metrics, and
   routing certification tests.
+- Added `nats_sinks.spool.SpoolSink`, a first-party encrypted edge
+  spool-and-forward sink for disconnected operation, including bounded local
+  custody, record-level AES encryption, deterministic idempotency-key files,
+  priority-aware replay, the `nats-sink replay-spool` command, unit coverage,
+  example configuration, and operator documentation.
+- Added a GoldenGate-inspired sink candidate research page and new managed
+  backlog items for missing Oracle-family, cloud, streaming, lakehouse,
+  database, messaging, and compatibility-profile connector candidates, using
+  Oracle GoldenGate public connectivity documentation as a planning reference
+  without claiming GoldenGate compatibility.
 
 ### Changed
 
