@@ -12,6 +12,10 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Added
 
+- Added Oracle Linux 9 slim as the required base image for the local
+  `nats-sinks` Docker image, replacing the previous Debian-based
+  `python:3.12-slim` base while preserving the non-root entry point and local
+  Docker/NATS smoke-test workflow.
 - Added a local Docker image and JSON Compose smoke-test stack for issue #12,
   including a non-root `nats-sink` image, a NATS JetStream service, a
   file-sink configuration, a `scripts/run-docker-local-smoke.py` runner that

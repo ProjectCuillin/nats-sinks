@@ -161,8 +161,9 @@ used immediately:
   references, mounted trust material, restrictive security contexts, resource
   limits, graceful termination, and optional Prometheus observability sidecars.
   See [Kubernetes Deployment](https://nats-sinks.readthedocs.io/en/latest/kubernetes/).
-- A local Docker image and JSON Compose stack for developer smoke testing with
-  a temporary NATS JetStream service and the file sink. See
+- A local Oracle Linux 9 slim based Docker image and JSON Compose stack for
+  developer smoke testing with a temporary NATS JetStream service and the file
+  sink. See
   [Local Docker Stack](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/docker.md).
 - Mission-support operational examples that show complete patterns for
   restricted event storage, disconnected file handoff, DLQ triage and replay

@@ -35,13 +35,29 @@ def _load_smoke_script() -> ModuleType:
     return module
 
 
+def test_dockerfile_uses_oracle_linux_slim_base_image() -> None:
+    """The local image should stay aligned with the Oracle Linux base-image policy."""
+
+    dockerfile = (REPO_ROOT / "Dockerfile").read_text(encoding="utf-8")
+    from_lines = [
+        line.strip() for line in dockerfile.splitlines() if line.strip().startswith("FROM ")
+    ]
+
+    assert "SPDX-License-Identifier: Apache-2.0" in dockerfile
+    assert from_lines == ["FROM container-registry.oracle.com/os/oraclelinux:9-slim"]
+    assert "python:3.12-slim" not in dockerfile
+    assert "debian:" not in dockerfile
+    assert "ubuntu:" not in dockerfile
+    assert "alpine:" not in dockerfile
+
+
 def test_dockerfile_uses_project_entrypoint_and_non_root_user() -> None:
     """The local image should run `nats-sink` without root privileges."""
 
     dockerfile = (REPO_ROOT / "Dockerfile").read_text(encoding="utf-8")
 
-    assert "SPDX-License-Identifier: Apache-2.0" in dockerfile
-    assert "FROM python:3.12-slim" in dockerfile
+    assert "python3.11 -m pip install" in dockerfile
+    assert "microdnf install -y python3.11 python3.11-pip" in dockerfile
     assert "useradd --system" in dockerfile
     assert "USER nats-sinks:nats-sinks" in dockerfile
     assert 'ENTRYPOINT ["nats-sink"]' in dockerfile
