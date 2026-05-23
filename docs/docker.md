@@ -7,10 +7,12 @@ sink.
 
 This image is intentionally a local testing image. It is useful for validating
 the CLI, JSON configuration, NATS connectivity, pull-consumer behavior, and
-file-sink output without installing `nats-sink` directly on the host. It is not
-yet the hardened public production image. Production hardening, signing,
-registry publication, and automated release image publication are tracked as
-separate backlog items.
+file-sink output without installing `nats-sink` directly on the host. The image
+is built from Oracle Linux 9 slim so the local container path remains aligned
+with Oracle-centric Linux and OCI deployment expectations, while still keeping
+the image small and easy to rebuild. It is not yet the hardened public
+production image. Production hardening, signing, registry publication, and
+automated release image publication are tracked as separate backlog items.
 
 ## What The Stack Provides
 
@@ -104,9 +106,16 @@ messages, waits for output, and selects non-conflicting ports automatically.
 
 ## Image Behavior
 
-The `Dockerfile` builds from `python:3.12-slim`, installs `nats-sinks` from the
-repository source tree, creates a non-root `nats-sinks` user, and exposes these
-paths as volumes:
+The `Dockerfile` builds from Oracle's Oracle Linux 9 slim base image:
+
+```text
+container-registry.oracle.com/os/oraclelinux:9-slim
+```
+
+During the image build, Python 3.11 and `pip` are installed from Oracle Linux
+package repositories. The build then installs `nats-sinks` from the repository
+source tree, creates a non-root `nats-sinks` user, and exposes these paths as
+volumes:
 
 - `/etc/nats-sinks` for mounted JSON configuration.
 - `/var/lib/nats-sinks` for mounted state, output files, or local test data.
@@ -125,6 +134,11 @@ nats-sink run /etc/nats-sinks/config.json
 
 The image does not contain Oracle wallets, NATS credentials, certificates,
 payload examples from private environments, or other deployment secrets.
+
+The Docker Hub `oraclelinux:9-slim` official image is also available, but the
+project Dockerfile uses the Oracle Container Registry reference so the default
+image source is explicit and Oracle-owned. Operators may still mirror or pin
+the base image by digest in their own controlled build pipeline.
 
 ## Configuration Used By The Example
 
@@ -195,6 +209,7 @@ valid JSON remains JSON and non-JSON payloads are wrapped in a JSON envelope.
 
 The local image follows useful baseline practices:
 
+- It is based on Oracle Linux 9 slim.
 - It runs as a non-root user.
 - It does not bake secrets into the image.
 - It expects configuration to be mounted read-only.
