@@ -1,0 +1,27 @@
+{
+  "id": "message-metadata-priority-header-control",
+  "title": "[Bug]: Priority metadata header accepts ASCII control characters",
+  "area": "Configuration",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": ["metadata", "input-validation", "bug-hunt"],
+  "summary": "The priority metadata header validator rejects newlines but still accepts other ASCII control characters, which is inconsistent with the stricter header validation used elsewhere in the project.",
+  "observed": "A configuration can set message_metadata.priority.header to a value containing a control character and validation still succeeds.",
+  "expected": "Metadata header names should fail closed when any ASCII control character is present.",
+  "reproduction": "Construct MessageMetadataFieldConfig with a priority header containing a NUL or tab character and observe that validation accepts the value.",
+  "failing_test": "Add a unit test that creates MessageMetadataFieldConfig(header='Priority\\u0000Header') and expects Pydantic validation to fail.",
+  "impact": "Unsafe header names can make runtime extraction ambiguous and weaken operator confidence in configuration validation.",
+  "delivery_semantics": "Commit-then-ACK behavior is not changed. This is a configuration validation hardening fix before messages are processed.",
+  "security": "The fix must reject hostile control characters without logging sensitive configuration values.",
+  "acceptance": [
+    "Priority metadata header validation rejects all ASCII control characters.",
+    "The regression test fails before the fix and passes after the fix.",
+    "The validation message is understandable for operators.",
+    "No NATS ACK behavior, sink contract, or payload persistence semantics change.",
+    "Release notes mention the metadata validation hardening."
+  ],
+  "tests": "Run the focused metadata boundary tests and the full local validation script.",
+  "documentation": "Update release notes and test evidence. No public configuration syntax changes are required beyond stricter invalid input rejection.",
+  "closeout": "Mark completed after the fix is merged into the release development branch with sanitized test evidence."
+}

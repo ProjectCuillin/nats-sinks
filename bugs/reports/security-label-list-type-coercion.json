@@ -1,0 +1,26 @@
+{
+  "id": "security-label-list-type-coercion",
+  "title": "[Bug]: Security label list fields implicitly coerce non-string items",
+  "area": "Security",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": ["security-labels", "input-validation", "bug-hunt"],
+  "summary": "Security label list fields accept numeric or boolean list items and silently coerce them to strings.",
+  "observed": "normalize_security_label_profile accepts values like {'releasability': [42]} and stores ['42'].",
+  "expected": "Security label list fields should contain only strings or a semicolon-separated string input.",
+  "reproduction": "Call normalize_security_label_profile with a numeric item in releasability and observe validation succeeds.",
+  "failing_test": "Add a unit test that expects non-string security label list entries to raise ValidationError.",
+  "impact": "Implicit coercion can hide malformed publisher output and weaken allow-list enforcement.",
+  "delivery_semantics": "Invalid metadata remains a permanent validation failure. ACK behavior is unchanged.",
+  "security": "Security-relevant label lists should be explicit string vocabularies.",
+  "acceptance": [
+    "Security label list fields reject non-string array items.",
+    "Semicolon-separated string input remains supported.",
+    "String list items remain valid.",
+    "Focused regression coverage exists."
+  ],
+  "tests": "Run focused security label tests and full validation.",
+  "documentation": "Update CHANGELOG.md and test report.",
+  "closeout": "Mark completed after merge with sanitized evidence."
+}

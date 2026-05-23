@@ -54,6 +54,8 @@ from nats_sinks.core.message_metadata import (
     DEFAULT_CLASSIFICATION_HEADER,
     DEFAULT_LABELS_HEADER,
     DEFAULT_PRIORITY_HEADER,
+    LABEL_SEPARATOR,
+    contains_ascii_control_characters,
     normalise_labels_value,
     normalise_metadata_value,
 )
@@ -229,6 +231,59 @@ def _validate_websocket_header_value(value: str, *, source: str) -> str:
     if value.strip() != value:
         raise ValueError(f"{source} values must not have surrounding whitespace")
     return value
+
+
+def _validate_metadata_header_name(value: str, *, source: str) -> str:
+    """Validate an operator-configured metadata header name.
+
+    Metadata header names are user-controlled configuration. The runtime keeps
+    the accepted grammar deliberately simple: trim surrounding whitespace,
+    reject empty names, and reject every ASCII control character so extraction
+    remains predictable and safe to audit.
+    """
+
+    rendered = value.strip()
+    if not rendered:
+        raise ValueError(f"{source} must not be empty")
+    if contains_ascii_control_characters(rendered):
+        raise ValueError(f"{source} must not contain control characters")
+    return rendered
+
+
+def _normalize_metadata_default(value: object, *, source: str) -> str | None:
+    """Normalize and validate one configured scalar message metadata default."""
+
+    normalized = normalise_metadata_value(value)
+    if normalized is None:
+        return None
+    if contains_ascii_control_characters(normalized):
+        raise ValueError(f"{source} must not contain control characters")
+    return normalized
+
+
+def _normalize_configured_labels(value: object, *, source: str) -> tuple[str, ...]:
+    """Normalize configured labels while rejecting ambiguous list items.
+
+    Strings may use the documented semicolon-separated form.  When an operator
+    supplies labels as a JSON array, each array item already represents one
+    label, so accepting a semicolon inside an item would make scalar storage
+    ambiguous.  The check is therefore stricter for array input while preserving
+    the documented string shorthand.
+    """
+
+    if isinstance(value, (list, tuple, set, frozenset)):
+        for item in value:
+            rendered = normalise_metadata_value(item)
+            if rendered is None:
+                continue
+            if LABEL_SEPARATOR in rendered:
+                raise ValueError(f"{source} list items must not contain the semicolon separator")
+
+    labels = normalise_labels_value(value)
+    for label in labels:
+        if contains_ascii_control_characters(label):
+            raise ValueError(f"{source} must not contain control characters")
+    return labels
 
 
 def _validate_websocket_header_env_name(value: str, *, source: str) -> str:
@@ -1151,21 +1206,14 @@ class MessageMetadataFieldConfig(BaseModel):
     def validate_header(cls, value: str) -> str:
         """Require a usable header name for runtime extraction."""
 
-        rendered = value.strip()
-        if not rendered:
-            raise ValueError("message metadata header must not be empty")
-        if "\n" in rendered or "\r" in rendered:
-            raise ValueError("message metadata header must not contain newlines")
-        return rendered
+        return _validate_metadata_header_name(value, source="message metadata header")
 
     @field_validator("default", mode="before")
     @classmethod
     def normalize_default(cls, value: object) -> object:
         """Treat blank defaults as null so config output is predictable."""
 
-        if value is None:
-            return None
-        return normalise_metadata_value(value)
+        return _normalize_metadata_default(value, source="message metadata default")
 
 
 class MessageMetadataLabelsConfig(BaseModel):
@@ -1186,19 +1234,14 @@ class MessageMetadataLabelsConfig(BaseModel):
     def validate_header(cls, value: str) -> str:
         """Require a usable header name for runtime extraction."""
 
-        rendered = value.strip()
-        if not rendered:
-            raise ValueError("message metadata labels header must not be empty")
-        if "\n" in rendered or "\r" in rendered:
-            raise ValueError("message metadata labels header must not contain newlines")
-        return rendered
+        return _validate_metadata_header_name(value, source="message metadata labels header")
 
     @field_validator("default", mode="before")
     @classmethod
     def normalize_default(cls, value: object) -> tuple[str, ...]:
         """Accept semicolon-separated text or JSON arrays for label defaults."""
 
-        return normalise_labels_value(value)
+        return _normalize_configured_labels(value, source="message metadata labels default")
 
 
 class MessageMetadataRuleConfig(BaseModel):
@@ -1230,16 +1273,14 @@ class MessageMetadataRuleConfig(BaseModel):
     def normalize_default(cls, value: object) -> object:
         """Normalize rule defaults exactly like global metadata defaults."""
 
-        if value is None:
-            return None
-        return normalise_metadata_value(value)
+        return _normalize_metadata_default(value, source="message metadata rule default")
 
     @field_validator("labels", mode="before")
     @classmethod
     def normalize_labels_default(cls, value: object) -> tuple[str, ...]:
         """Accept semicolon-separated text or JSON arrays for rule labels."""
 
-        return normalise_labels_value(value)
+        return _normalize_configured_labels(value, source="message metadata rule labels")
 
     @model_validator(mode="after")
     def validate_rule_has_default(self) -> MessageMetadataRuleConfig:
@@ -1462,7 +1503,7 @@ class MissionMetadataConfig(BaseModel):
             rendered = item.strip()
             if not rendered:
                 raise ValueError("mission_metadata.allowed_profiles must not contain empty values")
-            if "\n" in rendered or "\r" in rendered or "\x00" in rendered:
+            if contains_ascii_control_characters(rendered):
                 raise ValueError(
                     "mission_metadata.allowed_profiles must not contain control characters"
                 )
@@ -1520,7 +1561,7 @@ def _normalize_string_allow_list(value: object, *, field_name: str) -> tuple[str
         rendered = item.strip()
         if not rendered:
             raise ValueError(f"{field_name} must not contain empty values")
-        if "\n" in rendered or "\r" in rendered or "\x00" in rendered:
+        if contains_ascii_control_characters(rendered):
             raise ValueError(f"{field_name} must not contain control characters")
         if rendered in seen:
             continue

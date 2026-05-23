@@ -1,0 +1,26 @@
+{
+  "id": "message-metadata-labels-header-control",
+  "title": "[Bug]: Labels metadata header accepts ASCII control characters",
+  "area": "Configuration",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": ["metadata", "input-validation", "bug-hunt"],
+  "summary": "The labels metadata header validator rejects newlines but still accepts other ASCII control characters.",
+  "observed": "A configuration can set message_metadata.labels.header to a control-character-bearing value and validation accepts it.",
+  "expected": "Labels metadata header names should use the same fail-closed control-character policy as mission metadata, security labels, and WebSocket headers.",
+  "reproduction": "Construct MessageMetadataLabelsConfig with a header containing an ASCII control character and observe that validation succeeds.",
+  "failing_test": "Add a unit test that creates MessageMetadataLabelsConfig(header='Labels\\u0000Header') and expects validation to fail.",
+  "impact": "Ambiguous header names can interfere with safe metadata extraction and configuration review.",
+  "delivery_semantics": "Commit-then-ACK behavior is not changed. The defect is rejected during configuration loading.",
+  "security": "The fix must reject hostile control characters without exposing configured values in logs.",
+  "acceptance": [
+    "Labels metadata header validation rejects all ASCII control characters.",
+    "The regression test fails before the fix and passes after the fix.",
+    "The error explains that metadata headers must not contain control characters.",
+    "No sink storage schema or ACK behavior changes."
+  ],
+  "tests": "Run the focused metadata boundary tests and the full local validation script.",
+  "documentation": "Update release notes and test evidence.",
+  "closeout": "Mark completed after merge with sanitized evidence."
+}

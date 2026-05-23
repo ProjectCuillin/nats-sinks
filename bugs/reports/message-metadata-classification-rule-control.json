@@ -1,0 +1,26 @@
+{
+  "id": "message-metadata-classification-rule-control",
+  "title": "[Bug]: Subject-specific classification defaults accept control characters",
+  "area": "Configuration",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": ["metadata", "input-validation", "bug-hunt"],
+  "summary": "Subject-specific message metadata rules can set classification defaults that contain embedded control characters.",
+  "observed": "MessageMetadataRuleConfig accepts a classification default containing an ASCII control character.",
+  "expected": "Subject-specific priority and classification defaults should apply the same control-character rejection as global defaults.",
+  "reproduction": "Construct MessageMetadataRuleConfig(subject='ops.>', classification='NATO SECRET\\u0000') and observe validation succeeds.",
+  "failing_test": "Add a unit test that expects a subject rule classification default with a control character to fail validation.",
+  "impact": "Unsafe classification values can be applied to whole subject families and persisted into sinks.",
+  "delivery_semantics": "No ACK behavior changes. Invalid configuration should fail before the runner starts.",
+  "security": "Classification values are security-relevant metadata and must be bounded, explicit, and free of control characters.",
+  "acceptance": [
+    "Subject-specific priority and classification defaults reject all ASCII control characters.",
+    "The regression test fails before the fix and passes after the fix.",
+    "The operator-facing error describes invalid message metadata defaults.",
+    "No storage schema changes are introduced."
+  ],
+  "tests": "Run focused metadata boundary tests and full validation.",
+  "documentation": "Update release notes and sanitized test report.",
+  "closeout": "Mark completed after merge with sanitized test evidence."
+}

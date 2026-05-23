@@ -28,6 +28,7 @@ from nats_sinks.core.custody import freeze_custody_metadata, thaw_custody_metada
 from nats_sinks.core.errors import SerializationError
 from nats_sinks.core.message_metadata import (
     case_insensitive_header,
+    contains_ascii_control_characters,
     normalise_labels_value,
     normalise_metadata_value,
 )
@@ -66,6 +67,9 @@ def _normalise_headers(headers: Mapping[str, object] | None) -> Mapping[str, str
             continue
         rendered_key = _safe_text(key)
         if rendered_key is None:
+            continue
+        rendered_key = rendered_key.strip()
+        if not rendered_key or contains_ascii_control_characters(rendered_key):
             continue
         rendered: str | None
         if isinstance(value, (list, tuple)):

@@ -1,0 +1,26 @@
+{
+  "id": "security-label-list-semicolon-ambiguity",
+  "title": "[Bug]: Security label array items can contain the semicolon separator",
+  "area": "Security",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": ["security-labels", "input-validation", "bug-hunt"],
+  "summary": "Security label list values supplied as JSON arrays can contain semicolons, creating ambiguous scalar rendering and downstream interpretation.",
+  "observed": "A security label list item such as 'REL-A;REL-B' is accepted as a single list item.",
+  "expected": "Array-supplied security label list items should reject the semicolon separator. Semicolon-separated strings should continue to be split into separate values.",
+  "reproduction": "Call normalize_security_label_profile with {'releasability': ['REL-A;REL-B']} and observe validation succeeds.",
+  "failing_test": "Add a unit test that expects semicolons inside security label array items to raise ValidationError.",
+  "impact": "Ambiguous security label values can complicate audit review and policy checks.",
+  "delivery_semantics": "ACK ordering is unchanged. Invalid metadata follows existing validation failure handling.",
+  "security": "The fix improves data-centric label clarity and fail-closed parsing.",
+  "acceptance": [
+    "Security label array items reject the semicolon separator.",
+    "Semicolon-separated string inputs remain supported.",
+    "The regression test covers releasability or handling caveat ambiguity.",
+    "No sink schema changes are introduced."
+  ],
+  "tests": "Run focused security label tests and full validation.",
+  "documentation": "Update release notes and test evidence.",
+  "closeout": "Mark completed after merge with sanitized evidence."
+}

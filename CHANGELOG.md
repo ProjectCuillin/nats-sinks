@@ -211,6 +211,20 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Fixed
 
+- Fixed metadata trust-boundary validation so message metadata headers,
+  configured priority/classification defaults, configured labels, mission
+  metadata profile allow lists, and security-label vocabularies reject ASCII
+  control characters consistently.
+- Fixed ambiguous configured label handling by rejecting semicolons inside
+  individual JSON array label items while preserving documented
+  semicolon-separated string shorthand.
+- Fixed security-label normalization so scalar fields and list items fail
+  closed on non-string values instead of silently coercing JSON numbers or
+  booleans into policy text.
+- Fixed `NatsEnvelope` header normalization so malformed empty or
+  control-character-bearing header names are dropped before sink storage.
+- Fixed epoch nanosecond conversion to use exact integer arithmetic rather than
+  floating-point timestamp multiplication.
 - Fixed the new WebSocket harness unit tests so they mock loopback port probes
   rather than binding real sockets, preserving the no-network-unit-tests rule
   for locked-down CI and developer sandboxes.

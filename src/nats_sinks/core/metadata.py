@@ -55,6 +55,7 @@ NON_NATS_STANDARD_HEADER_NAMES: tuple[str, ...] = (
     "traceparent",
     "Accept-Encoding",
 )
+_EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 
 
 def datetime_to_epoch_ns(value: datetime | None) -> int | None:
@@ -72,7 +73,8 @@ def datetime_to_epoch_ns(value: datetime | None) -> int | None:
         value = value.replace(tzinfo=UTC)
     else:
         value = value.astimezone(UTC)
-    return int(value.timestamp() * 1_000_000_000)
+    delta = value - _EPOCH
+    return (delta.days * 86_400 + delta.seconds) * 1_000_000_000 + delta.microseconds * 1_000
 
 
 def parse_rfc3339_to_epoch_ns(value: str | None) -> int | None:

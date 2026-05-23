@@ -1,0 +1,26 @@
+{
+  "id": "message-metadata-label-semicolon-list",
+  "title": "[Bug]: JSON label array items can contain the semicolon storage separator",
+  "area": "Configuration",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": ["metadata", "input-validation", "bug-hunt"],
+  "summary": "Configured labels supplied as JSON arrays can contain semicolons, which makes scalar storage ambiguous because labels are persisted as semicolon-separated strings in relational columns.",
+  "observed": "A configured label list such as ['alpha;beta', 'gamma'] normalizes successfully and later renders indistinguishably from three separate labels in scalar storage.",
+  "expected": "Configured label values should reject the semicolon separator when labels are supplied as individual values.",
+  "reproduction": "Construct MessageMetadataLabelsConfig(header='Labels', default=['alpha;beta']) and observe validation succeeds.",
+  "failing_test": "Add a unit test that expects a configured label array item containing ';' to fail validation.",
+  "impact": "Ambiguous label storage can confuse filtering, audit review, and downstream reconciliation.",
+  "delivery_semantics": "No ACK behavior changes. The fix only rejects ambiguous configuration.",
+  "security": "Rejecting ambiguous metadata values supports auditability and avoids downstream parser confusion.",
+  "acceptance": [
+    "Configured label list items reject the semicolon separator.",
+    "Semicolon-separated string input remains supported and is split into individual labels.",
+    "The regression test proves ambiguous JSON array label items fail closed.",
+    "Documentation or release notes mention the stricter label configuration rule."
+  ],
+  "tests": "Run focused metadata boundary tests and full validation.",
+  "documentation": "Update CHANGELOG.md and test report.",
+  "closeout": "Mark completed after merge with sanitized evidence."
+}
