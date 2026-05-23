@@ -393,6 +393,22 @@ The pull request should normally use `Related #123` rather than `Closes #123`.
 Feature requests remain open until the release containing the work is
 published. Release automation closes managed issues at that boundary.
 
+Issue, feature, and development bug pull requests use guarded non-main
+auto-approval after implementation evidence is complete and the pull request
+is marked ready:
+
+```bash
+scripts/open-release-pr.sh \
+  --repo ProjectCuillin/nats-sinks \
+  --base release-v0.4.1 \
+  --ready
+```
+
+This convenience is only for pull requests that merge into another work branch.
+The helper refuses every pull request whose base branch is `main`. Release pull
+requests into `main` still require explicit maintainer review, release
+validation, and the normal release decision.
+
 Use `scripts/comment-backlog-issue.py` for progress notes so comments are
 validated with the same public-safety rules as local backlog JSON:
 

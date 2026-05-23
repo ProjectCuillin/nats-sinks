@@ -12,6 +12,11 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Added
 
+- Added guarded non-main pull request auto-approval tooling for ready issue,
+  feature, and bug branches raised by the local workflow. The helper refuses
+  release pull requests targeting `main`, can verify the expected PR author,
+  supports opt-out for manual inspection, and is documented as convenience for
+  development branches rather than a substitute for release approval.
 - Added a quiet hierarchical branch development and release workflow with
   release development branches, issue branches, bug sub-branches, configurable
   pull request bases, manual release-validation dispatch, pull request

@@ -43,6 +43,13 @@ This repository is safety-sensitive infrastructure code. Follow these rules:
   to create or refresh a draft pull request against the correct hierarchy
   target, then run `scripts/run-release-validation.sh` only when the branch is
   ready for merge or release validation.
+- For issue, feature, and bug pull requests raised by this workflow,
+  `scripts/open-release-pr.sh --ready` auto-approves ready non-main PRs by
+  default. Use `--no-auto-approve-non-main` only when manual inspection is
+  needed before approval. The helper must refuse any pull request whose base
+  branch is `main`, should verify the expected PR author when possible, and
+  must never replace tests, evidence, documentation updates, or release
+  approval. Release pull requests into `main` remain manual.
 - The `Branch Pull Request` workflow is manual and token-gated. Do not
   re-enable push-triggered pull request creation unless the maintainer
   explicitly changes the release policy.

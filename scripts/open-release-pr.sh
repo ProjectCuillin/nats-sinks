@@ -14,10 +14,15 @@ set -euo pipefail
 REPO=""
 BASE="${NATS_SINKS_PR_BASE:-}"
 DRAFT=true
+AUTO_APPROVE_NON_MAIN="${NATS_SINKS_AUTO_APPROVE_NON_MAIN_PR:-true}"
+AUTO_APPROVE_EXPLICIT=false
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
 usage() {
   cat <<'USAGE'
 Usage: scripts/open-release-pr.sh [--repo OWNER/REPO] [--base BRANCH] [--ready]
+                                  [--auto-approve-non-main|--no-auto-approve-non-main]
 
 Run from a branch named release-*, issue-*, feature-*, bug-*, bugfix-*, or
 hotfix-*. The script pushes the branch to origin and opens or updates a pull
@@ -32,6 +37,12 @@ NATS_SINKS_PR_BASE.
 By default the pull request is created as a draft so GitHub Actions stay quiet
 while the branch is still receiving small commits. Pass --ready only when the
 branch is ready for merge/release validation.
+
+Ready issue, feature, and bug pull requests targeting a non-main branch are
+auto-approved by default when they were raised by the current GitHub identity.
+Use --no-auto-approve-non-main or NATS_SINKS_AUTO_APPROVE_NON_MAIN_PR=false to
+disable that behavior. The helper refuses release pull requests that target
+main.
 USAGE
 }
 
@@ -47,6 +58,15 @@ while [[ $# -gt 0 ]]; do
       ;;
     --ready)
       DRAFT=false
+      shift
+      ;;
+    --auto-approve-non-main)
+      AUTO_APPROVE_NON_MAIN=true
+      AUTO_APPROVE_EXPLICIT=true
+      shift
+      ;;
+    --no-auto-approve-non-main)
+      AUTO_APPROVE_NON_MAIN=false
       shift
       ;;
     -h|--help)
@@ -105,6 +125,11 @@ if [[ "$BRANCH" == "$BASE" ]]; then
   exit 1
 fi
 
+if [[ "$AUTO_APPROVE_EXPLICIT" == "true" && "$AUTO_APPROVE_NON_MAIN" == "true" && "$BASE" == "main" ]]; then
+  echo "Refusing to auto-approve a pull request targeting main." >&2
+  exit 1
+fi
+
 title="Work branch: $BRANCH"
 if [[ "$BRANCH" =~ ^release-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   title="Release ${BRANCH#release-v}"
@@ -153,21 +178,59 @@ existing_pr="$(
 )"
 
 if [[ -n "$existing_pr" ]]; then
-  gh pr edit "$existing_pr" \
+  if ! gh pr edit "$existing_pr" \
     --repo "$REPO" \
     --title "$title" \
-    --body-file "$body_file"
-  echo "Updated pull request #$existing_pr for $BRANCH."
-else
-  draft_args=()
-  if [[ "$DRAFT" == "true" ]]; then
-    draft_args+=(--draft)
+    --body-file "$body_file"; then
+    echo "Unable to refresh pull request title/body through gh pr edit." >&2
+    echo "Continuing because the existing pull request can still be reviewed." >&2
   fi
-  gh pr create \
+  if [[ "$DRAFT" == "false" ]]; then
+    gh pr ready "$existing_pr" --repo "$REPO" >/dev/null 2>&1 || true
+  fi
+  echo "Updated pull request #$existing_pr for $BRANCH."
+  pr_number="$existing_pr"
+else
+  create_args=(
+    "pr" "create"
+    "--repo" "$REPO"
+    "--base" "$BASE"
+    "--head" "$BRANCH"
+    "--title" "$title"
+    "--body-file" "$body_file"
+  )
+  if [[ "$DRAFT" == "true" ]]; then
+    create_args+=("--draft")
+  fi
+  gh "${create_args[@]}"
+  pr_number="$(
+    gh pr list \
+      --repo "$REPO" \
+      --head "$BRANCH" \
+      --base "$BASE" \
+      --state open \
+      --json number \
+      --jq '.[0].number // empty'
+  )"
+fi
+
+if [[ "$AUTO_APPROVE_NON_MAIN" == "true" && "$DRAFT" == "false" && "$BASE" != "main" ]]; then
+  if [[ -z "${pr_number:-}" ]]; then
+    echo "Unable to determine pull request number for auto-approval." >&2
+    exit 1
+  fi
+  expected_author="${NATS_SINKS_PR_AUTO_APPROVE_EXPECTED_AUTHOR:-}"
+  if [[ -z "$expected_author" ]]; then
+    expected_author="$(gh api user --jq .login)"
+  fi
+  if ! "$SCRIPT_DIR/approve-non-main-pr.sh" \
     --repo "$REPO" \
-    --base "$BASE" \
-    --head "$BRANCH" \
-    --title "$title" \
-    --body-file "$body_file" \
-    "${draft_args[@]}"
+    --pr "$pr_number" \
+    --expected-author "$expected_author"; then
+    if [[ "$AUTO_APPROVE_EXPLICIT" == "true" ]]; then
+      exit 1
+    fi
+    echo "Non-main auto-approval was not applied. GitHub may reject self-approval;" >&2
+    echo "use a separate reviewer/bot identity or approve the PR manually." >&2
+  fi
 fi
