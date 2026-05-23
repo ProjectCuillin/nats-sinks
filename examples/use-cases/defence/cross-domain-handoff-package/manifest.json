@@ -1,0 +1,81 @@
+{
+  "schema": "nats_sinks.cross_domain_handoff_package.v1",
+  "package_id": "synthetic-review-package-00042",
+  "package_format": "directory",
+  "created_epoch_ns": 1770000005000000000,
+  "source": {
+    "stream": "SYNTHETIC_EVENTS",
+    "subject": "mission.sensor.synthetic",
+    "consumer": "review-worker"
+  },
+  "message": {
+    "stream_sequence": 42,
+    "consumer_sequence": 7,
+    "message_id": "synthetic-message-00042"
+  },
+  "metadata": {
+    "priority": "high",
+    "classification": "NATO SECRET",
+    "labels": "review-candidate;mission-test",
+    "labels_list": ["review-candidate", "mission-test"],
+    "mission_metadata_profile": "cross-domain-handoff-preparation"
+  },
+  "payload": {
+    "mode": "encrypted_reference",
+    "path": "payload.encrypted.json",
+    "content_type": "application/json",
+    "size_bytes": 257,
+    "sha256": "a543e610973b6c8d52535d6df54e7495dba87bbc26ed54297567157837b5c63b",
+    "encrypted": true,
+    "algorithm": "AES-256-GCM",
+    "key_id": "synthetic-key-version-001"
+  },
+  "files": [
+    {
+      "role": "metadata",
+      "path": "metadata.json",
+      "content_type": "application/json",
+      "size_bytes": 847,
+      "sha256": "1c7ab15d48f4c9bc87a120d38766bdf93749ab6a560b8d4ad69ac1de49743dee"
+    },
+    {
+      "role": "payload",
+      "path": "payload.encrypted.json",
+      "content_type": "application/json",
+      "size_bytes": 257,
+      "sha256": "a543e610973b6c8d52535d6df54e7495dba87bbc26ed54297567157837b5c63b"
+    },
+    {
+      "role": "evidence",
+      "path": "evidence.json",
+      "content_type": "application/json",
+      "size_bytes": 482,
+      "sha256": "46b3d890cc80a154a2a5a489ac3888864f9bbc6341b5d74bf75fac8420d7f639"
+    }
+  ],
+  "custody": {
+    "hash_algorithm": "sha256",
+    "payload_sha256": "a543e610973b6c8d52535d6df54e7495dba87bbc26ed54297567157837b5c63b",
+    "metadata_sha256": "1c7ab15d48f4c9bc87a120d38766bdf93749ab6a560b8d4ad69ac1de49743dee",
+    "evidence_sha256": "46b3d890cc80a154a2a5a489ac3888864f9bbc6341b5d74bf75fac8420d7f639"
+  },
+  "sink_commit": {
+    "sink_type": "file",
+    "committed_epoch_ns": 1770000004000000000,
+    "artifact_type": "directory-package",
+    "artifact_reference": "synthetic-review-package-00042/"
+  },
+  "review": {
+    "purpose": "controlled-review-preparation",
+    "candidate_domain": "synthetic-review-domain",
+    "release_required": true,
+    "approval_state": "pending_review"
+  },
+  "limits": {
+    "max_files": 8,
+    "max_manifest_bytes": 65536,
+    "max_metadata_bytes": 65536,
+    "max_payload_bytes": 10485760,
+    "max_package_bytes": 12582912
+  }
+}

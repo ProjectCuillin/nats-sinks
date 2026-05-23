@@ -88,6 +88,7 @@ nav:
           - Classification And Labels: use-cases/defence/classification-and-labels.md
           - Chain Of Custody: use-cases/defence/chain-of-custody.md
           - Cross-Domain Handoff Preparation: use-cases/defence/cross-domain-handoff-preparation.md
+          - Cross-Domain Handoff Package: use-cases/defence/cross-domain-handoff-package.md
           - Edge Operation: use-cases/defence/edge-operation.md
           - Audit-Oriented Persistence: use-cases/defence/audit-oriented-persistence.md
           - Synthetic Mission Testing: use-cases/defence/synthetic-mission-testing.md

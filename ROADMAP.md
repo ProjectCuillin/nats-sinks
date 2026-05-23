@@ -120,6 +120,10 @@ release, and closed only after the containing release is published.
   custody, classification and labels, chain of custody, cross-domain handoff
   preparation, edge operation, and audit-oriented persistence while keeping the
   framework generic.
+- Cross-domain handoff package blueprint documentation with a manifest schema,
+  sanitized example package, path-safety constraints, hash validation, and clear
+  non-goals stating that `nats-sinks` is not a cross-domain guard or
+  certification boundary.
 - Mission-support operational examples for restricted event storage,
   disconnected file handoff, DLQ triage and replay preparation, and
   destination outage recovery.

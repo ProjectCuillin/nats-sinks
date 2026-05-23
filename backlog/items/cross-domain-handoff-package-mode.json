@@ -3,7 +3,7 @@
   "title": "[Feature]: Add cross-domain handoff package guidance and optional packaging",
   "area": "Security",
   "priority": "P4 - research or design needed",
-  "target_release": "unscheduled",
+  "target_release": "v0.4.1",
   "labels": ["security", "documentation"],
   "problem": "Some environments need to prepare event data for controlled review, transfer, or archive between separated domains. nats-sinks can persist events safely, but it does not yet define a package format that groups payload, metadata, hashes, labels, encryption state, timestamps, and validation evidence into a reviewable bundle.",
   "proposal": "Research and design an optional cross-domain handoff package mode. The mode should produce reviewable packages for human or external system processing, not act as a cross-domain solution by itself. It should include a manifest, normalized metadata, optional encrypted payload, hashes, schema version, and sink commit evidence where available.",

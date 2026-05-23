@@ -36,6 +36,7 @@ flowchart LR
 - [Classification And Labels](defence/classification-and-labels.md)
 - [Chain Of Custody](defence/chain-of-custody.md)
 - [Cross-Domain Handoff Preparation](defence/cross-domain-handoff-preparation.md)
+- [Cross-Domain Handoff Package](defence/cross-domain-handoff-package.md)
 - [Edge Operation](defence/edge-operation.md)
 - [Audit-Oriented Persistence](defence/audit-oriented-persistence.md)
 - [Synthetic Mission Testing](defence/synthetic-mission-testing.md)
