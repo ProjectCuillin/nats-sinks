@@ -14,11 +14,11 @@ logs from live systems.
 | Field | Value |
 | --- | --- |
 | Overall result | Pass |
-| Report generated | 2026-05-23 conflict-resolution refresh |
+| Report generated | 2026-05-23 pull request label synchronization refresh |
 | Project version | `0.4.0` post-release development |
 | Python version | 3.12.4 |
 | Git revision checked | PR `#156` conflict-resolution workspace based on `release-v0.4.1` |
-| Worktree state | Active workspace merging guarded non-main pull request auto-approval tooling into the current `release-v0.4.1` development branch, preserving data-centric security labels, encrypted edge spool-and-forward sink work, GoldenGate-inspired sink candidate backlog research, stream planning, branch workflow automation, connector framework, WebSocket guardrails, Oracle high-throughput staging, custody metadata, advisory observation, durable consumer management, richer consumer policy controls, NATS no-echo, OTLP export, secure-development hardening, strict JSON config loading, log-injection sanitization, secret scanning, public API compatibility tests, GitHub Dependency Graph manifests, sanitized backlog tooling, release-gated close automation, standardized SPDX headers, metrics snapshots and CLI, observability policy core, Prometheus and NATS monitoring connectors, Kubernetes examples, systemd installer, NATS reconnect tuning, least-privilege NATS permission templates, JetStream topology guidance, retry backoff with jitter, priority-aware lanes, synthetic mission testing, mission-support examples, SBOM generation, release checksums, hash-verified installation guidance, property-style tests, defence and mission-support blueprints, generic mission metadata, payload encryption, and Oracle/file/spool sink support |
+| Worktree state | Active workspace adding pull request label synchronization to the guarded branch workflow for the current `release-v0.4.1` development branch, preserving data-centric security labels, encrypted edge spool-and-forward sink work, GoldenGate-inspired sink candidate backlog research, stream planning, branch workflow automation, connector framework, WebSocket guardrails, Oracle high-throughput staging, custody metadata, advisory observation, durable consumer management, richer consumer policy controls, NATS no-echo, OTLP export, secure-development hardening, strict JSON config loading, log-injection sanitization, secret scanning, public API compatibility tests, GitHub Dependency Graph manifests, sanitized backlog tooling, release-gated close automation, standardized SPDX headers, metrics snapshots and CLI, observability policy core, Prometheus and NATS monitoring connectors, Kubernetes examples, systemd installer, NATS reconnect tuning, least-privilege NATS permission templates, JetStream topology guidance, retry backoff with jitter, priority-aware lanes, synthetic mission testing, mission-support examples, SBOM generation, release checksums, hash-verified installation guidance, property-style tests, defence and mission-support blueprints, generic mission metadata, payload encryption, and Oracle/file/spool sink support |
 | Live NATS details | Redacted |
 | Live Oracle details | Redacted |
 
@@ -160,12 +160,26 @@ includes:
   inspection, and is covered by deterministic unit tests plus a no-network
   fake-`git`/fake-`gh` shell regression for the ready PR path. The helper
   warns without blocking when GitHub rejects default self-approval and fails
-  closed only when approval was explicitly requested. Full local
-  validation after this workflow change passed with `637 passed, 8 skipped` in
-  the main pytest run, `120 passed` in the encryption and sink contract suite,
-  and `104 passed` in the sink-focused suite; Ruff, mypy, documentation
-  builds, CLI smoke checks, high-confidence secret scan, Bandit, package build,
-  SBOM/checksum generation, and Twine metadata checks also passed,
+  closed only when approval was explicitly requested,
+- pull request label synchronization for managed issue, feature, and bug
+  branches. `scripts/open-release-pr.sh` now copies searchable labels from
+  detected or explicitly supplied source issues to the pull request before
+  guarded non-main approval. The standalone `scripts/sync-pr-labels.py` helper
+  supports dry-run diagnostics, de-duplicates labels across multiple source
+  issues, validates issue and PR numbers, rejects control characters in label
+  names, and leaves the official GitHub Issue Priority field on the issue
+  rather than translating it into a PR label. The change is tracked in issue
+  `#209`. Development testing found and fixed two workflow bugs: issue `#211`
+  changed label application from `gh pr edit` to `gh issue edit` to avoid an
+  unrelated GitHub CLI GraphQL `projectCards` failure, and issue `#212`
+  stopped Markdown code-span placeholders from being treated as real source
+  issue references. Pull request `#210` was refreshed and its labels now match
+  issue `#209`. Full local validation after this workflow change passed with
+  `685 passed, 8 skipped` in the main pytest run, `121 passed` in the
+  encryption and sink contract suite, and `104 passed` in the sink-focused
+  suite; Ruff, mypy, documentation builds, CLI smoke checks,
+  high-confidence secret scan, Bandit, package build, SBOM/checksum
+  generation, and Twine metadata checks also passed,
 - encrypted edge spool-and-forward work for issue `#51`, including
   `nats_sinks.spool.SpoolSink`, secure-by-default record-level encryption,
   bounded record and byte limits, deterministic idempotency-key filenames,

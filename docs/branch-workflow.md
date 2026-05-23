@@ -117,6 +117,15 @@ is intentionally closed before release. Release automation closes eligible
 release-bound feature and bug issues after the associated GitHub Release exists
 and the required evidence is present.
 
+Pull requests should carry the same searchable labels as the managed source
+issue. The local helper copies labels onto the PR by default. It detects issue
+numbers from branch names such as `issue-123-short-name`, from `Related #123`
+references in the pull request body, and from explicit `--issue` arguments.
+This keeps GitHub issue and PR views aligned for release labels, sink labels,
+bug labels, documentation labels, and the `completed` lifecycle label. The
+official GitHub Issue `Priority` field is not copied because it is issue-field
+metadata rather than a PR label.
+
 Development-only bug reports created while working on a feature may be closed
 when the bug branch has merged back into the feature branch. These bugs never
 reached a released artifact, so their closure boundary is the feature branch
@@ -152,10 +161,11 @@ scripts/open-release-pr.sh \
   --base release-v0.4.1
 
 # Feature branch back into the release branch. Ready non-main PRs are eligible
-# for guarded auto-approval by default.
+# for guarded auto-approval and issue-label synchronization by default.
 scripts/open-release-pr.sh \
   --repo ProjectCuillin/nats-sinks \
   --base release-v0.4.1 \
+  --issue 123 \
   --ready
 
 # Release branch into main when the release is explicitly approved.
@@ -225,6 +235,60 @@ prints a warning unless approval was explicitly requested. Use a separate
 reviewer or bot identity when true automatic approval is required. This helper
 is a convenience for non-main development flow, not a substitute for
 maintainer release approval.
+
+## Pull Request Label Synchronization
+
+`scripts/open-release-pr.sh` calls `scripts/sync-pr-labels.py` by default so
+managed issue labels and pull request labels stay in sync. This is useful when
+maintainers filter work by release, sink, bug, documentation, security, or
+completed status.
+
+The label sync helper is intentionally conservative:
+
+- it copies labels only from GitHub Issues that are explicitly or safely
+  detected;
+- it validates issue and pull request numbers before calling GitHub;
+- it rejects label names containing ASCII control characters before printing or
+  applying them;
+- it does not copy secrets, payloads, subjects, or any issue-field values;
+- it leaves the official GitHub Issue `Priority` field on the issue instead of
+  inventing a PR priority label.
+
+Use an explicit issue argument when a branch covers work that cannot be derived
+from the branch name:
+
+```bash
+scripts/open-release-pr.sh \
+  --repo ProjectCuillin/nats-sinks \
+  --base release-v0.4.1 \
+  --issue 123
+```
+
+For diagnostic or manual use, run the helper directly:
+
+```bash
+python scripts/sync-pr-labels.py \
+  --repo ProjectCuillin/nats-sinks \
+  --pr 456 \
+  --issue 123 \
+  --dry-run
+```
+
+Example output:
+
+```text
+would add PR labels: enhancement, release-v0.4.1, completed
+Copied 3 label(s) from issue(s) #123 to PR #456.
+```
+
+Disable label synchronization only for exceptional maintenance work:
+
+```bash
+scripts/open-release-pr.sh \
+  --repo ProjectCuillin/nats-sinks \
+  --base release-v0.4.1 \
+  --no-copy-issue-labels-to-pr
+```
 
 The repository also includes a manual `.github/workflows/auto-pr.yml` workflow
 for token-gated pull request creation. It is not triggered by branch pushes.

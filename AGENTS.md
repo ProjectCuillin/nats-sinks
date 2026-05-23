@@ -94,6 +94,14 @@ silent loss after an early ACK is not.
   `main`, should verify the expected author when possible, and does not
   replace release validation, maintainer review, issue evidence, docs, or
   changelog work. Release PRs into `main` are always manual.
+- Pull requests should inherit the searchable labels from their managed source
+  issues so issue and PR filtering stay aligned. Use
+  `scripts/open-release-pr.sh --issue <number>` when automatic detection from
+  the branch name or `Related #...` body text is not sufficient. The helper
+  copies source issue labels by default. Use `--no-copy-issue-labels-to-pr`
+  only for exceptional maintenance work. Do not convert the official GitHub
+  Issue `Priority` field into a pull request label; priority remains managed
+  on the issue.
 - The `Branch Pull Request` workflow is manual and token-gated. Do not
   re-enable push-triggered pull request creation unless the maintainer
   explicitly changes the release policy. Do not create release tags from

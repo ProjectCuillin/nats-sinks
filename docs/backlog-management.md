@@ -393,6 +393,26 @@ The pull request should normally use `Related #123` rather than `Closes #123`.
 Feature requests remain open until the release containing the work is
 published. Release automation closes managed issues at that boundary.
 
+Pull requests should also carry the same searchable labels as the source
+issue. `scripts/open-release-pr.sh` copies labels by default after it creates
+or refreshes the pull request. It discovers source issues from branch names
+such as `issue-123-short-name`, from `Related #123` references in the pull
+request body, and from explicit `--issue` arguments:
+
+```bash
+scripts/open-release-pr.sh \
+  --repo ProjectCuillin/nats-sinks \
+  --base release-v0.4.1 \
+  --issue 123 \
+  --ready
+```
+
+Use `--no-copy-issue-labels-to-pr` only for exceptional maintenance work where
+the PR intentionally has no source issue. Label synchronization copies GitHub
+labels only. The official GitHub Issue `Priority` field is issue metadata, not
+a pull request label, so priority remains managed by the backlog and bug sync
+tooling on the issue itself.
+
 Issue, feature, and development bug pull requests use guarded non-main
 auto-approval after implementation evidence is complete and the pull request
 is marked ready:
