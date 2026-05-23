@@ -16,6 +16,7 @@ BLUEPRINTS = {
     "classification-and-labels.md": "Classification And Labels",
     "chain-of-custody.md": "Chain Of Custody",
     "cross-domain-handoff-preparation.md": "Cross-Domain Handoff Preparation",
+    "cross-domain-handoff-package.md": "Cross-Domain Handoff Package",
     "edge-operation.md": "Edge Operation",
     "audit-oriented-persistence.md": "Audit-Oriented Persistence",
 }

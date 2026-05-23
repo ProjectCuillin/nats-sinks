@@ -794,6 +794,12 @@ JetStream, Oracle, Python packaging, or sink connectors:
   been explicitly designed, implemented, and tested. Never imply that
   nats-sinks performs targeting, fire-control, weapons release,
   rules-of-engagement evaluation, or autonomous decision-making.
+- Treat cross-domain handoff package material as review evidence only. Never
+  claim that a package, file sink output, or documentation blueprint is a
+  cross-domain guard, release authority, data diode, sanitizer, transfer
+  approval, or certification boundary. Package examples must use sanitized
+  identifiers, bounded manifests, validated relative paths, explicit hashes,
+  and no secrets.
 - Update README, docs pages, examples, and CLI help together when public
   behavior changes.
 - Keep the documentation set in a release-ready state. Do not leave new

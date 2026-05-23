@@ -69,6 +69,7 @@ represent the same need.
 - [Classification And Labels](classification-and-labels.md)
 - [Chain Of Custody](chain-of-custody.md)
 - [Cross-Domain Handoff Preparation](cross-domain-handoff-preparation.md)
+- [Cross-Domain Handoff Package](cross-domain-handoff-package.md)
 - [Edge Operation](edge-operation.md)
 - [Audit-Oriented Persistence](audit-oriented-persistence.md)
 - [Synthetic Mission Testing](synthetic-mission-testing.md)

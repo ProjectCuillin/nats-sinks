@@ -1,0 +1,17 @@
+{
+  "schema": "nats_sinks.cross_domain_handoff_evidence.v1",
+  "hash_algorithm": "sha256",
+  "sink_commit": {
+    "sink_type": "file",
+    "committed_epoch_ns": 1770000004000000000,
+    "artifact_type": "directory-package",
+    "artifact_reference": "synthetic-review-package-00042/"
+  },
+  "validation": {
+    "manifest_schema_checked": true,
+    "paths_checked": true,
+    "size_limits_checked": true,
+    "secret_scan_checked": true,
+    "approval_state": "pending_review"
+  }
+}

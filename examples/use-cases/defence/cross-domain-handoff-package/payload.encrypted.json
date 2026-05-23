@@ -1,0 +1,8 @@
+{
+  "schema": "nats_sinks.encrypted_payload.v1",
+  "algorithm": "AES-256-GCM",
+  "key_id": "synthetic-key-version-001",
+  "nonce_b64": "c3ludGhldGljLW5vbmNl",
+  "ciphertext_b64": "c3ludGhldGljLWVuY3J5cHRlZC1wYXlsb2Fk",
+  "tag_b64": "c3ludGhldGljLXRhZw=="
+}

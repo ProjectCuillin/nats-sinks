@@ -20,6 +20,12 @@ specialized backend is introduced. The file sink is not a replacement for a
 records-management system, but it gives a clear durable boundary and preserves
 the same metadata contract as the database sink.
 
+For reviewable handoff bundles, see the
+[Cross-Domain Handoff Package](use-cases/defence/cross-domain-handoff-package.md)
+blueprint. The blueprint shows how a file-oriented workflow can group a
+manifest, metadata, payload reference, and evidence files without claiming that
+`nats-sinks` is a cross-domain guard or certification boundary.
+
 > Commit first. ACK last. Design for redelivery.
 
 For `FileSink`, a batch is successful only after every required output file has
@@ -329,6 +335,11 @@ every policy concept into a fixed file-sink field. See
 
 For broader file-based handoff, edge operation, classification, labels, and
 audit examples, see [Defence And Mission Support](use-cases/defence/index.md).
+
+If a file workflow is used to stage review packages, generate package directory
+names and file names from validated internal identifiers. Do not allow
+publisher-controlled values to become raw path components, and keep package
+size, file count, manifest size, metadata size, and payload size bounded.
 
 When top-level `custody.enabled` is true, the file sink writes the custody
 object as a top-level `custody` field. This object contains hashes for the

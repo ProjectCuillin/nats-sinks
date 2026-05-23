@@ -393,6 +393,12 @@ silent loss after an early ACK is not.
   feature has been designed and tested. Never imply that nats-sinks performs
   targeting, fire-control, weapons release, rules-of-engagement evaluation, or
   autonomous decision-making.
+- Treat cross-domain handoff package material as review evidence only. Never
+  claim that a package, file sink output, or documentation blueprint is a
+  cross-domain guard, release authority, data diode, sanitizer, transfer
+  approval, or certification boundary. Package examples must use sanitized
+  identifiers, bounded manifests, validated relative paths, explicit hashes,
+  and no secrets.
 - Keep README documentation links PyPI-safe with fully qualified public URLs,
   and keep `docs/` page-to-page links relative so Read the Docs preserves
   version-local navigation.

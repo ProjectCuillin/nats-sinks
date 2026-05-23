@@ -17,6 +17,11 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   and TLS client certificate workflows, including identity-path redaction,
   focused unit coverage, and an environment-gated live authentication
   integration test scaffold.
+- Added a cross-domain handoff package blueprint with a bounded manifest
+  schema, sanitized example package files, SHA-256 validation evidence,
+  documentation links from the defence and file-sink guidance, and explicit
+  non-goals stating that `nats-sinks` is not a cross-domain guard or
+  certification boundary.
 - Added Oracle Linux 9 slim as the required base image for the local
   `nats-sinks` Docker image, replacing the previous Debian-based
   `python:3.12-slim` base while preserving the non-root entry point and local

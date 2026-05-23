@@ -522,6 +522,14 @@ directory, or path served directly by a web server. Keep generated output under
 an application data path such as `/var/lib/nats-sinks/events`, and apply your
 normal backup, retention, and access-control policies.
 
+For cross-domain handoff preparation, `nats-sinks` can help create reviewable
+records and package-shaped evidence, but it is not a cross-domain guard,
+certification boundary, release authority, data diode, or sanitizer. Keep
+transfer decisions in approved systems outside this package. If you use the
+[Cross-Domain Handoff Package](use-cases/defence/cross-domain-handoff-package.md)
+blueprint, enforce path normalization, bounded file counts, bounded payload
+sizes, and secret-free manifests before committing the package.
+
 ## Secure Failure Flow
 
 ```mermaid
