@@ -216,6 +216,10 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Fixed
 
+- Fixed pull request label synchronization to apply labels through
+  `gh issue edit` against the pull request number instead of `gh pr edit`,
+  avoiding an unrelated GitHub CLI GraphQL `projectCards` failure observed
+  during live PR creation.
 - Fixed metadata trust-boundary validation so message metadata headers,
   configured priority/classification defaults, configured labels, mission
   metadata profile allow lists, and security-label vocabularies reject ASCII

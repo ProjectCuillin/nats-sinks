@@ -264,7 +264,7 @@ if [[ "$1 $2 $3" == "issue view 123" ]]; then
 JSON
   exit 0
 fi
-if [[ "$1 $2" == "pr edit" ]]; then
+if [[ "$1 $2" == "issue edit" ]]; then
   touch "$STATE_DIR/labeled"
   exit 0
 fi
