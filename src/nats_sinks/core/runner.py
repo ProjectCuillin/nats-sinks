@@ -36,6 +36,7 @@ from nats_sinks.core.config import (
     MessageMetadataConfig,
     MissionMetadataConfig,
     PreSinkPolicyConfig,
+    SecurityLabelProfileConfig,
     SizePolicyConfig,
 )
 from nats_sinks.core.consumer import envelope_from_nats_message
@@ -99,6 +100,7 @@ class JetStreamSinkRunner:
         dead_letter: DeadLetterConfig | None = None,
         message_metadata: MessageMetadataConfig | None = None,
         mission_metadata: MissionMetadataConfig | None = None,
+        security_labels: SecurityLabelProfileConfig | None = None,
         encryption: EncryptionConfig | None = None,
         custody: CustodyConfig | None = None,
         advisories: JetStreamAdvisoryConfig | None = None,
@@ -129,6 +131,7 @@ class JetStreamSinkRunner:
         self.dead_letter = dead_letter or DeadLetterConfig()
         self.message_metadata = message_metadata or MessageMetadataConfig()
         self.mission_metadata = mission_metadata or MissionMetadataConfig()
+        self.security_labels = security_labels or SecurityLabelProfileConfig()
         self.encryption = encryption or EncryptionConfig()
         self.custody = custody or CustodyConfig()
         self.advisories = advisories or JetStreamAdvisoryConfig()
@@ -333,6 +336,7 @@ class JetStreamSinkRunner:
                     raw_message,
                     message_metadata=self.message_metadata,
                     mission_metadata=self.mission_metadata,
+                    security_labels=self.security_labels,
                 )
                 for raw_message in raw_message_list
             ]

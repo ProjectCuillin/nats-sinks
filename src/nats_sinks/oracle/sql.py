@@ -40,6 +40,7 @@ FIELD_TO_BIND = {
     "headers": "headers_json",
     "metadata": "metadata_json",
     "mission_metadata": "mission_metadata_json",
+    "security_labels": "security_labels_json",
 }
 
 

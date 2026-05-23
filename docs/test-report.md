@@ -14,11 +14,11 @@ logs from live systems.
 | Field | Value |
 | --- | --- |
 | Overall result | Pass |
-| Report generated | 2026-05-22 22:31:39 CEST |
+| Report generated | 2026-05-23 conflict-resolution refresh |
 | Project version | `0.4.0` post-release development |
 | Python version | 3.12.4 |
-| Git revision checked | Active `release-v0.4.1` hierarchical branch workflow workspace |
-| Worktree state | Active issue branch for issue `#51` with encrypted edge spool-and-forward sink implementation, `nats-sink replay-spool` CLI support, spool documentation, example configuration, updated backlog metadata for release `v0.4.1`, and the previously validated `release-v0.4.1` capability set covering branch workflow automation, connector framework, stream planning, WebSocket guardrails, Oracle high-throughput staging, custody metadata, advisory observation, durable consumer management, richer consumer policy controls, NATS no-echo, OTLP export, secure-development hardening, strict JSON config loading, log-injection sanitization, secret scanning, public API compatibility tests, GitHub Dependency Graph manifests, sanitized backlog tooling, release-gated close automation, standardized SPDX headers, metrics snapshots and CLI, observability policy core, Prometheus and NATS monitoring connectors, Kubernetes examples, systemd installer, NATS reconnect tuning, least-privilege NATS permission templates, JetStream topology guidance, retry backoff with jitter, priority-aware lanes, synthetic mission testing, mission-support examples, SBOM generation, release checksums, hash-verified installation guidance, property-style tests, defence and mission-support blueprints, generic mission metadata, payload encryption, and Oracle/file sink support |
+| Git revision checked | PR `#155` conflict-resolution workspace based on `release-v0.4.1` |
+| Worktree state | Active workspace merging issue `#49` data-centric security label profile work into the current `release-v0.4.1` development branch, preserving the later encrypted edge spool-and-forward sink work for issue `#51`, GoldenGate-inspired sink candidate backlog research, stream planning, branch workflow automation, connector framework, WebSocket guardrails, Oracle high-throughput staging, custody metadata, advisory observation, durable consumer management, richer consumer policy controls, NATS no-echo, OTLP export, secure-development hardening, strict JSON config loading, log-injection sanitization, secret scanning, public API compatibility tests, GitHub Dependency Graph manifests, sanitized backlog tooling, release-gated close automation, standardized SPDX headers, metrics snapshots and CLI, observability policy core, Prometheus and NATS monitoring connectors, Kubernetes examples, systemd installer, NATS reconnect tuning, least-privilege NATS permission templates, JetStream topology guidance, retry backoff with jitter, priority-aware lanes, synthetic mission testing, mission-support examples, SBOM generation, release checksums, hash-verified installation guidance, property-style tests, defence and mission-support blueprints, generic mission metadata, payload encryption, and Oracle/file/spool sink support |
 | Live NATS details | Redacted |
 | Live Oracle details | Redacted |
 
@@ -35,7 +35,8 @@ that it was a sandbox reachability condition rather than sink behavior.
 This validation refresh covered the new encrypted edge spool sink and replay
 command for issue `#51`, plus the core framework, strict JSON configuration
 loading, safe log formatting, high-confidence secret scanning, the 316-control
-security rule review, additional project-specific controls, expanded public API
+security rule review, data-centric security label profile validation and
+storage, additional project-specific controls, expanded public API
 compatibility checks and documentation, release-version consistency automation, clearer basic
 metrics counters, WebSocket transport guardrails, optional WebSocket connection
 headers, a collision-safe local WebSocket certification harness, local JSON metrics snapshots, the `nats-sink-metrics`
@@ -116,6 +117,7 @@ flowchart LR
     Synthetic[Synthetic mission harness] --> Report
     F2T2EA[F2T2EA blueprint examples] --> Report
     MissionMeta[Generic mission metadata] --> Report
+    SecurityLabels[Data-centric security label profile] --> Report
     Custody[Tamper-evident custody metadata] --> Report
     Crypto[Payload encryption] --> Report
     MessageMeta[Priority / classification / labels metadata] --> Report
@@ -174,6 +176,16 @@ published `0.4.0` release and has passed local validation. It includes:
   250-message partial-final-batch delivery with `batch_size=64`, and
   128-message AES-256-CCM encrypted delivery with decrypt verification. No new
   product bugs were identified during this run,
+- data-centric security label profile work for issue `#49`, including strict
+  JSON parsing, duplicate-key rejection, root-field allow-list validation,
+  optional controlled vocabularies, subject/global defaults, file sink
+  `security_labels` records, Oracle `SECURITY_LABELS_JSON` mapping and DDL,
+  DLQ-before-ACK behavior for invalid profile headers, and public API coverage.
+  Full local validation after this work passed with `639 passed, 8 skipped` in
+  the main pytest run, `121 passed` in the encryption and sink contract suite,
+  and `104 passed` in the sink-focused suite; Ruff, mypy, documentation builds,
+  secret scan, Bandit, package build, SBOM generation, checksum generation, and
+  Twine checks also passed,
 - sink certification contract work for issue `#41`, including a documented
   release gate, reusable `nats_sinks.testing` certification helpers, FileSink
   lifecycle/write/duplicate certification coverage, Oracle durable-success

@@ -490,6 +490,7 @@ def subjects_from_app_config(config: AppConfig) -> list[str]:
     subjects.extend(rule.subject for rule in config.encryption.rules)
     subjects.extend(rule.subject for rule in config.message_metadata.rules)
     subjects.extend(rule.subject for rule in config.mission_metadata.rules)
+    subjects.extend(rule.subject for rule in config.security_labels.rules)
     subjects.extend(_raw_sink_subjects(config))
     return _unique_preserve_order(validate_subject_pattern(subject) for subject in subjects)
 

@@ -38,6 +38,7 @@ def create_events_table_ddl(table: str = "NATS_SINK_EVENTS") -> str:
     headers_json      json,
     metadata_json     json,
     mission_metadata_json json,
+    security_labels_json json,
     constraint {table_name.split(".")[-1]}_pk
         primary key (stream_name, stream_sequence)
 )"""
@@ -76,5 +77,6 @@ def create_staging_events_table_ddl(
     payload_json      json,
     headers_json      json,
     metadata_json     json,
-    mission_metadata_json json
+    mission_metadata_json json,
+    security_labels_json json
 )"""

@@ -63,6 +63,12 @@ from nats_sinks.core.mission_metadata import (
     MAX_MISSION_METADATA_BYTES,
     normalize_mission_metadata_object,
 )
+from nats_sinks.core.security_labels import (
+    DEFAULT_MAX_SECURITY_LABEL_BYTES,
+    DEFAULT_SECURITY_LABELS_HEADER,
+    MAX_SECURITY_LABEL_BYTES,
+    normalize_security_label_profile,
+)
 from nats_sinks.core.subjects import matches_subject, validate_subject_pattern
 
 SENSITIVE_KEY_PARTS = (
@@ -1494,6 +1500,185 @@ class MissionMetadataConfig(BaseModel):
         return self
 
 
+def _normalize_string_allow_list(value: object, *, field_name: str) -> tuple[str, ...]:
+    """Normalize operator-defined allow lists for security-sensitive metadata."""
+
+    if value is None:
+        return ()
+    if isinstance(value, str):
+        raw_items = [value]
+    elif isinstance(value, (list, tuple, set, frozenset)):
+        raw_items = list(value)
+    else:
+        raise ValueError(f"{field_name} must be a list of strings")
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for item in raw_items:
+        if not isinstance(item, str):
+            raise ValueError(f"{field_name} must contain only strings")
+        rendered = item.strip()
+        if not rendered:
+            raise ValueError(f"{field_name} must not contain empty values")
+        if "\n" in rendered or "\r" in rendered or "\x00" in rendered:
+            raise ValueError(f"{field_name} must not contain control characters")
+        if rendered in seen:
+            continue
+        normalized.append(rendered)
+        seen.add(rendered)
+    return tuple(normalized)
+
+
+class SecurityLabelRuleConfig(BaseModel):
+    """Subject-specific default for the data-centric security label profile.
+
+    A rule supplies a validated JSON profile only when the configured security
+    label header is absent.  Setting `profile` to `null` explicitly clears the
+    global default for matching subjects.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    subject: str
+    profile: dict[str, Any] | None = None
+
+    @field_validator("subject")
+    @classmethod
+    def validate_subject(cls, value: str) -> str:
+        """Validate rule subjects with the same syntax as NATS wildcards."""
+
+        return validate_subject_pattern(value)
+
+    @field_validator("profile", mode="before")
+    @classmethod
+    def validate_profile(cls, value: object) -> object:
+        """Validate configured profile defaults before runtime processing."""
+
+        if value is None:
+            return None
+        try:
+            return normalize_security_label_profile(
+                value,
+                max_bytes=MAX_SECURITY_LABEL_BYTES,
+                source="security label rule",
+            )
+        except FrameworkValidationError as exc:
+            raise ValueError(str(exc)) from exc
+
+    @model_validator(mode="after")
+    def validate_rule_has_profile_field(self) -> SecurityLabelRuleConfig:
+        """Reject no-op rules that match a subject without setting profile."""
+
+        if "profile" not in self.model_fields_set:
+            raise ValueError("security label rule must set profile, including null if desired")
+        return self
+
+
+class SecurityLabelProfileConfig(BaseModel):
+    """Optional data-centric security label profile configuration.
+
+    The profile is disabled by default.  When enabled, a publisher can provide
+    structured labels in a NATS header, while operators can define global and
+    subject-aware defaults.  Optional allow lists let deployments fail closed
+    when classification, releasability, caveat, priority, or retention values
+    fall outside an approved vocabulary.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    header: str = DEFAULT_SECURITY_LABELS_HEADER
+    default: dict[str, Any] | None = None
+    rules: list[SecurityLabelRuleConfig] = Field(default_factory=list)
+    max_bytes: int = Field(
+        default=DEFAULT_MAX_SECURITY_LABEL_BYTES,
+        ge=1,
+        le=MAX_SECURITY_LABEL_BYTES,
+    )
+    allowed_priorities: tuple[str, ...] = Field(default_factory=tuple)
+    allowed_classifications: tuple[str, ...] = Field(default_factory=tuple)
+    allowed_releasability: tuple[str, ...] = Field(default_factory=tuple)
+    allowed_handling_caveats: tuple[str, ...] = Field(default_factory=tuple)
+    allowed_retention_categories: tuple[str, ...] = Field(default_factory=tuple)
+
+    @field_validator("header")
+    @classmethod
+    def validate_header(cls, value: str) -> str:
+        """Require a safe header name for security label extraction."""
+
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("security_labels.header must not be empty")
+        if "\n" in rendered or "\r" in rendered or "\x00" in rendered:
+            raise ValueError("security_labels.header must not contain control characters")
+        return rendered
+
+    @field_validator("default", mode="before")
+    @classmethod
+    def validate_default(cls, value: object) -> object:
+        """Validate optional global default profile."""
+
+        if value is None:
+            return None
+        try:
+            return normalize_security_label_profile(
+                value,
+                max_bytes=MAX_SECURITY_LABEL_BYTES,
+                source="security label default",
+            )
+        except FrameworkValidationError as exc:
+            raise ValueError(str(exc)) from exc
+
+    @field_validator(
+        "allowed_priorities",
+        "allowed_classifications",
+        "allowed_releasability",
+        "allowed_handling_caveats",
+        "allowed_retention_categories",
+        mode="before",
+    )
+    @classmethod
+    def validate_allow_list(cls, value: object, info: Any) -> tuple[str, ...]:
+        """Normalize configured vocabularies without accepting ambiguous values."""
+
+        return _normalize_string_allow_list(value, field_name=f"security_labels.{info.field_name}")
+
+    @model_validator(mode="after")
+    def validate_defaults_against_effective_limits(self) -> SecurityLabelProfileConfig:
+        """Recheck defaults with operator-provided size and vocabulary limits."""
+
+        if self.default is not None:
+            try:
+                self.default = normalize_security_label_profile(
+                    self.default,
+                    max_bytes=self.max_bytes,
+                    allowed_priorities=self.allowed_priorities,
+                    allowed_classifications=self.allowed_classifications,
+                    allowed_releasability=self.allowed_releasability,
+                    allowed_handling_caveats=self.allowed_handling_caveats,
+                    allowed_retention_categories=self.allowed_retention_categories,
+                    source="security label default",
+                )
+            except FrameworkValidationError as exc:
+                raise ValueError(str(exc)) from exc
+        for rule in self.rules:
+            if rule.profile is not None:
+                try:
+                    rule.profile = normalize_security_label_profile(
+                        rule.profile,
+                        max_bytes=self.max_bytes,
+                        allowed_priorities=self.allowed_priorities,
+                        allowed_classifications=self.allowed_classifications,
+                        allowed_releasability=self.allowed_releasability,
+                        allowed_handling_caveats=self.allowed_handling_caveats,
+                        allowed_retention_categories=self.allowed_retention_categories,
+                        source=f"security label rule {rule.subject}",
+                    )
+                except FrameworkValidationError as exc:
+                    raise ValueError(str(exc)) from exc
+        return self
+
+
 class EncryptionRuleConfig(BaseModel):
     """Subject-specific override for framework-level payload encryption.
 
@@ -1851,6 +2036,7 @@ class AppConfig(BaseModel):
     advisories: JetStreamAdvisoryConfig = Field(default_factory=JetStreamAdvisoryConfig)
     message_metadata: MessageMetadataConfig = Field(default_factory=MessageMetadataConfig)
     mission_metadata: MissionMetadataConfig = Field(default_factory=MissionMetadataConfig)
+    security_labels: SecurityLabelProfileConfig = Field(default_factory=SecurityLabelProfileConfig)
     encryption: EncryptionConfig = Field(default_factory=EncryptionConfig)
     custody: CustodyConfig = Field(default_factory=CustodyConfig)
     size_policy: SizePolicyConfig = Field(default_factory=SizePolicyConfig)
@@ -1887,6 +2073,8 @@ ENV_OVERRIDES: dict[str, tuple[str, ...]] = {
     "NATS_SINKS_LABELS_DEFAULT": ("message_metadata", "labels", "default"),
     "NATS_SINKS_MISSION_METADATA_ENABLED": ("mission_metadata", "enabled"),
     "NATS_SINKS_MISSION_METADATA_HEADER": ("mission_metadata", "header"),
+    "NATS_SINKS_SECURITY_LABELS_ENABLED": ("security_labels", "enabled"),
+    "NATS_SINKS_SECURITY_LABELS_HEADER": ("security_labels", "header"),
     "NATS_SINKS_CUSTODY_ENABLED": ("custody", "enabled"),
     "NATS_SINKS_CUSTODY_ALGORITHM": ("custody", "algorithm"),
     "NATS_SINKS_CUSTODY_KEY_ID": ("custody", "key_id"),

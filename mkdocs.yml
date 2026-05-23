@@ -48,6 +48,7 @@ nav:
       - Tamper-Evident Custody: tamper-evident-custody.md
       - Priority Lanes: priority-lanes.md
       - Mission Metadata: mission-metadata.md
+      - Security Label Profile: security-label-profile.md
   - Observability:
       - Overview: observability.md
       - Metrics Snapshot And CLI: metrics.md
