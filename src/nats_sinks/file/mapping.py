@@ -127,6 +127,7 @@ def file_record_for_envelope(
         "labels": labels_to_storage_string(envelope.labels),
         "labels_list": list(envelope.labels),
         "mission_metadata": envelope.mission_metadata_for_json_storage(),
+        "security_labels": envelope.security_labels_for_json_storage(),
         "custody": envelope.custody_for_json_storage(),
         "payload": normalized_payload.value,
         "payload_info": {

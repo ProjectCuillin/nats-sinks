@@ -21,10 +21,15 @@ from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime
 from typing import Any, SupportsBytes, cast
 
-from nats_sinks.core.config import MessageMetadataConfig, MissionMetadataConfig
+from nats_sinks.core.config import (
+    MessageMetadataConfig,
+    MissionMetadataConfig,
+    SecurityLabelProfileConfig,
+)
 from nats_sinks.core.envelope import NatsEnvelope
 from nats_sinks.core.message_metadata import resolve_metadata_field, resolve_metadata_labels
 from nats_sinks.core.mission_metadata import resolve_mission_metadata
+from nats_sinks.core.security_labels import resolve_security_label_profile
 
 
 def _get_nested(value: object, *names: str) -> object | None:
@@ -139,6 +144,7 @@ def envelope_from_nats_message(
     *,
     message_metadata: MessageMetadataConfig | None = None,
     mission_metadata: MissionMetadataConfig | None = None,
+    security_labels: SecurityLabelProfileConfig | None = None,
 ) -> NatsEnvelope:
     """Convert a nats-py message-like object into a stable envelope."""
 
@@ -147,6 +153,7 @@ def envelope_from_nats_message(
     headers = _headers(raw_message)
     metadata_config = message_metadata or MessageMetadataConfig()
     mission_metadata_config = mission_metadata or MissionMetadataConfig()
+    security_labels_config = security_labels or SecurityLabelProfileConfig()
 
     stream_sequence = _as_int(
         _get_nested(metadata, "sequence", "stream") or _safe_getattr(metadata, "stream_sequence")
@@ -161,6 +168,21 @@ def envelope_from_nats_message(
         timestamp = None
 
     subject = _safe_text(_safe_getattr(raw_message, "subject", ""))
+    priority = resolve_metadata_field(
+        headers,
+        header_name=metadata_config.priority.header,
+        default=metadata_config.priority_default_for_subject(subject),
+    )
+    classification = resolve_metadata_field(
+        headers,
+        header_name=metadata_config.classification.header,
+        default=metadata_config.classification_default_for_subject(subject),
+    )
+    labels = resolve_metadata_labels(
+        headers,
+        header_name=metadata_config.labels.header,
+        default=metadata_config.labels_default_for_subject(subject),
+    )
 
     return NatsEnvelope(
         subject=subject,
@@ -174,25 +196,21 @@ def envelope_from_nats_message(
         message_id=None,
         redelivered=None if delivered is None or delivered <= 0 else delivered > 1,
         pending=_as_int(_safe_getattr(metadata, "num_pending")),
-        priority=resolve_metadata_field(
-            headers,
-            header_name=metadata_config.priority.header,
-            default=metadata_config.priority_default_for_subject(subject),
-        ),
-        classification=resolve_metadata_field(
-            headers,
-            header_name=metadata_config.classification.header,
-            default=metadata_config.classification_default_for_subject(subject),
-        ),
-        labels=resolve_metadata_labels(
-            headers,
-            header_name=metadata_config.labels.header,
-            default=metadata_config.labels_default_for_subject(subject),
-        ),
+        priority=priority,
+        classification=classification,
+        labels=labels,
         mission_metadata=resolve_mission_metadata(
             headers,
             subject=subject,
             config=mission_metadata_config,
+        ),
+        security_labels=resolve_security_label_profile(
+            headers,
+            subject=subject,
+            priority=priority,
+            classification=classification,
+            labels=labels,
+            config=security_labels_config,
         ),
         reply=_safe_optional_text(_safe_getattr(raw_message, "reply")),
         domain=_safe_optional_text(_safe_getattr(metadata, "domain")),

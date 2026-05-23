@@ -1,0 +1,23 @@
+{
+  "id": "amazon-redshift-sink",
+  "title": "[Feature]: Evaluate an Amazon Redshift sink",
+  "area": "Future sink",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "security", "testing"],
+  "problem": "Oracle GoldenGate lists Amazon Redshift as a target-only data warehouse. nats-sinks does not yet define a Redshift write strategy, staging model, or idempotency profile.",
+  "proposal": "Research an Amazon Redshift sink that writes normalized event envelopes through a safe batch path, likely using staging files plus Redshift COPY or parameterized SQL for small volumes. The design should compare direct inserts, COPY from S3, merge/upsert behavior, transaction boundaries, and how to avoid acknowledging messages before warehouse acceptance.",
+  "users": "Analytics and data warehouse teams moving JetStream events into AWS Redshift for reporting, audit, and downstream analysis.",
+  "delivery_semantics": "Success may be returned only after Redshift has committed the target rows or after a documented staging-plus-COPY transaction is durable. Duplicate redelivery must be controlled with deterministic keys and merge/upsert logic.",
+  "security": "Credentials, IAM roles, S3 staging prefixes, table names, and payloads must be redacted. SQL values must use parameters or safe COPY manifests; identifiers require strict allow-list validation.",
+  "acceptance": [
+    "Research selects a safe Redshift ingest pattern.",
+    "The design documents direct versus staged writes and commit boundaries.",
+    "Idempotent merge or insert-ignore behavior is specified.",
+    "Unit tests use fakes and no AWS network calls.",
+    "Docs include least-privilege IAM and warehouse cost guidance."
+  ],
+  "tests": "Add unit tests for config validation, SQL/COPY manifest construction, identifier validation, duplicate decisions, and error classification. Gate live Redshift tests.",
+  "documentation": "Add Redshift sink documentation and update roadmap and sink framework pages.",
+  "closeout": "Close after release of the research decision or implementation."
+}

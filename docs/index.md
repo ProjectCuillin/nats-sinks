@@ -58,7 +58,8 @@ The current release provides the following production-ready foundation:
   clear error handling.
 - `NatsEnvelope`, an immutable message representation that gives sinks payload,
   headers, JetStream metadata, normalized priority/classification/labels fields,
-  timestamps, and idempotency keys without giving them ACK methods.
+  optional data-centric security labels, timestamps, and idempotency keys
+  without giving them ACK methods.
 - JSON configuration loading with environment-variable overrides and redacted
   output for secrets.
 - Optional core payload encryption with AES-256-GCM and AES-256-CCM before
@@ -68,6 +69,10 @@ The current release provides the following production-ready foundation:
 - Optional tamper-evident custody metadata with deterministic payload,
   metadata, and record hashes computed before sink writes. This is evidence
   support for later verification, not encryption or a digital signature.
+- Optional data-centric security label profiles for structured releasability,
+  handling caveats, owner, originator, policy identifiers, and retention
+  categories. The profile is metadata only and does not replace destination
+  authorization.
 - Optional pre-sink policy enforcement that runs after message normalization,
   metadata defaults, mission metadata validation, and payload encryption, but
   before Oracle, file, or future sink writes. It can require priority,
@@ -124,8 +129,11 @@ The current release provides the following production-ready foundation:
   file placement, deterministic filenames, duplicate handling, optional gzip
   compression, metadata persistence, and the same payload normalization contract
   used by Oracle.
-- A safe sink connector framework with first-party Oracle and file connector
-  descriptors, explicit registry resolution, public connector metadata, and
+- `nats_sinks.spool.SpoolSink`, a production-oriented encrypted edge spool sink
+  for disconnected operation, bounded local custody, deterministic idempotency,
+  priority-aware replay, and forwarding into a final destination sink.
+- A safe sink connector framework with first-party Oracle, file, and spool
+  connector descriptors, explicit registry resolution, public connector metadata, and
   disabled-by-default allow-listed entry-point discovery for reviewed external
   connectors.
 - Tests and documentation for the commit-then-acknowledge invariant across the
@@ -134,8 +142,9 @@ The current release provides the following production-ready foundation:
 The same features are intentionally useful in mission-oriented deployments:
 priority can signal handling urgency, classification can capture the handling
 domain, labels can carry operational tags such as sensor family, mission
-thread, platform class, exercise identifier, coalition caveat, or audit lane,
-and payload encryption can protect stored message bodies while leaving enough
+thread, platform class, exercise identifier, coalition caveat, or audit lane.
+Security label profiles can preserve releasability and handling policy context,
+while payload encryption can protect stored message bodies while leaving enough
 metadata for routing and audit.
 
 ## Production Sinks
@@ -144,9 +153,10 @@ metadata for routing and audit.
 | --- | --- | --- | --- |
 | Oracle Database | `from nats_sinks.oracle import OracleSink` | Persist JetStream messages into Oracle tables with idempotent writes. | Oracle transaction committed. |
 | Local files | `from nats_sinks.file import FileSink` | Write one JSON or gzip-compressed JSON document per message for local handoff, audit, development, or simple archival flows. | Final file atomically placed after flush and optional `fsync`. |
+| Edge spool | `from nats_sinks.spool import SpoolSink` | Commit encrypted local custody during disconnected operation, then replay later to Oracle, file, or another sink. | Encrypted spool record atomically placed after flush and optional `fsync`. |
 
-Both sinks follow the same framework rule: the sink writes durably and returns
-success; the core runner ACKs JetStream messages afterward.
+All built-in sinks follow the same framework rule: the sink writes durably and
+returns success; the core runner ACKs JetStream messages afterward.
 
 ## High-Level Flow
 
@@ -219,6 +229,8 @@ operations without hunting through a long flat list.
   merge mode, metadata columns, Autonomous Database, and transactions.
 - [File Sink](file-sink.md): atomic local files, deterministic filenames,
   duplicate handling, gzip compression, and handoff patterns.
+- [Edge Spool Sink](spool-sink.md): encrypted local custody for disconnected
+  operation and controlled replay into a final destination sink.
 
 ### Data Handling
 

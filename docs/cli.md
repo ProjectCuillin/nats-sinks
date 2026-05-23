@@ -34,6 +34,7 @@ nats-sink validate config.json
 nats-sink show-effective-config config.json
 nats-sink test-sink config.json
 nats-sink stream-plan config.json
+nats-sink replay-spool spool-config.json target-config.json --dry-run
 nats-sink-metrics show .local/nats-sinks/metrics.json
 nats-sink-observe init-prometheus-policy config.json observability.prometheus.json
 nats-sink-observe prometheus-http .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
@@ -129,6 +130,41 @@ Example JSON excerpt:
 
 See [JetStream Stream Management Planning](stream-management.md) for the full
 operator guide and permission discussion.
+
+### `nats-sink replay-spool`
+
+Replays committed records from an encrypted edge spool into a final destination
+sink. The first argument must be a normal configuration file whose
+`sink.type` is `spool`. The second argument must be a normal configuration file
+for the target sink, such as `file` or `oracle`.
+
+```bash
+nats-sink replay-spool /etc/nats-sinks/spool.json /etc/nats-sinks/oracle.json --dry-run
+```
+
+Example dry-run output:
+
+```text
+Dry run complete; 128 committed spool record(s) eligible.
+```
+
+Replay a bounded number of records:
+
+```bash
+nats-sink replay-spool /etc/nats-sinks/spool.json /etc/nats-sinks/oracle.json --max-records 100
+```
+
+Example replay output:
+
+```text
+Replay complete: scanned=100 replayed=100 deleted=100 failed=0
+```
+
+Replay does not ACK JetStream messages. The original ACK already happened when
+the spool record was committed by `nats-sink run`. During replay, files are
+deleted only after the target sink returns success and the spool config keeps
+`delete_after_replay` enabled. See [Edge Spool Sink](spool-sink.md) for the
+full delivery and security model.
 
 ### `nats-sink run`
 

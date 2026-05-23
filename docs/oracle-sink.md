@@ -345,6 +345,7 @@ separate so downstream controls can reason about each class of data.
 | `headers` | `HEADERS_JSON` | Message headers as JSON. |
 | `metadata` | `METADATA_JSON` | Full generic metadata snapshot. |
 | `mission_metadata` | `MISSION_METADATA_JSON` | Optional validated mission metadata JSON object resolved by the core runtime. Missing mission metadata is stored as JSON `null`. |
+| `security_labels` | `SECURITY_LABELS_JSON` | Optional validated data-centric security label profile resolved by the core runtime. Missing security labels are stored as JSON `null`. |
 
 Example:
 
@@ -609,6 +610,7 @@ create table nats_sink_events (
     headers_json      json,
     metadata_json     json,
     mission_metadata_json json,
+    security_labels_json json,
     constraint nats_sink_events_pk
         primary key (stream_name, stream_sequence)
 );
@@ -664,6 +666,15 @@ richer operational context in one JSON column instead of adding fixed Oracle
 columns for every possible mission, platform, sensor, track, or lifecycle
 field. See [Mission Metadata](mission-metadata.md) and
 [F2T2EA Event Phase Tagging](use-cases/defence/f2t2ea-event-phase-tagging.md).
+
+`security_labels_json` stores the optional data-centric security label profile
+resolved by the core runtime. This profile is useful when Oracle rows need to
+carry policy context such as releasability, handling caveats, owner,
+originator, policy identifier, and retention category. The profile is metadata
+only; Oracle grants, views, VPD policies, application authorization, and other
+downstream controls still enforce access. See
+[Data-Centric Security Label Profile](security-label-profile.md).
+
 For broader examples that combine Oracle columns, mission metadata, custody,
 classification, labels, and audit-oriented query patterns, see
 [Defence And Mission Support](use-cases/defence/index.md).
@@ -760,6 +771,7 @@ organization.
 | `HEADERS_JSON` | Headers such as `Nats-Msg-Id`, `Nats-Sinks-Priority`, `Nats-Sinks-Classification`, and `Nats-Sinks-Labels` when present. |
 | `METADATA_JSON` | Full metadata document including `message_metadata.priority`, `message_metadata.classification`, `message_metadata.labels`, and optional `custody` evidence. |
 | `MISSION_METADATA_JSON` | Optional validated JSON object such as `{"profile":"mission-event-v1","mission_id":"SYN-MISSION-001","f2t2ea_phase":"track"}` when mission metadata is enabled. |
+| `SECURITY_LABELS_JSON` | Optional validated data-centric security label profile such as `{"profile":"nats-sinks.security-label.v1","classification":"NATO SECRET","releasability":["NATO","FVEY"]}` when security labels are enabled. |
 
 For F2T2EA-style phase tagging, keep phase values metadata-only and do not use
 them to change ACK behavior, idempotency keys, or sink write ordering. The
@@ -1088,7 +1100,8 @@ create table NATS_SINK_EVENTS_STAGE (
     payload_json      json,
     headers_json      json,
     metadata_json     json,
-    mission_metadata_json json
+    mission_metadata_json json,
+    security_labels_json json
 );
 
 create index NATS_SINK_EVENTS_STAGE_BID_I
@@ -1358,6 +1371,7 @@ create table nats_sink_events (
     headers_json      json,
     metadata_json     json,
     mission_metadata_json json,
+    security_labels_json json,
     constraint nats_sink_events_pk
         primary key (stream_name, stream_sequence)
 );

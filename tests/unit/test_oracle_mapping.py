@@ -50,6 +50,7 @@ def test_envelope_to_row_maps_payload_and_headers() -> None:
     assert json.loads(row["payload_json"])["order_id"] == "O-1001"
     assert json.loads(row["headers_json"])["Nats-Msg-Id"] == "m-1"
     assert json.loads(row["mission_metadata_json"]) is None
+    assert json.loads(row["security_labels_json"]) is None
     metadata = json.loads(row["metadata_json"])
     assert metadata["nats"]["reserved_headers"]["Nats-Msg-Id"] == "m-1"
     assert metadata["message_metadata"] == {
@@ -58,6 +59,7 @@ def test_envelope_to_row_maps_payload_and_headers() -> None:
         "labels": [],
     }
     assert metadata["mission_metadata"] is None
+    assert metadata["security_labels"] is None
     assert metadata["custody"] is None
 
 

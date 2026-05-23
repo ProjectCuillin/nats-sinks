@@ -132,6 +132,7 @@ def build_nats_metadata_snapshot(
             "labels": list(envelope.labels),
         },
         "mission_metadata": envelope.mission_metadata_for_json_storage(),
+        "security_labels": envelope.security_labels_for_json_storage(),
         "headers": headers,
         "nats": {
             "reserved_headers": reserved_headers,

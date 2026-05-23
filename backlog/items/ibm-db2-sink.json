@@ -1,0 +1,23 @@
+{
+  "id": "ibm-db2-sink",
+  "title": "[Feature]: Evaluate an IBM Db2 sink",
+  "area": "Future sink",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "security", "testing"],
+  "problem": "OCI GoldenGate lists IBM Db2 for i and Db2 for z/OS, while GoldenGate connectivity material also lists Db2 LUW. nats-sinks does not yet define a Db2 sink strategy.",
+  "proposal": "Research an IBM Db2 sink covering Db2 LUW, Db2 for i, and Db2 for z/OS differences. The evaluation should identify driver support, SQL dialect, transaction behavior, upsert or merge support, identifier rules, mainframe connectivity constraints, and whether one connector can safely cover all Db2 variants.",
+  "users": "Enterprise and mainframe integration teams that need controlled JetStream-to-Db2 persistence.",
+  "delivery_semantics": "Success may be returned only after a Db2 transaction commits. Duplicate handling must use unique constraints and a documented merge/upsert strategy for the selected Db2 family.",
+  "security": "Database credentials, host identifiers, schema names, and payloads must be redacted. Bind variables and least-privilege database grants are mandatory.",
+  "acceptance": [
+    "Research determines whether one Db2 sink can support all variants.",
+    "Driver and licensing implications are documented.",
+    "Idempotency and SQL dialect constraints are specified.",
+    "Unit tests use fakes and no live Db2 services.",
+    "Documentation warns about platform-specific operational requirements."
+  ],
+  "tests": "Add mocked driver tests and SQL generation tests for accepted dialects. Gate live Db2 tests.",
+  "documentation": "Add Db2 sink evaluation documentation and roadmap updates.",
+  "closeout": "Close after the research or implementation release is published."
+}

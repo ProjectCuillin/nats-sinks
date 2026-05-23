@@ -155,6 +155,7 @@ def test_file_record_preserves_json_payload_and_metadata() -> None:
     assert record["labels"] == "billing;urgent"
     assert record["labels_list"] == ["billing", "urgent"]
     assert record["mission_metadata"] is None
+    assert record["security_labels"] is None
     assert record["custody"] is None
     assert record["payload"] == {"order_id": "O-1001"}
     assert record["payload_info"]["original_format"] == "json"
@@ -163,6 +164,7 @@ def test_file_record_preserves_json_payload_and_metadata() -> None:
     assert record["metadata"]["message_metadata"]["classification"] == "restricted"
     assert record["metadata"]["message_metadata"]["labels"] == ["billing", "urgent"]
     assert record["metadata"]["mission_metadata"] is None
+    assert record["metadata"]["security_labels"] is None
 
 
 def test_file_record_preserves_custody_metadata() -> None:
@@ -187,6 +189,7 @@ def test_file_record_stores_missing_message_metadata_as_null() -> None:
     assert record["labels"] is None
     assert record["labels_list"] == []
     assert record["mission_metadata"] is None
+    assert record["security_labels"] is None
     assert record["metadata"]["message_metadata"] == {
         "priority": None,
         "classification": None,

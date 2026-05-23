@@ -84,6 +84,11 @@ from nats_sinks.core.payload import (
 from nats_sinks.core.policy import PolicyEvaluation, PolicyViolation, evaluate_pre_sink_policy
 from nats_sinks.core.priority import PriorityLaneAssignment, order_by_priority_lanes
 from nats_sinks.core.runner import JetStreamSinkRunner
+from nats_sinks.core.security_labels import (
+    DEFAULT_SECURITY_LABELS_HEADER,
+    SECURITY_LABEL_PROFILE_NAME,
+    parse_security_label_header,
+)
 from nats_sinks.core.size_policy import (
     SizePolicyEvaluation,
     SizePolicyViolation,
@@ -99,11 +104,13 @@ __all__ = [
     "DEFAULT_METRIC_NAMESPACE",
     "DEFAULT_MISSION_METADATA_HEADER",
     "DEFAULT_PRIORITY_HEADER",
+    "DEFAULT_SECURITY_LABELS_HEADER",
     "ENCRYPTED_PAYLOAD_KEY",
     "LEGACY_METRIC_ALIASES",
     "METRIC_SPECS",
     "MISSION_METADATA_PROFILE_VERSION",
     "NATS_RESERVED_HEADER_NAMES",
+    "SECURITY_LABEL_PROFILE_NAME",
     "ConsumerDrift",
     "ConsumerManagementResult",
     "InMemoryMetrics",
@@ -145,6 +152,7 @@ __all__ = [
     "order_by_priority_lanes",
     "parse_jetstream_advisory",
     "parse_mission_metadata_header",
+    "parse_security_label_header",
     "qualified_metric_name",
     "validate_advisory_subject",
     "validate_metric_namespace",

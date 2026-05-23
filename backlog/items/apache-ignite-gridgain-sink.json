@@ -1,0 +1,23 @@
+{
+  "id": "apache-ignite-gridgain-sink",
+  "title": "[Feature]: Evaluate Apache Ignite and GridGain sinks",
+  "area": "Future sink",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "security", "testing"],
+  "problem": "Oracle GoldenGate connectivity material lists Apache Ignite and GridGain. nats-sinks does not yet define a sink strategy for in-memory data grid targets.",
+  "proposal": "Research Apache Ignite and GridGain sink support, including whether the target can provide durable enough storage for ACK-gated operation or should only be used as a non-gated fan-out target. The design should evaluate SQL, key-value, thin client, persistence, cache configuration, and duplicate handling.",
+  "users": "Teams using in-memory data grids for low-latency state propagation or operational data access.",
+  "delivery_semantics": "ACK-gated success is allowed only when persistence and write confirmation provide a durable boundary. Volatile cache-only writes must be marked unsafe for critical event custody.",
+  "security": "Cluster endpoints, credentials, cache names, keys, and payloads must be redacted. TLS and authentication must be verified by default when supported.",
+  "acceptance": [
+    "Research determines durable versus non-durable deployment modes.",
+    "The design selects a client API and data model.",
+    "Configuration validates cache/table names, key strategy, timeouts, and persistence assumptions.",
+    "Unit tests use fakes and no live clusters.",
+    "Documentation clearly marks unsafe cache-only modes."
+  ],
+  "tests": "Add fake client tests for key mapping, duplicate handling, persistence mode validation, and error classification.",
+  "documentation": "Add Ignite/GridGain evaluation notes and update roadmap.",
+  "closeout": "Close after release of the research or implementation."
+}

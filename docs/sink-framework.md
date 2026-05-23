@@ -288,6 +288,7 @@ flowchart LR
     Registry --> Optional[Optional allow-listed entry points]
     BuiltIn --> File[FileSink]
     BuiltIn --> Oracle[OracleSink]
+    BuiltIn --> Spool[SpoolSink]
     Optional --> ThirdParty[Reviewed external connector]
     ThirdParty --> Contract[Sink protocol and certification tests]
 ```
@@ -298,6 +299,7 @@ Today, the first-party production connectors are built in:
 | --- | --- | --- | --- |
 | Oracle Database | `oracle` | `nats_sinks.oracle.OracleSink` | Production connector in this repository. |
 | File | `file` | `nats_sinks.file.FileSink` | Production connector in this repository. |
+| Edge spool | `spool` | `nats_sinks.spool.SpoolSink` | Production connector in this repository. |
 
 Future Oracle-family sinks such as OCI Object Storage, Oracle MySQL,
 Oracle Berkeley DB, Oracle NoSQL Database, and OCI Streaming are intended to
@@ -414,6 +416,7 @@ Current production sinks and their durable success boundaries:
 | --- | --- | --- |
 | Oracle | `nats_sinks.oracle` | Oracle transaction committed. |
 | File | `nats_sinks.file` | Output file atomically placed after temporary write, flush, and configured fsync behavior. |
+| Edge spool | `nats_sinks.spool` | Encrypted spool record atomically placed after temporary write, flush, and configured fsync behavior. |
 
 ## Adding Future Sinks Without Breaking Users
 

@@ -1,0 +1,23 @@
+{
+  "id": "amazon-documentdb-sink",
+  "title": "[Feature]: Evaluate an Amazon DocumentDB sink",
+  "area": "Future sink",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "security", "testing"],
+  "problem": "Oracle GoldenGate Big Data targets include AWS DocumentDB. nats-sinks has a MongoDB sink backlog item, but it does not yet capture Amazon DocumentDB compatibility, TLS, and API-difference risks.",
+  "proposal": "Evaluate whether Amazon DocumentDB should be a compatibility profile under a future MongoDB sink or a dedicated connector. The design should cover TLS certificate handling, connection strings, write concerns, retryable writes support, deterministic document IDs, and compatibility limitations versus MongoDB.",
+  "users": "AWS users storing event envelopes in Amazon DocumentDB while preserving nats-sinks idempotency and metadata contracts.",
+  "delivery_semantics": "Success may be returned only after the configured write concern reports durable acceptance. Duplicate redelivery must map to deterministic document IDs or a documented duplicate policy.",
+  "security": "Connection strings, certificates, users, payloads, document IDs, and collection names must be redacted. TLS verification must be enabled by default.",
+  "acceptance": [
+    "Research compares Amazon DocumentDB behavior with MongoDB sink requirements.",
+    "The design decides profile versus dedicated sink.",
+    "Configuration validates database, collection, TLS, and duplicate settings.",
+    "Unit tests use fake clients and avoid network calls.",
+    "Documentation explains compatibility limitations."
+  ],
+  "tests": "Add mocked client tests for config validation, duplicate document handling, write concern choices, and error translation.",
+  "documentation": "Document as a MongoDB compatibility profile or a dedicated sink page depending on the decision.",
+  "closeout": "Close after release of the decision or implementation."
+}

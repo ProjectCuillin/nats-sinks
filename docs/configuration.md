@@ -240,7 +240,7 @@ The top-level sections are:
 | `encryption` | no | Optional core payload encryption before messages are passed to any sink. |
 | `size_policy` | no | Optional destination-neutral payload, header, metadata, label, record, and batch-size bounds evaluated before any sink write. Disabled by default. |
 | `pre_sink_policy` | no | Optional fail-closed validation gate evaluated after normalization and core payload transformation, but before any sink write. |
-| `plugins` | no | Optional allow-listed discovery for externally installed sink connectors. Disabled by default. Built-in Oracle and file sinks do not need this section. |
+| `plugins` | no | Optional allow-listed discovery for externally installed sink connectors. Disabled by default. Built-in Oracle, file, and spool sinks do not need this section. |
 | `sink` | yes | Destination-specific sink configuration. `sink.type` chooses the sink implementation. |
 
 The only supported `delivery.ack_policy` value is `after_sink_commit`, which
@@ -990,6 +990,92 @@ See [Mission Metadata](mission-metadata.md) for the full storage contract and
 [F2T2EA Event Phase Tagging](use-cases/defence/f2t2ea-event-phase-tagging.md)
 for a defence-oriented use-case blueprint built on the generic feature.
 
+### `security_labels`
+
+The `security_labels` section is disabled by default. Enable it when messages
+need a structured data-centric security label profile next to the normal
+`priority`, `classification`, and `labels` fields. The profile is useful for
+policy context such as releasability, handling caveats, owner, originator,
+policy identifier, and retention category.
+
+The profile is metadata only. It can inform routing, retention, audit, and
+downstream authorization policy, but it does not enforce authorization by
+itself.
+
+```json
+{
+  "security_labels": {
+    "enabled": true,
+    "header": "Nats-Sinks-Security-Labels",
+    "max_bytes": 8192,
+    "allowed_priorities": ["routine", "priority", "immediate", "flash"],
+    "allowed_classifications": [
+      "NATO UNCLASSIFIED",
+      "NATO RESTRICTED",
+      "NATO CONFIDENTIAL",
+      "NATO SECRET"
+    ],
+    "allowed_releasability": ["NATO", "FVEY", "EU"],
+    "allowed_handling_caveats": ["MISSION", "TRAINING", "EXERCISE"],
+    "allowed_retention_categories": ["mission-log-30d", "mission-log-1y"],
+    "default": {
+      "profile": "nats-sinks.security-label.v1",
+      "classification": "NATO RESTRICTED",
+      "releasability": ["NATO"],
+      "handling_caveats": ["MISSION"],
+      "owner": "example-owner",
+      "originator": "example-originator",
+      "policy_id": "example-policy",
+      "retention_category": "mission-log-30d"
+    },
+    "rules": [
+      {
+        "subject": "mission.sensor.>",
+        "profile": {
+          "profile": "nats-sinks.security-label.v1",
+          "classification": "NATO SECRET",
+          "releasability": ["NATO", "FVEY"],
+          "handling_caveats": ["MISSION"],
+          "owner": "example-sensor-domain",
+          "originator": "example-originator",
+          "policy_id": "example-mission-policy",
+          "retention_category": "mission-log-1y"
+        }
+      }
+    ]
+  }
+}
+```
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `enabled` | no | `false` | `true` or `false`. | Enables parsing, validation, and sink delivery of the data-centric security label profile. |
+| `header` | no | `Nats-Sinks-Security-Labels` | Non-empty header name without control characters. | Header containing a JSON profile supplied by a publisher. |
+| `max_bytes` | no | `8192` | Integer from `1` to `262144`. | Maximum canonical JSON size for one profile. |
+| `allowed_priorities` | no | `[]` | List of non-empty strings. | Optional fail-closed vocabulary for profile `priority`. |
+| `allowed_classifications` | no | `[]` | List of non-empty strings. | Optional fail-closed vocabulary for profile `classification`. |
+| `allowed_releasability` | no | `[]` | List of non-empty strings. | Optional fail-closed vocabulary for every `releasability` value. |
+| `allowed_handling_caveats` | no | `[]` | List of non-empty strings. | Optional fail-closed vocabulary for every `handling_caveats` value. |
+| `allowed_retention_categories` | no | `[]` | List of non-empty strings. | Optional fail-closed vocabulary for `retention_category`. |
+| `default` | no | `null` | JSON object or `null`. | Global default profile used when the header is absent and no subject rule matches. |
+| `rules` | no | `[]` | List of subject-rule objects. | Ordered subject-specific defaults evaluated before the global default. |
+
+Rule fields:
+
+| Rule field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `subject` | yes | none | NATS subject pattern. | Subject pattern matched against `NatsEnvelope.subject`. |
+| `profile` | yes | none | JSON object or `null`. | Default profile for matching subjects. `null` explicitly clears the global default. |
+
+Valid profile root fields are `profile`, `priority`, `classification`,
+`labels`, `releasability`, `handling_caveats`, `owner`, `originator`,
+`policy_id`, `retention_category`, and `extensions`. Unknown root fields are
+rejected. Missing `priority`, `classification`, and `labels` values are filled
+from the already-normalized message metadata values.
+
+See [Data-Centric Security Label Profile](security-label-profile.md) for the
+complete profile shape, storage examples, Mermaid diagrams, and security notes.
+
 ### `encryption`
 
 The `encryption` section is a generic core runtime feature. When enabled, the
@@ -1299,19 +1385,21 @@ remaining fields to the selected sink validator.
 
 | Field | Required | Default | Valid values | Description |
 | --- | --- | --- | --- | --- |
-| `type` | yes | none | `file` or `oracle` in the current release. | Selects the production sink implementation. Future sinks should add new values without changing the generic core sections. |
+| `type` | yes | none | `file`, `oracle`, or `spool` in the current release. | Selects the production sink implementation. Future sinks should add new values without changing the generic core sections. |
 
 All other fields under `sink` are sink-specific:
 
 - `file` fields are documented in [File Sink](file-sink.md),
-- `oracle` fields are documented in [Oracle Sink](oracle-sink.md).
+- `oracle` fields are documented in [Oracle Sink](oracle-sink.md),
+- `spool` fields are documented in [Edge Spool Sink](spool-sink.md).
 
 ### `plugins`
 
 The `plugins` section controls optional discovery for externally installed sink
 connectors. It is disabled by default because Python plugin loading is a
 code-execution and supply-chain trust boundary. You do not need this section
-for the built-in Oracle Database sink or the built-in FileSink.
+for the built-in Oracle Database sink, built-in FileSink, or built-in
+SpoolSink.
 
 | Field | Required | Default | Valid values | Description |
 | --- | --- | --- | --- | --- |
@@ -1397,13 +1485,16 @@ secret-handling guidance, and examples. The current production sinks are:
   also documented on the Oracle page because they depend on Oracle table
   design and constraints.
 - `"type": "file"` for local JSON file output. File durability, duplicate
-  policies, deterministic file names, optional gzip compression, and filesystem safety live in
-  [File Sink](file-sink.md).
+  policies, deterministic file names, optional gzip compression, and filesystem
+  safety live in [File Sink](file-sink.md).
+- `"type": "spool"` for encrypted local edge custody. Spool durability,
+  record-level encryption, bounded capacity, deterministic duplicate handling,
+  priority-aware replay, and cleanup policy live in [Edge Spool Sink](spool-sink.md).
 
 This separation is part of the compatibility contract. Adding a future
 `postgres`, `http`, or `s3` sink should add new sink-specific fields under
-`"sink"` without requiring existing Oracle or file users to change the rest of
-their configuration.
+`"sink"` without requiring existing Oracle, file, or spool users to change the
+rest of their configuration.
 
 ## Payload Storage Modes
 

@@ -60,6 +60,11 @@ used immediately:
   subject-specific rules shared by every sink. These fields are useful for
   separating routine traffic from urgent, restricted, coalition, exercise, or
   audit-relevant event streams without changing sink code.
+- Optional data-centric security label profiles for structured releasability,
+  handling caveats, owner, originator, policy identifier, and retention
+  category metadata. Oracle stores the profile in `SECURITY_LABELS_JSON`, the
+  file sink writes it as `security_labels`, and future sinks can use the same
+  core-normalized profile.
 - `nats-sink`, the CLI for validating JSON configuration, showing redacted
   effective config, testing sinks, and running sink processes.
 - `nats-sink-metrics`, a separate CLI for reading a local JSON metrics snapshot
@@ -94,8 +99,12 @@ used immediately:
   filenames, atomic temporary-file placement, optional `fsync`, duplicate
   handling, optional Python standard-library gzip compression, metadata
   persistence, and the same payload normalization contract used by Oracle.
-- A safe sink connector framework with first-party Oracle and file connectors,
-  stable `SinkConnector` metadata, explicit `SinkRegistry` resolution, and
+- `nats_sinks.spool.SpoolSink`, the production-oriented encrypted edge spool
+  sink for disconnected operation, bounded local custody, deterministic
+  idempotency, priority-aware replay, and explicit replay into a final
+  destination sink when connectivity returns.
+- A safe sink connector framework with first-party Oracle, file, and spool
+  connectors, stable `SinkConnector` metadata, explicit `SinkRegistry` resolution, and
   disabled-by-default allow-listed entry-point discovery for reviewed external
   connectors.
 - Basic metrics counters and timing observations for fetched, prepared,
@@ -160,6 +169,10 @@ used immediately:
   Oracle `MISSION_METADATA_JSON`, file-sink output records, and future sinks
   without adding fixed columns for every use case. See
   [Mission Metadata](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/mission-metadata.md).
+- A data-centric security label profile for structured policy metadata such as
+  releasability, handling caveats, owner, originator, policy ID, and retention
+  category. See
+  [Data-Centric Security Label Profile](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/security-label-profile.md).
 - F2T2EA event phase tagging guidance built on mission metadata as
   metadata-only context, with explicit non-goals around targeting,
   fire-control, weapons-release, and autonomous decision behavior. See
@@ -169,6 +182,7 @@ Production sink modules shipped today:
 
 - `nats_sinks.oracle`
 - `nats_sinks.file`
+- `nats_sinks.spool`
 
 ## Status
 
@@ -183,6 +197,7 @@ Included today:
 - Oracle sink with idempotent production modes.
 - File sink with atomic local JSON file writes and deterministic duplicate
   handling.
+- Edge spool sink with encrypted local records and replay into a final sink.
 - Optional AES-256-GCM and AES-256-CCM payload encryption in the core runner.
 - Multi-key payload decryption helper for controlled key-rotation, replay, and
   verification workflows.
@@ -585,6 +600,40 @@ With the file sink, these values appear as top-level JSON fields such as
 are stored in `PRIORITY`, `CLASSIFICATION`, and `LABELS` columns and repeated
 inside `METADATA_JSON.message_metadata`.
 
+For richer data-centric policy context, enable `security_labels`. The profile
+is optional and metadata-only. It can help downstream systems reason about
+releasability, handling caveats, owner, originator, policy identifiers, and
+retention categories, but it does not replace authorization in Oracle, IAM, or
+the destination platform.
+
+```json
+{
+  "security_labels": {
+    "enabled": true,
+    "allowed_classifications": [
+      "NATO UNCLASSIFIED",
+      "NATO RESTRICTED",
+      "NATO CONFIDENTIAL",
+      "NATO SECRET"
+    ],
+    "default": {
+      "profile": "nats-sinks.security-label.v1",
+      "classification": "NATO RESTRICTED",
+      "releasability": ["NATO"],
+      "handling_caveats": ["MISSION"],
+      "owner": "example-owner",
+      "originator": "example-originator",
+      "policy_id": "example-policy",
+      "retention_category": "mission-log-30d"
+    }
+  }
+}
+```
+
+With the file sink, the profile appears as top-level `security_labels` and
+inside `metadata.security_labels`. With Oracle, the profile is stored in
+`SECURITY_LABELS_JSON` and repeated inside `METADATA_JSON.security_labels`.
+
 ## NATS Connections
 
 `nats-sinks` supports common NATS client authentication options through the
@@ -718,15 +767,19 @@ Destination-specific details are split into dedicated pages:
   local file output, atomic write behavior, deterministic file names, duplicate
   policies, gzip compression, filesystem safety, and file-specific performance
   guidance.
+- [Edge Spool Sink](https://nats-sinks.readthedocs.io/en/latest/spool-sink/)
+  covers encrypted local custody for disconnected operation, bounded spool
+  directories, deterministic duplicate handling, priority-aware replay, and
+  forwarding into a final destination sink.
 
 The generic sink framework is documented separately in
 [Sink Framework](https://nats-sinks.readthedocs.io/en/latest/sink-framework/)
 and the reusable release gate is documented in
 [Sink Certification](https://nats-sinks.readthedocs.io/en/latest/sink-certification/).
-That boundary is deliberate: Oracle and file sinks use the same core delivery
-semantics, the same envelope contract, and the same commit-then-acknowledge
-rule. Future sinks must provide comparable certification evidence before they
-are described as production-ready.
+That boundary is deliberate: Oracle, file, and spool sinks use the same core
+delivery semantics, the same envelope contract, and the same
+commit-then-acknowledge rule. Future sinks must provide comparable
+certification evidence before they are described as production-ready.
 
 Generic data-handling features such as
 [payload encryption](https://nats-sinks.readthedocs.io/en/latest/payload-encryption/),

@@ -1,0 +1,23 @@
+{
+  "id": "solace-sink",
+  "title": "[Feature]: Evaluate a Solace sink",
+  "area": "Future sink",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "security", "testing"],
+  "problem": "Oracle GoldenGate connectivity material lists Solace under streaming and events. nats-sinks does not yet have a Solace sink or event-broker compatibility profile.",
+  "proposal": "Research a Solace sink using supported Solace APIs or protocols. The design should compare direct Solace publishing, JMS compatibility, MQTT/AMQP options if relevant, persistent messaging, transactions or acknowledgements, duplicate handling, and routing metadata mapping.",
+  "users": "Organizations using Solace event brokers that want NATS JetStream events forwarded into existing event meshes.",
+  "delivery_semantics": "ACK-gated success requires persistent Solace acceptance for every required message. Best-effort or non-persistent publishing must not be the default for durable sink mode.",
+  "security": "Broker URLs, credentials, VPN names, topic names, and payloads must be redacted. TLS verification and least-privilege publish permissions are required.",
+  "acceptance": [
+    "Research identifies the preferred Solace integration API.",
+    "The design documents persistent delivery and duplicate behavior.",
+    "Configuration validates topics, endpoints, timeouts, and authentication mode.",
+    "Unit tests use fakes and no broker network calls.",
+    "Documentation explains relationship with generic JMS or AMQP-style connectors."
+  ],
+  "tests": "Add fake client tests for publish confirmation, error translation, and ACK ordering if implemented. Gate live tests.",
+  "documentation": "Add Solace sink evaluation documentation and roadmap entry.",
+  "closeout": "Close after release of the research or implementation."
+}

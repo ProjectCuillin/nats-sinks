@@ -160,9 +160,10 @@ def test_cli_metrics_hook_attaches_oracle_sink_counters() -> None:
 def test_cli_registry_always_exposes_first_party_connectors() -> None:
     registry = _registry()
 
-    assert registry.names() == ("file", "oracle")
+    assert registry.names() == ("file", "oracle", "spool")
     assert registry.connector("file").built_in is True
     assert registry.connector("oracle").production_ready is True
+    assert registry.connector("spool").requires_extra == "crypto"
 
 
 def test_cli_registry_rejects_missing_allow_listed_plugin() -> None:

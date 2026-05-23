@@ -63,8 +63,8 @@ treated as a supply-chain trust decision.
 
 Secure defaults:
 
-- Oracle Database and FileSink are first-party built-in connectors and do not
-  require plugin discovery.
+- Oracle Database, FileSink, and SpoolSink are first-party built-in connectors
+  and do not require plugin discovery.
 - Optional third-party discovery is disabled by default.
 - When discovery is enabled, `plugins.allowed_sinks` must explicitly list each
   external connector name.
@@ -144,6 +144,11 @@ Use this baseline for code review and future releases:
   disabled by default, subscribes only to configured advisory subjects, parses
   bounded JSON payloads, and emits aggregate counters without exporting stream
   names, consumer names, sequence numbers, or advisory payload bodies.
+- Treat local spool directories as protected custody locations. Spool records
+  are encrypted by default, but operators must still restrict filesystem
+  permissions, exclude spool paths from source control, monitor disk usage,
+  rotate keys with care, and avoid exposing directory listings because wrapper
+  metadata can still reveal record counts and rough priority ordering.
 - Prefer least privilege for NATS accounts, Oracle users, service accounts,
   CI jobs, containers, cloud identities, filesystems, and documentation
   examples.
@@ -206,6 +211,15 @@ batch size before any sink write. It is intentionally sink-neutral so Oracle,
 file, and future sinks all receive the same protection. Rejections are
 permanent validation failures and follow the same DLQ-before-ACK rule as other
 pre-sink failures.
+
+Use `security_labels` when deployments need a structured data-centric security
+label profile with releasability, handling caveats, owner, originator, policy
+identifier, and retention category. The profile is validated before sink
+delivery and stored as JSON in Oracle and file outputs. It can inform policy
+decisions, but it is not an access-control mechanism by itself. Keep
+authorization in Oracle, the application, IAM, compartment policies, database
+views, VPD policies, or the destination platform that actually controls access.
+See [Data-Centric Security Label Profile](security-label-profile.md).
 
 Use `size_policy` for broad resource and abuse-case controls, then use
 `pre_sink_policy` for semantic requirements such as classification, required

@@ -4,6 +4,11 @@ The local file sink writes JetStream messages to JSON files on a local or
 mounted filesystem. It is the second production sink in `nats-sinks`, alongside
 Oracle Database.
 
+If you need disconnected local custody followed by later replay into another
+sink, use the [Edge Spool Sink](spool-sink.md) instead. `FileSink` is a final
+filesystem destination; `SpoolSink` is a local custody queue with encrypted
+replay records and explicit forwarding semantics.
+
 The file sink is useful when you need a durable handoff directory, a simple
 audit trail, a development destination without a database, or an integration
 point for another process that watches files. It follows the same core rule as
@@ -265,6 +270,18 @@ Each uncompressed file contains a single JSON document:
     "mission_id": "SYN-MISSION-001",
     "f2t2ea_phase": "track"
   },
+  "security_labels": {
+    "profile": "nats-sinks.security-label.v1",
+    "priority": "immediate",
+    "classification": "NATO SECRET",
+    "labels": ["mission-report", "coalition", "watch-floor"],
+    "releasability": ["NATO", "FVEY"],
+    "handling_caveats": ["MISSION"],
+    "owner": "example-owner",
+    "originator": "example-originator",
+    "policy_id": "example-policy",
+    "retention_category": "mission-log-1y"
+  },
   "custody": null,
   "payload": {
     "report_id": "R-1001",
@@ -301,6 +318,15 @@ JSON `null`. This is the recommended pattern for optional F2T2EA phase tagging
 and other mission-support context that should not become fixed generic
 framework fields. See [Mission Metadata](mission-metadata.md) and
 [F2T2EA Event Phase Tagging](use-cases/defence/f2t2ea-event-phase-tagging.md).
+
+When top-level `security_labels.enabled` is true, the file sink writes the
+validated data-centric security label profile as top-level `security_labels`
+and also includes it in `metadata.security_labels`. If the profile is absent,
+both locations use JSON `null`. The profile can carry releasability, handling
+caveats, owner, originator, policy ID, and retention category without turning
+every policy concept into a fixed file-sink field. See
+[Data-Centric Security Label Profile](security-label-profile.md).
+
 For broader file-based handoff, edge operation, classification, labels, and
 audit examples, see [Defence And Mission Support](use-cases/defence/index.md).
 
@@ -358,6 +384,18 @@ the visible effect of enabling encryption for the same message:
     "profile": "mission-event-v1",
     "mission_id": "SYN-MISSION-001",
     "f2t2ea_phase": "track"
+  },
+  "security_labels": {
+    "profile": "nats-sinks.security-label.v1",
+    "priority": "immediate",
+    "classification": "NATO SECRET",
+    "labels": ["mission-report", "coalition", "watch-floor"],
+    "releasability": ["NATO", "FVEY"],
+    "handling_caveats": ["MISSION"],
+    "owner": "example-owner",
+    "originator": "example-originator",
+    "policy_id": "example-policy",
+    "retention_category": "mission-log-1y"
   },
   "payload": {
     "_nats_sinks_encryption": {

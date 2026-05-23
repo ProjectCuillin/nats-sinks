@@ -1,0 +1,23 @@
+{
+  "id": "data-warehouse-specialty-sinks",
+  "title": "[Feature]: Evaluate specialty data warehouse sinks",
+  "area": "Future sink",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "security", "testing"],
+  "problem": "Oracle GoldenGate connectivity material lists data warehouse targets such as Teradata Vantage, Vertica, IBM Netezza, and related cloud variants. nats-sinks already tracks Snowflake, BigQuery, Redshift, and Azure Synapse separately, but not these specialty warehouse families.",
+  "proposal": "Research whether Teradata, Vertica, and IBM Netezza should receive separate sink issues or remain grouped as lower-priority specialty warehouse profiles. The evaluation should cover maintained Python drivers, batch load APIs, staging requirements, transaction boundaries, idempotent merge behavior, and operational complexity.",
+  "users": "Enterprise warehouse teams operating Teradata, Vertica, Netezza, or compatible systems.",
+  "delivery_semantics": "Each accepted warehouse target must define a durable commit boundary before it can be ACK-gated. Staged load jobs must be confirmed before success is returned.",
+  "security": "Warehouse credentials, hostnames, schemas, table names, staging locations, and payloads must be redacted. SQL must use parameters or safe load manifests.",
+  "acceptance": [
+    "Research ranks Teradata, Vertica, and Netezza demand and feasibility.",
+    "Separate implementation issues are created for any accepted sink.",
+    "The evaluation documents idempotency and staging patterns.",
+    "No implementation starts from this grouped issue.",
+    "Documentation explains why specialty warehouses are handled separately from generic JDBC."
+  ],
+  "tests": "Research-only initially. Future sinks require mocked driver/load tests and gated integration tests.",
+  "documentation": "Add findings to future sink roadmap documentation.",
+  "closeout": "Close after the evaluation release and follow-up issues are created."
+}

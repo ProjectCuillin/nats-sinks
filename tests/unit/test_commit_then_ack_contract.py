@@ -25,6 +25,7 @@ from nats_sinks.core.config import (
     PreSinkPolicyConfig,
     PriorityLaneConfig,
     PriorityLanesConfig,
+    SecurityLabelProfileConfig,
     SizePolicyConfig,
 )
 from nats_sinks.core.errors import AckError, DeadLetterError
@@ -1123,6 +1124,33 @@ async def test_invalid_mission_metadata_goes_to_dlq_before_ack() -> None:
         subject="orders.*",
         sink=RecordingSink(events),
         mission_metadata=MissionMetadataConfig(enabled=True),
+        dead_letter=DeadLetterConfig(enabled=True, subject="orders.dlq"),
+        jetstream=js,
+    )
+
+    await runner.process_raw_batch([message])
+
+    assert events == ["dlq", "ack"]
+    assert message.acked
+    assert js.published[0][0] == "orders.dlq"
+
+
+@pytest.mark.asyncio
+async def test_invalid_security_labels_go_to_dlq_before_ack() -> None:
+    events: list[str] = []
+    message = FakeMessage(events)
+    message.headers = {
+        "Nats-Msg-Id": "m-1",
+        "Nats-Sinks-Security-Labels": "{not-json",
+    }
+    js = FakeJetStream(events)
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=RecordingSink(events),
+        security_labels=SecurityLabelProfileConfig(enabled=True),
         dead_letter=DeadLetterConfig(enabled=True, subject="orders.dlq"),
         jetstream=js,
     )

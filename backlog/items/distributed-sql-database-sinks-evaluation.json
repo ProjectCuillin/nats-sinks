@@ -1,0 +1,23 @@
+{
+  "id": "distributed-sql-database-sinks-evaluation",
+  "title": "[Feature]: Evaluate distributed SQL database sinks",
+  "area": "Future sink",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "security", "testing"],
+  "problem": "Oracle GoldenGate connectivity material lists distributed SQL and PostgreSQL/MySQL-compatible systems such as SingleStoreDB, YugabyteDB, Greenplum, EDB Postgres Advanced Server, and cloud derivatives. nats-sinks does not yet define how these should relate to MySQL, Postgres, or dedicated sink families.",
+  "proposal": "Research distributed SQL sink coverage as a family. The evaluation should decide whether systems such as SingleStoreDB, YugabyteDB, Greenplum, and EDB Postgres Advanced Server are certified profiles under future MySQL/Postgres sinks or separate sinks with their own SQL dialect and idempotency tests.",
+  "users": "Operators of distributed SQL systems who need event persistence with clear duplicate and transaction semantics.",
+  "delivery_semantics": "ACK-gated success requires committed writes under the selected system's consistency model. Any eventually consistent or asynchronous ingest path must document what durable acceptance means.",
+  "security": "Credentials, connection strings, schemas, payloads, and query details must be redacted. Parameterized SQL and strict identifier validation are mandatory.",
+  "acceptance": [
+    "Research maps each candidate to a dedicated sink or compatibility profile.",
+    "Dialect differences and upsert behavior are documented.",
+    "Separate feature requests are created for any accepted dedicated sink.",
+    "No implementation starts before certification strategy exists.",
+    "Documentation explains compatibility boundaries."
+  ],
+  "tests": "Research-only initially. Future profiles need dialect tests, driver fakes, and gated live tests.",
+  "documentation": "Add distributed SQL evaluation to sink roadmap documentation.",
+  "closeout": "Close after the evaluation release is published."
+}
