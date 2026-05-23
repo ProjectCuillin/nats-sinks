@@ -229,6 +229,10 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Fixed
 
+- Fixed the local Docker smoke runner so expected transient NATS startup
+  connection failures use a quiet error callback and NATS stream seeding
+  failures are reported as concise `SmokeTestError` messages instead of raw
+  tracebacks.
 - Fixed pull request label synchronization to apply labels through
   `gh issue edit` against the pull request number instead of `gh pr edit`,
   avoiding an unrelated GitHub CLI GraphQL `projectCards` failure observed

@@ -40,6 +40,12 @@ class SmokeTestError(RuntimeError):
     """Raised when the local Docker smoke test cannot complete safely."""
 
 
+async def ignore_transient_nats_error(_exc: Exception) -> None:
+    """Suppress expected retry noise while the temporary NATS container starts."""
+
+    return None
+
+
 def parse_args() -> argparse.Namespace:
     """Parse bounded command-line arguments for the smoke test."""
 
@@ -160,7 +166,11 @@ async def wait_for_nats(url: str, timeout_seconds: float) -> None:
     last_error: Exception | None = None
     while time.monotonic() < deadline:
         try:
-            nc = await nats.connect(servers=[url], connect_timeout=1)
+            nc = await nats.connect(
+                servers=[url],
+                connect_timeout=1,
+                error_cb=ignore_transient_nats_error,
+            )
             await nc.close()
             return
         except Exception as exc:
@@ -172,7 +182,14 @@ async def wait_for_nats(url: str, timeout_seconds: float) -> None:
 async def seed_stream(url: str, message_count: int) -> None:
     """Create a clean ORDERS stream and publish deterministic test messages."""
 
-    nc = await nats.connect(servers=[url], connect_timeout=3)
+    try:
+        nc = await nats.connect(
+            servers=[url],
+            connect_timeout=3,
+            error_cb=ignore_transient_nats_error,
+        )
+    except Exception as exc:
+        raise SmokeTestError(f"Unable to seed NATS stream at {url}: {exc}") from exc
     try:
         js = nc.jetstream()
         with contextlib.suppress(Exception):
@@ -195,6 +212,8 @@ async def seed_stream(url: str, message_count: int) -> None:
                 json.dumps(payload).encode("utf-8"),
                 headers=headers,
             )
+    except Exception as exc:
+        raise SmokeTestError(f"Unable to seed NATS stream at {url}: {exc}") from exc
     finally:
         await nc.drain()
 
