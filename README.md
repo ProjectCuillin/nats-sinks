@@ -161,6 +161,9 @@ used immediately:
   references, mounted trust material, restrictive security contexts, resource
   limits, graceful termination, and optional Prometheus observability sidecars.
   See [Kubernetes Deployment](https://nats-sinks.readthedocs.io/en/latest/kubernetes/).
+- A local Docker image and JSON Compose stack for developer smoke testing with
+  a temporary NATS JetStream service and the file sink. See
+  [Local Docker Stack](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/docker.md).
 - Mission-support operational examples that show complete patterns for
   restricted event storage, disconnected file handoff, DLQ triage and replay
   preparation, and destination outage recovery. See
@@ -998,7 +1001,7 @@ Phase 2:
   bucket guidance.
 - Kafka, search, warehouse, document database, key-value, and wide-column
   backend evaluation through the sink framework.
-- Docker image.
+- Hardened public Docker image and release publication automation.
 - Certified TLS certificate authentication guidance.
 - Certified NKEY with challenge authentication support.
 - Certified decentralized JWT authentication/authorization support.

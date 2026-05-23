@@ -1,0 +1,39 @@
+{
+  "name": "nats-sinks-local",
+  "services": {
+    "nats": {
+      "image": "nats:2.10",
+      "command": [
+        "-js",
+        "-m",
+        "8222"
+      ],
+      "ports": [
+        "${NATS_SINKS_NATS_PORT:-4222}:4222",
+        "${NATS_SINKS_NATS_MONITOR_PORT:-8222}:8222"
+      ]
+    },
+    "nats-sink": {
+      "image": "${NATS_SINKS_IMAGE:-nats-sinks:local}",
+      "build": {
+        "context": "../..",
+        "dockerfile": "Dockerfile"
+      },
+      "depends_on": [
+        "nats"
+      ],
+      "command": [
+        "run",
+        "/etc/nats-sinks/config.json"
+      ],
+      "environment": {
+        "PYTHONUNBUFFERED": "1"
+      },
+      "volumes": [
+        "./config.json:/etc/nats-sinks/config.json:ro",
+        "${NATS_SINKS_DOCKER_OUTPUT_DIR:-../../.local/docker-file-sink}:/var/lib/nats-sinks/file:rw"
+      ],
+      "restart": "no"
+    }
+  }
+}

@@ -14,11 +14,11 @@ logs from live systems.
 | Field | Value |
 | --- | --- |
 | Overall result | Pass |
-| Report generated | 2026-05-23 pull request label synchronization refresh |
+| Report generated | 2026-05-23 local Docker image and NATS stack validation |
 | Project version | `0.4.0` post-release development |
 | Python version | 3.12.4 |
-| Git revision checked | PR `#156` conflict-resolution workspace based on `release-v0.4.1` |
-| Worktree state | Active workspace adding pull request label synchronization to the guarded branch workflow for the current `release-v0.4.1` development branch, preserving data-centric security labels, encrypted edge spool-and-forward sink work, GoldenGate-inspired sink candidate backlog research, stream planning, branch workflow automation, connector framework, WebSocket guardrails, Oracle high-throughput staging, custody metadata, advisory observation, durable consumer management, richer consumer policy controls, NATS no-echo, OTLP export, secure-development hardening, strict JSON config loading, log-injection sanitization, secret scanning, public API compatibility tests, GitHub Dependency Graph manifests, sanitized backlog tooling, release-gated close automation, standardized SPDX headers, metrics snapshots and CLI, observability policy core, Prometheus and NATS monitoring connectors, Kubernetes examples, systemd installer, NATS reconnect tuning, least-privilege NATS permission templates, JetStream topology guidance, retry backoff with jitter, priority-aware lanes, synthetic mission testing, mission-support examples, SBOM generation, release checksums, hash-verified installation guidance, property-style tests, defence and mission-support blueprints, generic mission metadata, payload encryption, and Oracle/file/spool sink support |
+| Git revision checked | Issue `#12` workspace based on `release-v0.4.1` |
+| Worktree state | Active workspace adding a local Docker image, JSON Compose NATS JetStream stack, Docker smoke-test runner, Docker documentation, follow-up Docker backlog issues, and a regression fix for bug `#222`, while preserving data-centric security labels, encrypted edge spool-and-forward sink work, GoldenGate-inspired sink candidate backlog research, stream planning, branch workflow automation, connector framework, WebSocket guardrails, Oracle high-throughput staging, custody metadata, advisory observation, durable consumer management, richer consumer policy controls, NATS no-echo, OTLP export, secure-development hardening, strict JSON config loading, log-injection sanitization, secret scanning, public API compatibility tests, GitHub Dependency Graph manifests, sanitized backlog tooling, release-gated close automation, standardized SPDX headers, metrics snapshots and CLI, observability policy core, Prometheus and NATS monitoring connectors, Kubernetes examples, systemd installer, NATS reconnect tuning, least-privilege NATS permission templates, JetStream topology guidance, retry backoff with jitter, priority-aware lanes, synthetic mission testing, mission-support examples, SBOM generation, release checksums, hash-verified installation guidance, property-style tests, defence and mission-support blueprints, generic mission metadata, payload encryption, and Oracle/file/spool sink support |
 | Live NATS details | Redacted |
 | Live Oracle details | Redacted |
 
@@ -100,6 +100,15 @@ and Oracle tests unless the explicit integration flags are set; separate
 release-prep live NATS-to-Oracle and Oracle benchmark smoke runs were executed
 and are recorded below.
 
+This refresh also covered issue `#12`, adding a local Docker image and NATS
+JetStream Compose stack for developer smoke testing. Deterministic Docker
+asset tests passed, the Docker example config validated through the production
+CLI, and `scripts/check.sh` passed end to end. The live Docker smoke run was
+not completed in this sandbox because local loopback socket allocation is
+blocked and the Docker daemon is not reachable. That failure path is now
+handled cleanly and tracked as bug `#222`, with a regression test proving the
+script reports a concise sanitized error instead of a traceback.
+
 ```mermaid
 flowchart LR
     Core[Core framework] --> Report[Latest sanitized report]
@@ -123,6 +132,7 @@ flowchart LR
     MessageMeta[Priority / classification / labels metadata] --> Report
     File[File sink] --> Report
     Spool[Encrypted edge spool sink] --> Report
+    Docker[Local Docker image and NATS stack] --> Report
     OracleUnit[Oracle unit coverage] --> Report
     DocsRTD[Read the Docs MkDocs build] --> Report
     DocsPages[GitHub Pages MkDocs build] --> Report

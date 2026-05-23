@@ -568,9 +568,12 @@ uncompressed files.
 
 ## Docker Compose Examples
 
-The examples directory includes JSON-formatted Compose files:
+The examples directory includes JSON-formatted Compose files. For the current
+local Docker image and NATS JetStream smoke-test stack, see
+[Local Docker Stack](docker.md).
 
 ```bash
+python scripts/run-docker-local-smoke.py
 docker compose -f examples/docker-compose.nats.json up
 docker compose -f examples/docker-compose.oracle.json up
 ```

@@ -59,6 +59,7 @@ nav:
       - Future Connectors: observability-connectors.md
   - Deployment:
       - Operations: operations.md
+      - Local Docker Stack: docker.md
       - Service Deployment: service-deployment.md
       - Kubernetes Deployment: kubernetes.md
   - Security And Supply Chain:

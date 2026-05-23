@@ -1,0 +1,24 @@
+{
+  "id": "docker-image-release-publishing",
+  "title": "[Feature]: Automate release-time container image build and public publication",
+  "area": "Operations and deployment",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["deployment", "release", "supply-chain"],
+  "problem": "After a production-ready image is hardened, maintainers need a repeatable release-time process that builds a container image, tags it consistently with the package release, and publishes it publicly without relying on manual local steps or long-lived credentials.",
+  "proposal": "Design and implement release automation for container image generation and public publication. The workflow should prefer short-lived or trusted publishing credentials, generate release-specific and immutable tags, attach SBOM and checksum evidence, avoid publishing on non-release branches, and document how maintainers can optionally reproduce the build locally after a release.",
+  "users": "Maintainers publishing nats-sinks releases, operators who consume signed or checksum-verifiable images, and platform teams that need stable image references for Kubernetes, systemd-container, or other deployment pipelines.",
+  "delivery_semantics": "Image publication automation must not alter runtime delivery semantics. It should publish build artifacts only after the corresponding source release is approved and must not run sink workloads or connect to NATS, Oracle, filesystems, or observability endpoints during publication.",
+  "security": "The workflow must avoid long-lived registry tokens where short-lived credentials are available. It must not expose secrets in logs, build arguments, labels, SBOM files, or release notes. It should document registry permissions, provenance expectations, and how to revoke or rotate publication credentials.",
+  "acceptance": [
+    "Release image tags are derived from the Git release tag and include immutable version tags.",
+    "The workflow does not publish images from ordinary issue branches or development branches.",
+    "The workflow supports public publication to an approved registry such as GitHub Container Registry, with credentials scoped to the repository.",
+    "SBOM, checksum, and provenance evidence are generated or linked for image releases.",
+    "Documentation explains how to verify the published image and how to reproduce the build locally.",
+    "The automation is tested without requiring public publication during unit tests."
+  ],
+  "tests": "Add workflow validation tests, script dry-run tests, and documentation tests. Use local dry-run or metadata-only checks for registry publication logic. Do not make network publication calls in unit tests.",
+  "documentation": "Update docs/docker.md, docs/release.md, docs/publishing.md, docs/sbom.md, README.md, ROADMAP.md, and CHANGELOG.md with release-time image publication guidance.",
+  "closeout": "Close only after the release automation has shipped in a published release and the first public image publication path is documented and verified."
+}
