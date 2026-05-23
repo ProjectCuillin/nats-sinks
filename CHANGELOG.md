@@ -218,6 +218,10 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   numeric `issue_id` values to the GitHub API instead of string values.
 - Fixed GitHub backlog and bug priority sync so native Issue Priority field
   updates use the current GitHub Issue Field Values API payload shape.
+- Fixed the Dependency Review workflow by moving
+  `actions/dependency-review-action` to the Node.js 24-compatible `v5` release
+  line so pull request dependency review no longer emits Node.js 20 action
+  runtime deprecation warnings.
 - Fixed the high-confidence secret scanner so it prefers `rg` when available
   but falls back to `grep` in minimal CI environments where ripgrep is not
   installed.
