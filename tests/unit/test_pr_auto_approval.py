@@ -221,6 +221,7 @@ exit 1
         f"""#!/usr/bin/env bash
 set -euo pipefail
 STATE_DIR={state_dir}
+printf '%s\n' "$*" >> "$STATE_DIR/gh-calls"
 if [[ "$1 $2" == "pr list" ]]; then
   if [[ -f "$STATE_DIR/created" ]]; then
     printf '321\\n'
@@ -240,12 +241,31 @@ if [[ "$1 $2" == "api user" ]]; then
 fi
 if [[ "$1 $2" == "pr view" ]]; then
   cat <<'JSON'
-{{"number":321,"baseRefName":"release-v0.4.1","headRefName":"issue-123-example","state":"OPEN","isDraft":false,"author":{{"login":"louwersj"}},"url":"https://github.com/ProjectCuillin/nats-sinks/pull/321"}}
+{{
+  "number": 321,
+  "baseRefName": "release-v0.4.1",
+  "headRefName": "issue-123-example",
+  "state": "OPEN",
+  "isDraft": false,
+  "author": {{"login": "louwersj"}},
+  "url": "https://github.com/ProjectCuillin/nats-sinks/pull/321",
+  "body": "Related #123"
+}}
 JSON
   exit 0
 fi
 if [[ "$1 $2" == "pr review" ]]; then
   touch "$STATE_DIR/reviewed"
+  exit 0
+fi
+if [[ "$1 $2 $3" == "issue view 123" ]]; then
+  cat <<'JSON'
+{{"labels":[{{"name":"enhancement"}},{{"name":"release-v0.4.1"}}]}}
+JSON
+  exit 0
+fi
+if [[ "$1 $2" == "pr edit" ]]; then
+  touch "$STATE_DIR/labeled"
   exit 0
 fi
 echo "unexpected gh command: $*" >&2
@@ -270,7 +290,11 @@ exit 1
             "--ready",
         ],
         cwd=ROOT,
-        env={**os.environ, "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"},
+        env={
+            **os.environ,
+            "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+            "NATS_SINKS_COPY_ISSUE_LABELS_TO_PR": "true",
+        },
         check=False,
         capture_output=True,
         text=True,
@@ -280,3 +304,4 @@ exit 1
     assert result.returncode == 0, result.stderr
     assert (state_dir / "created").exists()
     assert (state_dir / "reviewed").exists()
+    assert (state_dir / "labeled").exists(), (state_dir / "gh-calls").read_text(encoding="utf-8")

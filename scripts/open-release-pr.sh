@@ -16,12 +16,15 @@ BASE="${NATS_SINKS_PR_BASE:-}"
 DRAFT=true
 AUTO_APPROVE_NON_MAIN="${NATS_SINKS_AUTO_APPROVE_NON_MAIN_PR:-true}"
 AUTO_APPROVE_EXPLICIT=false
+COPY_ISSUE_LABELS="${NATS_SINKS_COPY_ISSUE_LABELS_TO_PR:-true}"
+PR_ISSUES=()
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 
 usage() {
   cat <<'USAGE'
 Usage: scripts/open-release-pr.sh [--repo OWNER/REPO] [--base BRANCH] [--ready]
+                                  [--issue NUMBER] [--copy-issue-labels-to-pr|--no-copy-issue-labels-to-pr]
                                   [--auto-approve-non-main|--no-auto-approve-non-main]
 
 Run from a branch named release-*, issue-*, feature-*, bug-*, bugfix-*, or
@@ -43,6 +46,13 @@ auto-approved by default when they were raised by the current GitHub identity.
 Use --no-auto-approve-non-main or NATS_SINKS_AUTO_APPROVE_NON_MAIN_PR=false to
 disable that behavior. The helper refuses release pull requests that target
 main.
+
+By default the helper also copies labels from the managed source issue to the
+pull request. It detects issue numbers from branch names such as issue-123-...
+or bug-123-..., scans Related #123 references in the PR body, and accepts
+--issue NUMBER for branches that intentionally cover one or more issues.
+Use --no-copy-issue-labels-to-pr or NATS_SINKS_COPY_ISSUE_LABELS_TO_PR=false
+to disable this behavior for an exceptional branch.
 USAGE
 }
 
@@ -58,6 +68,18 @@ while [[ $# -gt 0 ]]; do
       ;;
     --ready)
       DRAFT=false
+      shift
+      ;;
+    --issue)
+      PR_ISSUES+=("${2:?--issue requires an issue number}")
+      shift 2
+      ;;
+    --copy-issue-labels-to-pr)
+      COPY_ISSUE_LABELS=true
+      shift
+      ;;
+    --no-copy-issue-labels-to-pr)
+      COPY_ISSUE_LABELS=false
       shift
       ;;
     --auto-approve-non-main)
@@ -84,6 +106,12 @@ done
 if ! command -v gh >/dev/null 2>&1; then
   echo "GitHub CLI is required." >&2
   exit 1
+fi
+
+if [[ ${#PR_ISSUES[@]} -eq 0 && -n "${NATS_SINKS_PR_ISSUES:-}" ]]; then
+  normalized_issue_list="${NATS_SINKS_PR_ISSUES//,/ }"
+  # shellcheck disable=SC2206
+  PR_ISSUES=($normalized_issue_list)
 fi
 
 if [[ -z "$REPO" ]]; then
@@ -212,6 +240,27 @@ else
       --json number \
       --jq '.[0].number // empty'
   )"
+fi
+
+if [[ "$COPY_ISSUE_LABELS" == "true" ]]; then
+  if [[ -z "${pr_number:-}" ]]; then
+    echo "Unable to determine pull request number for label sync." >&2
+    exit 1
+  fi
+  label_command=(
+    "python" "$SCRIPT_DIR/sync-pr-labels.py"
+    "--repo" "$REPO"
+    "--pr" "$pr_number"
+  )
+  if [[ ${#PR_ISSUES[@]} -gt 0 ]]; then
+    for issue_number in "${PR_ISSUES[@]}"; do
+      label_command+=("--issue" "$issue_number")
+    done
+  fi
+  if ! "${label_command[@]}"; then
+    echo "Unable to copy source issue labels to pull request #$pr_number." >&2
+    exit 1
+  fi
 fi
 
 if [[ "$AUTO_APPROVE_NON_MAIN" == "true" && "$DRAFT" == "false" && "$BASE" != "main" ]]; then

@@ -17,6 +17,11 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   release pull requests targeting `main`, can verify the expected PR author,
   supports opt-out for manual inspection, and is documented as convenience for
   development branches rather than a substitute for release approval.
+- Added pull request label synchronization for the local branch workflow. The
+  `scripts/open-release-pr.sh` helper now copies searchable GitHub labels from
+  managed source issues to issue, feature, and bug pull requests by default,
+  with explicit `--issue` support and a standalone `scripts/sync-pr-labels.py`
+  helper for dry-run diagnostics.
 - Added a quiet hierarchical branch development and release workflow with
   release development branches, issue branches, bug sub-branches, configurable
   pull request bases, manual release-validation dispatch, pull request

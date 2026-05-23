@@ -50,6 +50,13 @@ This repository is safety-sensitive infrastructure code. Follow these rules:
   branch is `main`, should verify the expected PR author when possible, and
   must never replace tests, evidence, documentation updates, or release
   approval. Release pull requests into `main` remain manual.
+- Pull requests should carry the same searchable labels as their managed
+  source issues. Use `scripts/open-release-pr.sh --issue <number>` when the
+  branch name or PR body does not make the source issue obvious. The helper
+  copies issue labels onto the PR by default and supports
+  `--no-copy-issue-labels-to-pr` only for exceptional maintenance work. Do not
+  recreate the GitHub Issue `Priority` field as a pull request label; priority
+  remains managed on the issue itself.
 - The `Branch Pull Request` workflow is manual and token-gated. Do not
   re-enable push-triggered pull request creation unless the maintainer
   explicitly changes the release policy.
