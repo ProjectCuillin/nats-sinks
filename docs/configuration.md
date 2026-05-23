@@ -297,7 +297,7 @@ classification, and labels without changing producer payloads.
 | Field | Required | Default | Valid values | Description |
 | --- | --- | --- | --- | --- |
 | `url` | no | `nats://localhost:4222` | URL using `nats`, `tls`, `ws`, or `wss`. | Single server URL passed to `nats-py` when `urls` is not set. Use `tls://` for encrypted TCP connections. Use `wss://` for approved WebSocket deployments and keep certificate verification enabled. `ws://` is intended only for local labs or explicitly accepted controlled networks. Unsupported schemes and credentials embedded in URLs fail validation. |
-| `urls` | no | `[]` | Non-empty list of URLs using `nats`, `tls`, `ws`, or `wss`. | Optional seed server list for clustered deployments. When set, it is passed to `nats-py` as `servers` and takes precedence over `url`. If any seed URL uses `tls://` or `wss://`, or if TLS certificate files are configured, the CLI builds a TLS context. WebSocket seed lists must not mix `ws` or `wss` URLs with `nats` or `tls` URLs. |
+| `urls` | no | `[]` | Non-empty list of URLs using `nats`, `tls`, `ws`, or `wss`. | Optional seed server list for clustered deployments. When set, it is passed to `nats-py` as `servers` and takes precedence over `url`. If any seed URL uses `tls://` or `wss://`, or if TLS certificate files are configured, the shared NATS option builder creates a TLS context. WebSocket seed lists must not mix `ws` or `wss` URLs with `nats` or `tls` URLs. |
 | `stream` | yes | none | Non-empty JetStream stream name. | Stream that owns the messages consumed by the sink. |
 | `consumer` | yes | none | Consumer/durable name accepted by NATS. | Durable consumer name when `durable` is true. It is also used in logging and metrics context. |
 | `subject` | yes | none | NATS subject or wildcard subject, for example `orders.*` or `orders.>`. | Subject used for pull subscription binding. It should be covered by the configured stream subjects. |
@@ -308,11 +308,11 @@ classification, and labels without changing producer payloads.
 | `password_env` | no | `null` | Environment variable name. | Environment variable that contains the NATS password. Mutually exclusive with `password`. |
 | `token` | no | `null` | Token string. | Direct NATS token. Use only for disposable local tests; prefer `token_env` for production. |
 | `token_env` | no | `null` | Environment variable name. | Environment variable that contains the NATS token. Mutually exclusive with `token`. |
-| `creds_file` | no | `null` | Local file path. | Path to a NATS credentials file consumed by `nats-py` as `user_credentials`. |
-| `nkey_seed_file` | no | `null` | Local file path. | Path to an NKEY seed file consumed by `nats-py` as `nkeys_seed`. |
-| `tls_ca_file` | no | `null` | Local file path. | CA certificate file used to trust a private or self-signed NATS server certificate. |
-| `tls_cert_file` | no | `null` | Local file path. | Optional client certificate file for mutual TLS transport. |
-| `tls_key_file` | no | `null` | Local file path. | Optional client private key file. Requires `tls_cert_file` when set. |
+| `creds_file` | no | `null` | Local file path without surrounding whitespace or control characters. | Path to a NATS credentials file consumed by `nats-py` as `user_credentials`. Use for credentials-file and decentralized JWT user workflows. The path is redacted in effective configuration output. |
+| `nkey_seed_file` | no | `null` | Local file path without surrounding whitespace or control characters. | Path to an NKEY seed file consumed by `nats-py` as `nkeys_seed`. Use for NKEY challenge authentication. The path is redacted in effective configuration output. |
+| `tls_ca_file` | no | `null` | Local file path without surrounding whitespace or control characters. | CA certificate file used to trust a private or self-signed NATS server certificate. The CA path is not treated as secret, but the file should still come from a trusted deployment source. |
+| `tls_cert_file` | no | `null` | Local file path without surrounding whitespace or control characters. | Optional client certificate file for mutual TLS transport. The path is redacted because it identifies the client. |
+| `tls_key_file` | no | `null` | Local file path without surrounding whitespace or control characters. | Optional client private key file. Requires `tls_cert_file` when set and is redacted in effective configuration output. |
 | `tls_verify` | no | `true` | `true` or `false`. | Enables certificate verification and hostname checking. Keep enabled in production. |
 | `websocket_headers` | no | `{}` | Object with HTTP header names and non-sensitive string values. | Optional WebSocket handshake headers for approved proxy routing hints. Values are bounded, control characters are rejected, protocol-owned headers are rejected, and sensitive header names such as `Authorization` must use `websocket_headers_env` instead. Only valid with `ws://` or `wss://` transport. |
 | `websocket_headers_env` | no | `{}` | Object with HTTP header names and environment variable names. | Optional WebSocket handshake headers whose values are read from environment variables at connection time. Use this for sensitive proxy or gateway material. The JSON config and redacted effective config show only redacted values, not resolved secrets. Only valid with `ws://` or `wss://` transport. |
@@ -334,6 +334,10 @@ Validation rules:
   source,
 - token authentication, username/password authentication, `creds_file`, and
   `nkey_seed_file` are mutually exclusive authentication modes,
+- identity and TLS file path fields are validated for empty values,
+  surrounding whitespace, and control characters; file existence is checked
+  later by `ssl` or `nats-py` when the live connection is opened so runtime
+  secret mounts remain supported,
 - `url` and every `urls` entry must use one of the supported NATS client
   schemes: `nats`, `tls`, `ws`, or `wss`,
 - WebSocket URL lists must be all WebSocket (`ws`/`wss`) or all non-WebSocket

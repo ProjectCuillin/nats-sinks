@@ -387,12 +387,24 @@ Supported NATS client authentication modes in this release are documented in
 - use `nats.user` and `nats.password_env` for username/password authentication,
 - use the same client-side username/password configuration when the NATS server
   stores a bcrypted password hash,
+- use `nats.creds_file` for NATS credentials-file and decentralized JWT user
+  workflows,
+- use `nats.nkey_seed_file` for NKEY challenge authentication,
 - use `nats.tls_ca_file` to trust a local CA certificate for private or
-  self-signed NATS server certificates.
+  self-signed NATS server certificates, and
+- use `nats.tls_cert_file` with `nats.tls_key_file` when the deployment
+  requires a client certificate during the TLS handshake.
 
 Bcrypt is a server-side storage control. The client still needs the clear-text
 password to authenticate, so username/password and token authentication should
 use TLS in production.
+
+Credentials files, NKEY seed files, TLS private keys, and client certificate
+paths are treated as identity material. They must be mounted from a secret
+location, kept out of Git, excluded from issue comments, and protected with
+least-privilege file permissions. `nats-sinks` redacts those fields in
+effective configuration output and validates that path strings are not empty,
+not surrounded by whitespace, and do not contain control characters.
 
 WebSocket transport is supported with explicit guardrails. Prefer `wss://`,
 verify certificates, use `tls_ca_file` for private CAs, and reserve `ws://` for
@@ -447,8 +459,10 @@ flowchart LR
     NATS --> Hash[Server-side token or bcrypt verification]
 ```
 
-TLS certificate authentication, NKEY with challenge, and decentralized JWT
-authentication/authorization are roadmap items for future certified support.
+TLS certificate files, NKEY seed files, and NATS credentials files are
+supported client-side authentication inputs. The NATS operator must still
+certify server-side account resolvers, trust anchors, subject permissions, and
+identity-to-authorization policy for the target deployment.
 
 ## Oracle Security
 

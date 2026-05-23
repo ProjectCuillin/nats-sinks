@@ -84,11 +84,15 @@ change control:
 
 The primary production connection path is still direct NATS TCP with
 `nats://` for controlled local use or `tls://` for encrypted production
-connectivity. WebSocket transport is also supported for environments where
-HTTP-aware network boundaries or approved gateways require `ws://` or
-`wss://`. Use `wss://` with certificate verification for operational
-deployments, keep WebSocket header values redacted, and review proxy logs as
-part of the deployment threat model. See
+connectivity. Operational authentication may use token, username/password,
+credentials-file, NKEY seed-file, local CA TLS, or TLS client certificate
+settings, but identity material must be mounted from a secret location and must
+not appear in logs, issue comments, service files, or public examples. WebSocket
+transport is also supported for environments where HTTP-aware network
+boundaries or approved gateways require `ws://` or `wss://`. Use `wss://` with
+certificate verification for operational deployments, keep WebSocket header
+values redacted, and review proxy logs as part of the deployment threat model.
+See
 [WebSocket Connection Evaluation](websocket-connection-evaluation.md) before
 approving WebSocket transport in an operational deployment.
 

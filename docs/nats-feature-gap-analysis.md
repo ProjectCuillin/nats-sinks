@@ -36,8 +36,9 @@ certified support in the sink framework.
 - reconnect tuning and NATS connection event metrics,
 - offline JetStream stream-management planning for retention, discard,
   storage, replicas, duplicate-window, and permission review,
-- pass-through fields for NATS credentials and NKEY seed files, not yet
-  certified as production auth modes.
+- client-side credentials-file, NKEY seed-file, and TLS client certificate
+  option construction with validation, redaction, documentation, and gated
+  integration-test hooks.
 
 ## High-Level Gap Map
 
@@ -50,6 +51,10 @@ mindmap
       Token auth
       User password auth
       TLS local CA
+      Credentials file auth
+      NKEY seed auth
+      TLS client certificates
+      WebSocket connection guardrails
       DLQ publishing
       Stream planning helper
     Not yet supported
@@ -57,8 +62,7 @@ mindmap
       Stream mutation
       Push and ordered consumers
       AckSync and InProgress
-      NKEY and JWT certification
-      WebSocket connections
+      Advanced WebSocket proxy runbooks
       KV and object stores
       Request reply and services
       Advisories and system events
@@ -80,9 +84,9 @@ Current gap details:
 | Connection event metrics | NATS clients can report disconnect, reconnect, closed, discovered server, and async error events. | Runner wraps `nats-py` callbacks and records connection event metrics while preserving user-supplied callbacks. | Implemented |
 | No-echo connection option | NATS clients can request server-side suppression of messages published on the same connection being echoed back to matching subscriptions on that connection. | Supported through `nats.no_echo`, passed to `nats-py` as `no_echo`. The default is `false` because normal JetStream pull-consumer sink workers do not depend on same-connection echo suppression. | Implemented |
 | WebSocket connections | NATS URLs can use `ws://` for WebSocket connections, and NATS server WebSocket support can run alongside traditional TCP connections. | Supported with project guardrails for mixed transport rejection, credential-free URLs, `wss://` local CA handling, validated optional headers, and an optional local certification harness. See [WebSocket Connection Evaluation](websocket-connection-evaluation.md). | Implemented; continue hardening proxy-specific runbooks. |
-| TLS certificate identity auth | NATS can use client certificate/key material and server-side TLS verification. | Client cert/key can be loaded into the SSL context, but production certificate-auth guidance and tests are not certified. | Phase 2 |
-| NKEY challenge auth | NATS supports challenge-response auth using Ed25519 NKEYs. | `nkey_seed_file` exists as pass-through config, but this is not documented or tested as certified support. | Phase 2 |
-| Decentralized JWT auth | NATS supports operator/account/user JWT auth with credentials files and resolvers. | `creds_file` exists as pass-through config, but JWT workflows are not certified or documented deeply. | Phase 2 |
+| TLS certificate identity auth | NATS can use client certificate/key material and server-side TLS verification. | Client cert/key option construction, redaction, validation, and documentation are certified on the client side. Server-side certificate identity policy remains an operator responsibility. | Implemented for client configuration; keep expanding live certification runbooks. |
+| NKEY challenge auth | NATS supports challenge-response auth using Ed25519 NKEYs. | `nkey_seed_file` is validated, redacted, passed to `nats-py` as `nkeys_seed`, and covered by unit plus gated integration tests. | Implemented for client configuration; keep expanding live certification runbooks. |
+| Decentralized JWT auth | NATS supports operator/account/user JWT auth with credentials files and resolvers. | `creds_file` is validated, redacted, passed to `nats-py` as `user_credentials`, and documented as the client-side credentials-file workflow. Account resolver setup remains server-side policy. | Implemented for client configuration; keep expanding live certification runbooks. |
 | Accounts, exports, imports, permissions | NATS supports account isolation and subject-level permissions. | Least-privilege runtime, DLQ, management, and advisory permission templates are documented. Account export/import designs remain server-side operator policy. | Implemented for runtime templates; deeper account design remains Phase 2 |
 | Auth callouts | NATS supports auth callout extensions. | Server-side feature; not supported or documented for sink deployments. | Phase 3 |
 

@@ -238,6 +238,15 @@ silent loss after an early ACK is not.
   tested.
 - Validate external input, especially SQL identifiers, NATS subject routing
   patterns, file paths, and configuration fields.
+- Build NATS connection options only through `nats_sinks.core.nats_options`.
+  This keeps password, token, credentials-file, NKEY seed-file, TLS context,
+  WebSocket header, and reconnect handling centralized and reviewable.
+- Treat NATS credentials files, NKEY seed files, TLS private keys, and client
+  certificate paths as sensitive identity material. Redact them from CLI
+  output, logs, issue comments, evidence, and documentation examples.
+- Keep live NATS authentication workflow tests behind explicit environment
+  flags. Normal unit, smoke, and release-prep checks must not depend on real
+  NATS identities, certificate files, or private endpoints.
 - Use bind variables for values and strict allow-list validation for SQL
   identifiers.
 - Do not add dependencies without a clear reason and corresponding docs.
