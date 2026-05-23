@@ -154,3 +154,53 @@ def test_docker_smoke_script_reports_port_allocation_failures(
 
     with pytest.raises(module.SmokeTestError, match="Unable to allocate a local loopback port"):
         module.find_free_port()
+
+
+@pytest.mark.asyncio
+async def test_docker_smoke_script_uses_quiet_nats_readiness_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Expected NATS startup retries should not use the noisy default error callback."""
+
+    module = _load_smoke_script()
+    callbacks: list[object] = []
+    monotonic_values = iter([0.0, 0.0, 1.0])
+
+    async def fake_connect(
+        *,
+        servers: list[str],
+        connect_timeout: int,
+        error_cb: object | None = None,
+    ) -> object:
+        callbacks.append(error_cb)
+        raise ConnectionRefusedError("not ready")
+
+    async def fake_sleep(delay: float) -> None:
+        return None
+
+    monkeypatch.setattr(module.nats, "connect", fake_connect)
+    monkeypatch.setattr(module.asyncio, "sleep", fake_sleep)
+    monkeypatch.setattr(module.time, "monotonic", lambda: next(monotonic_values, 1.0))
+
+    with pytest.raises(module.SmokeTestError, match="NATS did not become ready"):
+        await module.wait_for_nats("nats://127.0.0.1:1", 0.5)
+
+    assert callbacks
+    assert all(callable(callback) for callback in callbacks)
+
+
+@pytest.mark.asyncio
+async def test_docker_smoke_script_reports_seed_failures_without_traceback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """NATS seeding failures should be converted into a concise smoke-test error."""
+
+    module = _load_smoke_script()
+
+    async def fake_connect(*args: object, **kwargs: object) -> object:
+        raise ConnectionRefusedError("not ready")
+
+    monkeypatch.setattr(module.nats, "connect", fake_connect)
+
+    with pytest.raises(module.SmokeTestError, match="Unable to seed NATS stream"):
+        await module.seed_stream("nats://127.0.0.1:1", 1)
