@@ -12,6 +12,11 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Added
 
+- Added a local Docker image and JSON Compose smoke-test stack for issue #12,
+  including a non-root `nats-sink` image, a NATS JetStream service, a
+  file-sink configuration, a `scripts/run-docker-local-smoke.py` runner that
+  builds the image, publishes test messages, verifies persisted files, and
+  avoids local NATS port collisions, plus Docker documentation and unit tests.
 - Added guarded non-main pull request auto-approval tooling for ready issue,
   feature, and bug branches raised by the local workflow. The helper refuses
   release pull requests targeting `main`, can verify the expected PR author,

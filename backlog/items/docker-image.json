@@ -1,23 +1,24 @@
 {
   "id": "docker-image",
-  "title": "[Feature]: Publish a hardened Docker image",
+  "title": "[Feature]: Add a local Docker image and NATS Compose test stack",
   "area": "Operations and deployment",
-  "priority": "P3 - backlog candidate",
-  "target_release": "unscheduled",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
   "labels": ["deployment", "release"],
-  "problem": "Users can install the package with Python tooling and run systemd services, but container-based environments need a maintained Docker image. A container image must be designed carefully so it does not run as root unnecessarily, does not bake in secrets, and can support optional sink extras without becoming too broad.",
-  "proposal": "Add a hardened container image build for the nats-sink CLI with clear variants or build arguments for optional extras. The image should run as a non-root user, use a minimal base, include health-check guidance, support mounted JSON configuration and secret injection, and publish immutable release artifacts through the release workflow when appropriate.",
-  "users": "Operators deploying nats-sinks in container platforms, maintainers validating release artifacts, and security teams reviewing runtime isolation.",
+  "problem": "Users can install the package with Python tooling and run systemd services, but local container-based testing still needs a maintained image build and a repeatable NATS JetStream deployment that exercises nats-sink without requiring Oracle credentials or local Python virtualenv setup.",
+  "proposal": "Add a baseline Docker image for the nats-sink CLI and a JSON Compose stack that runs NATS JetStream, initializes a disposable stream, runs nats-sink with a mounted file-sink configuration, and publishes local test messages. Keep the image suitable for local testing and explicitly move production hardening and public image publishing into follow-up issues.",
+  "users": "Maintainers, contributors, and operators who need a local container smoke test for nats-sinks with NATS JetStream and a disposable file sink destination.",
   "delivery_semantics": "Containerization must not change commit-then-ACK behavior. Shutdown handling must preserve the existing graceful stop model, and container health checks must reflect readiness without causing message loss.",
-  "security": "The image must not contain credentials, local wallets, certificate material, test configs, or build secrets. It should use a non-root user, avoid unnecessary packages, pin dependencies through the release artifact, and document filesystem write locations.",
+  "security": "The baseline local image must not contain credentials, local wallets, certificate material, production configs, or build secrets. It should avoid running as root where practical, document mounted configuration and output paths, and make clear that additional production hardening is tracked separately.",
   "acceptance": [
-    "A Dockerfile or image build definition is added with security comments.",
-    "The image runs nats-sink with mounted configuration.",
-    "Release automation can build and optionally publish image artifacts.",
-    "Container documentation includes least-privilege and secret handling guidance.",
-    "Image build checks are included in CI or release validation where practical."
+    "A Dockerfile and .dockerignore are added for the nats-sink CLI image.",
+    "The image can run nats-sink with mounted JSON configuration.",
+    "A JSON Compose stack starts NATS JetStream and nats-sink for local file-sink testing.",
+    "A local smoke script can build the image, start the stack, publish messages, and verify output files when Docker is available.",
+    "Documentation explains the local Docker workflow, security boundaries, and limitations.",
+    "Follow-up issues exist for hardened production image work and release-driven public image publishing."
   ],
-  "tests": "Add smoke tests for image build and CLI help where container tooling is available, plus documentation and security checks. Run scripts/check.sh.",
-  "documentation": "Update docs/operations.md, docs/development.md, docs/security.md, docs/release.md, README.md, ROADMAP.md, and CHANGELOG.md.",
-  "closeout": "Close after a release provides the container build path. Include release tag, image variant details, checks run, and any publishing limitations."
+  "tests": "Add deterministic unit tests for Docker and Compose assets. When Docker is available, run the local Docker smoke script. Run scripts/check.sh.",
+  "documentation": "Update docs/operations.md, docs/development.md, docs/security.md, README.md, docs/test-report.md, and CHANGELOG.md.",
+  "closeout": "Close after the baseline local Docker image and Compose test stack have merged into the release branch, with follow-up hardening and publishing issues created."
 }

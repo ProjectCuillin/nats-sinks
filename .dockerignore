@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
+
+.git
+.github
+.local
+.mypy_cache
+.pytest_cache
+.ruff_cache
+.tox
+.venv
+__pycache__
+*.py[cod]
+*.egg-info
+build
+dist
+htmlcov
+site
+tmp
+wallet
+wallets
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.zip
+*.tar
+*.tar.gz

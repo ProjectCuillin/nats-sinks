@@ -1,0 +1,34 @@
+{
+  "id": "docker-local-smoke-port-permission-traceback",
+  "title": "[Bug]: Docker smoke script should handle local port allocation failures cleanly",
+  "area": "Testing",
+  "severity": "low",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": [
+    "deployment",
+    "testing"
+  ],
+  "summary": "The local Docker smoke script can expose a raw Python traceback when the host or sandbox refuses the loopback bind used for temporary NATS port selection.",
+  "observed": "During the issue #12 smoke-script dry run, the script attempted to bind an ephemeral loopback port before checking Docker availability. The local environment rejected the bind and the script printed an unsanitized traceback instead of a short operator-facing error.",
+  "expected": "The script should catch local port allocation failures and raise a controlled SmokeTestError that explains that the test environment cannot allocate a loopback port.",
+  "reproduction": "Run python scripts/run-docker-local-smoke.py in an environment that denies localhost socket binding for ephemeral port discovery.",
+  "failing_test": "Add a focused unit test that patches socket.socket.bind to raise PermissionError and asserts find_free_port raises SmokeTestError with a clear message.",
+  "impact": "The Docker smoke workflow remains local-only, but raw tracebacks make release evidence harder to review and can expose local path details.",
+  "delivery_semantics": "The defect is limited to test orchestration before any NATS message is fetched. It does not change sink writes, DLQ behavior, idempotency, or commit-then-ACK behavior.",
+  "security": "The fix keeps failure output concise and avoids leaking local path details through raw tracebacks in public issue evidence.",
+  "acceptance": [
+    "Local port allocation failures are translated into SmokeTestError.",
+    "The smoke script prints a concise sanitized failure message instead of a traceback.",
+    "A unit test covers the port allocation failure path without opening real network sockets.",
+    "Existing Docker asset tests continue to pass."
+  ],
+  "tests": "Run python -m pytest tests/unit/test_docker_assets.py -q and rerun python scripts/run-docker-local-smoke.py --message-count 3 to confirm it fails cleanly when Docker or socket access is unavailable.",
+  "documentation": "No command syntax changes are required. Docker documentation should remain accurate and describe that Docker must be available for the live smoke test.",
+  "closeout": "Mark completed after the fix is merged into the release development branch with sanitized test evidence.",
+  "relationships": {
+    "related": [
+      "backlog:docker-image"
+    ]
+  }
+}
