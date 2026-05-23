@@ -158,6 +158,11 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   fan-out, including route matching by subject and metadata, named sink
   instances, optional ACK-gating wait policy, partial-failure metrics, and
   routing certification tests.
+- Added `nats_sinks.spool.SpoolSink`, a first-party encrypted edge
+  spool-and-forward sink for disconnected operation, including bounded local
+  custody, record-level AES encryption, deterministic idempotency-key files,
+  priority-aware replay, the `nats-sink replay-spool` command, unit coverage,
+  example configuration, and operator documentation.
 
 ### Changed
 

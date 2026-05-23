@@ -12,7 +12,7 @@ license = "Apache-2.0"
 authors = [
   { name = "Johan Louwers", email = "louwersj@gmail.com" }
 ]
-keywords = ["nats", "jetstream", "sink", "oracle", "file", "messaging", "etl", "streaming"]
+keywords = ["nats", "jetstream", "sink", "oracle", "file", "spool", "messaging", "etl", "streaming"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",
@@ -35,6 +35,9 @@ dependencies = [
 [project.optional-dependencies]
 crypto = [
   "cryptography>=42,<47",
+]
+spool = [
+  "nats-sinks[crypto]",
 ]
 oracle = [
   "oracledb>=2.3,<5",

@@ -159,6 +159,37 @@ stateDiagram-v2
     StopSink --> [*]
 ```
 
+## Disconnected Edge Spooling
+
+The [Edge Spool Sink](spool-sink.md) can be used when a node must keep local
+custody of messages during disconnected or degraded operation. In that mode,
+the durable success boundary is the encrypted local spool record, not the final
+remote database or object store. The runner ACKs JetStream only after the spool
+record is atomically committed.
+
+```mermaid
+flowchart LR
+    JS[JetStream] --> R[nats-sinks runner]
+    R --> S[Encrypted local spool]
+    S --> ACK[ACK after local commit]
+    S -. later replay .-> O[Oracle, file, or future sink]
+```
+
+Use this deliberately. Local spool directories need capacity monitoring,
+restricted permissions, backup and retention decisions, and an operator replay
+procedure. If the spool reaches its configured record or byte limit, writes
+fail closed and the runner does not ACK affected JetStream messages.
+
+Replay is an explicit operator action:
+
+```bash
+nats-sink replay-spool /etc/nats-sinks/spool.json /etc/nats-sinks/oracle.json --max-records 100
+```
+
+That command reconstructs the original `NatsEnvelope` from encrypted local
+custody and calls the target sink. Spool files are deleted only after the
+target sink returns success and `delete_after_replay` is enabled.
+
 ## Logging
 
 The package uses standard Python logging. Payload logging is disabled by

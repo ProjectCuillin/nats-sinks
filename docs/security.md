@@ -63,8 +63,8 @@ treated as a supply-chain trust decision.
 
 Secure defaults:
 
-- Oracle Database and FileSink are first-party built-in connectors and do not
-  require plugin discovery.
+- Oracle Database, FileSink, and SpoolSink are first-party built-in connectors
+  and do not require plugin discovery.
 - Optional third-party discovery is disabled by default.
 - When discovery is enabled, `plugins.allowed_sinks` must explicitly list each
   external connector name.
@@ -144,6 +144,11 @@ Use this baseline for code review and future releases:
   disabled by default, subscribes only to configured advisory subjects, parses
   bounded JSON payloads, and emits aggregate counters without exporting stream
   names, consumer names, sequence numbers, or advisory payload bodies.
+- Treat local spool directories as protected custody locations. Spool records
+  are encrypted by default, but operators must still restrict filesystem
+  permissions, exclude spool paths from source control, monitor disk usage,
+  rotate keys with care, and avoid exposing directory listings because wrapper
+  metadata can still reveal record counts and rough priority ordering.
 - Prefer least privilege for NATS accounts, Oracle users, service accounts,
   CI jobs, containers, cloud identities, filesystems, and documentation
   examples.

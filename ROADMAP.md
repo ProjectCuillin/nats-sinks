@@ -72,6 +72,9 @@ release, and closed only after the containing release is published.
   `SinkRegistry` resolution, first-party Oracle and FileSink descriptors, and
   disabled-by-default allow-listed entry-point discovery for reviewed external
   connectors.
+- Encrypted edge spool-and-forward sink for disconnected operation, with
+  bounded local custody, deterministic duplicate handling, priority-aware
+  replay, and explicit forwarding into a final destination sink.
 - Documented sink certification contract with reusable test helpers for
   lifecycle, durable write success, duplicate redelivery, ACK-boundary
   protection, and log-redaction checks across current and future production

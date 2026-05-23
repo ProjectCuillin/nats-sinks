@@ -4,6 +4,11 @@ The local file sink writes JetStream messages to JSON files on a local or
 mounted filesystem. It is the second production sink in `nats-sinks`, alongside
 Oracle Database.
 
+If you need disconnected local custody followed by later replay into another
+sink, use the [Edge Spool Sink](spool-sink.md) instead. `FileSink` is a final
+filesystem destination; `SpoolSink` is a local custody queue with encrypted
+replay records and explicit forwarding semantics.
+
 The file sink is useful when you need a durable handoff directory, a simple
 audit trail, a development destination without a database, or an integration
 point for another process that watches files. It follows the same core rule as
