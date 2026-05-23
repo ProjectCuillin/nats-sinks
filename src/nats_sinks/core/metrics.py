@@ -125,6 +125,11 @@ class MetricNames:
     POLICY_BATCHES_PASSED_TOTAL = "policy_batches_passed_total"
     POLICY_BATCHES_REJECTED_TOTAL = "policy_batches_rejected_total"
     POLICY_EVALUATION_ERRORS_TOTAL = "policy_evaluation_errors_total"
+    MESSAGE_AUTHENTICITY_MESSAGES_PASSED_TOTAL = "message_authenticity_messages_passed_total"
+    MESSAGE_AUTHENTICITY_MESSAGES_REJECTED_TOTAL = "message_authenticity_messages_rejected_total"
+    MESSAGE_AUTHENTICITY_BATCHES_PASSED_TOTAL = "message_authenticity_batches_passed_total"
+    MESSAGE_AUTHENTICITY_BATCHES_REJECTED_TOTAL = "message_authenticity_batches_rejected_total"
+    MESSAGE_AUTHENTICITY_EVALUATION_ERRORS_TOTAL = "message_authenticity_evaluation_errors_total"
     SIZE_POLICY_MESSAGES_PASSED_TOTAL = "size_policy_messages_passed_total"
     SIZE_POLICY_MESSAGES_REJECTED_TOTAL = "size_policy_messages_rejected_total"
     SIZE_POLICY_BATCHES_PASSED_TOTAL = "size_policy_batches_passed_total"
@@ -422,6 +427,31 @@ METRIC_SPECS: tuple[MetricSpec, ...] = (
         MetricNames.POLICY_EVALUATION_ERRORS_TOTAL,
         "counter",
         "Messages left redeliverable because policy evaluation failed unexpectedly.",
+    ),
+    MetricSpec(
+        MetricNames.MESSAGE_AUTHENTICITY_MESSAGES_PASSED_TOTAL,
+        "counter",
+        "Messages accepted by message authenticity verification before sink delivery.",
+    ),
+    MetricSpec(
+        MetricNames.MESSAGE_AUTHENTICITY_MESSAGES_REJECTED_TOTAL,
+        "counter",
+        "Messages rejected by message authenticity verification before sink delivery.",
+    ),
+    MetricSpec(
+        MetricNames.MESSAGE_AUTHENTICITY_BATCHES_PASSED_TOTAL,
+        "counter",
+        "Batches with at least one message accepted by message authenticity verification.",
+    ),
+    MetricSpec(
+        MetricNames.MESSAGE_AUTHENTICITY_BATCHES_REJECTED_TOTAL,
+        "counter",
+        "Batches with at least one message rejected by message authenticity verification.",
+    ),
+    MetricSpec(
+        MetricNames.MESSAGE_AUTHENTICITY_EVALUATION_ERRORS_TOTAL,
+        "counter",
+        "Messages left redeliverable because authenticity evaluation failed unexpectedly.",
     ),
     MetricSpec(
         MetricNames.SIZE_POLICY_MESSAGES_PASSED_TOTAL,

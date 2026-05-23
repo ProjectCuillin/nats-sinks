@@ -21,6 +21,9 @@
 - Core message metadata for priority, classification, and labels so
   mission-oriented deployments can preserve operational handling context across
   all production sinks.
+- Optional message authenticity verification before sink writes, with
+  subject-scoped HMAC-SHA256 and Ed25519 rules, sanitized rejection reasons,
+  aggregate metrics, and DLQ-before-ACK behavior for failed signatures.
 - Generic mission metadata support for one validated JSON context object across
   the core runtime, Oracle `MISSION_METADATA_JSON`, file-sink output, and future
   sink contracts.

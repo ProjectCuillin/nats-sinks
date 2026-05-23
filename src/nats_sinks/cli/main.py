@@ -492,6 +492,7 @@ def run(
             consumer_management=loaded.consumer_management,
             dead_letter=loaded.dead_letter,
             message_metadata=loaded.message_metadata,
+            message_authenticity=loaded.message_authenticity,
             mission_metadata=loaded.mission_metadata,
             security_labels=loaded.security_labels,
             encryption=loaded.encryption,

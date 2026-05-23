@@ -113,8 +113,8 @@ Use this baseline for code review and future releases:
   setup, sink selection, or policy evaluation is ambiguous.
 - Keep security-sensitive logic centralized and documented: configuration
   loading, TLS setup, credential resolution, SQL identifier validation, payload
-  encryption, pre-sink policy enforcement, log sanitization, redaction, DLQ
-  shaping, and ACK decisions.
+  encryption, message authenticity verification, pre-sink policy enforcement,
+  log sanitization, redaction, DLQ shaping, and ACK decisions.
 - Use allow-list validation for enum values, formats, lengths, ranges, SQL
   identifiers, file extensions, URL schemes, sink names, route names, and NATS
   subject patterns.
@@ -309,6 +309,21 @@ Rule order is security-sensitive because the first matching rule wins and a
 disabled rule intentionally leaves matching payloads unchanged. See
 [Payload Encryption](payload-encryption.md) for the full design and
 configuration reference.
+
+Optional message authenticity verification can prove that an approved producer
+signed the message body and selected metadata before the core passes the
+envelope to any sink. This is not the same as NATS authentication or TLS. NATS
+controls who can connect and publish; message authenticity checks whether a
+specific delivered event matches a configured producer signature policy.
+
+Authenticity rules are subject scoped, algorithm allow-listed, and fail closed
+by default. HMAC-SHA256 uses constant-time comparison for shared-secret
+deployments. Ed25519 lets the sink runtime hold only public verification key
+material while producers keep private signing keys. A verification rejection is
+a permanent pre-sink failure: the message never reaches Oracle, file, spool, or
+future sinks, and the original JetStream message is ACKed only after successful
+DLQ publication when DLQ is configured. See
+[Message Authenticity](message-authenticity.md).
 
 Optional tamper-evident custody metadata can help auditors detect unexpected
 changes to stored payload or metadata records. When enabled, the runner hashes

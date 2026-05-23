@@ -88,6 +88,23 @@ SENSITIVE_KEY_PARTS = (
 )
 AES_256_KEY_BYTES = 32
 MAX_ENCRYPTION_KEY_ID_LENGTH = 128
+MAX_AUTHENTICITY_KEY_ID_LENGTH = 128
+MAX_AUTHENTICITY_SIGNATURE_LENGTH = 1024
+MIN_HMAC_SHA256_KEY_BYTES = 32
+MAX_HMAC_SHA256_KEY_BYTES = 1024
+ED25519_PUBLIC_KEY_BYTES = 32
+AUTHENTICITY_SIGNED_FIELDS = frozenset(
+    {
+        "subject",
+        "message_id",
+        "priority",
+        "classification",
+        "labels",
+        "mission_metadata",
+        "security_labels",
+    }
+)
+DEFAULT_AUTHENTICITY_SIGNED_FIELDS = ("subject", "message_id")
 MAX_CONFIG_BYTES = 1_048_576
 NATS_ALLOWED_URL_SCHEMES = frozenset({"nats", "tls", "ws", "wss"})
 NATS_WEBSOCKET_URL_SCHEMES = frozenset({"ws", "wss"})
@@ -378,6 +395,41 @@ def _decode_aes_256_key(value: str, *, source: str) -> bytes:
         raise ConfigurationError(f"{source} must be base64 encoded") from exc
     if len(decoded) != AES_256_KEY_BYTES:
         raise ConfigurationError(f"{source} must decode to exactly 32 bytes for AES-256")
+    return decoded
+
+
+def _decode_authenticity_key(
+    value: str,
+    *,
+    algorithm: str,
+    source: str,
+) -> bytes:
+    """Decode and bound message-authenticity verification key material.
+
+    HMAC-SHA256 uses a shared secret and Ed25519 uses a public verification
+    key.  Both values cross the configuration trust boundary as base64 text, so
+    they are validated before the runner starts.  The decoded material is never
+    logged or included in public issue comments.
+    """
+
+    try:
+        decoded = base64.b64decode(value.encode("ascii"), validate=True)
+    except (UnicodeEncodeError, binascii.Error) as exc:
+        raise ConfigurationError(f"{source} must be base64 encoded") from exc
+    if algorithm == "hmac-sha256":
+        if not MIN_HMAC_SHA256_KEY_BYTES <= len(decoded) <= MAX_HMAC_SHA256_KEY_BYTES:
+            raise ConfigurationError(
+                f"{source} must decode to {MIN_HMAC_SHA256_KEY_BYTES}-"
+                f"{MAX_HMAC_SHA256_KEY_BYTES} bytes for HMAC-SHA256"
+            )
+    elif algorithm == "ed25519":
+        if len(decoded) != ED25519_PUBLIC_KEY_BYTES:
+            raise ConfigurationError(
+                f"{source} must decode to exactly {ED25519_PUBLIC_KEY_BYTES} bytes "
+                "for Ed25519 public keys"
+            )
+    else:
+        raise ConfigurationError("message_authenticity algorithm is not supported")
     return decoded
 
 
@@ -1979,6 +2031,188 @@ class EncryptionConfig(BaseModel):
         return rule.key_b64 is None and rule.key_b64_env is None
 
 
+class MessageAuthenticityRuleConfig(BaseModel):
+    """One subject-specific message authenticity verification rule.
+
+    The rule describes the exact cryptographic verification material expected
+    for matching subjects.  A disabled rule is an explicit exemption and should
+    be used sparingly; enabled rules fail closed when a signature, key
+    identifier, or algorithm header is missing or mismatched.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    subject: str
+    enabled: bool = True
+    algorithm: Literal["hmac-sha256", "ed25519"] = "hmac-sha256"
+    key_id: str | None = None
+    key_b64: str | None = None
+    key_b64_env: str | None = None
+    signed_fields: tuple[str, ...] = DEFAULT_AUTHENTICITY_SIGNED_FIELDS
+
+    @field_validator("subject")
+    @classmethod
+    def validate_subject(cls, value: str) -> str:
+        """Validate rule subjects with the same syntax as NATS wildcards."""
+
+        return validate_subject_pattern(value)
+
+    @field_validator("algorithm", mode="before")
+    @classmethod
+    def normalize_algorithm(cls, value: object) -> object:
+        """Accept common casing variants while storing canonical algorithm names."""
+
+        if isinstance(value, str):
+            return value.strip().lower().replace("_", "-")
+        return value
+
+    @field_validator("key_id")
+    @classmethod
+    def validate_key_id(cls, value: str | None) -> str | None:
+        """Validate a non-secret verification key identifier."""
+
+        if value is None:
+            return None
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("message_authenticity rule key_id must not be empty")
+        if len(rendered) > MAX_AUTHENTICITY_KEY_ID_LENGTH:
+            raise ValueError(
+                "message_authenticity rule key_id must not exceed "
+                f"{MAX_AUTHENTICITY_KEY_ID_LENGTH} characters"
+            )
+        if contains_ascii_control_characters(rendered):
+            raise ValueError("message_authenticity rule key_id must not contain control characters")
+        return rendered
+
+    @field_validator("key_b64_env")
+    @classmethod
+    def validate_key_env(cls, value: str | None) -> str | None:
+        """Validate the environment variable name used for verification keys."""
+
+        if value is None:
+            return None
+        return _validate_websocket_header_env_name(
+            value,
+            source="message_authenticity rule key_b64_env",
+        )
+
+    @field_validator("signed_fields", mode="before")
+    @classmethod
+    def normalize_signed_fields(cls, value: object) -> tuple[str, ...]:
+        """Normalize and allow-list metadata fields included in signatures."""
+
+        if value is None:
+            return DEFAULT_AUTHENTICITY_SIGNED_FIELDS
+        if isinstance(value, str):
+            raw_items = [value]
+        elif isinstance(value, (list, tuple, set, frozenset)):
+            raw_items = list(value)
+        else:
+            raise ValueError("message_authenticity signed_fields must be a string or list")
+
+        rendered: list[str] = []
+        seen: set[str] = set()
+        for item in raw_items:
+            if not isinstance(item, str):
+                raise ValueError("message_authenticity signed_fields entries must be strings")
+            field_name = item.strip().lower().replace("-", "_")
+            if field_name not in AUTHENTICITY_SIGNED_FIELDS:
+                allowed = ", ".join(sorted(AUTHENTICITY_SIGNED_FIELDS))
+                raise ValueError(
+                    f"message_authenticity signed_fields entries must be one of: {allowed}"
+                )
+            if field_name in seen:
+                continue
+            rendered.append(field_name)
+            seen.add(field_name)
+        return tuple(rendered)
+
+    @model_validator(mode="after")
+    def validate_key_sources(self) -> MessageAuthenticityRuleConfig:
+        """Reject ambiguous or incomplete verification key configuration."""
+
+        if self.key_b64 is not None and self.key_b64_env is not None:
+            raise ValueError("configure either message_authenticity rule key_b64 or key_b64_env")
+        if not self.enabled:
+            return self
+        if self.key_id is None:
+            raise ValueError("message_authenticity enabled rules require key_id")
+        if self.key_b64 is None and self.key_b64_env is None:
+            raise ValueError("message_authenticity enabled rules require key_b64_env or key_b64")
+        if self.key_b64 is not None:
+            _decode_authenticity_key(
+                self.key_b64,
+                algorithm=self.algorithm,
+                source=f"message_authenticity rule {self.subject}.key_b64",
+            )
+        return self
+
+    def resolve_key(self) -> bytes:
+        """Resolve verification key material at the runtime boundary."""
+
+        if self.key_b64 is not None:
+            return _decode_authenticity_key(
+                self.key_b64,
+                algorithm=self.algorithm,
+                source=f"message_authenticity rule {self.subject}.key_b64",
+            )
+        if self.key_b64_env is None:
+            raise ConfigurationError("message_authenticity verification key is not configured")
+        value = os.getenv(self.key_b64_env)
+        if value is None:
+            raise ConfigurationError(f"environment variable {self.key_b64_env} is not set")
+        return _decode_authenticity_key(
+            value,
+            algorithm=self.algorithm,
+            source=f"environment variable {self.key_b64_env}",
+        )
+
+
+class MessageAuthenticityConfig(BaseModel):
+    """Destination-neutral message-level authenticity verification.
+
+    NATS authentication and TLS protect broker access and transport, but they
+    do not prove that a specific message body was produced by an authorized
+    publisher.  This optional gate verifies a producer-supplied signature before
+    any sink receives a message.  Verification failures are permanent pre-sink
+    failures and follow the normal DLQ-before-ACK path.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    unmatched_subject_action: Literal["allow", "reject"] = "reject"
+    signature_header: str = "Nats-Sinks-Authenticity-Signature"
+    algorithm_header: str = "Nats-Sinks-Authenticity-Algorithm"
+    key_id_header: str = "Nats-Sinks-Authenticity-Key-Id"
+    rules: list[MessageAuthenticityRuleConfig] = Field(default_factory=list)
+
+    @field_validator("signature_header", "algorithm_header", "key_id_header")
+    @classmethod
+    def validate_header_name(cls, value: str, info: Any) -> str:
+        """Validate operator-selected authenticity metadata header names."""
+
+        return _validate_metadata_header_name(
+            value, source=f"message_authenticity.{info.field_name}"
+        )
+
+    @model_validator(mode="after")
+    def validate_enabled_rules(self) -> MessageAuthenticityConfig:
+        """Require explicit rules before enabling verification."""
+
+        header_names = [
+            self.signature_header.casefold(),
+            self.algorithm_header.casefold(),
+            self.key_id_header.casefold(),
+        ]
+        if len(set(header_names)) != len(header_names):
+            raise ValueError("message_authenticity header names must be distinct")
+        if self.enabled and not self.rules:
+            raise ValueError("message_authenticity.enabled requires at least one rule")
+        return self
+
+
 class CustodyConfig(BaseModel):
     """Optional tamper-evident metadata computed before sink delivery.
 
@@ -2135,6 +2369,9 @@ class AppConfig(BaseModel):
     mission_metadata: MissionMetadataConfig = Field(default_factory=MissionMetadataConfig)
     security_labels: SecurityLabelProfileConfig = Field(default_factory=SecurityLabelProfileConfig)
     encryption: EncryptionConfig = Field(default_factory=EncryptionConfig)
+    message_authenticity: MessageAuthenticityConfig = Field(
+        default_factory=MessageAuthenticityConfig
+    )
     custody: CustodyConfig = Field(default_factory=CustodyConfig)
     size_policy: SizePolicyConfig = Field(default_factory=SizePolicyConfig)
     pre_sink_policy: PreSinkPolicyConfig = Field(default_factory=PreSinkPolicyConfig)
@@ -2154,6 +2391,19 @@ ENV_OVERRIDES: dict[str, tuple[str, ...]] = {
     "NATS_SINKS_ENCRYPTION_ALGORITHM": ("encryption", "algorithm"),
     "NATS_SINKS_ENCRYPTION_KEY_ID": ("encryption", "key_id"),
     "NATS_SINKS_ENCRYPTION_KEY_B64_ENV": ("encryption", "key_b64_env"),
+    "NATS_SINKS_MESSAGE_AUTHENTICITY_ENABLED": ("message_authenticity", "enabled"),
+    "NATS_SINKS_MESSAGE_AUTHENTICITY_SIGNATURE_HEADER": (
+        "message_authenticity",
+        "signature_header",
+    ),
+    "NATS_SINKS_MESSAGE_AUTHENTICITY_ALGORITHM_HEADER": (
+        "message_authenticity",
+        "algorithm_header",
+    ),
+    "NATS_SINKS_MESSAGE_AUTHENTICITY_KEY_ID_HEADER": (
+        "message_authenticity",
+        "key_id_header",
+    ),
     "NATS_SINKS_PRIORITY_HEADER": ("message_metadata", "priority", "header"),
     "NATS_SINKS_PRIORITY_DEFAULT": ("message_metadata", "priority", "default"),
     "NATS_SINKS_CLASSIFICATION_HEADER": (

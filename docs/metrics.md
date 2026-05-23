@@ -238,6 +238,46 @@ sensitive and can create unbounded cardinality. Use aggregate counters first,
 then investigate individual records through approved operational tooling when a
 metric indicates delayed, missing, malformed, or skewed event timestamps.
 
+## Message Authenticity Metrics
+
+When `message_authenticity.enabled` is true, the core runtime records aggregate
+verification metrics before any sink write. These counters help operators see
+whether signed traffic is flowing, whether producers are missing required
+headers, and whether a signature policy is rejecting messages. They do not
+export signatures, key material, payload bytes, or raw header values.
+
+| Metric suffix | Type | Meaning |
+| --- | --- | --- |
+| `message_authenticity_messages_passed_total` | counter | Messages accepted by message authenticity verification. |
+| `message_authenticity_messages_rejected_total` | counter | Messages rejected before sink delivery. |
+| `message_authenticity_batches_passed_total` | counter | Batches with at least one accepted message. |
+| `message_authenticity_batches_rejected_total` | counter | Batches with at least one rejected message. |
+| `message_authenticity_evaluation_errors_total` | counter | Unexpected evaluator failures that left messages redeliverable. |
+
+Example shell inspection:
+
+```bash
+nats-sink-metrics show .local/nats-sinks/metrics.json \
+  --format shell \
+  --metric "message_authenticity_*"
+```
+
+Example output:
+
+```text
+MESSAGE_AUTHENTICITY_MESSAGES_PASSED_TOTAL=250
+MESSAGE_AUTHENTICITY_MESSAGES_REJECTED_TOTAL=6
+MESSAGE_AUTHENTICITY_BATCHES_PASSED_TOTAL=4
+MESSAGE_AUTHENTICITY_BATCHES_REJECTED_TOTAL=1
+MESSAGE_AUTHENTICITY_EVALUATION_ERRORS_TOTAL=0
+```
+
+These metrics are useful in controlled mission networks because a sudden
+increase in rejected signed messages can indicate a producer deployment
+mistake, stale key material, replayed traffic, or an attempted injection into a
+trusted event stream. Keep any external sharing behind an explicit
+observability policy allow list.
+
 ## CLI Commands
 
 The metrics CLI provides three commands:

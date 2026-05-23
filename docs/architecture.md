@@ -37,6 +37,7 @@ flowchart TB
     subgraph Core[nats_sinks.core]
         Runner[JetStreamSinkRunner]
         Envelope[NatsEnvelope]
+        Authenticity[Optional message authenticity gate]
         Encrypt[Optional payload encryption]
         Policy[Optional pre-sink policy gate]
         Custody[Optional custody hash evidence]
@@ -57,7 +58,7 @@ flowchart TB
     end
 
     Stream --> Consumer --> Runner
-    Runner --> Envelope --> Encrypt --> Policy --> Custody --> Priority --> Protocol
+    Runner --> Envelope --> Authenticity --> Encrypt --> Policy --> Custody --> Priority --> Protocol
     Protocol --> Oracle
     Protocol --> File
     Protocol --> Future
@@ -77,6 +78,7 @@ destination write, then to a durable commit, and only then to a JetStream ACK.
 JetStream stream
   -> durable consumer
   -> nats-sinks core runner
+  -> optional message authenticity verification
   -> optional payload encryption
   -> optional pre-sink policy gate
   -> optional tamper-evident custody metadata
@@ -94,6 +96,7 @@ The core runtime handles:
 - Pull-based consumption.
 - Bounded batch fetching.
 - Conversion from raw NATS messages to `NatsEnvelope`.
+- Optional message authenticity verification before any sink delivery.
 - Optional payload encryption before sink delivery.
 - Optional fail-closed policy enforcement after normalization and core payload
   transformation, but before any destination write.
@@ -252,6 +255,15 @@ Payload encryption is also part of the core, not a sink-specific responsibility.
 When enabled, the runner encrypts `NatsEnvelope.data` and passes a copied
 envelope to the sink. Metadata remains clear. This lets all sinks store the
 same encrypted payload envelope without duplicating cryptographic code.
+
+Message authenticity verification is also part of the core. When enabled, the
+runner checks producer-supplied signature headers against an allow-listed
+subject rule before payload encryption, policy enforcement, custody hashing,
+priority lanes, or sink delivery. A verification rejection is handled as a
+permanent validation failure: the rejected message does not reach the sink, and
+the core follows DLQ-before-ACK behavior when a DLQ is configured. This
+complements NATS authentication and TLS; it does not replace them. See
+[Message Authenticity](message-authenticity.md).
 
 Pre-sink policy enforcement is also part of the core. The policy gate is
 configured with explicit allow-listed checks such as required priority,

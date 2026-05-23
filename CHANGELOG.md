@@ -12,6 +12,12 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Added
 
+- Added optional core message authenticity verification before sink writes,
+  including subject-scoped HMAC-SHA256 and Ed25519 rules, canonical signed
+  payload and metadata documents, sanitized verification failures,
+  DLQ-before-ACK rejection handling, aggregate authenticity metrics, public
+  producer helper APIs, configuration validation, tests, and operator
+  documentation.
 - Added centralized NATS authentication and TLS connection option construction
   for username/password, token, credentials-file, NKEY seed-file, local CA TLS,
   and TLS client certificate workflows, including identity-path redaction,

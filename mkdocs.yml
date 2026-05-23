@@ -44,6 +44,7 @@ nav:
       - Edge Spool Sink: spool-sink.md
       - GoldenGate-Inspired Sink Candidates: goldengate-sink-candidate-research.md
   - Data Handling:
+      - Message Authenticity: message-authenticity.md
       - Payload Encryption: payload-encryption.md
       - Tamper-Evident Custody: tamper-evident-custody.md
       - Priority Lanes: priority-lanes.md

@@ -18,6 +18,8 @@ Examples:
 - invalid JSON payload,
 - missing required idempotency field,
 - validation failure,
+- message authenticity verification failure such as a missing signature,
+  mismatched key identifier, or invalid signature,
 - size-policy rejection such as oversized payload, too many headers, labels
   outside the configured bounds, or a normalized record that exceeds the
   deployment contract,
@@ -59,13 +61,19 @@ for the design decision and safety limits.
 sequenceDiagram
     participant JS as JetStream
     participant R as Runner
+    participant A as Authenticity
     participant Z as Size policy
     participant P as Pre-sink policy
     participant S as Sink
     participant Q as DLQ Subject
 
     JS->>R: Deliver message
-    R->>Z: Evaluate optional size policy
+    R->>A: Evaluate optional message authenticity
+    alt Authenticity rejects
+        A-->>R: PolicyViolationError
+    else Authenticity passes or disabled
+        R->>Z: Evaluate optional size policy
+    end
     alt Size policy rejects
         Z-->>R: SizePolicyViolationError
     else Size policy passes
