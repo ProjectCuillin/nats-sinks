@@ -182,6 +182,15 @@ includes:
   suite; Ruff, mypy, documentation builds, CLI smoke checks,
   high-confidence secret scan, Bandit, package build, SBOM/checksum
   generation, and Twine metadata checks also passed,
+- guarded pull request merge comments for issue `#220`. The new
+  `scripts/merge-pr-with-comment.py` helper validates a short sanitized
+  test-evidence comment, posts it to the pull request, and only then invokes
+  `gh pr merge`. Focused unit tests passed with `7 passed`, covering
+  comment-before-merge ordering, dry-run behavior, merge method selection,
+  draft and non-open PR rejection, missing test-evidence rejection, and
+  public text safety checks. Full local validation passed with `698 passed,
+  8 skipped` in the main pytest run, `121 passed` in the encryption and sink
+  contract suite, and `104 passed` in the sink-focused suite,
 - encrypted edge spool-and-forward work for issue `#51`, including
   `nats_sinks.spool.SpoolSink`, secure-by-default record-level encryption,
   bounded record and byte limits, deterministic idempotency-key filenames,

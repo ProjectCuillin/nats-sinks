@@ -28,6 +28,10 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   governance checks, CODEOWNERS review, branch protection tooling, and release
   workflow validation that tags are cut only from commits already merged into
   `main`.
+- Added guarded pull request merge evidence tooling. Maintainers can now use
+  `scripts/merge-pr-with-comment.py` to validate and post a sanitized
+  test-evidence comment before invoking `gh pr merge`, preventing silent local
+  PR merges in the release branch workflow.
 - Added an optional data-centric security label profile that carries structured
   releasability, handling caveats, owner, originator, policy identifier, and
   retention category metadata through the core runtime, file sink JSON records,

@@ -437,6 +437,25 @@ The helper refuses every pull request whose base branch is `main`. Release pull
 requests into `main` still require explicit maintainer review, release
 validation, and the normal release decision.
 
+Before merging any pull request, post a short sanitized merge comment with the
+test evidence used for the decision. Use the guarded local merge helper so the
+comment is posted before the merge command runs:
+
+```bash
+python scripts/merge-pr-with-comment.py \
+  --repo ProjectCuillin/nats-sinks \
+  --pr 123 \
+  --comment-file .local/pr-merge-comments/pr-123.md \
+  --delete-branch
+```
+
+The comment file must include a heading such as `## Test Evidence`,
+`## Test Results`, `## Validation Evidence`, or `## Verification Evidence`.
+The helper rejects empty comments, comments without test evidence, common
+secret patterns, draft pull requests, and closed pull requests. This keeps the
+backlog, pull request, and release evidence aligned while avoiding silent
+merges.
+
 Use `scripts/comment-backlog-issue.py` for progress notes so comments are
 validated with the same public-safety rules as local backlog JSON:
 

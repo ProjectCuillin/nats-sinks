@@ -58,6 +58,12 @@ This repository is safety-sensitive infrastructure code. Follow these rules:
   supports `--no-copy-issue-labels-to-pr` only for exceptional maintenance
   work. Do not recreate the GitHub Issue `Priority` field as a pull request
   label; priority remains managed on the issue itself.
+- Never merge a pull request silently. Before every PR merge, post a short
+  sanitized comment that summarizes the test results or validation evidence.
+  Use `python scripts/merge-pr-with-comment.py --pr <number> --comment-file
+  <file>` for local merges so the comment is posted before `gh pr merge`
+  runs. Do not include secrets, private endpoints, payloads, local paths, or
+  token values in merge comments.
 - The `Branch Pull Request` workflow is manual and token-gated. Do not
   re-enable push-triggered pull request creation unless the maintainer
   explicitly changes the release policy.

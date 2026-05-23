@@ -184,6 +184,62 @@ That helper starts the manual `CI`, `Docs`, and `CodeQL` workflows for the
 current branch. Use it only when the branch is ready for merge or release
 validation.
 
+## Pull Request Merge Comments
+
+Every pull request merge must have a short public comment before the merge
+happens. The comment should tell reviewers what was tested, which local or
+manual checks passed, and whether any checks were intentionally skipped. This
+keeps the release trail understandable without requiring access to private chat
+history or local terminal output.
+
+Use the guarded merge helper instead of calling `gh pr merge` directly:
+
+```bash
+cat > .local/pr-merge-comments/pr-123.md <<'EOF'
+## Test Evidence
+
+- `python -m pytest tests/unit/test_pr_merge_comment.py -q` passed.
+- `scripts/check.sh` passed in the local release workspace.
+
+## Merge Note
+
+This PR updates local workflow automation only. Runtime NATS delivery,
+commit-then-ACK behavior, sink writes, and package imports are unchanged.
+EOF
+
+python scripts/merge-pr-with-comment.py \
+  --repo ProjectCuillin/nats-sinks \
+  --pr 123 \
+  --comment-file .local/pr-merge-comments/pr-123.md \
+  --delete-branch
+```
+
+The helper validates the comment first, posts it to the pull request, and only
+then invokes `gh pr merge`. If the comment is empty, lacks a test-evidence
+heading, contains common secret patterns, or cannot be posted, the merge is not
+started. Use `--dry-run` to verify the planned action without writing to
+GitHub:
+
+```bash
+python scripts/merge-pr-with-comment.py \
+  --repo ProjectCuillin/nats-sinks \
+  --pr 123 \
+  --comment-file .local/pr-merge-comments/pr-123.md \
+  --dry-run
+```
+
+The helper supports the normal GitHub merge methods:
+
+```bash
+python scripts/merge-pr-with-comment.py --pr 123 --comment-file .local/pr-merge-comments/pr-123.md --method merge
+python scripts/merge-pr-with-comment.py --pr 123 --comment-file .local/pr-merge-comments/pr-123.md --method squash
+python scripts/merge-pr-with-comment.py --pr 123 --comment-file .local/pr-merge-comments/pr-123.md --method rebase
+```
+
+Merge comments are public. Do not include passwords, tokens, certificates,
+private endpoints, IP addresses, Oracle wallet paths, payload dumps,
+classified examples, customer names, or local environment details.
+
 ## Guarded Non-Main Auto-Approval
 
 Issue, feature, and bug pull requests can be approved automatically when they
