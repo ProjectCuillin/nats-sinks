@@ -100,7 +100,10 @@ Oracle-specific fields inside the `sink` object.
   "metrics": {
     "enabled": false,
     "namespace": "nats_sinks",
-    "snapshot_file": null
+    "snapshot_file": null,
+    "event_freshness_enabled": true,
+    "event_stale_after_seconds": 300,
+    "event_future_skew_tolerance_seconds": 5
   },
   "advisories": {
     "enabled": false,
@@ -670,6 +673,9 @@ failure rates, so store it in an operator-controlled path.
 | `enabled` | no | `false` | `true` or `false`. | Enables metrics when a snapshot file is configured or a concrete recorder/exporter is supplied by deployment code. |
 | `namespace` | no | `nats_sinks` | Letters, digits, underscores, and colons. Must not start with a digit. | Prefix used by metrics integrations and documentation. Exporters should combine this namespace with emitted suffixes, for example `nats_sinks_messages_fetched_total`. |
 | `snapshot_file` | no | `null` | Local filesystem path without control characters. | Optional JSON snapshot file written by `nats-sink run` when metrics are enabled. The `nats-sink-metrics` CLI reads this file for table, JSON, JSONL, shell, names, and Prometheus text output. |
+| `event_freshness_enabled` | no | `true` | `true` or `false`. | Enables aggregate event freshness observations after sink durable success and before ACK. The metrics are observational only and never reject or ACK messages. |
+| `event_stale_after_seconds` | no | `300` | `null` or number from `0` to `31536000`. | Threshold used to increment stale-event counters at receive time and store time. Set to `null` to observe ages without counting stale events. |
+| `event_future_skew_tolerance_seconds` | no | `5` | Number from `0` to `86400`. | Allowed future timestamp skew before `event_creation_timestamp_future_total` is incremented. Positive skew is still observed in `event_source_clock_skew_seconds`. |
 
 Preferred metric suffixes are documented in
 [Metrics](metrics.md) and summarized in [Operations](operations.md#metrics).
@@ -695,7 +701,10 @@ Example:
   "metrics": {
     "enabled": true,
     "namespace": "nats_sinks",
-    "snapshot_file": ".local/nats-sinks/metrics.json"
+    "snapshot_file": ".local/nats-sinks/metrics.json",
+    "event_freshness_enabled": true,
+    "event_stale_after_seconds": 300,
+    "event_future_skew_tolerance_seconds": 5
   }
 }
 ```

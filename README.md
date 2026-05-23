@@ -108,9 +108,11 @@ used immediately:
   disabled-by-default allow-listed entry-point discovery for reviewed external
   connectors.
 - Basic metrics counters and timing observations for fetched, prepared,
-  written, ACKed, NAKed, failed, DLQ, sink write, ACK error, and active batch
-  behavior. The built-in runtime can write a local JSON snapshot when
-  configured, and embedded applications can still supply their own metrics
+  written, ACKed, NAKed, failed, DLQ, sink write, ACK error, active batch, and
+  event freshness behavior. Freshness metrics cover event age at receive and
+  store time, stale-event counts, missing or malformed creation timestamps, and
+  positive source clock skew. The built-in runtime can write a local JSON
+  snapshot when configured, and embedded applications can still supply their own metrics
   recorder or exporter. External observability sharing is controlled by a
   separate policy and is disabled by default, whether operators choose the
   recommended Prometheus textfile connector, the optional native HTTP
@@ -379,7 +381,10 @@ contains destination-specific fields documented on each sink page.
   "metrics": {
     "enabled": false,
     "namespace": "nats_sinks",
-    "snapshot_file": null
+    "snapshot_file": null,
+    "event_freshness_enabled": true,
+    "event_stale_after_seconds": 300,
+    "event_future_skew_tolerance_seconds": 5
   },
   "message_metadata": {
     "priority": {
@@ -420,7 +425,10 @@ snapshot path:
   "metrics": {
     "enabled": true,
     "namespace": "nats_sinks",
-    "snapshot_file": ".local/nats-sinks/metrics.json"
+    "snapshot_file": ".local/nats-sinks/metrics.json",
+    "event_freshness_enabled": true,
+    "event_stale_after_seconds": 300,
+    "event_future_skew_tolerance_seconds": 5
   }
 }
 ```
@@ -431,6 +439,7 @@ Inspect the snapshot from another terminal:
 nats-sink-metrics show .local/nats-sinks/metrics.json --format table
 nats-sink-metrics show .local/nats-sinks/metrics.json --format shell --kind counter
 nats-sink-metrics show .local/nats-sinks/metrics.json --metric "oracle_*"
+nats-sink-metrics show .local/nats-sinks/metrics.json --metric "event_*" --metric "events_*"
 nats-sink-metrics get .local/nats-sinks/metrics.json messages_failed_total --default 0
 ```
 
@@ -686,6 +695,7 @@ nats-sink test-sink examples/oracle-jetstream/config.json
 nats-sink run examples/oracle-jetstream/config.json
 nats-sink-metrics show .local/nats-sinks/metrics.json --format table
 nats-sink-metrics show .local/nats-sinks/metrics.json --metric "oracle_*"
+nats-sink-metrics show .local/nats-sinks/metrics.json --metric "event_*" --metric "events_*"
 nats-sink-metrics get .local/nats-sinks/metrics.json messages_failed_total --default 0
 nats-sink-observe init-prometheus-policy examples/file-basic/config.json .local/observability.prometheus.json
 nats-sink-observe validate-policy .local/observability.prometheus.json
@@ -703,7 +713,9 @@ The metrics CLI reads only a local JSON snapshot written by the runner when
 `metrics.enabled` and `metrics.snapshot_file` are configured. It supports
 table, JSON, JSONL, shell, names, and Prometheus text output so developers can
 pipe results into service checks and scripts. Oracle duplicate/conflict
-counters are visible through the same command with `--metric "oracle_*"`. See
+counters are visible through the same command with `--metric "oracle_*"`.
+Event freshness and staleness metrics are visible with `--metric "event_*"`
+and `--metric "events_*"` when metrics are enabled. See
 [Metrics](https://nats-sinks.readthedocs.io/en/latest/metrics/) for examples.
 
 The observability CLI manages external sharing policy. It can generate a

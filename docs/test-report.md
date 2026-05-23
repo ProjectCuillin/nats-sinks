@@ -14,22 +14,29 @@ logs from live systems.
 | Field | Value |
 | --- | --- |
 | Overall result | Pass |
-| Report generated | 2026-05-23 cross-domain handoff package blueprint validation |
+| Report generated | 2026-05-23 event freshness and staleness metrics validation |
 | Project version | `0.4.0` post-release development |
 | Python version | 3.12.4 |
-| Git revision checked | Issue `#48` workspace based on `release-v0.4.1` |
-| Worktree state | Active workspace adding the cross-domain handoff package blueprint and validated sanitized example package while preserving local Docker image work, data-centric security labels, encrypted edge spool-and-forward sink work, GoldenGate-inspired sink candidate backlog research, stream planning, branch workflow automation, connector framework, WebSocket guardrails, Oracle high-throughput staging, custody metadata, advisory observation, durable consumer management, richer consumer policy controls, NATS no-echo, OTLP export, secure-development hardening, strict JSON config loading, log-injection sanitization, secret scanning, public API compatibility tests, GitHub Dependency Graph manifests, sanitized backlog tooling, release-gated close automation, standardized SPDX headers, metrics snapshots and CLI, observability policy core, Prometheus and NATS monitoring connectors, Kubernetes examples, systemd installer, NATS reconnect tuning, least-privilege NATS permission templates, JetStream topology guidance, retry backoff with jitter, priority-aware lanes, synthetic mission testing, mission-support examples, SBOM generation, release checksums, hash-verified installation guidance, property-style tests, defence and mission-support blueprints, generic mission metadata, payload encryption, and Oracle/file/spool sink support |
+| Git revision checked | Issue `#52` workspace based on `release-v0.4.1` |
+| Worktree state | Active workspace adding event freshness and staleness metrics while preserving local Docker image work, data-centric security labels, encrypted edge spool-and-forward sink work, GoldenGate-inspired sink candidate backlog research, stream planning, branch workflow automation, connector framework, WebSocket guardrails, Oracle high-throughput staging, custody metadata, advisory observation, durable consumer management, richer consumer policy controls, NATS no-echo, OTLP export, secure-development hardening, strict JSON config loading, log-injection sanitization, secret scanning, public API compatibility tests, GitHub Dependency Graph manifests, sanitized backlog tooling, release-gated close automation, standardized SPDX headers, metrics snapshots and CLI, observability policy core, Prometheus and NATS monitoring connectors, Kubernetes examples, systemd installer, NATS reconnect tuning, least-privilege NATS permission templates, JetStream topology guidance, retry backoff with jitter, priority-aware lanes, synthetic mission testing, mission-support examples, SBOM generation, release checksums, hash-verified installation guidance, property-style tests, defence and mission-support blueprints, generic mission metadata, payload encryption, and Oracle/file/spool sink support |
 | Live NATS details | Redacted |
 | Live Oracle details | Redacted |
 
-This refresh covered issue `#48`, adding a cross-domain handoff package
-blueprint, a sanitized directory-style package example, manifest/schema
-guidance, explicit non-goals, file-sink and security documentation links, and
-unit tests that validate package discoverability, path safety, bounded package
-shape, SHA-256 hash consistency, classification/labels metadata, and sanitized
-public fixtures. The focused package documentation suite passed with
-`8 passed`, and the full `scripts/check.sh` run passed with `717 passed,
-9 skipped` in the main pytest run.
+This refresh covered issue `#52`, adding event freshness and staleness metrics
+to the core runtime, metrics snapshot CLI, Prometheus observability path, and
+operator documentation. The implementation records aggregate event age at
+receive time and store time, stale-event counters, missing and malformed
+creation timestamp counters, future timestamp counters, and source clock skew
+observations without exposing payloads, subjects, headers, endpoints, or
+credentials. Focused freshness and observability tests passed with
+`105 passed`. The full local validation suite passed through
+`scripts/check.sh`, including Ruff, mypy, dependency manifest validation,
+backlog and bug-report validation, Markdown link checks, documentation builds,
+pytest with `729 passed, 9 skipped`, encryption checks, sink checks, CLI smoke
+checks, security scanning, package build, SBOM generation, checksum
+generation, and Twine metadata validation. The skipped tests remain gated live
+NATS and Oracle integration tests that require explicit local environment
+flags or services.
 
 This refresh also preserves issue `#11`, centralizing NATS connection option
 construction in `nats_sinks.core.nats_options`, validating identity-material

@@ -99,6 +99,12 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 - Added terminal acknowledgement metrics for opt-in DLQ terminal handling:
   `messages_terminated_total`, `message_term_seconds`, and
   `term_errors_total`.
+- Added aggregate event freshness and staleness metrics for event age at receive
+  time and durable store time, stale-event counts, missing or malformed creation
+  timestamps, future timestamp counts, and positive source clock skew. The
+  metrics remain observational only and are available through the local metrics
+  snapshot, `nats-sink-metrics`, Prometheus policy allow lists, and OTLP policy
+  allow lists without changing ACK behavior.
 - Added a researched backlog item for a future Oracle MySQL sink, including
   initial design direction for MySQL Connector/Python, idempotent upserts,
   TLS, least-privilege access, test planning, and documentation scope.

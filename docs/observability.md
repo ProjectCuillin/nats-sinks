@@ -48,6 +48,8 @@ runtime:
   classification values, labels, and subjects must not be exported by default,
 - exported metrics must be low-cardinality unless a future connector clearly
   documents a bounded label strategy,
+- event freshness metrics must remain aggregate-only because event age, stale
+  counts, and source clock skew can reveal operational tempo,
 - external sharing is disabled until an explicit policy enables it,
 - observability connectors are isolated from core and sink logic so new
   platforms can be added without breaking sink APIs.
@@ -481,6 +483,9 @@ messages_terminated_total
 messages_nacked_total
 messages_failed_total
 messages_dlq_total
+event_age_at_receive_seconds
+event_age_at_store_seconds
+events_stale_at_receive_total
 ```
 
 List discovered subject hints in a shell-friendly format:
@@ -629,6 +634,8 @@ Treat observability configuration as production policy:
 
 - keep policies reviewed and under change control,
 - export the smallest useful metric set,
+- allow freshness metrics only when event-age and clock-skew timing are approved
+  for the deployment,
 - avoid subject labels unless a future connector explicitly supports bounded,
   approved subject-aware metrics,
 - keep metrics snapshots and textfiles out of git,

@@ -23,6 +23,7 @@ from nats_sinks.core.advisory import (
     parse_jetstream_advisory,
     validate_advisory_subject,
 )
+from nats_sinks.core.config import MetricsConfig
 from nats_sinks.core.consumer_management import (
     ConsumerDrift,
     ConsumerManagementResult,
@@ -46,6 +47,7 @@ from nats_sinks.core.encryption import (
     is_encrypted_payload_envelope,
 )
 from nats_sinks.core.envelope import NatsEnvelope
+from nats_sinks.core.freshness import record_event_freshness_metrics
 from nats_sinks.core.message_metadata import (
     DEFAULT_CLASSIFICATION_HEADER,
     DEFAULT_LABELS_HEADER,
@@ -119,6 +121,7 @@ __all__ = [
     "JetStreamSinkRunner",
     "JsonFileMetrics",
     "MetricNames",
+    "MetricsConfig",
     "NatsEnvelope",
     "NoopMetrics",
     "NormalizedPayload",
@@ -154,6 +157,7 @@ __all__ = [
     "parse_mission_metadata_header",
     "parse_security_label_header",
     "qualified_metric_name",
+    "record_event_freshness_metrics",
     "validate_advisory_subject",
     "validate_metric_namespace",
     "write_metrics_snapshot",

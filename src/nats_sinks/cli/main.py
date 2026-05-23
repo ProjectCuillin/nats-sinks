@@ -357,6 +357,7 @@ def run(
             size_policy=loaded.size_policy,
             pre_sink_policy=loaded.pre_sink_policy,
             metrics=metrics,
+            metrics_config=loaded.metrics,
             nats_options=_nats_options(loaded),
         )
         asyncio.run(runner.run())

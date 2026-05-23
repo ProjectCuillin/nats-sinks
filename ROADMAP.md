@@ -41,6 +41,9 @@ release, and closed only after the containing release is published.
   persisted by Oracle, file, and future sinks.
 - Basic metrics counters and observations for fetched, prepared, written,
   ACKed, NAKed, failed, DLQ, sink write, ACK error, and active batch behavior.
+- Event freshness and staleness metrics for aggregate event age at receive and
+  store time, missing or malformed creation timestamps, stale events, and
+  positive source clock skew.
 - Local JSON metrics snapshots and the `nats-sink-metrics` inspection CLI for
   table, JSON, JSONL, shell, names, and Prometheus text output.
 - Observability core with disabled-by-default sharing policies and a

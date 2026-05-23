@@ -130,9 +130,10 @@ Use this baseline for code review and future releases:
   secrets while retaining enough subject, stream, sequence, sink, and error
   category context for operators.
 - Treat observability output as an information-sharing boundary. Metrics,
-  timestamps, failure counters, duplicate counters, and write timings can
-  reveal operational tempo even without payloads. Use disabled-by-default
-  observability policies and allow lists before publishing to Prometheus,
+  timestamps, event freshness observations, source clock-skew values, failure
+  counters, duplicate counters, and write timings can reveal operational tempo
+  even without payloads. Use disabled-by-default observability policies and
+  allow lists before publishing to Prometheus,
   OpenTelemetry Collectors, NATS monitoring snapshots, or any future
   monitoring platform. OTLP collector endpoints must not contain credentials,
   non-loopback endpoints must use HTTPS, and optional collector headers must

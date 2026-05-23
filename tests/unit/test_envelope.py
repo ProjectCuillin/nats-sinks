@@ -113,8 +113,13 @@ def test_metadata_snapshot_captures_optional_nats_headers_and_epoch_times() -> N
     assert metadata["nats"]["reserved_headers"]["Nats-Expected-Stream"] == "ORDERS"
     assert metadata["jetstream"]["stream_sequence"] == 42
     assert metadata["timestamps"]["message_created_at_epoch_ns"] == 1778926530000000000
+    assert metadata["timestamps"]["message_created_at_source"] == "nats_time_stamp"
+    assert not metadata["timestamps"]["message_created_at_header_malformed"]
     assert metadata["timestamps"]["received_at_epoch_ns"] == 1778926620000000000
     assert metadata["timestamps"]["stored_at_epoch_ns"] == 1778926680000000000
+    assert metadata["freshness"]["event_age_at_receive_seconds"] == 90.0
+    assert metadata["freshness"]["event_age_at_store_seconds"] == 150.0
+    assert metadata["freshness"]["source_clock_skew_seconds"] == 0.0
 
 
 def test_metadata_snapshot_handles_missing_reserved_headers() -> None:
@@ -125,3 +130,16 @@ def test_metadata_snapshot_handles_missing_reserved_headers() -> None:
     assert metadata["message_metadata"]["classification"] is None
     assert metadata["message_metadata"]["labels"] == []
     assert metadata["nats"]["reserved_headers"] == {}
+
+
+def test_metadata_snapshot_clamps_future_timestamp_age_and_records_skew() -> None:
+    item = envelope(
+        headers={"Nats-Time-Stamp": "2026-05-16T10:20:00Z"},
+        received_at=datetime(2026, 5, 16, 10, 17, tzinfo=UTC),
+    )
+
+    metadata = item.metadata_for_json_storage(stored_at=datetime(2026, 5, 16, 10, 18, tzinfo=UTC))
+
+    assert metadata["freshness"]["event_age_at_receive_seconds"] == 0.0
+    assert metadata["freshness"]["event_age_at_store_seconds"] == 0.0
+    assert metadata["freshness"]["source_clock_skew_seconds"] == 180.0

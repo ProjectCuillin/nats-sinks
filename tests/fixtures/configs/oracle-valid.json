@@ -32,7 +32,10 @@
   },
   "metrics": {
     "enabled": false,
-    "namespace": "nats_sinks"
+    "namespace": "nats_sinks",
+    "event_freshness_enabled": true,
+    "event_stale_after_seconds": 300,
+    "event_future_skew_tolerance_seconds": 5
   },
   "sink": {
     "type": "oracle",

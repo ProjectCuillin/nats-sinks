@@ -18,8 +18,9 @@ server fields are preserved before the code knows their exact meaning.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from nats_sinks.core.envelope import NatsEnvelope
@@ -56,6 +57,25 @@ NON_NATS_STANDARD_HEADER_NAMES: tuple[str, ...] = (
     "Accept-Encoding",
 )
 _EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
+
+MessageCreatedTimestampSource = Literal["nats_time_stamp", "jetstream_timestamp", "missing"]
+
+
+@dataclass(frozen=True, slots=True)
+class MessageCreatedTimestamp:
+    """Resolved message creation timestamp and parsing evidence.
+
+    Publishers may provide `Nats-Time-Stamp`, while JetStream metadata can also
+    expose a server-side timestamp.  Operators need to distinguish a clean
+    publisher timestamp from a fallback or a missing value, especially when
+    freshness and stale-event metrics are used during replay or delayed
+    network conditions.
+    """
+
+    epoch_ns: int | None
+    source: MessageCreatedTimestampSource
+    raw_header: str | None = None
+    malformed_header: bool = False
 
 
 def datetime_to_epoch_ns(value: datetime | None) -> int | None:
@@ -108,6 +128,58 @@ def _standard_headers(headers: Mapping[str, str]) -> dict[str, str]:
     return standard
 
 
+def resolve_message_created_timestamp(envelope: NatsEnvelope) -> MessageCreatedTimestamp:
+    """Resolve message creation time from trusted parser output.
+
+    The function prefers a syntactically valid `Nats-Time-Stamp` header because
+    that is the publisher-visible event creation hint.  If the header is
+    missing or malformed, it falls back to the JetStream metadata timestamp
+    when available.  A malformed header is still reported so metrics can count
+    it without rejecting or repairing the message.
+    """
+
+    raw_header = _case_insensitive_lookup(envelope.headers, "Nats-Time-Stamp")
+    if raw_header is not None:
+        header_epoch_ns = parse_rfc3339_to_epoch_ns(raw_header)
+        if header_epoch_ns is not None:
+            return MessageCreatedTimestamp(
+                epoch_ns=header_epoch_ns,
+                source="nats_time_stamp",
+                raw_header=raw_header,
+            )
+        fallback_epoch_ns = datetime_to_epoch_ns(envelope.timestamp)
+        return MessageCreatedTimestamp(
+            epoch_ns=fallback_epoch_ns,
+            source="jetstream_timestamp" if fallback_epoch_ns is not None else "missing",
+            raw_header=raw_header,
+            malformed_header=True,
+        )
+
+    fallback_epoch_ns = datetime_to_epoch_ns(envelope.timestamp)
+    return MessageCreatedTimestamp(
+        epoch_ns=fallback_epoch_ns,
+        source="jetstream_timestamp" if fallback_epoch_ns is not None else "missing",
+    )
+
+
+def _age_seconds(later_epoch_ns: int | None, earlier_epoch_ns: int | None) -> float | None:
+    """Return a bounded age in seconds for metadata storage."""
+
+    if later_epoch_ns is None or earlier_epoch_ns is None:
+        return None
+    return max(0.0, (later_epoch_ns - earlier_epoch_ns) / 1_000_000_000)
+
+
+def _future_skew_seconds(
+    created_epoch_ns: int | None, observed_epoch_ns: int | None
+) -> float | None:
+    """Return positive source clock skew for future-dated message timestamps."""
+
+    if created_epoch_ns is None or observed_epoch_ns is None:
+        return None
+    return max(0.0, (created_epoch_ns - observed_epoch_ns) / 1_000_000_000)
+
+
 def build_nats_metadata_snapshot(
     envelope: NatsEnvelope,
     *,
@@ -118,10 +190,9 @@ def build_nats_metadata_snapshot(
     stored_at = stored_at or datetime.now(UTC)
     headers = dict(envelope.headers)
     reserved_headers = _standard_headers(headers)
-    nats_time_stamp = _case_insensitive_lookup(headers, "Nats-Time-Stamp")
-    message_created_at_epoch_ns = parse_rfc3339_to_epoch_ns(
-        nats_time_stamp
-    ) or datetime_to_epoch_ns(envelope.timestamp)
+    created_timestamp = resolve_message_created_timestamp(envelope)
+    received_at_epoch_ns = datetime_to_epoch_ns(envelope.received_at)
+    stored_at_epoch_ns = datetime_to_epoch_ns(stored_at)
 
     return {
         "metadata_version": 1,
@@ -152,12 +223,31 @@ def build_nats_metadata_snapshot(
             "timestamp_epoch_ns": datetime_to_epoch_ns(envelope.timestamp),
         },
         "timestamps": {
-            "message_created_at_epoch_ns": message_created_at_epoch_ns,
-            "nats_time_stamp": nats_time_stamp,
+            "message_created_at_epoch_ns": created_timestamp.epoch_ns,
+            "message_created_at_source": created_timestamp.source,
+            "message_created_at_header_malformed": created_timestamp.malformed_header,
+            "nats_time_stamp": created_timestamp.raw_header,
             "jetstream_timestamp_epoch_ns": datetime_to_epoch_ns(envelope.timestamp),
             "received_at": envelope.received_at.isoformat(),
-            "received_at_epoch_ns": datetime_to_epoch_ns(envelope.received_at),
+            "received_at_epoch_ns": received_at_epoch_ns,
             "stored_at": stored_at.isoformat(),
-            "stored_at_epoch_ns": datetime_to_epoch_ns(stored_at),
+            "stored_at_epoch_ns": stored_at_epoch_ns,
+        },
+        "freshness": {
+            "event_age_at_receive_seconds": _age_seconds(
+                received_at_epoch_ns,
+                created_timestamp.epoch_ns,
+            ),
+            "event_age_at_store_seconds": _age_seconds(
+                stored_at_epoch_ns,
+                created_timestamp.epoch_ns,
+            ),
+            "source_clock_skew_seconds": _future_skew_seconds(
+                created_timestamp.epoch_ns,
+                received_at_epoch_ns,
+            ),
+            "message_created_at_source": created_timestamp.source,
+            "message_created_at_missing": created_timestamp.epoch_ns is None,
+            "message_created_at_header_malformed": created_timestamp.malformed_header,
         },
     }
