@@ -30,6 +30,22 @@ DEFAULT_PRIORITY_HEADER = "Nats-Sinks-Priority"
 DEFAULT_CLASSIFICATION_HEADER = "Nats-Sinks-Classification"
 DEFAULT_LABELS_HEADER = "Nats-Sinks-Labels"
 LABEL_SEPARATOR = ";"
+ASCII_CONTROL_MAX = 31
+ASCII_DELETE = 127
+
+
+def contains_ascii_control_characters(value: str) -> bool:
+    """Return whether text contains ASCII controls unsafe for metadata fields.
+
+    The helper is intentionally small and shared by configuration, envelope, and
+    security-label validation. Metadata values can appear in logs, metrics,
+    database columns, file records, and routing decisions, so control
+    characters are treated as malformed input at trust boundaries.
+    """
+
+    return any(
+        ord(character) <= ASCII_CONTROL_MAX or ord(character) == ASCII_DELETE for character in value
+    )
 
 
 def normalise_metadata_value(value: object | None) -> str | None:

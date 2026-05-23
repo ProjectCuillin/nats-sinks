@@ -1,0 +1,26 @@
+{
+  "id": "message-metadata-label-default-control",
+  "title": "[Bug]: Message metadata label defaults accept control characters",
+  "area": "Configuration",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": ["metadata", "input-validation", "bug-hunt"],
+  "summary": "Message metadata label defaults can include control characters when configured as strings or arrays.",
+  "observed": "MessageMetadataLabelsConfig and MessageMetadataRuleConfig accept label defaults containing ASCII control characters.",
+  "expected": "Configured labels should reject control characters before they can reach envelopes, files, Oracle columns, or metrics.",
+  "reproduction": "Construct MessageMetadataLabelsConfig(header='Labels', default=['ops\\u0000label']) and observe validation succeeds.",
+  "failing_test": "Add unit coverage for global and rule label defaults containing ASCII control characters.",
+  "impact": "Unsafe labels can be persisted broadly and can create log or terminal hygiene problems when operators inspect records.",
+  "delivery_semantics": "No NATS delivery semantics change.",
+  "security": "Labels are operator-controlled metadata and should follow allow-list style validation.",
+  "acceptance": [
+    "Global label defaults reject ASCII control characters.",
+    "Subject rule label defaults reject ASCII control characters.",
+    "Label validation keeps duplicate removal and blank-label behavior intact.",
+    "Focused tests cover the invalid cases."
+  ],
+  "tests": "Run focused metadata boundary tests and full validation.",
+  "documentation": "Update release notes and test report.",
+  "closeout": "Mark completed after merge with sanitized evidence."
+}

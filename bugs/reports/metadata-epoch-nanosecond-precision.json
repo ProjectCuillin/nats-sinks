@@ -1,0 +1,26 @@
+{
+  "id": "metadata-epoch-nanosecond-precision",
+  "title": "[Bug]: Metadata epoch nanosecond conversion uses floating-point timestamp math",
+  "area": "Core runtime and delivery semantics",
+  "severity": "low",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": ["metadata", "time", "bug-hunt"],
+  "summary": "datetime_to_epoch_ns converts datetimes to epoch nanoseconds through datetime.timestamp(), which uses floating-point arithmetic and can lose microsecond precision for some timestamps.",
+  "observed": "Far-future or otherwise precision-sensitive datetimes can be converted with a small nanosecond error.",
+  "expected": "Epoch nanosecond conversion should use integer arithmetic from UTC-aware datetime components.",
+  "reproduction": "Compare datetime_to_epoch_ns for a precision-sensitive UTC datetime with an integer timedelta-based calculation.",
+  "failing_test": "Add a unit test that verifies exact nanosecond conversion for a far-future microsecond-bearing datetime.",
+  "impact": "The defect can make stored timing metadata slightly inaccurate, which matters for audit trails and ordering analysis.",
+  "delivery_semantics": "No ACK behavior or sink durability semantics change.",
+  "security": "Accurate timing supports audit evidence. The fix must not introduce payload logging or external dependencies.",
+  "acceptance": [
+    "datetime_to_epoch_ns uses integer arithmetic.",
+    "The regression test proves exact conversion for a precision-sensitive datetime.",
+    "Naive datetimes remain treated as UTC.",
+    "Release notes mention timestamp precision hardening."
+  ],
+  "tests": "Run focused metadata tests and full validation.",
+  "documentation": "Update release notes and test report.",
+  "closeout": "Mark completed after merge with sanitized evidence."
+}

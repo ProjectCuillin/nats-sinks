@@ -188,6 +188,20 @@ includes:
   `actions/dependency-review-action@v5` release line, adding a deterministic
   workflow regression test, and keeping the workflow permissions limited to
   read-only repository and pull request access,
+- metadata boundary hardening for bug issues `#194` through `#207`, including
+  strict ASCII-control rejection for configured message metadata, labels,
+  mission metadata profile allow lists, and security-label vocabularies;
+  rejection of ambiguous semicolons inside individual configured label array
+  items; stricter security-label string typing; safer envelope header
+  normalization; and exact integer epoch nanosecond conversion. Focused
+  regression coverage passed with `14 passed`, and adjacent envelope,
+  configuration, security-label, and unhappy-path tests passed with
+  `113 passed`. Full local validation with `scripts/check.sh` also passed,
+  including `680 passed, 8 skipped` in the main pytest run, `121 passed` in
+  the encryption and sink contract suite, and `104 passed` in the sink-focused
+  suite. Ruff, mypy, documentation builds, CLI smoke checks, high-confidence
+  secret scan, Bandit, package build, SBOM generation, checksum generation, and
+  Twine metadata checks also passed,
 - full validation on 2026-05-22 with `scripts/check.sh`, the local WebSocket
   e2e harness, direct Oracle integration tests, and live NATS-to-Oracle e2e
   runs. The live Oracle checks covered 256-message non-encrypted delivery,

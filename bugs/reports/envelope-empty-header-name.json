@@ -1,0 +1,26 @@
+{
+  "id": "envelope-empty-header-name",
+  "title": "[Bug]: NatsEnvelope preserves empty normalized header names",
+  "area": "Core runtime and delivery semantics",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": ["envelope", "metadata", "input-validation", "bug-hunt"],
+  "summary": "NatsEnvelope header normalization currently preserves header names that normalize to an empty string.",
+  "observed": "Creating an envelope with a blank or whitespace-only header name keeps that header in envelope.headers.",
+  "expected": "The envelope should drop empty header names at the trust boundary while preserving valid headers.",
+  "reproduction": "Create NatsEnvelope(headers={'   ': 'value'}) and observe that the normalized headers still include a blank key.",
+  "failing_test": "Add a unit test that verifies whitespace-only header names are removed from normalized envelope headers.",
+  "impact": "Empty header names are not useful for routing or storage and can make persisted metadata harder to audit.",
+  "delivery_semantics": "No ACK behavior changes. This only affects malformed header metadata normalization.",
+  "security": "The fix should drop invalid header keys without logging header values.",
+  "acceptance": [
+    "Whitespace-only header names are not present in normalized envelope headers.",
+    "Valid headers remain preserved exactly enough for case-insensitive lookup.",
+    "The focused regression test passes after the fix.",
+    "No payload logging is introduced."
+  ],
+  "tests": "Run focused envelope tests and full validation.",
+  "documentation": "Update release notes and test report.",
+  "closeout": "Mark completed after merge with sanitized evidence."
+}

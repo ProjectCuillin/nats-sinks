@@ -29,7 +29,9 @@ from typing import TYPE_CHECKING, Any, cast
 
 from nats_sinks.core.errors import ValidationError
 from nats_sinks.core.message_metadata import (
+    LABEL_SEPARATOR,
     case_insensitive_header,
+    contains_ascii_control_characters,
     normalise_labels_value,
     normalise_metadata_value,
 )
@@ -71,6 +73,8 @@ def _normalize_scalar(value: object, *, field: str) -> str | None:
     closed before they can enter logs, metrics, file names, or SQL bind data.
     """
 
+    if value is not None and not isinstance(value, str):
+        raise ValidationError(f"security label field {field!r} must be a string")
     normalized = normalise_metadata_value(value)
     if normalized is None:
         return None
@@ -78,7 +82,7 @@ def _normalize_scalar(value: object, *, field: str) -> str | None:
         raise ValidationError(
             f"security label field {field!r} exceeds {MAX_SECURITY_LABEL_STRING_LENGTH} characters"
         )
-    if "\x00" in normalized or "\n" in normalized or "\r" in normalized:
+    if contains_ascii_control_characters(normalized):
         raise ValidationError(f"security label field {field!r} contains control characters")
     return normalized
 
@@ -86,7 +90,27 @@ def _normalize_scalar(value: object, *, field: str) -> str | None:
 def _normalize_list(value: object, *, field: str) -> list[str]:
     """Normalize a semicolon-separated string or JSON array into label values."""
 
-    labels = list(normalise_labels_value(value))
+    if value is None:
+        labels = []
+    elif isinstance(value, str):
+        labels = list(normalise_labels_value(value))
+    elif isinstance(value, Sequence) and not isinstance(value, (bytes, bytearray)):
+        raw_labels: list[str] = []
+        for item in value:
+            if not isinstance(item, str):
+                raise ValidationError(f"security label field {field!r} must contain only strings")
+            rendered = normalise_metadata_value(item)
+            if rendered is None:
+                continue
+            if LABEL_SEPARATOR in rendered:
+                raise ValidationError(
+                    f"security label field {field!r} list items must not contain "
+                    "the semicolon separator"
+                )
+            raw_labels.append(rendered)
+        labels = list(normalise_labels_value(raw_labels))
+    else:
+        raise ValidationError(f"security label field {field!r} must be a string or list of strings")
     if len(labels) > MAX_SECURITY_LABEL_LIST_ITEMS:
         raise ValidationError(
             f"security label field {field!r} exceeds {MAX_SECURITY_LABEL_LIST_ITEMS} items"
@@ -97,7 +121,7 @@ def _normalize_list(value: object, *, field: str) -> list[str]:
                 f"security label field {field!r} contains an item longer than "
                 f"{MAX_SECURITY_LABEL_STRING_LENGTH} characters"
             )
-        if "\x00" in item or "\n" in item or "\r" in item:
+        if contains_ascii_control_characters(item):
             raise ValidationError(f"security label field {field!r} contains control characters")
     return labels
 
