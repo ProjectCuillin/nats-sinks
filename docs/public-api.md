@@ -34,6 +34,10 @@ The tests also cover:
   `ConfigurationError`, `AckError`, and `DeadLetterError`,
 - payload encryption helpers such as `EncryptionConfig`, `PayloadEncryptor`,
   `SubjectPayloadEncryptor`, `PayloadKeyRegistry`, and `decrypt_payload`,
+- message authenticity helpers such as `MessageAuthenticityConfig`,
+  `MessageAuthenticityRuleConfig`, `canonical_message_authenticity_bytes`,
+  `canonical_message_authenticity_document`, `hmac_sha256_signature_b64`, and
+  `evaluate_message_authenticity`,
 - custody helpers such as `CustodyConfig`, `compute_custody_metadata`,
   `attach_custody_metadata`, and `canonical_json_bytes`,
 - durable consumer-management helpers such as `ConsumerManagementConfig`,

@@ -65,6 +65,12 @@ used immediately:
   category metadata. Oracle stores the profile in `SECURITY_LABELS_JSON`, the
   file sink writes it as `security_labels`, and future sinks can use the same
   core-normalized profile.
+- Optional message-level authenticity verification before any sink write, with
+  subject-specific HMAC-SHA256 or Ed25519 signature rules, sanitized rejection
+  reasons, and DLQ-before-ACK behavior for messages that fail verification.
+  This complements NATS authentication and TLS by proving the message body and
+  selected metadata were signed by an approved producer. See
+  [Message Authenticity](https://nats-sinks.readthedocs.io/en/latest/message-authenticity/).
 - `nats-sink`, the CLI for validating JSON configuration, showing redacted
   effective config, testing sinks, running sink processes, and performing
   bounded read-only Oracle lineage queries by allow-listed mission metadata or
@@ -209,6 +215,9 @@ Included today:
 - Optional AES-256-GCM and AES-256-CCM payload encryption in the core runner.
 - Multi-key payload decryption helper for controlled key-rotation, replay, and
   verification workflows.
+- Optional message authenticity verification for signed messages before
+  payload encryption, policy checks, custody metadata, priority lanes, or sink
+  writes.
 - Optional tamper-evident custody metadata for deterministic verification
   evidence. Custody hashes are not encryption or digital signatures.
 - JSON configuration and redacted effective-config output.
@@ -239,7 +248,9 @@ flowchart LR
     Stream --> Consumer[Durable pull consumer]
     Consumer --> Runner[nats-sinks core runner]
     Runner --> Envelope[NatsEnvelope batch]
-    Envelope --> Crypto{payload encryption enabled?}
+    Envelope --> Auth{authenticity required?}
+    Auth -->|passes or disabled| Crypto{payload encryption enabled?}
+    Auth -. permanent rejection .-> DLQ
     Crypto -->|yes| Encrypted[Encrypted payload envelope]
     Crypto -->|no| Plain[Original payload bytes]
     Encrypted --> Policy{pre-sink policy enabled?}
@@ -502,6 +513,43 @@ See [Sink Framework](https://nats-sinks.readthedocs.io/en/latest/sink-framework/
 [File Sink](https://nats-sinks.readthedocs.io/en/latest/file-sink/) for the JSON envelope shape and operational
 guidance. Oracle-specific payload storage is documented in
 [Oracle Sink](https://nats-sinks.readthedocs.io/en/latest/oracle-sink/).
+
+## Message Authenticity
+
+The core runner can verify producer-level message signatures before the
+envelope reaches any sink. This is different from NATS authentication and TLS:
+those controls protect broker access and network transport, while message
+authenticity proves that the message body and selected metadata were signed by
+an approved producer key.
+
+Supported algorithms are HMAC-SHA256 and Ed25519. Rules can apply to every
+subject or to selected NATS wildcard subject families:
+
+```json
+{
+  "message_authenticity": {
+    "enabled": true,
+    "unmatched_subject_action": "reject",
+    "rules": [
+      {
+        "subject": "mission.>",
+        "algorithm": "hmac-sha256",
+        "key_id": "producer-key-2026-05",
+        "key_b64_env": "NATS_SINKS_AUTHENTICITY_KEY_B64",
+        "signed_fields": ["subject", "message_id"]
+      }
+    ]
+  }
+}
+```
+
+Verification failures are permanent pre-sink failures. The message never
+reaches Oracle, file, spool, or future sinks. If DLQ is configured, the
+original JetStream message is ACKed only after the DLQ publish succeeds.
+
+See [Message Authenticity](https://nats-sinks.readthedocs.io/en/latest/message-authenticity/)
+for the canonical signed document, producer examples, Ed25519 guidance, metrics,
+and DLQ behavior.
 
 ## Payload Encryption
 
@@ -841,6 +889,9 @@ Important failure cases:
 - payload is permanently invalid for the selected sink: message is published to
   DLQ when configured, then the original is ACKed only after DLQ publish
   succeeds,
+- message authenticity verification rejects a missing, malformed, mismatched,
+  or invalid signature: the message does not reach a sink, and the original is
+  ACKed only after DLQ publish succeeds when DLQ is configured,
 - DLQ publish fails: original message is not ACKed.
 
 ## Security Notes
@@ -858,6 +909,8 @@ Important failure cases:
   publish rights for ordinary workers.
 - Use core payload encryption when destination storage should retain encrypted
   message bodies while keeping routing metadata available.
+- Use message authenticity verification when broker authentication and TLS are
+  not enough to prove producer-level event provenance.
 - Use tamper-evident custody metadata when operators need deterministic hashes
   for later verification, and remember that hashes are not encryption.
 - Use least-privilege destination credentials with access only to the required

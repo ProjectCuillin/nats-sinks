@@ -66,6 +66,10 @@ The current release provides the following production-ready foundation:
   messages are written by any sink.
 - A public multi-key payload decryption helper for controlled key-rotation,
   replay, migration, and verification workflows.
+- Optional message authenticity verification that checks HMAC-SHA256 or
+  Ed25519 signatures before Oracle, file, spool, or future sinks see a
+  message. This complements NATS authentication and TLS by proving that the
+  message body and selected metadata were signed by an approved producer.
 - Optional tamper-evident custody metadata with deterministic payload,
   metadata, and record hashes computed before sink writes. This is evidence
   support for later verification, not encryption or a digital signature.
@@ -234,6 +238,8 @@ operations without hunting through a long flat list.
 
 ### Data Handling
 
+- [Message Authenticity](message-authenticity.md): verify producer signatures
+  over payload hashes and selected metadata before sink delivery.
 - [Payload Encryption](payload-encryption.md): encrypt stored message bodies
   while keeping safe operational metadata available.
 - [Priority-Aware Processing Lanes](priority-lanes.md): prefer urgent messages

@@ -137,6 +137,23 @@ Oracle-specific fields inside the `sink` object.
       }
     ]
   },
+  "message_authenticity": {
+    "enabled": false,
+    "unmatched_subject_action": "reject",
+    "signature_header": "Nats-Sinks-Authenticity-Signature",
+    "algorithm_header": "Nats-Sinks-Authenticity-Algorithm",
+    "key_id_header": "Nats-Sinks-Authenticity-Key-Id",
+    "rules": [
+      {
+        "subject": "orders.secure.>",
+        "enabled": true,
+        "algorithm": "hmac-sha256",
+        "key_id": "orders-producer-key-v1",
+        "key_b64_env": "NATS_SINKS_AUTHENTICITY_KEY_B64",
+        "signed_fields": ["subject", "message_id"]
+      }
+    ]
+  },
   "encryption": {
     "enabled": false,
     "algorithm": "aes-256-gcm",
@@ -239,6 +256,7 @@ The top-level sections are:
 | `metrics` | no | Metrics namespace, enablement flag, and optional local JSON snapshot path. |
 | `advisories` | no | Optional observation-only JetStream advisory subscription settings. Disabled by default and isolated from source-message ACK behavior. |
 | `message_metadata` | no | Optional priority, classification, and labels extraction defaults applied to every message before sink delivery. |
+| `message_authenticity` | no | Optional fail-closed message-level authenticity verification before payload encryption and sink delivery. Disabled by default. |
 | `custody` | no | Optional tamper-evident payload and metadata hashes computed by the core before sink delivery. Disabled by default. |
 | `encryption` | no | Optional core payload encryption before messages are passed to any sink. |
 | `size_policy` | no | Optional destination-neutral payload, header, metadata, label, record, and batch-size bounds evaluated before any sink write. Disabled by default. |
@@ -1089,6 +1107,79 @@ from the already-normalized message metadata values.
 See [Data-Centric Security Label Profile](security-label-profile.md) for the
 complete profile shape, storage examples, Mermaid diagrams, and security notes.
 
+### `message_authenticity`
+
+The `message_authenticity` section verifies producer-level message signatures
+before payload encryption, size policy checks, pre-sink policy checks, custody
+metadata, and destination writes. It is disabled by default because it requires
+publisher cooperation: producers must sign the canonical nats-sinks
+authenticity document and publish the algorithm, key identifier, and signature
+as NATS headers.
+
+Use this feature when broker authentication and TLS are not enough by
+themselves. NATS authentication tells the server which client connected.
+Message authenticity tells the sink runtime whether a particular message body
+and selected metadata fields were signed with an approved key.
+
+```json
+{
+  "message_authenticity": {
+    "enabled": true,
+    "unmatched_subject_action": "reject",
+    "signature_header": "Nats-Sinks-Authenticity-Signature",
+    "algorithm_header": "Nats-Sinks-Authenticity-Algorithm",
+    "key_id_header": "Nats-Sinks-Authenticity-Key-Id",
+    "rules": [
+      {
+        "subject": "mission.sensor.>",
+        "enabled": true,
+        "algorithm": "hmac-sha256",
+        "key_id": "sensor-producer-key-v1",
+        "key_b64_env": "NATS_SINKS_AUTHENTICITY_KEY_B64",
+        "signed_fields": ["subject", "message_id", "classification", "labels"]
+      }
+    ]
+  }
+}
+```
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `enabled` | no | `false` | `true` or `false`. | Enables message-level signature verification before sink delivery. |
+| `unmatched_subject_action` | no | `reject` | `reject` or `allow`. | Controls messages whose subject matches no authenticity rule. `reject` is the secure default. |
+| `signature_header` | no | `Nats-Sinks-Authenticity-Signature` | Non-empty header name without control characters. | Header containing the base64 signature. |
+| `algorithm_header` | no | `Nats-Sinks-Authenticity-Algorithm` | Non-empty header name without control characters. | Header containing `hmac-sha256` or `ed25519`. |
+| `key_id_header` | no | `Nats-Sinks-Authenticity-Key-Id` | Non-empty header name without control characters. | Header containing the configured non-secret key identifier. |
+| `rules` | no | `[]` | List of subject-rule objects. | Ordered subject-specific verification rules. First matching rule wins. |
+
+Rule fields:
+
+| Rule field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `subject` | yes | none | NATS subject pattern. | Pattern matched against `NatsEnvelope.subject`. |
+| `enabled` | no | `true` | `true` or `false`. | Enables verification for the matching subject, or explicitly exempts the subject when `false`. |
+| `algorithm` | no | `hmac-sha256` | `hmac-sha256` or `ed25519`. | Verification algorithm required by matching messages. |
+| `key_id` | yes when enabled | none | Non-empty string up to 128 characters. | Non-secret key identifier that must match the message header. |
+| `key_b64` | no | `null` | Base64 verification key material. | Direct HMAC shared key or Ed25519 public key. Redacted by CLI output. Prefer `key_b64_env` for production HMAC keys. |
+| `key_b64_env` | no | `null` | Environment variable name. | Environment variable containing base64 verification key material. Mutually exclusive with `key_b64`. |
+| `signed_fields` | no | `["subject", "message_id"]` | Allow-listed fields: `subject`, `message_id`, `priority`, `classification`, `labels`, `mission_metadata`, `security_labels`. | Normalized metadata fields included in the canonical signed document. The payload SHA-256 is always included. |
+
+Key material requirements:
+
+| Algorithm | Key material expected by nats-sinks | Recommended use |
+| --- | --- | --- |
+| `hmac-sha256` | Base64 shared secret, 32 to 1024 decoded bytes. | Symmetric producer and consumer trust domains where a shared secret can be managed safely. |
+| `ed25519` | Base64 Ed25519 public key, exactly 32 decoded bytes. | Asymmetric producer signing where sinks only need public verification keys. Requires the optional crypto extra. |
+
+Verification failure is a permanent pre-sink failure. With DLQ enabled, the
+original message is published to DLQ and ACKed only after DLQ publication
+succeeds. If DLQ publication fails, the original message is not ACKed and
+remains eligible for redelivery. If DLQ is disabled, rejected messages are left
+unacked.
+
+See [Message Authenticity](message-authenticity.md) for the canonical signed
+content, producer examples, Mermaid sequence diagrams, and security guidance.
+
 ### `encryption`
 
 The `encryption` section is a generic core runtime feature. When enabled, the
@@ -1566,6 +1657,10 @@ Supported environment overrides:
 - `NATS_SINKS_ENCRYPTION_ALGORITHM`
 - `NATS_SINKS_ENCRYPTION_KEY_ID`
 - `NATS_SINKS_ENCRYPTION_KEY_B64_ENV`
+- `NATS_SINKS_MESSAGE_AUTHENTICITY_ENABLED`
+- `NATS_SINKS_MESSAGE_AUTHENTICITY_SIGNATURE_HEADER`
+- `NATS_SINKS_MESSAGE_AUTHENTICITY_ALGORITHM_HEADER`
+- `NATS_SINKS_MESSAGE_AUTHENTICITY_KEY_ID_HEADER`
 - `NATS_SINKS_PRIORITY_HEADER`
 - `NATS_SINKS_PRIORITY_DEFAULT`
 - `NATS_SINKS_CLASSIFICATION_HEADER`

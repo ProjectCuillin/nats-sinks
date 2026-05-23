@@ -179,7 +179,7 @@ is merged.
 | SD-117 | Use TLS for network communication. | Already covered | NATS TLS options and docs |
 | SD-118 | Do not disable certificate or hostname validation for convenience. | Already covered | TLS verify true by default, docs warn |
 | SD-119 | Use modern hashes for integrity/signatures and password hashes for passwords. | Already covered | SHA-256 for diagnostics only; no password hashes |
-| SD-120 | Use HMAC or digital signatures for authenticity instead of plain hashes. | Roadmap | Needed if message authenticity feature is added |
+| SD-120 | Use HMAC or digital signatures for authenticity instead of plain hashes. | Applied | Optional message authenticity verification supports HMAC-SHA256 and Ed25519 before sink delivery |
 | SD-121 | Do not treat Base64, hex, JWT body data, or URL encoding as encryption. | Already covered | Docs explicitly distinguish key encoding/encryption |
 | SD-122 | Keep secrets out of source, history, logs, tickets, fixtures, images, and bundles. | Applied | Secret scan, docs |
 | SD-123 | Load secrets from managed stores or secure runtime config. | Already covered | `password_env`, `token_env`, `key_b64_env` |

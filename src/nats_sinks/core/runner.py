@@ -27,6 +27,10 @@ from datetime import UTC, datetime
 from typing import Any
 
 from nats_sinks.core.advisory import JetStreamAdvisoryMonitor
+from nats_sinks.core.authenticity import (
+    MessageAuthenticator,
+    message_authenticity_violation_error,
+)
 from nats_sinks.core.config import (
     ConsumerManagementConfig,
     CustodyConfig,
@@ -34,6 +38,7 @@ from nats_sinks.core.config import (
     DeliveryConfig,
     EncryptionConfig,
     JetStreamAdvisoryConfig,
+    MessageAuthenticityConfig,
     MessageMetadataConfig,
     MetricsConfig,
     MissionMetadataConfig,
@@ -102,6 +107,7 @@ class JetStreamSinkRunner:
         consumer_management: ConsumerManagementConfig | None = None,
         dead_letter: DeadLetterConfig | None = None,
         message_metadata: MessageMetadataConfig | None = None,
+        message_authenticity: MessageAuthenticityConfig | None = None,
         mission_metadata: MissionMetadataConfig | None = None,
         security_labels: SecurityLabelProfileConfig | None = None,
         encryption: EncryptionConfig | None = None,
@@ -134,6 +140,7 @@ class JetStreamSinkRunner:
         )
         self.dead_letter = dead_letter or DeadLetterConfig()
         self.message_metadata = message_metadata or MessageMetadataConfig()
+        self.message_authenticity = message_authenticity or MessageAuthenticityConfig()
         self.mission_metadata = mission_metadata or MissionMetadataConfig()
         self.security_labels = security_labels or SecurityLabelProfileConfig()
         self.encryption = encryption or EncryptionConfig()
@@ -149,6 +156,7 @@ class JetStreamSinkRunner:
             if payload_encryptor is not None
             else PayloadEncryptor.from_config(self.encryption)
         )
+        self._message_authenticator = MessageAuthenticator.from_config(self.message_authenticity)
         self._js = jetstream
         self._nc = nats_connection
         self._subscription: Any | None = None
@@ -389,6 +397,68 @@ class JetStreamSinkRunner:
                 log_exception=True,
             )
             return
+
+        if self._message_authenticator is not None:
+            try:
+                authenticity_evaluation = self._message_authenticator.evaluate(envelopes)
+            except PermanentSinkError as exc:
+                await self._handle_policy_rejections(
+                    raw_message_list,
+                    envelopes,
+                    exc,
+                    context="message authenticity verification failure",
+                )
+                return
+            except Exception as exc:
+                await self._handle_temporary_failure(
+                    raw_message_list,
+                    exc,
+                    context="message authenticity evaluation failure",
+                    error_metric=MetricNames.MESSAGE_AUTHENTICITY_EVALUATION_ERRORS_TOTAL,
+                    log_exception=True,
+                )
+                return
+
+            if authenticity_evaluation.accepted_indexes:
+                increment_metric(
+                    self.metrics,
+                    MetricNames.MESSAGE_AUTHENTICITY_MESSAGES_PASSED_TOTAL,
+                    len(authenticity_evaluation.accepted_indexes),
+                )
+                increment_metric(
+                    self.metrics,
+                    MetricNames.MESSAGE_AUTHENTICITY_BATCHES_PASSED_TOTAL,
+                )
+            if authenticity_evaluation.rejected_indexes:
+                increment_metric(
+                    self.metrics,
+                    MetricNames.MESSAGE_AUTHENTICITY_MESSAGES_REJECTED_TOTAL,
+                    len(authenticity_evaluation.rejected_indexes),
+                )
+                increment_metric(
+                    self.metrics,
+                    MetricNames.MESSAGE_AUTHENTICITY_BATCHES_REJECTED_TOTAL,
+                )
+
+            if authenticity_evaluation.has_rejections:
+                rejected_raw = [
+                    raw_message_list[index] for index in authenticity_evaluation.rejected_indexes
+                ]
+                rejected_envelopes = [
+                    envelopes[index] for index in authenticity_evaluation.rejected_indexes
+                ]
+                await self._handle_policy_rejections(
+                    rejected_raw,
+                    rejected_envelopes,
+                    message_authenticity_violation_error(authenticity_evaluation.violations),
+                    context="message authenticity verification failure",
+                )
+                raw_message_list = [
+                    raw_message_list[index] for index in authenticity_evaluation.accepted_indexes
+                ]
+                envelopes = [envelopes[index] for index in authenticity_evaluation.accepted_indexes]
+                if not raw_message_list:
+                    return
         try:
             if self._payload_encryptor is not None:
                 # Payload encryption happens in the core immediately before

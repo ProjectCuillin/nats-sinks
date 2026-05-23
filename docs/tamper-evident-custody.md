@@ -50,9 +50,10 @@ Tamper-evident custody metadata is deliberately narrow:
 - It does not prevent someone with write access from changing both the record
   and the stored hash.
 
-For stronger authenticity guarantees, future releases may add HMAC or digital
-signature support. This first version focuses on deterministic evidence that is
-simple to review and safe to persist across Oracle, file, and future sinks.
+For stronger authenticity guarantees, enable
+[Message Authenticity](message-authenticity.md) before sink delivery. Custody
+metadata remains deterministic evidence that is simple to review and safe to
+persist across Oracle, file, and future sinks; it is not an identity proof.
 
 ## Processing Sequence
 
@@ -67,6 +68,7 @@ sequenceDiagram
 
     JS->>R: Deliver message
     R->>R: Normalize NatsEnvelope
+    R->>R: Optional message authenticity verification
     R->>R: Optional payload encryption
     R->>R: Optional pre-sink policy
     R->>C: Compute custody metadata

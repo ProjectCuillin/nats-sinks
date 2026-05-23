@@ -48,6 +48,9 @@ def test_metric_specs_have_unique_names_and_kinds() -> None:
     assert MetricNames.SIZE_POLICY_MESSAGES_PASSED_TOTAL in names
     assert MetricNames.SIZE_POLICY_MESSAGES_REJECTED_TOTAL in names
     assert MetricNames.SIZE_POLICY_EVALUATION_ERRORS_TOTAL in names
+    assert MetricNames.MESSAGE_AUTHENTICITY_MESSAGES_PASSED_TOTAL in names
+    assert MetricNames.MESSAGE_AUTHENTICITY_MESSAGES_REJECTED_TOTAL in names
+    assert MetricNames.MESSAGE_AUTHENTICITY_EVALUATION_ERRORS_TOTAL in names
     assert MetricNames.EVENT_AGE_AT_RECEIVE_SECONDS in names
     assert MetricNames.EVENT_AGE_AT_STORE_SECONDS in names
     assert MetricNames.EVENT_CREATION_TIMESTAMP_MISSING_TOTAL in names

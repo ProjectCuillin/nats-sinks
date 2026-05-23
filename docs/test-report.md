@@ -14,29 +14,34 @@ logs from live systems.
 | Field | Value |
 | --- | --- |
 | Overall result | Pass |
-| Report generated | 2026-05-23 Oracle lineage query helper validation |
+| Report generated | 2026-05-23 message authenticity verification validation |
 | Project version | `0.4.0` post-release development |
 | Python version | 3.12.4 |
-| Git revision checked | Issue `#54` workspace based on `release-v0.4.1` |
-| Worktree state | Active workspace adding read-only Oracle lineage query helpers while preserving local Docker image work, data-centric security labels, encrypted edge spool-and-forward sink work, GoldenGate-inspired sink candidate backlog research, stream planning, branch workflow automation, connector framework, WebSocket guardrails, Oracle high-throughput staging, custody metadata, advisory observation, durable consumer management, richer consumer policy controls, NATS no-echo, OTLP export, secure-development hardening, strict JSON config loading, log-injection sanitization, secret scanning, public API compatibility tests, GitHub Dependency Graph manifests, sanitized backlog tooling, release-gated close automation, standardized SPDX headers, metrics snapshots and CLI, observability policy core, Prometheus and NATS monitoring connectors, Kubernetes examples, systemd installer, NATS reconnect tuning, least-privilege NATS permission templates, JetStream topology guidance, retry backoff with jitter, priority-aware lanes, synthetic mission testing, mission-support examples, SBOM generation, release checksums, hash-verified installation guidance, property-style tests, defence and mission-support blueprints, generic mission metadata, payload encryption, and Oracle/file/spool sink support |
+| Git revision checked | Issue `#55` workspace based on `release-v0.4.1` |
+| Worktree state | Active workspace adding optional core message authenticity verification while preserving local Docker image work, data-centric security labels, encrypted edge spool-and-forward sink work, GoldenGate-inspired sink candidate backlog research, stream planning, branch workflow automation, connector framework, WebSocket guardrails, Oracle high-throughput staging, custody metadata, advisory observation, durable consumer management, richer consumer policy controls, NATS no-echo, OTLP export, secure-development hardening, strict JSON config loading, log-injection sanitization, secret scanning, public API compatibility tests, GitHub Dependency Graph manifests, sanitized backlog tooling, release-gated close automation, standardized SPDX headers, metrics snapshots and CLI, observability policy core, Prometheus and NATS monitoring connectors, Kubernetes examples, systemd installer, NATS reconnect tuning, least-privilege NATS permission templates, JetStream topology guidance, retry backoff with jitter, priority-aware lanes, synthetic mission testing, mission-support examples, SBOM generation, release checksums, hash-verified installation guidance, property-style tests, defence and mission-support blueprints, generic mission metadata, payload encryption, and Oracle/file/spool sink support |
 | Live NATS details | Redacted |
 | Live Oracle details | Redacted |
 
-This refresh covered issue `#54`, adding read-only Oracle lineage query
-helpers and the `nats-sink query-lineage` CLI command. The implementation
-supports allow-listed lookups by correlation identifier, causation identifier,
-mission identifier, tasking identifier, track identifier, message ID, or
-subject. It validates configured Oracle tables and columns, binds lookup
-values, bounds result limits, omits payload output by default, and does not
-connect to NATS or affect sink writes, retries, DLQ behavior, idempotency, or
-ACK ordering. Focused lineage, CLI, and public API tests passed with
-`34 passed`. The full local validation suite passed through `scripts/check.sh`,
-including Ruff, mypy, dependency manifest validation, backlog and bug-report
-validation, Markdown link checks, documentation builds, pytest with
-`747 passed, 9 skipped`, encryption checks, sink checks, CLI smoke checks,
-security scanning, package build, SBOM generation, checksum generation, and
-Twine metadata validation. The skipped tests remain gated live NATS and Oracle
-integration tests that require explicit local environment flags or services.
+This refresh covered issue `#55`, adding optional message authenticity
+verification in the core runtime before payload encryption, policy checks,
+custody hashing, priority lanes, or sink delivery. The implementation supports
+subject-scoped HMAC-SHA256 and Ed25519 rules, a canonical signed document over
+the payload SHA-256 and selected normalized metadata, environment-backed
+verification keys, sanitized rejection reasons, aggregate authenticity metrics,
+public producer helper APIs, and DLQ-before-ACK handling for verification
+failures. Focused authenticity tests passed with `10 passed`. The full local
+validation suite passed through `scripts/check.sh`, including Ruff, mypy,
+dependency manifest validation, backlog and bug-report validation, Markdown
+link checks, documentation builds, pytest with `757 passed, 9 skipped`,
+encryption checks, sink checks, CLI smoke checks, security scanning, package
+build, SBOM
+generation, checksum generation, and Twine metadata validation. The skipped
+tests remain gated live NATS and Oracle integration tests that require
+explicit local environment flags or services.
+
+This refresh preserves issue `#54`, which added read-only Oracle lineage query
+helpers and the `nats-sink query-lineage` CLI command without affecting sink
+writes, retries, DLQ behavior, idempotency, or ACK ordering.
 
 This refresh also preserves issue `#11`, centralizing NATS connection option
 construction in `nats_sinks.core.nats_options`, validating identity-material
@@ -151,6 +156,7 @@ flowchart LR
     F2T2EA[F2T2EA blueprint examples] --> Report
     MissionMeta[Generic mission metadata] --> Report
     SecurityLabels[Data-centric security label profile] --> Report
+    Authenticity[Message authenticity verification] --> Report
     Custody[Tamper-evident custody metadata] --> Report
     Crypto[Payload encryption] --> Report
     MessageMeta[Priority / classification / labels metadata] --> Report
