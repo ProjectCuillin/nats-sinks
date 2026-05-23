@@ -86,6 +86,10 @@ scripts/run-release-validation.sh --repo ProjectCuillin/nats-sinks
 The pull request is the review boundary before `main`. Branch protection should
 require CI, CODEOWNER review, resolved conversations, and no direct pushes. See
 [Hierarchical Branch Development And Release Workflow](branch-workflow.md).
+Before merging any pull request, use
+`python scripts/merge-pr-with-comment.py --pr <number> --comment-file <file>`
+with a sanitized `## Test Evidence` comment so the merge itself carries public
+validation context.
 
 ## Synthetic Test Harness
 

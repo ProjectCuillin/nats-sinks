@@ -103,6 +103,12 @@ silent loss after an early ACK is not.
   `--no-copy-issue-labels-to-pr` only for exceptional maintenance work. Do not
   convert the official GitHub Issue `Priority` field into a pull request
   label; priority remains managed on the issue.
+- Never merge a pull request without a short sanitized merge comment. The
+  comment should summarize the relevant test results or validation evidence.
+  Use `python scripts/merge-pr-with-comment.py --pr <number> --comment-file
+  <file>` for local merges so the comment is posted before the merge command.
+  Keep merge comments free of secrets, private endpoints, payloads, local
+  paths, and token values.
 - The `Branch Pull Request` workflow is manual and token-gated. Do not
   re-enable push-triggered pull request creation unless the maintainer
   explicitly changes the release policy. Do not create release tags from
