@@ -1,0 +1,23 @@
+{
+  "id": "google-cloud-storage-sink",
+  "title": "[Feature]: Evaluate a Google Cloud Storage sink",
+  "area": "Future sink",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "security", "testing"],
+  "problem": "Oracle GoldenGate lists Google Cloud Storage as a target-only connection. nats-sinks has S3 and OCI Object Storage backlog items but not a Google Cloud Storage-specific sink.",
+  "proposal": "Research a Google Cloud Storage sink with deterministic object names, conditional object creation for duplicate safety, checksum verification, optional compression compatibility, payload encryption support, and workload identity or service-account authentication.",
+  "users": "Google Cloud operators, data platform teams, and cross-cloud event archive users.",
+  "delivery_semantics": "Success may be returned only after the object write or composed object has been durably accepted by Google Cloud Storage. Duplicate redelivery must be controlled through conditional writes or verification.",
+  "security": "Service-account keys should be avoided where workload identity is possible. Bucket names, object prefixes, metadata, and payloads must be treated as sensitive and redacted from logs.",
+  "acceptance": [
+    "Research identifies object write, precondition, checksum, and retry semantics.",
+    "The design supports deterministic object keys and duplicate policies.",
+    "Configuration validates bucket, prefix, region/location expectations, and timeouts.",
+    "Unit tests use storage fakes and no network calls.",
+    "Documentation covers IAM, retention, lifecycle, and cost considerations."
+  ],
+  "tests": "Add unit tests for object-key rendering, conditional write behavior, checksums, duplicate decisions, and error classification. Gate live tests.",
+  "documentation": "Add docs/google-cloud-storage-sink.md if implemented and update roadmap and security pages.",
+  "closeout": "Close after release of the research or implementation."
+}

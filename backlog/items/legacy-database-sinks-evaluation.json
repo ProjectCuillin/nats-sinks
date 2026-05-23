@@ -1,0 +1,23 @@
+{
+  "id": "legacy-database-sinks-evaluation",
+  "title": "[Feature]: Evaluate legacy and specialized database sinks",
+  "area": "Future sink",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "security", "testing"],
+  "problem": "Oracle GoldenGate connectivity material lists legacy and specialized systems such as Sybase Adaptive Server Enterprise, HPE Enscribe, HPE NonStop SQL/MP, HPE NonStop SQL/MX, and FairCom DB. nats-sinks does not yet define whether these systems are in scope.",
+  "proposal": "Research whether legacy and specialized database targets should become documented out-of-scope items, generic JDBC candidates, or dedicated sink feature requests. The evaluation should consider driver availability, licensing, transaction semantics, operator demand, security review effort, and testability.",
+  "users": "Enterprise operators with legacy transaction systems and maintainers deciding how far nats-sinks should extend beyond modern cloud and database connectors.",
+  "delivery_semantics": "No ACK-gated sink should be accepted until a target-specific commit boundary and idempotent duplicate strategy are documented.",
+  "security": "Legacy protocols and drivers must be treated as high-risk. Credentials, endpoints, table names, and payloads must be redacted, and unsafe dynamic driver loading must be rejected.",
+  "acceptance": [
+    "Research classifies each legacy target as dedicated sink, generic profile, or not planned.",
+    "Driver and security risks are documented.",
+    "Any accepted target receives a separate feature request.",
+    "No implementation starts from this grouped issue.",
+    "Documentation explains maintenance expectations."
+  ],
+  "tests": "Research-only initially. Future implementations require fake drivers, injection tests, and gated live tests.",
+  "documentation": "Add legacy database sink evaluation notes to roadmap documentation.",
+  "closeout": "Close after research release and creation of follow-up issues if needed."
+}

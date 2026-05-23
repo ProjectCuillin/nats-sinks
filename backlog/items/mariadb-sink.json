@@ -1,0 +1,23 @@
+{
+  "id": "mariadb-sink",
+  "title": "[Feature]: Evaluate a MariaDB sink",
+  "area": "Future sink",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "security", "testing"],
+  "problem": "OCI GoldenGate lists MariaDB and Amazon RDS for MariaDB as supported MySQL-family connections. nats-sinks has an Oracle MySQL sink backlog item, but MariaDB dialect and connector behavior may diverge enough to need a separate profile.",
+  "proposal": "Research whether MariaDB should be certified under the future Oracle MySQL sink, a generic MySQL-compatible connector, or a separate MariaDB sink. The evaluation should compare driver support, `INSERT ... ON DUPLICATE KEY UPDATE`, JSON column behavior, transaction semantics, TLS, and cloud-hosted variants.",
+  "users": "MariaDB operators and managed MariaDB users who need safe JetStream event persistence.",
+  "delivery_semantics": "Success may be returned only after a MariaDB transaction commits. Duplicate redelivery must use deterministic keys and documented upsert or ignore behavior.",
+  "security": "Credentials, connection strings, table identifiers, and payloads must be redacted. Bind parameters and strict identifier validation are mandatory.",
+  "acceptance": [
+    "Research decides whether MariaDB is a profile or separate sink.",
+    "Dialect differences from MySQL are documented.",
+    "Idempotent write modes are specified.",
+    "Unit tests use fakes and no live MariaDB service.",
+    "Documentation explains compatibility and limitations."
+  ],
+  "tests": "Add dialect/config tests if accepted. Gate live MariaDB tests behind explicit environment settings.",
+  "documentation": "Add MariaDB findings to MySQL sink planning and roadmap documentation.",
+  "closeout": "Close after research or implementation release."
+}

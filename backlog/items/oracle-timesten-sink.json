@@ -1,0 +1,23 @@
+{
+  "id": "oracle-timesten-sink",
+  "title": "[Feature]: Evaluate an Oracle TimesTen sink",
+  "area": "Future sink",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "sink-oracle", "security", "testing"],
+  "problem": "Oracle GoldenGate connectivity material lists Oracle TimesTen. nats-sinks does not currently define a TimesTen-specific sink strategy, durability boundary, or idempotency pattern.",
+  "proposal": "Research whether Oracle TimesTen should be supported through the existing Oracle Database sink, an ODBC/JDBC-style connector, or a dedicated first-party Oracle TimesTen sink. The design should evaluate transaction semantics, connection drivers, table DDL, idempotent upsert support, and whether in-memory deployment modes satisfy critical custody requirements.",
+  "users": "Oracle TimesTen users, low-latency application teams, and operators considering NATS-to-TimesTen event persistence.",
+  "delivery_semantics": "The sink may return success only after a TimesTen transaction has committed under a documented durable mode. Volatile or cache-only modes must be marked unsafe for ACK-gated processing.",
+  "security": "Connection strings, credentials, table names, and payloads must be redacted. Identifier validation and bind variables are mandatory.",
+  "acceptance": [
+    "Research selects a supported Python integration approach.",
+    "Durable and non-durable TimesTen modes are documented separately.",
+    "Idempotent write modes are specified before implementation.",
+    "Unit tests cover SQL generation or client behavior with fakes.",
+    "Documentation warns when deployment mode cannot provide durable custody."
+  ],
+  "tests": "Add mocked driver tests for config validation, SQL binding, duplicate handling, and error translation. Optional live TimesTen tests stay gated.",
+  "documentation": "Add TimesTen evaluation notes and roadmap entries.",
+  "closeout": "Close after release of the research decision or implementation."
+}

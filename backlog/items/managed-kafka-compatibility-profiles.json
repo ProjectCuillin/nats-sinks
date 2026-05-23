@@ -1,0 +1,23 @@
+{
+  "id": "managed-kafka-compatibility-profiles",
+  "title": "[Feature]: Add managed Kafka compatibility profiles",
+  "area": "Future sink",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "security", "testing"],
+  "problem": "Oracle GoldenGate lists Apache Kafka, Confluent Kafka, Amazon MSK, Google Cloud Managed Service for Apache Kafka, OCI Streaming with Apache Kafka, and Pub/Sub Kafka compatibility mode. nats-sinks has a Kafka sink backlog item, but it does not yet capture managed-service compatibility profiles.",
+  "proposal": "Create compatibility profiles for future Kafka sink certification across Apache Kafka, Confluent Platform or Cloud, Amazon MSK, Google managed Kafka, OCI Streaming Kafka endpoints, and Pub/Sub Kafka compatibility mode. The profiles should define authentication, TLS, schema registry, idempotent producer settings, delivery confirmation, topic validation, and service-specific limitations.",
+  "users": "Operators who want one Kafka sink contract with clear behavior across common managed Kafka services.",
+  "delivery_semantics": "ACK-gated success requires producer delivery confirmation for every required record. The profile must document idempotent producer settings, retries, ordering, and duplicate risks for each service.",
+  "security": "Broker endpoints, SASL credentials, client certificates, schema registry credentials, topics, and payloads must be redacted. TLS verification must be enabled by default.",
+  "acceptance": [
+    "Research maps managed Kafka services to one Kafka sink certification matrix.",
+    "Authentication and TLS requirements are documented for each service.",
+    "Service-specific limits and unsupported features are captured.",
+    "Unit tests use fake producers and no network calls.",
+    "Documentation explains when a separate sink is not required."
+  ],
+  "tests": "Add compatibility-profile tests around config validation and producer options once Kafka sink work starts. Gate live tests per service.",
+  "documentation": "Update future Kafka sink docs and roadmap with managed-service profiles.",
+  "closeout": "Close after the profile matrix is released."
+}
