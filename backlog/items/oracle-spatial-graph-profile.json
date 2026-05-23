@@ -1,0 +1,23 @@
+{
+  "id": "oracle-spatial-graph-profile",
+  "title": "[Feature]: Evaluate Oracle Spatial and Graph storage profiles",
+  "area": "Future sink",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "sink-oracle", "security", "testing"],
+  "problem": "Oracle GoldenGate connectivity material lists Oracle Spatial and Graph. nats-sinks can persist generic JSON metadata today, but it does not provide guidance for spatial, graph, lineage, or relationship-oriented event storage in Oracle.",
+  "proposal": "Research Oracle Spatial and Graph storage profiles for OracleSink rather than starting with a separate connector. The profile should define how to map mission metadata, geospatial coordinates, track identifiers, relationship edges, custody evidence, and labels into Oracle tables or graph structures while keeping the base OracleSink stable.",
+  "users": "Operators and data architects who need queryable spatial, track, graph, or lineage context for persisted events.",
+  "delivery_semantics": "The profile must preserve the OracleSink commit boundary: success only after the Oracle transaction commits. Additional graph or spatial side effects must commit in the same transaction or be handled as explicitly separate fan-out targets.",
+  "security": "Spatial and graph metadata can be sensitive. Documentation must cover classification, labels, coordinate privacy, redaction, and least-privilege table or graph grants.",
+  "acceptance": [
+    "Research determines whether this is an OracleSink profile, schema helper, or dedicated sink.",
+    "A metadata mapping pattern is documented without forcing defence-only semantics.",
+    "DDL examples avoid delete/drop privileges for runtime users.",
+    "Tests cover mapping validation if implementation is added.",
+    "Documentation separates optional spatial/graph enrichment from core payload persistence."
+  ],
+  "tests": "Add mapping and DDL validation tests if implemented. Keep live Oracle graph/spatial tests optional and isolated.",
+  "documentation": "Add Oracle Spatial and Graph profile guidance under Oracle sink documentation and mission metadata pages.",
+  "closeout": "Close after the research or implementation release is published."
+}

@@ -1,0 +1,23 @@
+{
+  "id": "generic-jdbc-sink",
+  "title": "[Feature]: Evaluate a generic JDBC-style sink framework",
+  "area": "Future sink",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "security", "testing"],
+  "problem": "Oracle GoldenGate Big Data targets include JDBC. nats-sinks currently uses destination-specific Python connectors and does not expose a generic JDBC sink.",
+  "proposal": "Research whether nats-sinks should offer a generic JDBC-style sink framework or avoid it in favor of certified destination-specific sinks. The work should evaluate Python JVM bridge risks, driver management, SQL dialect differences, type mapping, idempotency, safe identifier validation, parameterized SQL, and maintenance burden.",
+  "users": "Operators who need long-tail database targets not covered by a dedicated sink, and maintainers deciding how to scale connector coverage safely.",
+  "delivery_semantics": "Any JDBC-style sink must return success only after a destination transaction commits. The design must not allow raw SQL templates or unreviewed drivers to weaken injection resistance or idempotency.",
+  "security": "Dynamic driver loading, connection URLs, SQL templates, credentials, and table identifiers are high-risk. The secure default should be deny-by-default destination allow lists, no arbitrary class loading, and strict parameter binding.",
+  "acceptance": [
+    "Research recommends generic JDBC, destination-specific sinks, or both with clear constraints.",
+    "Dynamic driver loading and SQL injection risks are threat-modeled.",
+    "Configuration is fail-closed and allow-listed.",
+    "No implementation starts without dedicated security review.",
+    "Documentation explains why generic database sinks are harder to certify."
+  ],
+  "tests": "Research-only initially. Future implementation requires injection tests, fake driver tests, dialect tests, and sink certification coverage.",
+  "documentation": "Add JDBC framework findings to sink framework and security documentation.",
+  "closeout": "Close after the research decision is released."
+}

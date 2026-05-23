@@ -1,0 +1,23 @@
+{
+  "id": "generic-jms-sink",
+  "title": "[Feature]: Evaluate a generic JMS sink",
+  "area": "Future sink",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "security", "testing"],
+  "problem": "Oracle GoldenGate connectivity material includes Java Message Service and names messaging systems such as IBM MQ and RabbitMQ in the JMS family. nats-sinks does not yet have a generic JMS sink.",
+  "proposal": "Research a generic JMS sink that can publish normalized NatsEnvelope records to JMS queues or topics through a safe Python-to-JMS integration approach. The evaluation should define how provider-specific clients, JNDI, persistent delivery, message properties, transactions, duplicate handling, and payload encoding are handled without turning the core package into a Java runtime.",
+  "users": "Enterprise integration teams with existing JMS, IBM MQ, RabbitMQ, or Java middleware estates.",
+  "delivery_semantics": "ACK-gated success requires persistent delivery and a transaction or confirmed-send boundary for every required message. Non-persistent delivery must be disabled by default or marked unsafe for durable event custody.",
+  "security": "Credentials, broker URLs, queue names, headers, and payloads must be redacted. TLS verification, authentication, and least-privilege queue permissions must be documented.",
+  "acceptance": [
+    "Research selects one or more viable integration approaches.",
+    "The design separates generic JMS behavior from Oracle WebLogic-specific behavior.",
+    "Persistent delivery and transaction requirements are documented.",
+    "Unit tests use fake clients and no external brokers.",
+    "Documentation covers provider compatibility and limitations."
+  ],
+  "tests": "Add contract tests with fake JMS clients for config validation, message property mapping, persistent send confirmation, duplicate handling, and error translation.",
+  "documentation": "Add generic JMS sink research documentation and update sink roadmap.",
+  "closeout": "Close after the research or implementation release is published."
+}

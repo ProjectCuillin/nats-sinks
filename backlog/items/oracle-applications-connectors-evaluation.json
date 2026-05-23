@@ -1,0 +1,23 @@
+{
+  "id": "oracle-applications-connectors-evaluation",
+  "title": "[Feature]: Evaluate Oracle application connector families",
+  "area": "Future sink",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "sink-oracle", "security", "testing"],
+  "problem": "Oracle GoldenGate connectivity material lists Oracle application families such as Oracle E-Business Suite, Fusion Applications, NetSuite, Retail, Health, Transportation Management, and Utilities. nats-sinks does not yet have a policy for application-specific sinks versus generic HTTP, database, or event connectors.",
+  "proposal": "Research whether Oracle application targets should become dedicated first-party sinks, documented integration blueprints, or examples built on generic HTTP, Oracle Database, object storage, or queue sinks. The evaluation should avoid over-specializing the core package while preserving a clear Oracle-centric path for high-value application integrations.",
+  "users": "Oracle application owners, integration teams, and operators who need controlled event handoff into Oracle SaaS or enterprise application estates.",
+  "delivery_semantics": "Each application family must define its own durable acceptance boundary before any ACK-gated sink can be implemented. Best-effort API calls must not be described as durable without proof.",
+  "security": "Application credentials, tenant identifiers, business payloads, and endpoint URLs must be handled as sensitive. OAuth, API keys, mTLS, and least-privilege application roles must be documented for each future connector.",
+  "acceptance": [
+    "Research classifies each Oracle application family as dedicated sink, blueprint, or out of scope.",
+    "The evaluation identifies shared security and testing requirements.",
+    "No application connector is implemented without a separate feature request.",
+    "Documentation avoids implying official Oracle application support beyond verified APIs.",
+    "Backlog items are created for any application connector recommended for development."
+  ],
+  "tests": "Research-only item. Future connector tests must use API fakes, contract tests, and gated live tests with sanitized evidence.",
+  "documentation": "Add findings to sink roadmap documentation and create future application-specific pages only when a connector is accepted.",
+  "closeout": "Close after publication of the evaluation release and creation of any resulting feature requests."
+}

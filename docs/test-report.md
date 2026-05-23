@@ -81,9 +81,10 @@ CLI smoke checks, package build, metadata validation, security
 scanning, GitHub Dependency Graph manifest generation and drift checks, local
 backlog item validation, exact-marker GitHub issue sync tooling, sanitized
 backlog comment tooling, completed-label workflow support, stricter issue
-lifecycle enforcement, GitHub issue
-synchronization for 52 open backlog items including the OCI Object Storage
-sink issue, standardized SPDX source headers across Python and shell files,
+lifecycle enforcement, sanitized GitHub issue synchronization for managed
+issues, including the scoped GoldenGate-inspired sink candidate sync that
+created issues `#158` through `#190`, standardized SPDX source headers across
+Python and shell files,
 CycloneDX SBOM generation, release checksum manifest generation,
 hash-verified installation guidance, standalone systemd installer
 asset-fetch and package-spec checks, deterministic bounded property-style
@@ -160,6 +161,12 @@ published `0.4.0` release and has passed local validation. It includes:
   `639 passed, 8 skipped` in the main pytest run, `120 passed` in the
   encryption and sink contract suite, and `104 passed` in the sink-focused
   suite,
+- GoldenGate-inspired sink candidate research added on 2026-05-23, including a
+  dedicated documentation page, roadmap updates, changelog entry, and 33
+  scoped managed backlog items synced to GitHub as issues `#158` through
+  `#190`. Targeted validation for this documentation and backlog-only change
+  passed with backlog JSON validation, Ruff formatting check, Ruff lint,
+  MkDocs strict build, and backlog sync unit tests,
 - full validation on 2026-05-22 with `scripts/check.sh`, the local WebSocket
   e2e harness, direct Oracle integration tests, and live NATS-to-Oracle e2e
   runs. The live Oracle checks covered 256-message non-encrypted delivery,
@@ -543,9 +550,11 @@ ordering, DLQ-before-ACK ordering, and deterministic unhappy-path handling.
 | Type checking | `mypy src` | Pass | No type issues in 56 source files |
 | Version consistency | `python scripts/check-version-consistency.py` | Pass | Package metadata, runtime `__version__`, README, docs home page, and changelog all report `0.4.0` |
 | Dependency manifest consistency | `python scripts/update-dependency-manifests.py --check` | Pass | Generated `requirements*.txt` files are in sync with `pyproject.toml` for GitHub Dependency Graph and Dependabot visibility |
-| Local backlog validation | `python scripts/sync-backlog-issues.py --check` | Pass | Validated 84 local backlog item JSON files; validation rejects common public-leak patterns before issue bodies are generated |
+| Local backlog validation | `python scripts/sync-backlog-issues.py --check` | Pass | Validated 136 local backlog item JSON files; validation rejects common public-leak patterns before issue bodies are generated |
 | Local bug report validation | `python scripts/sync-bug-reports.py --check` | Pass | Validated 39 local bug report JSON files, including the file path sanitizer, synthetic reporting, metrics, NATS monitoring, payload serialization, NATS auth, retry-policy, Oracle idempotency, MkDocs build isolation, metrics CLI CI repair, release workflow artifact separation, and other regression reports |
 | OCI Object Storage backlog sync | `python scripts/sync-backlog-issues.py --directory /private/tmp/nats-sinks-oci-backlog-sync` | Pass | Created GitHub issue `#47` from the scoped validated backlog item without publishing secrets or private service details |
+| GoldenGate-inspired sink backlog sync | `python scripts/sync-backlog-issues.py --directory /private/tmp/nats-sinks-goldengate-backlog-sync --issue-priority-field Priority --issue-priority-field-id 41029122` | Pass | Created managed GitHub issues `#158` through `#190` from 33 scoped validated backlog items without publishing secrets, private service addresses, credentials, or payload material |
+| GoldenGate-inspired backlog tests | `pytest tests/unit/test_backlog_sync.py tests/unit/test_bug_hunt_strict_json_boundaries.py -q` | Pass | 26 passed, covering strict backlog JSON validation, duplicate-key rejection, non-standard JSON constant rejection, public-leak rejection, issue body rendering, release labels, and official GitHub Issue Priority field handling |
 | Markdown link guard | `python scripts/check-markdown-links.py` | Pass | PyPI-facing README links use fully qualified URLs; MkDocs docs keep version-local relative links |
 | NATS permissions documentation | `scripts/check-docs.sh` through `scripts/check.sh` | Pass | Added and built least-privilege NATS permission templates for runtime, DLQ, management, and advisory-reader scenarios |
 | JetStream topology documentation | `scripts/check-docs.sh` through `scripts/check.sh` | Pass | Added and built advanced topology guidance for mirrors, sources, transforms, republish, compression, placement, metadata, and idempotency review |

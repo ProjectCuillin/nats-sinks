@@ -163,6 +163,11 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   custody, record-level AES encryption, deterministic idempotency-key files,
   priority-aware replay, the `nats-sink replay-spool` command, unit coverage,
   example configuration, and operator documentation.
+- Added a GoldenGate-inspired sink candidate research page and new managed
+  backlog items for missing Oracle-family, cloud, streaming, lakehouse,
+  database, messaging, and compatibility-profile connector candidates, using
+  Oracle GoldenGate public connectivity documentation as a planning reference
+  without claiming GoldenGate compatibility.
 
 ### Changed
 

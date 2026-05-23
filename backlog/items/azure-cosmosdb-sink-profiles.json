@@ -1,0 +1,23 @@
+{
+  "id": "azure-cosmosdb-sink-profiles",
+  "title": "[Feature]: Evaluate Azure Cosmos DB sink profiles",
+  "area": "Future sink",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "security", "testing"],
+  "problem": "OCI GoldenGate lists Azure Cosmos DB for MongoDB and Azure Cosmos DB for PostgreSQL target variants. nats-sinks has MongoDB and Postgres backlog coverage, but it does not yet document Cosmos DB compatibility requirements.",
+  "proposal": "Research Azure Cosmos DB compatibility profiles for future MongoDB and PostgreSQL-related sinks. The evaluation should define whether Cosmos DB is a separate sink, a compatibility target, or not planned under current scope, and should capture partition keys, throughput limits, consistency levels, duplicate handling, and cloud identity.",
+  "users": "Azure teams using Cosmos DB APIs who need controlled event persistence from NATS JetStream.",
+  "delivery_semantics": "ACK-gated success requires the Cosmos DB API call or compatible driver write to be durably accepted at the configured consistency level. Duplicate behavior must use deterministic IDs and partition keys.",
+  "security": "Connection strings, keys, tenant information, collection names, partition keys, and payloads must be redacted. Managed identity should be preferred where available.",
+  "acceptance": [
+    "Research maps MongoDB and PostgreSQL API variants to future connector plans.",
+    "Partition and consistency requirements are documented.",
+    "The design avoids duplicating generic MongoDB/Postgres work unnecessarily.",
+    "Unit tests use fakes and no network calls if implemented.",
+    "Documentation explains service-specific limitations."
+  ],
+  "tests": "Research-only initially. Future profile tests should validate partition key mapping, duplicate handling, and error translation.",
+  "documentation": "Add Cosmos DB profile findings to MongoDB/Postgres sink planning docs.",
+  "closeout": "Close after the evaluation release is published."
+}

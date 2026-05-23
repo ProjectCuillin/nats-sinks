@@ -1,0 +1,23 @@
+{
+  "id": "amazon-kinesis-sink",
+  "title": "[Feature]: Evaluate an Amazon Kinesis sink",
+  "area": "Future sink",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "security", "testing"],
+  "problem": "Oracle GoldenGate lists Amazon Kinesis as a target-capable streaming service. nats-sinks does not yet have an AWS streaming sink for durable or near-real-time handoff outside NATS.",
+  "proposal": "Evaluate and later design an Amazon Kinesis sink using the AWS SDK for Python with explicit partition-key mapping, deterministic idempotency metadata, bounded batching, retry controls, payload encryption compatibility, and safe error classification. The feature must document where Kinesis acceptance fits relative to commit-then-acknowledge because Kinesis is a stream handoff target, not a database transaction.",
+  "users": "Operators integrating NATS JetStream event custody with AWS streaming analytics, serverless processing, or cross-cloud handoff.",
+  "delivery_semantics": "ACK-gated success may occur only after Kinesis returns successful `PutRecords` or equivalent acceptance for every required record. Partial failures must prevent ACK for failed messages or route them through explicit retry/DLQ behavior.",
+  "security": "AWS credentials must use IAM roles, web identity, or secure runtime configuration. Stream names, partition keys, payloads, and metadata must be redacted from logs unless explicitly enabled for controlled diagnostics.",
+  "acceptance": [
+    "Research identifies Kinesis API limits, batch sizes, partition-key rules, and retry behavior.",
+    "Design handles partial batch failures without silent message loss.",
+    "Configuration validates stream names, region, partition strategy, timeouts, and retry limits.",
+    "Unit tests use AWS fakes and make no network calls.",
+    "Documentation explains cost, ordering, duplicate delivery, and least-privilege IAM."
+  ],
+  "tests": "Add unit tests for partition key selection, PutRecords batching, partial-failure handling, error translation, and ACK ordering. Live tests must be explicitly gated and sanitized.",
+  "documentation": "Add docs/amazon-kinesis-sink.md if implemented and update sink framework, configuration, security, idempotency, operations, roadmap, and changelog.",
+  "closeout": "Close after the research or implementation release is published."
+}
