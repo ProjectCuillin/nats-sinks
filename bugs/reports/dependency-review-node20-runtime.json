@@ -1,0 +1,28 @@
+{
+  "id": "dependency-review-node20-runtime",
+  "title": "[Bug]: Dependency Review workflow emits Node.js 20 deprecation warning",
+  "area": "CI and automation",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": ["github-actions", "dependency-review", "supply-chain"],
+  "summary": "The GitHub Dependency Review workflow still references an action release line that can emit GitHub runner warnings about the deprecated Node.js 20 action runtime. The warning does not fail the job today, but it creates noisy release evidence and risks future failure when GitHub removes Node.js 20 from hosted runners.",
+  "observed": "A dependency review job can complete with a warning that actions/dependency-review-action@v4 is running on Node.js 20 and may stop behaving as expected when GitHub forces Node.js 24 defaults and later removes Node.js 20.",
+  "expected": "The Dependency Review workflow should use a Node.js 24-compatible Dependency Review action release and should not require unsafe runtime opt-out flags.",
+  "reproduction": "Run the Dependency Review workflow on a pull request and inspect the job annotations for the Node.js 20 deprecation warning emitted by actions/dependency-review-action@v4.",
+  "failing_test": "Add a deterministic workflow regression test that inspects .github/workflows/dependency-review.yml and fails while it references actions/dependency-review-action@v4 instead of the Node.js 24-compatible release line.",
+  "impact": "The issue affects supply-chain review confidence and release hygiene. The action currently still runs, but warning-only CI drift can become a release blocker once GitHub runner defaults change.",
+  "delivery_semantics": "No NATS delivery semantics, sink behavior, commit-then-ACK ordering, idempotency behavior, or payload handling are affected. The change is limited to supply-chain CI automation.",
+  "security": "The fix must not weaken dependency review, disable alerts, add permissive allow lists, or introduce secrets into workflow files. It should update the action reference while keeping least-privilege permissions.",
+  "acceptance": [
+    "The Dependency Review workflow uses a Node.js 24-compatible Dependency Review action release.",
+    "A regression test fails if the workflow returns to actions/dependency-review-action@v4.",
+    "The workflow keeps least-privilege permissions.",
+    "Documentation or release notes mention the dependency-review runtime hygiene fix.",
+    "The full local check script passes.",
+    "The issue includes sanitized close-out evidence."
+  ],
+  "tests": "Run the focused workflow regression test and the full local check script.",
+  "documentation": "Update CHANGELOG.md and the latest sanitized test report. Keep any operational details public-safe and free from repository secrets.",
+  "closeout": "Close after the fix is merged into the development branch with test evidence. Include the action version change, focused test evidence, full validation evidence, and confirmation that no secrets were published."
+}

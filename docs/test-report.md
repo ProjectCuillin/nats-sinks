@@ -183,6 +183,11 @@ includes:
   `#190`. Targeted validation for this documentation and backlog-only change
   passed with backlog JSON validation, Ruff formatting check, Ruff lint,
   MkDocs strict build, and backlog sync unit tests,
+- dependency review runtime hygiene for bug issue `#192`, moving the
+  Dependency Review workflow to the Node.js 24-compatible
+  `actions/dependency-review-action@v5` release line, adding a deterministic
+  workflow regression test, and keeping the workflow permissions limited to
+  read-only repository and pull request access,
 - full validation on 2026-05-22 with `scripts/check.sh`, the local WebSocket
   e2e harness, direct Oracle integration tests, and live NATS-to-Oracle e2e
   runs. The live Oracle checks covered 256-message non-encrypted delivery,
@@ -577,7 +582,8 @@ ordering, DLQ-before-ACK ordering, and deterministic unhappy-path handling.
 | Version consistency | `python scripts/check-version-consistency.py` | Pass | Package metadata, runtime `__version__`, README, docs home page, and changelog all report `0.4.0` |
 | Dependency manifest consistency | `python scripts/update-dependency-manifests.py --check` | Pass | Generated `requirements*.txt` files are in sync with `pyproject.toml` for GitHub Dependency Graph and Dependabot visibility |
 | Local backlog validation | `python scripts/sync-backlog-issues.py --check` | Pass | Validated 136 local backlog item JSON files; validation rejects common public-leak patterns before issue bodies are generated |
-| Local bug report validation | `python scripts/sync-bug-reports.py --check` | Pass | Validated 39 local bug report JSON files, including the file path sanitizer, synthetic reporting, metrics, NATS monitoring, payload serialization, NATS auth, retry-policy, Oracle idempotency, MkDocs build isolation, metrics CLI CI repair, release workflow artifact separation, and other regression reports |
+| Local bug report validation | `python scripts/sync-bug-reports.py --check` | Pass | Validated 42 local bug report JSON files, including the file path sanitizer, synthetic reporting, metrics, NATS monitoring, payload serialization, NATS auth, retry-policy, Oracle idempotency, MkDocs build isolation, metrics CLI CI repair, release workflow artifact separation, Dependency Review Node.js 24 runtime hygiene, and other regression reports |
+| Dependency Review workflow runtime check | `python -m pytest tests/unit/test_dependency_review_workflow.py -q` | Pass | 2 passed, covering the Node.js 24-compatible Dependency Review action reference and least-privilege workflow permissions |
 | OCI Object Storage backlog sync | `python scripts/sync-backlog-issues.py --directory /private/tmp/nats-sinks-oci-backlog-sync` | Pass | Created GitHub issue `#47` from the scoped validated backlog item without publishing secrets or private service details |
 | GoldenGate-inspired sink backlog sync | `python scripts/sync-backlog-issues.py --directory /private/tmp/nats-sinks-goldengate-backlog-sync --issue-priority-field Priority --issue-priority-field-id 41029122` | Pass | Created managed GitHub issues `#158` through `#190` from 33 scoped validated backlog items without publishing secrets, private service addresses, credentials, or payload material |
 | GoldenGate-inspired backlog tests | `pytest tests/unit/test_backlog_sync.py tests/unit/test_bug_hunt_strict_json_boundaries.py -q` | Pass | 26 passed, covering strict backlog JSON validation, duplicate-key rejection, non-standard JSON constant rejection, public-leak rejection, issue body rendering, release labels, and official GitHub Issue Priority field handling |
