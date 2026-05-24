@@ -134,10 +134,12 @@ Use this baseline for code review and future releases:
   counters, duplicate counters, and write timings can reveal operational tempo
   even without payloads. Use disabled-by-default observability policies and
   allow lists before publishing to Prometheus,
-  OpenTelemetry Collectors, NATS monitoring snapshots, or any future
-  monitoring platform. OTLP collector endpoints must not contain credentials,
-  non-loopback endpoints must use HTTPS, and optional collector headers must
-  be sourced from environment variables rather than stored in policy JSON.
+  OpenTelemetry Collectors, Splunk HEC, StatsD, syslog, NATS monitoring
+  snapshots, or any future monitoring platform. OTLP collector endpoints must
+  not contain credentials, non-loopback endpoints must use HTTPS, and optional
+  collector headers must be sourced from environment variables rather than
+  stored in policy JSON. Syslog export must be treated as redistribution to an
+  operational logging fabric, not as a private local debug stream.
   NATS server monitoring endpoint values must also be selected with explicit
   endpoint and field allow lists before they are stored locally or rendered for
   Prometheus. JetStream advisories are also
@@ -189,7 +191,7 @@ Policy-controlled metric and selected NATS monitoring export is documented in
 kept in the [Prometheus Integration](prometheus.md) sub-page and
 OpenTelemetry-specific connector guidance kept in the
 [OpenTelemetry OTLP Integration](otlp.md) sub-page. Elastic, Grafana Alloy,
-Splunk HEC, and StatsD platform guidance is kept in their respective
+Splunk HEC, StatsD, and syslog platform guidance is kept in their respective
 observability sub-pages so each sharing boundary has its own configuration and
 security review.
 The NATS server monitoring connector and delivery-boundary decision, including

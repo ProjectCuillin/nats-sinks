@@ -13,6 +13,11 @@ documentation contract.
 - a Prometheus textfile connector,
 - an optional native Prometheus HTTP endpoint,
 - an OpenTelemetry OTLP/HTTP JSON metrics connector,
+- an Elastic Observability profile,
+- a Grafana Alloy profile,
+- a Splunk HEC observability connector,
+- a StatsD observability connector,
+- a syslog observability bridge,
 - a NATS server monitoring snapshot connector.
 
 Future connectors must build on that model. Existing connectors must continue
@@ -62,7 +67,7 @@ flowchart LR
 | OCI Monitoring | High | OCI-native connector using Monitoring custom metrics with instance principals, resource principals, or configured OCI identity. | Natural fit for Oracle Cloud deployments and Oracle-heavy nats-sinks users. | Compartments, dimensions, tenancy metadata, and signer configuration require least-privilege review. | New separate feature request. |
 | Amazon CloudWatch | Medium | AWS SDK based connector using custom metrics. | Useful for AWS deployments that use CloudWatch as the operational source of truth. | IAM permissions, namespace design, dimensions, and API cost controls need careful bounds. | New separate feature request. |
 | Azure Monitor | Medium | Azure Monitor custom metrics connector using Microsoft Entra authentication or managed identity. | Useful for Microsoft cloud deployments and existing Azure operational teams. | Resource identifiers, dimensions, and bearer-token handling need strict redaction. | New separate feature request. |
-| Syslog | Low | RFC 5424 structured-data or structured-log bridge for restricted networks. | Useful where pull-based scraping and cloud APIs are not available. | Syslog has transport and format pitfalls; messages must be bounded and sanitized. | New separate feature request. |
+| Syslog | Implemented | RFC 5424-style structured-data bridge for restricted networks over UDP or Unix datagrams. | Useful where pull-based scraping and cloud APIs are not available. | Syslog has transport and format pitfalls; messages must be bounded and sanitized. | See [Syslog Bridge](syslog.md). |
 
 ## Source Notes
 
@@ -118,12 +123,9 @@ Before any connector ships, the implementation issue must prove:
 ## Implementation Order Guidance
 
 The recommended order after the implemented Prometheus, OTLP, Elastic, Grafana
-Alloy, Splunk HEC, StatsD, and NATS monitoring connectors is:
+Alloy, Splunk HEC, StatsD, syslog, and NATS monitoring connectors is:
 
 1. OCI Monitoring, because it fits the Oracle-oriented user base.
 2. Datadog, because it covers common hosted observability workflows.
 3. CloudWatch and Azure Monitor, because they matter for cloud-specific
    deployments but should follow the same connector core.
-4. StatsD and syslog, because they are useful for constrained or legacy
-   environments but have weaker reliability and structure than modern
-   collector APIs.

@@ -59,7 +59,8 @@ The tests also cover:
   `PrometheusTextfilePolicy`, `PrometheusHttpEndpointPolicy`,
   `OtlpMetricsPolicy`, `ElasticObservabilityPolicy`,
   `GrafanaAlloyObservabilityPolicy`, `SplunkHecObservabilityPolicy`,
-  `StatsdObservabilityPolicy`, `NatsServerMonitoringPolicy`,
+  `StatsdObservabilityPolicy`, `SyslogObservabilityPolicy`,
+  `NatsServerMonitoringPolicy`,
   `collect_nats_monitoring_snapshot`,
   `render_otlp_metrics_json`, `export_otlp_metrics`,
   `render_elastic_otlp_metrics_json`,
@@ -67,7 +68,8 @@ The tests also cover:
   `render_grafana_alloy_otlp_metrics_json`, `export_grafana_alloy_metrics`,
   `render_grafana_alloy_config`, `render_splunk_hec_event_json`,
   `export_splunk_hec_metrics`, `render_statsd_lines`,
-  `export_statsd_metrics`, and
+  `export_statsd_metrics`, `render_syslog_messages`,
+  `export_syslog_metrics`, and
   `render_nats_monitoring_prometheus`,
 - sink extension points such as `Sink`, `HealthCheckableSink`,
   `SchemaAwareSink`, `FlushableSink`, `SinkRegistry`, `SinkConnector`,

@@ -71,6 +71,7 @@ def test_init_prometheus_policy_generates_disabled_policy(tmp_path: Path) -> Non
     data = json.loads(policy.read_text(encoding="utf-8"))
     assert data["enabled"] is False
     assert data["prometheus"]["enabled"] is False
+    assert data["syslog"]["enabled"] is False
     assert data["subjects"][0]["subject"] == "orders.*"
 
 
@@ -86,6 +87,7 @@ def test_validate_and_show_effective_policy(tmp_path: Path) -> None:
     assert "Observability policy is valid." in validate.stdout
     assert show.exit_code == 0
     assert "prometheus_enabled=false" in show.stdout
+    assert "syslog_enabled=false" in show.stdout
 
 
 def test_list_metrics_and_subjects_are_script_friendly(tmp_path: Path) -> None:
@@ -711,6 +713,97 @@ def test_statsd_export_rejects_stale_snapshot_without_override(tmp_path: Path) -
     )
 
     result = runner.invoke(app, ["statsd-export", str(snapshot), str(policy), "--dry-run"])
+
+    assert result.exit_code == 3
+    assert "Metrics snapshot is stale" in result.stderr
+
+
+def test_syslog_disabled_policy_does_not_need_snapshot(tmp_path: Path) -> None:
+    policy = tmp_path / "observability.prometheus.json"
+    policy.write_text(ObservabilityPolicy().model_dump_json(by_alias=True), encoding="utf-8")
+
+    result = runner.invoke(app, ["syslog-export", str(tmp_path / "missing.json"), str(policy)])
+
+    assert result.exit_code == 0
+    assert "Syslog export disabled by observability policy" in result.stdout
+
+
+def test_syslog_export_dry_run_outputs_allowed_messages(tmp_path: Path) -> None:
+    snapshot = _snapshot(tmp_path / "metrics.json")
+    policy = tmp_path / "observability.prometheus.json"
+    policy.write_text(
+        json.dumps(
+            {
+                "schema": "nats_sinks.observability.policy.v1",
+                "enabled": True,
+                "namespace": "mission_ops",
+                "allowed_metrics": ["messages_fetched_total"],
+                "allowed_metric_patterns": [],
+                "denied_metrics": [],
+                "denied_metric_patterns": [],
+                "include_observations": False,
+                "include_legacy": False,
+                "subjects": [],
+                "syslog": {
+                    "enabled": True,
+                    "transport": "udp",
+                    "host": "127.0.0.1",
+                    "port": 514,
+                    "facility": "local0",
+                    "severity": "info",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["syslog-export", str(snapshot), str(policy), "--dry-run"])
+
+    assert result.exit_code == 0
+    assert 'metric="messages_fetched_total"' in result.stdout
+    assert 'profile="syslog"' in result.stdout
+    assert "oracle_duplicates_total" not in result.stdout
+
+
+def test_syslog_export_rejects_stale_snapshot_without_override(tmp_path: Path) -> None:
+    snapshot = tmp_path / "metrics.json"
+    snapshot.write_text(
+        json.dumps(
+            {
+                "schema": "nats_sinks.metrics.snapshot.v1",
+                "namespace": "mission_ops",
+                "generated_at_epoch_seconds": 1.0,
+                "counters": {"messages_fetched_total": 7},
+                "gauges": {},
+                "observations": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    policy = tmp_path / "observability.prometheus.json"
+    policy.write_text(
+        json.dumps(
+            {
+                "schema": "nats_sinks.observability.policy.v1",
+                "enabled": True,
+                "namespace": "mission_ops",
+                "allowed_metrics": ["messages_fetched_total"],
+                "allowed_metric_patterns": [],
+                "denied_metrics": [],
+                "denied_metric_patterns": [],
+                "include_observations": False,
+                "include_legacy": False,
+                "subjects": [],
+                "syslog": {
+                    "enabled": True,
+                    "stale_after_seconds": 1,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["syslog-export", str(snapshot), str(policy), "--dry-run"])
 
     assert result.exit_code == 3
     assert "Metrics snapshot is stale" in result.stderr

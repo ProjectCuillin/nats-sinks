@@ -3,7 +3,7 @@
   "title": "[Feature]: Add a syslog observability bridge",
   "area": "Metrics and observability",
   "priority": "P4 - research or design needed",
-  "target_release": "unscheduled",
+  "target_release": "v0.4.1",
   "labels": ["observability", "security", "testing"],
   "problem": "Some restricted or legacy networks rely on syslog-style forwarding rather than Prometheus scraping, cloud APIs, or collector protocols. nats-sinks currently has no syslog observability bridge, which may lead teams to write unbounded log-forwarding scripts that mix operational metrics with sensitive payload or subject data.",
   "proposal": "Design and implement an optional syslog observability bridge that follows the shared observability connector contract. It must be disabled by default, read approved metrics from the local metrics snapshot or shared read-only provider, apply the same observability policy allow and deny lists, use the same stale snapshot, dry-run, timeout, retry, and redaction behavior, and export only policy-approved metric names. The preferred format should be RFC 5424 structured data or a clearly documented structured-log shape, with bounded message length and explicit transport limitations.",

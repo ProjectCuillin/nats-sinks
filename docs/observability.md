@@ -33,6 +33,8 @@ Observability is documented as a small set of focused pages:
   incident-response environments.
 - [StatsD Integration](statsd.md): explains best-effort UDP and Unix datagram
   export to StatsD-compatible aggregators.
+- [Syslog Bridge](syslog.md): explains best-effort RFC 5424-style UDP and Unix
+  datagram export for restricted or legacy syslog pipelines.
 - [NATS Server Monitoring Integration](nats-server-monitoring.md): explains the
   disabled-by-default connector for selected NATS monitoring endpoint fields.
 - Optional JetStream advisory observation is configured in
@@ -53,6 +55,9 @@ The Splunk HEC connector follows the same rule and emits one bounded
 policy-approved metric event to Splunk's HTTP Event Collector.
 The StatsD connector follows the same rule and emits bounded best-effort
 datagrams to a StatsD-compatible local or network listener.
+The syslog bridge follows the same rule and emits bounded RFC 5424-style
+messages to an approved syslog listener without exporting payloads, subjects,
+classification values, labels, mission metadata, or destination details.
 
 ## Design Goals
 
@@ -310,6 +315,25 @@ Generated policies are disabled by default:
     "stale_after_seconds": null,
     "max_datagram_bytes": 1432
   },
+  "syslog": {
+    "enabled": false,
+    "transport": "udp",
+    "host": "127.0.0.1",
+    "port": 514,
+    "socket_path": null,
+    "facility": "local0",
+    "severity": "info",
+    "hostname": "-",
+    "app_name": "nats-sinks",
+    "procid": "-",
+    "msgid": "metrics",
+    "structured_data_id": "nats_sinks",
+    "timeout_seconds": 1,
+    "max_retries": 0,
+    "retry_backoff_seconds": 0.25,
+    "stale_after_seconds": null,
+    "max_message_bytes": 1024
+  },
   "nats_server_monitoring": {
     "enabled": false,
     "base_url": null,
@@ -366,6 +390,12 @@ one bounded datagram per approved aggregate metric over UDP or a Unix datagram
 socket. StatsD is best-effort observability and must not be treated as durable
 delivery evidence.
 
+The `syslog` object controls the syslog bridge. It is disabled by default and
+requires both `enabled=true` and `syslog.enabled=true`. The connector sends one
+bounded RFC 5424-style message per approved aggregate metric over UDP or a Unix
+datagram socket. Syslog is best-effort observability and must not be treated as
+durable delivery evidence.
+
 The `nats_server_monitoring` object controls the optional NATS monitoring
 connector. It is also disabled by default. When enabled, it polls only the
 approved NATS server monitoring endpoint paths and extracts only the approved
@@ -393,6 +423,7 @@ topology fields unless an operator has selected those exact fields.
 | `grafana_alloy` | object | Grafana Alloy profile settings over the OTLP connector, including generated River snippet settings. |
 | `splunk_hec` | object | Splunk HTTP Event Collector settings for approved aggregate metric events. |
 | `statsd` | object | StatsD connector settings for approved best-effort metric datagrams. |
+| `syslog` | object | Syslog bridge settings for approved RFC 5424-style best-effort metric messages. |
 | `nats_server_monitoring` | object | Optional connector settings for selected NATS server monitoring endpoint values. |
 
 The deny list wins over the allow list. This lets a broad allow rule such as
@@ -516,6 +547,31 @@ format, service guidance, security notes, and test coverage.
 
 See [StatsD Integration](statsd.md) for full examples, datagram format,
 transport limitations, service guidance, security notes, and test coverage.
+
+## Syslog Bridge Fields
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `syslog.enabled` | `false` | Enables syslog export when the top-level observability policy is also enabled. |
+| `syslog.transport` | `udp` | Transport mode. Supported values are `udp` and `unixgram`. |
+| `syslog.host` | `127.0.0.1` | UDP target host. Keep loopback unless an approved network path exists. |
+| `syslog.port` | `514` | UDP target port, validated from `1` through `65535`. |
+| `syslog.socket_path` | `null` | Unix datagram socket path. Required when `transport` is `unixgram`. |
+| `syslog.facility` | `local0` | Syslog facility used to calculate the RFC 5424 priority value. |
+| `syslog.severity` | `info` | Syslog severity used to calculate the RFC 5424 priority value. |
+| `syslog.hostname` | `-` | RFC 5424 hostname field. The safe default avoids exposing host identity. |
+| `syslog.app_name` | `nats-sinks` | RFC 5424 application name field. |
+| `syslog.procid` | `-` | RFC 5424 process identifier field. |
+| `syslog.msgid` | `metrics` | RFC 5424 message identifier field. |
+| `syslog.structured_data_id` | `nats_sinks` | Structured-data identifier used for metric parameters. |
+| `syslog.timeout_seconds` | `1` | Socket timeout, validated from greater than `0` through `60` seconds. |
+| `syslog.max_retries` | `0` | Bounded retries after the initial send attempt. |
+| `syslog.retry_backoff_seconds` | `0.25` | Delay between retry attempts when a local send operation fails. |
+| `syslog.stale_after_seconds` | `null` | Optional maximum snapshot age before export fails closed unless `--allow-stale` is used. |
+| `syslog.max_message_bytes` | `1024` | Maximum size for each rendered syslog message. |
+
+See [Syslog Bridge](syslog.md) for RFC 5424 mapping, dry-run output, transport
+limitations, service guidance, security notes, and test coverage.
 
 ## NATS Server Monitoring Fields
 

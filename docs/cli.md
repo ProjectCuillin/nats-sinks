@@ -19,7 +19,8 @@ Prometheus HTTP endpoint. It can also export approved metrics to an
 OpenTelemetry Collector through OTLP/HTTP JSON, including the Elastic
 Observability and Grafana Alloy profiles, and approved aggregate metric events
 through Splunk HEC. It can also send approved best-effort datagrams to
-StatsD-compatible aggregators.
+StatsD-compatible aggregators and RFC 5424-style messages to syslog
+pipelines.
 
 For readers new to this project, the CLI does not implement a separate
 delivery engine. It validates configuration, creates the selected sink, builds
@@ -48,6 +49,7 @@ nats-sink-observe grafana-alloy-config observability.prometheus.json
 nats-sink-observe grafana-alloy-export .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
 nats-sink-observe splunk-hec-export .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
 nats-sink-observe statsd-export .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
+nats-sink-observe syslog-export .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
 nats-sink-observe nats-monitoring-poll observability.prometheus.json --dry-run
 ```
 
@@ -345,6 +347,7 @@ elastic_enabled=false
 grafana_alloy_enabled=false
 splunk_hec_enabled=false
 statsd_enabled=false
+syslog_enabled=false
 nats_server_monitoring_enabled=false
 nats_server_monitoring_prometheus_enabled=false
 allowed_metrics=0
@@ -665,6 +668,41 @@ transport is best-effort, so successful local sending must not be treated as
 durable telemetry custody. Full connector guidance is documented in
 [StatsD Integration](statsd.md).
 
+### `nats-sink-observe syslog-export`
+
+Exports policy-approved metrics as RFC 5424-style syslog messages over UDP or
+a Unix datagram socket. The command is disabled unless both the top-level
+observability policy and `syslog.enabled` are true. It uses the same local
+snapshot, allow and deny lists, stale-snapshot checks, timeout bounds, retry
+bounds, and redaction posture as the other observability connectors.
+
+Dry-run mode prints syslog messages without opening a socket:
+
+```bash
+nats-sink-observe syslog-export \
+  /var/lib/nats-sink/metrics.json \
+  /etc/nats-sinks/observability.prometheus.json \
+  --dry-run
+```
+
+Example dry-run output:
+
+```text
+<134>1 2026-09-21T14:13:20.000Z - nats-sinks - metrics [nats_sinks metric="messages_fetched_total" kind="counter" value="256" namespace="nats_sinks" profile="syslog"] -
+<134>1 2026-09-21T14:13:20.000Z - nats-sinks - metrics [nats_sinks metric="messages_acked_total" kind="counter" value="256" namespace="nats_sinks" profile="syslog"] -
+```
+
+Example success output:
+
+```text
+Syslog export: attempted=true delivered=true attempts=1 messages=2 message=Syslog export delivered
+```
+
+The command is an observability connector, not a delivery feature. Syslog
+transport is best-effort, messages are bounded and sanitized, and successful
+local sending must not be treated as durable telemetry custody. Full connector
+guidance is documented in [Syslog Bridge](syslog.md).
+
 ### `nats-sink-observe nats-monitoring-poll`
 
 Polls policy-approved NATS server monitoring endpoints and writes a sanitized
@@ -756,6 +794,7 @@ cannot find a metric without a default value.
 `nats-sink-observe` returns `0` on success, `2` for invalid configuration,
 policy, snapshot, textfile output errors, disabled native endpoint startup, or
 profile render errors, and `3` when an enabled Prometheus, OTLP, Elastic,
-Grafana Alloy, Splunk HEC, or StatsD policy rejects a stale snapshot, a native HTTP
-dry-run returns an error response, or export exhausts its bounded delivery
-attempts.
+Grafana Alloy, Splunk HEC, StatsD, or syslog export exhausts its bounded
+delivery attempts, a policy rejects a stale snapshot in connector-specific
+paths that use delivery-failure exit handling, or a native HTTP dry-run returns
+an error response.

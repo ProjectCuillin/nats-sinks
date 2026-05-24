@@ -14,15 +14,32 @@ logs from live systems.
 | Field | Value |
 | --- | --- |
 | Overall result | Pass |
-| Report generated | 2026-05-24 StatsD observability validation |
+| Report generated | 2026-05-24 Syslog observability validation |
 | Project version | `0.4.0` post-release development |
 | Python version | 3.12.4 |
-| Git revision checked | Issue `#109` workspace based on `release-v0.4.1` |
-| Worktree state | Active workspace adding the StatsD observability connector while preserving the Splunk HEC connector, Grafana Alloy profile, Elastic Observability profile, optional core message authenticity verification, local Docker image work, data-centric security labels, encrypted edge spool-and-forward sink work, GoldenGate-inspired sink candidate backlog research, stream planning, branch workflow automation, connector framework, WebSocket guardrails, Oracle high-throughput staging, custody metadata, advisory observation, durable consumer management, richer consumer policy controls, NATS no-echo, OTLP export, secure-development hardening, strict JSON config loading, log-injection sanitization, secret scanning, public API compatibility tests, GitHub Dependency Graph manifests, sanitized backlog tooling, release-gated close automation, standardized SPDX headers, metrics snapshots and CLI, observability policy core, Prometheus and NATS monitoring connectors, Kubernetes examples, systemd installer, NATS reconnect tuning, least-privilege NATS permission templates, JetStream topology guidance, retry backoff with jitter, priority-aware lanes, synthetic mission testing, mission-support examples, SBOM generation, release checksums, hash-verified installation guidance, property-style tests, defence and mission-support blueprints, generic mission metadata, payload encryption, and Oracle/file/spool sink support |
+| Git revision checked | Issue `#110` workspace based on `release-v0.4.1` |
+| Worktree state | Active workspace adding the syslog observability bridge while preserving the StatsD connector, Splunk HEC connector, Grafana Alloy profile, Elastic Observability profile, optional core message authenticity verification, local Docker image work, data-centric security labels, encrypted edge spool-and-forward sink work, GoldenGate-inspired sink candidate backlog research, stream planning, branch workflow automation, connector framework, WebSocket guardrails, Oracle high-throughput staging, custody metadata, advisory observation, durable consumer management, richer consumer policy controls, NATS no-echo, OTLP export, secure-development hardening, strict JSON config loading, log-injection sanitization, secret scanning, public API compatibility tests, GitHub Dependency Graph manifests, sanitized backlog tooling, release-gated close automation, standardized SPDX headers, metrics snapshots and CLI, observability policy core, Prometheus and NATS monitoring connectors, Kubernetes examples, systemd installer, NATS reconnect tuning, least-privilege NATS permission templates, JetStream topology guidance, retry backoff with jitter, priority-aware lanes, synthetic mission testing, mission-support examples, SBOM generation, release checksums, hash-verified installation guidance, property-style tests, defence and mission-support blueprints, generic mission metadata, payload encryption, and Oracle/file/spool sink support |
 | Live NATS details | Redacted |
 | Live Oracle details | Redacted |
 
-This refresh covered issue `#109`, adding a StatsD observability connector over
+This refresh covered issue `#110`, adding a syslog observability bridge over
+the shared local metrics snapshot and observability policy model. The bridge
+remains disabled by default, uses the shared allow and deny policy, renders
+bounded RFC 5424-style structured messages, supports UDP and Unix datagram
+transports, enforces message-size, timeout, retry, stale-snapshot, and syslog
+field validation, escapes structured-data values, and exposes dry-run and
+live-send behavior through `nats-sink-observe syslog-export`. Focused syslog
+observability and public API tests passed with `57 passed`. The full local
+validation suite also passed through `scripts/check.sh`, including formatting
+for `193` files, linting, type checking with no issues in `76` source files,
+the main pytest suite with `833 passed, 9 skipped`, the encryption and sink
+contract suite with `123 passed`, the sink capability suite with `104 passed`,
+MkDocs builds for Read the Docs and GitHub Pages, security scanning, package
+build, SBOM generation, checksum generation, and Twine metadata validation.
+The skipped tests remain gated live NATS and Oracle integration tests that
+require explicit local environment flags or services.
+
+This refresh also preserves issue `#109`, adding a StatsD observability connector over
 the shared local metrics snapshot and observability policy model. The connector
 remains disabled by default, uses the shared allow and deny policy, supports
 UDP and Unix datagram transports, enforces bounded datagram size, timeout,
@@ -196,6 +213,7 @@ flowchart LR
     Observe[Observability policy and Prometheus connectors] --> Report
     Splunk[Splunk HEC connector] --> Report
     StatsD[StatsD connector] --> Report
+    Syslog[Syslog bridge] --> Report
     NATSMon[NATS server monitoring connector] --> Report
     Advisories[JetStream advisory observer] --> Report
     Consumers[Durable consumer policy] --> Report
