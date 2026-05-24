@@ -300,6 +300,9 @@ The observability CLI provides policy and connector commands:
 | `nats-sink-observe prometheus-textfile SNAPSHOT POLICY` | Render policy-filtered Prometheus textfile output. |
 | `nats-sink-observe prometheus-http SNAPSHOT POLICY` | Run or dry-run the optional native Prometheus HTTP endpoint. |
 | `nats-sink-observe otlp-export SNAPSHOT POLICY` | Dry-run or send policy-approved metrics to an OpenTelemetry Collector through OTLP/HTTP JSON. |
+| `nats-sink-observe elastic-export SNAPSHOT POLICY` | Dry-run or send approved metrics through the Elastic OTLP profile. |
+| `nats-sink-observe grafana-alloy-export SNAPSHOT POLICY` | Dry-run or send approved metrics through the Grafana Alloy profile. |
+| `nats-sink-observe splunk-hec-export SNAPSHOT POLICY` | Dry-run or send approved aggregate metrics to Splunk HEC. |
 
 The global version flag is available too:
 

@@ -88,6 +88,9 @@ def test_generated_policy_is_disabled_and_copies_safe_subject_hints(tmp_path: Pa
     assert policy.elastic.endpoint is None
     assert policy.grafana_alloy.enabled is False
     assert policy.grafana_alloy.endpoint is None
+    assert policy.splunk_hec.enabled is False
+    assert policy.splunk_hec.endpoint is None
+    assert policy.splunk_hec.token_env is None
     assert policy.prometheus.http_endpoint.host == "127.0.0.1"
     assert policy.prometheus.http_endpoint.path == "/metrics"
     assert policy.nats_server_monitoring.enabled is False
@@ -217,3 +220,50 @@ def test_policy_rejects_unsafe_grafana_alloy_settings() -> None:
 
     with pytest.raises(ValueError, match="basic upstream auth"):
         ObservabilityPolicy(grafana_alloy={"upstream_auth_mode": "basic"})
+
+
+def test_policy_rejects_unsafe_splunk_hec_settings() -> None:
+    with pytest.raises(ValueError, match="endpoint is required"):
+        ObservabilityPolicy(enabled=True, splunk_hec={"enabled": True, "token_env": "HEC_TOKEN"})
+
+    with pytest.raises(ValueError, match="token_env is required"):
+        ObservabilityPolicy(
+            enabled=True,
+            splunk_hec={
+                "enabled": True,
+                "endpoint": "https://splunk-hec.example.test/services/collector/event",
+            },
+        )
+
+    with pytest.raises(ValueError, match="credentials"):
+        ObservabilityPolicy(
+            splunk_hec={
+                "endpoint": "https://user:secret@example.test/services/collector/event",
+                "token_env": "HEC_TOKEN",
+            }
+        )
+
+    with pytest.raises(ValueError, match="plain http"):
+        ObservabilityPolicy(
+            splunk_hec={
+                "endpoint": "http://splunk-hec.example.test/services/collector/event",
+                "token_env": "HEC_TOKEN",
+            }
+        )
+
+    with pytest.raises(ValueError, match="/services/collector/event"):
+        ObservabilityPolicy(
+            splunk_hec={
+                "endpoint": "https://splunk-hec.example.test/services/collector/raw",
+                "token_env": "HEC_TOKEN",
+            }
+        )
+
+    with pytest.raises(ValueError, match="Authorization"):
+        ObservabilityPolicy(splunk_hec={"headers_env": {"Authorization": "HEC_TOKEN"}})
+
+    with pytest.raises(ValueError, match="metadata values"):
+        ObservabilityPolicy(splunk_hec={"source": "bad value"})
+
+    with pytest.raises(ValueError, match="index"):
+        ObservabilityPolicy(splunk_hec={"index": "bad.index"})

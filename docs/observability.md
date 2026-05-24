@@ -28,6 +28,9 @@ Observability is documented as a small set of focused pages:
   Elasticsearch writes.
 - [Grafana Alloy Profile](grafana-alloy.md): explains the Alloy-specific
   profile that exports approved OTLP metrics to a separate Alloy collector.
+- [Splunk HEC Integration](splunk-hec.md): explains the Splunk HTTP Event
+  Collector connector for approved aggregate metrics in SIEM and
+  incident-response environments.
 - [NATS Server Monitoring Integration](nats-server-monitoring.md): explains the
   disabled-by-default connector for selected NATS monitoring endpoint fields.
 - Optional JetStream advisory observation is configured in
@@ -44,6 +47,8 @@ The Elastic profile follows the same rule and is implemented as an
 Elastic-oriented OTLP profile under observability.
 The Grafana Alloy profile follows the same rule and is implemented as an OTLP
 handoff to a separate Alloy collector.
+The Splunk HEC connector follows the same rule and emits one bounded
+policy-approved metric event to Splunk's HTTP Event Collector.
 
 ## Design Goals
 
@@ -272,6 +277,22 @@ Generated policies are disabled by default:
     "upstream_auth_username_env": null,
     "upstream_auth_password_env": null
   },
+  "splunk_hec": {
+    "enabled": false,
+    "endpoint": null,
+    "token_env": null,
+    "timeout_seconds": 5,
+    "max_retries": 0,
+    "retry_backoff_seconds": 0.25,
+    "stale_after_seconds": null,
+    "max_request_bytes": 1048576,
+    "verify_tls": true,
+    "headers_env": {},
+    "source": "nats-sinks",
+    "sourcetype": "nats_sinks:metrics",
+    "host": "nats-sinks",
+    "index": null
+  },
   "nats_server_monitoring": {
     "enabled": false,
     "base_url": null,
@@ -316,6 +337,12 @@ usually on loopback, and can generate a minimal Alloy River configuration
 snippet for the collector side. It does not manage Alloy and does not require
 the delivery worker to hold Grafana credentials.
 
+The `splunk_hec` object controls the Splunk HTTP Event Collector connector. It
+is disabled by default and requires both `enabled=true` and
+`splunk_hec.enabled=true`. The connector sends one bounded HEC metric event
+containing only approved aggregate metric fields. HEC tokens are referenced by
+environment variable name and resolved only at export time.
+
 The `nats_server_monitoring` object controls the optional NATS monitoring
 connector. It is also disabled by default. When enabled, it polls only the
 approved NATS server monitoring endpoint paths and extracts only the approved
@@ -341,6 +368,7 @@ topology fields unless an operator has selected those exact fields.
 | `otlp` | object | OpenTelemetry OTLP connector settings. |
 | `elastic` | object | Elastic Observability profile settings over the OTLP connector. |
 | `grafana_alloy` | object | Grafana Alloy profile settings over the OTLP connector, including generated River snippet settings. |
+| `splunk_hec` | object | Splunk HTTP Event Collector settings for approved aggregate metric events. |
 | `nats_server_monitoring` | object | Optional connector settings for selected NATS server monitoring endpoint values. |
 
 The deny list wins over the allow list. This lets a broad allow rule such as
@@ -423,6 +451,28 @@ examples, Collector guidance, non-goals, and test coverage.
 
 See [Grafana Alloy Profile](grafana-alloy.md) for full examples, River config
 generation, service guidance, security notes, and test coverage.
+
+## Splunk HEC Connector Fields
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `splunk_hec.enabled` | `false` | Enables Splunk HEC export when the top-level policy is also enabled. |
+| `splunk_hec.endpoint` | `null` | Splunk HEC JSON event endpoint. Enabled connectors require `/services/collector/event`. Plain `http` is allowed only for loopback hosts. |
+| `splunk_hec.token_env` | `null` | Environment variable name containing the HEC token. Required when HEC export is enabled. |
+| `splunk_hec.timeout_seconds` | `5` | Per-request timeout, validated from greater than `0` through `60` seconds. |
+| `splunk_hec.max_retries` | `0` | Bounded retries after the initial attempt. |
+| `splunk_hec.retry_backoff_seconds` | `0.25` | Delay between retry attempts. |
+| `splunk_hec.stale_after_seconds` | `null` | Optional maximum snapshot age before export fails closed unless `--allow-stale` is used. |
+| `splunk_hec.max_request_bytes` | `1048576` | Maximum rendered HEC JSON request body size. |
+| `splunk_hec.verify_tls` | `true` | TLS verification is required; the policy rejects `false`. |
+| `splunk_hec.headers_env` | `{}` | Optional additional HEC headers sourced from environment variables. `Authorization` and `Content-Type` cannot be overridden here. |
+| `splunk_hec.source` | `nats-sinks` | Low-cardinality HEC source value. |
+| `splunk_hec.sourcetype` | `nats_sinks:metrics` | Low-cardinality HEC sourcetype value. |
+| `splunk_hec.host` | `nats-sinks` | Low-cardinality HEC host value. |
+| `splunk_hec.index` | `null` | Optional Splunk index name. Leave unset when the HEC token controls index routing. |
+
+See [Splunk HEC Integration](splunk-hec.md) for full examples, HEC event
+format, service guidance, security notes, and test coverage.
 
 ## NATS Server Monitoring Fields
 
@@ -553,6 +603,7 @@ prometheus_enabled=false
 otlp_enabled=false
 elastic_enabled=false
 grafana_alloy_enabled=false
+splunk_hec_enabled=false
 nats_server_monitoring_enabled=false
 nats_server_monitoring_prometheus_enabled=false
 allowed_metrics=0
@@ -758,13 +809,12 @@ labels, or classified mission details.
 ## Future Connectors
 
 The observability core is intentionally connector-neutral. Prometheus textfile,
-Prometheus HTTP, OTLP, Elastic Observability, Grafana Alloy, and NATS monitoring
-connectors are implemented today.
+Prometheus HTTP, OTLP, Elastic Observability, Grafana Alloy, Splunk HEC, and
+NATS monitoring connectors are implemented today.
 Future connectors may include:
 
 - StatsD for lightweight counter/timer forwarding,
 - Datadog for hosted operational dashboards,
-- Splunk HEC for security operations and incident-response workflows,
 - Grafana Agent legacy migration notes where needed for existing estates,
 - Oracle Cloud Infrastructure Monitoring for OCI-native deployments,
 - Amazon CloudWatch for AWS deployments,

@@ -31,6 +31,12 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   through `nats-sink-observe grafana-alloy-export` and
   `nats-sink-observe grafana-alloy-config`, focused tests, and an
   Observability documentation sub-page.
+- Added a Splunk HEC observability connector for approved aggregate metrics,
+  including disabled-by-default policy controls, environment-sourced HEC token
+  handling, HEC metric event rendering, TLS verification enforcement, dry-run
+  rendering, bounded retries and request sizes, CLI support through
+  `nats-sink-observe splunk-hec-export`, focused tests, and an Observability
+  documentation sub-page.
 - Added centralized NATS authentication and TLS connection option construction
   for username/password, token, credentials-file, NKEY seed-file, local CA TLS,
   and TLS client certificate workflows, including identity-path redaction,
