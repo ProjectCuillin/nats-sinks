@@ -82,7 +82,8 @@ used immediately:
   sharing policies, validating what may be exported, and producing
   policy-filtered Prometheus textfile output for node_exporter or an optional
   native Prometheus HTTP scrape endpoint. It also provides a disabled-by-default
-  OpenTelemetry OTLP metrics connector and a disabled-by-default NATS server
+  OpenTelemetry OTLP metrics connector, Elastic Observability and Grafana Alloy
+  profiles over the shared OTLP core, and a disabled-by-default NATS server
   monitoring connector for explicitly approved `/healthz`, `/jsz`, and related
   endpoint fields.
 - Optional core payload encryption for AES-256-GCM and AES-256-CCM before
@@ -459,16 +460,16 @@ nats-sink-metrics get .local/nats-sinks/metrics.json messages_failed_total --def
 The metrics CLI is documented in
 [Metrics](https://nats-sinks.readthedocs.io/en/latest/metrics/).
 Policy-controlled Prometheus and OpenTelemetry export are part of the
-observability documentation, including the Elastic Observability profile:
-start with
-[Observability](https://nats-sinks.readthedocs.io/en/latest/observability/) and
-then use the
-[Prometheus Integration](https://nats-sinks.readthedocs.io/en/latest/prometheus/)
-,
-[OpenTelemetry OTLP Integration](https://nats-sinks.readthedocs.io/en/latest/otlp/)
+observability documentation, including the Elastic Observability and Grafana
+Alloy profiles. Start with
+[Observability](https://nats-sinks.readthedocs.io/en/latest/observability/),
+then use
+[Prometheus Integration](https://nats-sinks.readthedocs.io/en/latest/prometheus/),
+[OpenTelemetry OTLP Integration](https://nats-sinks.readthedocs.io/en/latest/otlp/),
+[Elastic Observability Profile](https://nats-sinks.readthedocs.io/en/latest/elastic-observability/),
 or
-[Elastic Observability Profile](https://nats-sinks.readthedocs.io/en/latest/elastic-observability/)
-sub-pages for connector details.
+[Grafana Alloy Profile](https://nats-sinks.readthedocs.io/en/latest/grafana-alloy/)
+for connector details.
 The NATS server monitoring connector and delivery-boundary decision for
 endpoints such as `/jsz` and `/healthz` are documented in
 [NATS Server Monitoring](https://nats-sinks.readthedocs.io/en/latest/nats-server-monitoring/).
@@ -779,14 +780,17 @@ disabled Prometheus policy from runtime config, list known metric names and
 subject hints, validate the policy, write policy-filtered Prometheus textfile
 output, run a disabled-by-default native Prometheus HTTP endpoint, and export
 approved metrics to an OpenTelemetry Collector through OTLP/HTTP JSON,
-including an Elastic Observability profile that reuses the shared OTLP core.
+including Elastic Observability and Grafana Alloy profiles that reuse the shared
+OTLP core.
 Metrics sharing remains off until the global policy and the selected connector
 are explicitly enabled. See
 [Observability](https://nats-sinks.readthedocs.io/en/latest/observability/),
 [Prometheus Integration](https://nats-sinks.readthedocs.io/en/latest/prometheus/),
 [OpenTelemetry OTLP Integration](https://nats-sinks.readthedocs.io/en/latest/otlp/),
-and
+and the
 [Elastic Observability Profile](https://nats-sinks.readthedocs.io/en/latest/elastic-observability/)
+or
+[Grafana Alloy Profile](https://nats-sinks.readthedocs.io/en/latest/grafana-alloy/)
 for connector guidance.
 
 ## Python API
@@ -1048,6 +1052,8 @@ Phase 1:
   HTTP scrape endpoint as separate observability services.
 - Policy-controlled OpenTelemetry OTLP metrics export to an OpenTelemetry
   Collector as a separate observability command or service.
+- Disabled-by-default Elastic Observability and Grafana Alloy profiles over the
+  shared OTLP observability core.
 - Disabled-by-default NATS server monitoring connector for approved endpoint
   fields, implemented outside the delivery worker.
 - Kubernetes deployment examples with worker/observability separation,

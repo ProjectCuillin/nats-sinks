@@ -58,10 +58,13 @@ The tests also cover:
 - observability policy and connector helpers such as `ObservabilityPolicy`,
   `PrometheusTextfilePolicy`, `PrometheusHttpEndpointPolicy`,
   `OtlpMetricsPolicy`, `ElasticObservabilityPolicy`,
-  `NatsServerMonitoringPolicy`, `collect_nats_monitoring_snapshot`,
+  `GrafanaAlloyObservabilityPolicy`, `NatsServerMonitoringPolicy`,
+  `collect_nats_monitoring_snapshot`,
   `render_otlp_metrics_json`, `export_otlp_metrics`,
   `render_elastic_otlp_metrics_json`,
   `export_elastic_observability_metrics`, and
+  `render_grafana_alloy_otlp_metrics_json`, `export_grafana_alloy_metrics`,
+  `render_grafana_alloy_config`, and
   `render_nats_monitoring_prometheus`,
 - sink extension points such as `Sink`, `HealthCheckableSink`,
   `SchemaAwareSink`, `FlushableSink`, `SinkRegistry`, `SinkConnector`,

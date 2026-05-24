@@ -86,6 +86,8 @@ def test_generated_policy_is_disabled_and_copies_safe_subject_hints(tmp_path: Pa
     assert policy.otlp.endpoint is None
     assert policy.elastic.enabled is False
     assert policy.elastic.endpoint is None
+    assert policy.grafana_alloy.enabled is False
+    assert policy.grafana_alloy.endpoint is None
     assert policy.prometheus.http_endpoint.host == "127.0.0.1"
     assert policy.prometheus.http_endpoint.path == "/metrics"
     assert policy.nats_server_monitoring.enabled is False
@@ -190,3 +192,28 @@ def test_policy_rejects_unsafe_elastic_settings() -> None:
 
     with pytest.raises(ValueError, match="data_stream_namespace"):
         ObservabilityPolicy(elastic={"data_stream_namespace": "bad value"})
+
+
+def test_policy_rejects_unsafe_grafana_alloy_settings() -> None:
+    with pytest.raises(ValueError, match="endpoint is required"):
+        ObservabilityPolicy(enabled=True, grafana_alloy={"enabled": True})
+
+    with pytest.raises(ValueError, match="credentials"):
+        ObservabilityPolicy(
+            grafana_alloy={"endpoint": "https://user:secret@example.test/v1/metrics"}
+        )
+
+    with pytest.raises(ValueError, match="/v1/metrics"):
+        ObservabilityPolicy(grafana_alloy={"endpoint": "http://127.0.0.1:4318/other"})
+
+    with pytest.raises(ValueError, match="plain http"):
+        ObservabilityPolicy(grafana_alloy={"endpoint": "http://collector.example.test/v1/metrics"})
+
+    with pytest.raises(ValueError, match="header names"):
+        ObservabilityPolicy(grafana_alloy={"headers_env": {"Bad Header": "ALLOY_TOKEN"}})
+
+    with pytest.raises(ValueError, match="component labels"):
+        ObservabilityPolicy(grafana_alloy={"exporter_label": "bad-label"})
+
+    with pytest.raises(ValueError, match="basic upstream auth"):
+        ObservabilityPolicy(grafana_alloy={"upstream_auth_mode": "basic"})

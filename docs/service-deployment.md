@@ -129,9 +129,9 @@ service user, installs the main `nats-sink.service`, installs the disabled
 Prometheus textfile service/timer assets, installs the disabled native
 Prometheus HTTP service asset, installs the disabled OTLP service/timer assets,
 installs the disabled NATS monitoring service/timer assets, and enables only
-the main sink service. Prometheus, OTLP, Elastic Observability, and NATS
-monitoring sharing remain disabled until the observability policy and the
-selected observability service are explicitly enabled.
+the main sink service. Prometheus, OTLP, Elastic Observability, Grafana Alloy,
+and NATS monitoring sharing remain disabled until the observability policy and
+the selected observability service are explicitly enabled.
 
 The installer works in two modes. When it is run from a local git checkout, it
 copies tracked example configuration files and systemd unit files from that
@@ -325,6 +325,13 @@ metrics snapshot and observability policy, sends only policy-approved metric
 names, and exits non-zero if the collector is unavailable after bounded
 attempts. See [OpenTelemetry OTLP Integration](otlp.md) for policy examples,
 dry-run output, timeout and retry controls, and limitations.
+
+For Grafana Alloy, keep Alloy as a separate service and use
+`nats-sink-observe grafana-alloy-export` as the nats-sinks side of the handoff.
+The profile can also render a starter Alloy River snippet with
+`nats-sink-observe grafana-alloy-config`. See
+[Grafana Alloy Profile](grafana-alloy.md) for service separation, generated
+config, and security guidance.
 
 Enable the NATS server monitoring timer only when the observability policy
 explicitly enables `nats_server_monitoring.enabled`, endpoint and field allow
