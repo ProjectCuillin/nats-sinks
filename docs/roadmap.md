@@ -52,6 +52,8 @@
 - Splunk HEC observability connector for approved aggregate metrics in
   security operations and incident-response environments, with token values
   sourced from environment variables and HEC export kept outside delivery.
+- StatsD observability connector for approved best-effort UDP or Unix datagram
+  metric export, kept outside delivery semantics.
 - NATS server monitoring diagnostic connector for selected endpoints such as
   `/jsz` and `/healthz`, implemented outside the delivery worker with explicit
   endpoint and field allow lists.
@@ -134,8 +136,8 @@
 
 ## Phase 2
 
-- Individual observability connector backlog items for StatsD, Datadog, Oracle
-  Cloud Infrastructure Monitoring, Amazon CloudWatch, Azure Monitor, and syslog
+- Individual observability connector backlog items for Datadog, Oracle Cloud
+  Infrastructure Monitoring, Amazon CloudWatch, Azure Monitor, and syslog
   bridges, all following the shared disabled-by-default observability connector
   contract.
 - Headers-only JetStream delivery support split into validated consumer

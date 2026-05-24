@@ -18,7 +18,8 @@ policy-filtered Prometheus textfile output or run the optional native
 Prometheus HTTP endpoint. It can also export approved metrics to an
 OpenTelemetry Collector through OTLP/HTTP JSON, including the Elastic
 Observability and Grafana Alloy profiles, and approved aggregate metric events
-through Splunk HEC.
+through Splunk HEC. It can also send approved best-effort datagrams to
+StatsD-compatible aggregators.
 
 For readers new to this project, the CLI does not implement a separate
 delivery engine. It validates configuration, creates the selected sink, builds
@@ -46,6 +47,7 @@ nats-sink-observe elastic-export .local/nats-sinks/metrics.json observability.pr
 nats-sink-observe grafana-alloy-config observability.prometheus.json
 nats-sink-observe grafana-alloy-export .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
 nats-sink-observe splunk-hec-export .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
+nats-sink-observe statsd-export .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
 nats-sink-observe nats-monitoring-poll observability.prometheus.json --dry-run
 ```
 
@@ -342,6 +344,7 @@ otlp_enabled=false
 elastic_enabled=false
 grafana_alloy_enabled=false
 splunk_hec_enabled=false
+statsd_enabled=false
 nats_server_monitoring_enabled=false
 nats_server_monitoring_prometheus_enabled=false
 allowed_metrics=0
@@ -627,6 +630,41 @@ ACK messages, write payloads to Splunk, or expose the HEC endpoint or token in
 result summaries. Full connector guidance is documented in
 [Splunk HEC Integration](splunk-hec.md).
 
+### `nats-sink-observe statsd-export`
+
+Exports policy-approved metrics to a StatsD-compatible UDP listener or Unix
+datagram socket. The command is disabled unless both the top-level
+observability policy and `statsd.enabled` are true. It uses the same local
+snapshot, allow and deny lists, stale-snapshot checks, timeout bounds, retry
+bounds, and redaction posture as the other observability connectors.
+
+Dry-run mode prints StatsD lines without opening a socket:
+
+```bash
+nats-sink-observe statsd-export \
+  /var/lib/nats-sink/metrics.json \
+  /etc/nats-sinks/observability.prometheus.json \
+  --dry-run
+```
+
+Example dry-run output:
+
+```text
+nats_sinks.messages_fetched_total:256|g
+nats_sinks.messages_acked_total:256|g
+```
+
+Example success output:
+
+```text
+StatsD export: attempted=true delivered=true attempts=1 datagrams=2 message=StatsD export delivered
+```
+
+The command is an observability connector, not a delivery feature. StatsD
+transport is best-effort, so successful local sending must not be treated as
+durable telemetry custody. Full connector guidance is documented in
+[StatsD Integration](statsd.md).
+
 ### `nats-sink-observe nats-monitoring-poll`
 
 Polls policy-approved NATS server monitoring endpoints and writes a sanitized
@@ -718,6 +756,6 @@ cannot find a metric without a default value.
 `nats-sink-observe` returns `0` on success, `2` for invalid configuration,
 policy, snapshot, textfile output errors, disabled native endpoint startup, or
 profile render errors, and `3` when an enabled Prometheus, OTLP, Elastic,
-Grafana Alloy, or Splunk HEC policy rejects a stale snapshot, a native HTTP
+Grafana Alloy, Splunk HEC, or StatsD policy rejects a stale snapshot, a native HTTP
 dry-run returns an error response, or export exhausts its bounded delivery
 attempts.

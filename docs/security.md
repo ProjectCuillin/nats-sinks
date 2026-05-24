@@ -189,9 +189,9 @@ Policy-controlled metric and selected NATS monitoring export is documented in
 kept in the [Prometheus Integration](prometheus.md) sub-page and
 OpenTelemetry-specific connector guidance kept in the
 [OpenTelemetry OTLP Integration](otlp.md) sub-page. Elastic, Grafana Alloy,
-and Splunk HEC platform guidance is kept in their respective observability
-sub-pages so each sharing boundary has its own configuration and security
-review.
+Splunk HEC, and StatsD platform guidance is kept in their respective
+observability sub-pages so each sharing boundary has its own configuration and
+security review.
 The NATS server monitoring connector and delivery-boundary decision, including
 `/jsz` and `/healthz` handling, are documented in
 [NATS Server Monitoring Integration](nats-server-monitoring.md).

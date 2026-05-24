@@ -54,7 +54,7 @@ flowchart LR
 | Connector | Priority | Recommended Shape | Why It Is Valuable | Main Security Concern | Feature Request |
 | --- | --- | --- | --- | --- | --- |
 | OpenTelemetry OTLP | Implemented | Native connector that exports approved metrics to an OpenTelemetry Collector through OTLP/HTTP JSON. | OTLP is a stable OpenTelemetry exporter path and is a common neutral bridge to many platforms. | Collector endpoints and resource attributes must not leak sensitive deployment details. | See [OpenTelemetry OTLP Integration](otlp.md). |
-| StatsD | Medium | Lightweight UDP or Unix-socket style connector for counters, gauges, and timings. | Useful in older or constrained environments with existing StatsD aggregation. | UDP can drop data and has limited metadata structure; avoid pretending it is reliable. | New separate feature request. |
+| StatsD | Implemented | Lightweight UDP or Unix-datagram connector for approved counters, gauges, and observation summaries. | Useful in older or constrained environments with existing StatsD-compatible aggregation. | UDP and datagram transports are best-effort; avoid pretending they provide durable telemetry custody. | See [StatsD Integration](statsd.md). |
 | Datadog | Medium | Prefer DogStatsD through the local Datadog Agent; evaluate HTTP API only when an Agent path is unavailable. | Datadog is widely used for hosted operational dashboards and alerting. | Tags and custom metrics can create cost, cardinality, and confidentiality risk. | New separate feature request. |
 | Splunk HEC | Implemented | HEC metric event containing only policy-approved aggregate metric fields. | Valuable for security operations, incident response, and SIEM-adjacent environments. | HEC tokens are sensitive and payload shaping must avoid event-style leakage of operational metadata. | See [Splunk HEC Integration](splunk-hec.md). |
 | Elastic Observability | Implemented | Elastic profile over the shared OTLP connector, intended for a local or gateway OpenTelemetry Collector that forwards to Elastic. | Useful for organizations that standardize on Elasticsearch-backed observability while keeping nats-sinks on the shared policy model. | Index fields and labels can expose sensitive operational detail or create high cardinality. | See [Elastic Observability Profile](elastic-observability.md). |
@@ -118,11 +118,10 @@ Before any connector ships, the implementation issue must prove:
 ## Implementation Order Guidance
 
 The recommended order after the implemented Prometheus, OTLP, Elastic, Grafana
-Alloy, and NATS monitoring connectors is:
+Alloy, Splunk HEC, StatsD, and NATS monitoring connectors is:
 
 1. OCI Monitoring, because it fits the Oracle-oriented user base.
-2. Datadog and Splunk HEC, because they cover common hosted observability and
-   security-operations workflows.
+2. Datadog, because it covers common hosted observability workflows.
 3. CloudWatch and Azure Monitor, because they matter for cloud-specific
    deployments but should follow the same connector core.
 4. StatsD and syslog, because they are useful for constrained or legacy

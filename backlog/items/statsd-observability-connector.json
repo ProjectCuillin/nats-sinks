@@ -3,7 +3,7 @@
   "title": "[Feature]: Add a StatsD observability connector",
   "area": "Metrics and observability",
   "priority": "P4 - research or design needed",
-  "target_release": "unscheduled",
+  "target_release": "v0.4.1",
   "labels": ["observability", "testing"],
   "problem": "Some environments still use StatsD-compatible aggregators for lightweight counters, gauges, and timing metrics. nats-sinks currently has a local metrics snapshot, metrics CLI, Prometheus connectors, and a connector-neutral observability core, but no StatsD connector. Without a managed connector, operators may write local scripts that bypass policy review, leak unsafe metric names, or assume unreliable UDP forwarding is equivalent to durable telemetry.",
   "proposal": "Design and implement an optional StatsD connector that follows the shared observability connector contract. It must be disabled by default, read approved metrics from the local metrics snapshot or shared read-only provider, apply the same observability policy allow and deny lists, use the same stale snapshot, dry-run, timeout, retry, and redaction behavior, and export only policy-approved metric names. The connector should support UDP and, where practical, Unix-domain socket output, metric prefix configuration, safe name normalization, and an explicit warning that StatsD transport is best-effort and observational only.",

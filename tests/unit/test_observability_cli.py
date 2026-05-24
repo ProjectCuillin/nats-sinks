@@ -626,6 +626,96 @@ def test_splunk_hec_export_rejects_stale_snapshot_without_override(tmp_path: Pat
     assert "splunk-hec.example.test" not in result.stderr
 
 
+def test_statsd_disabled_policy_does_not_need_snapshot(tmp_path: Path) -> None:
+    config = _config_file(tmp_path / "config.json")
+    policy = tmp_path / "observability.prometheus.json"
+    runner.invoke(app, ["init-prometheus-policy", str(config), str(policy)])
+
+    result = runner.invoke(app, ["statsd-export", str(tmp_path / "missing.json"), str(policy)])
+
+    assert result.exit_code == 0
+    assert "disabled by observability policy" in result.stdout
+
+
+def test_statsd_export_dry_run_outputs_allowed_lines(tmp_path: Path) -> None:
+    snapshot = _snapshot(tmp_path / "metrics.json")
+    policy = tmp_path / "observability.prometheus.json"
+    policy.write_text(
+        json.dumps(
+            {
+                "schema": "nats_sinks.observability.policy.v1",
+                "enabled": True,
+                "namespace": "mission_ops",
+                "allowed_metrics": ["messages_fetched_total"],
+                "allowed_metric_patterns": [],
+                "denied_metrics": [],
+                "denied_metric_patterns": [],
+                "include_observations": False,
+                "include_legacy": False,
+                "subjects": [],
+                "statsd": {
+                    "enabled": True,
+                    "transport": "udp",
+                    "host": "127.0.0.1",
+                    "port": 8125,
+                    "metric_prefix": "mission.ops",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["statsd-export", str(snapshot), str(policy), "--dry-run"])
+
+    assert result.exit_code == 0
+    assert "mission.ops.messages_fetched_total:7|g" in result.stdout
+    assert "oracle_duplicates_total" not in result.stdout
+
+
+def test_statsd_export_rejects_stale_snapshot_without_override(tmp_path: Path) -> None:
+    snapshot = tmp_path / "metrics.json"
+    snapshot.write_text(
+        json.dumps(
+            {
+                "schema": "nats_sinks.metrics.snapshot.v1",
+                "namespace": "mission_ops",
+                "generated_at_epoch_seconds": 1.0,
+                "counters": {"messages_fetched_total": 7},
+                "gauges": {},
+                "observations": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    policy = tmp_path / "observability.prometheus.json"
+    policy.write_text(
+        json.dumps(
+            {
+                "schema": "nats_sinks.observability.policy.v1",
+                "enabled": True,
+                "namespace": "mission_ops",
+                "allowed_metrics": ["messages_fetched_total"],
+                "allowed_metric_patterns": [],
+                "denied_metrics": [],
+                "denied_metric_patterns": [],
+                "include_observations": False,
+                "include_legacy": False,
+                "subjects": [],
+                "statsd": {
+                    "enabled": True,
+                    "stale_after_seconds": 1,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["statsd-export", str(snapshot), str(policy), "--dry-run"])
+
+    assert result.exit_code == 3
+    assert "Metrics snapshot is stale" in result.stderr
+
+
 def test_nats_monitoring_poll_dry_run_outputs_sanitized_snapshot(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

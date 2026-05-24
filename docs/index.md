@@ -268,11 +268,13 @@ operations without hunting through a long flat list.
   an Alloy-oriented profile over the OTLP connector.
 - [Splunk HEC Integration](splunk-hec.md): export approved aggregate metrics to
   Splunk HTTP Event Collector for security operations and incident response.
+- [StatsD Integration](statsd.md): export approved aggregate metrics as
+  best-effort UDP or Unix datagrams to StatsD-compatible aggregators.
 - [NATS Server Monitoring](nats-server-monitoring.md): understand why endpoints
   such as `/jsz` and `/healthz` stay outside the delivery worker.
 - [Future Observability Connectors](observability-connectors.md): review the
-  shared connector contract and the staged connector backlog for StatsD,
-  Datadog, OCI Monitoring, CloudWatch, Azure Monitor, syslog, and other future
+  shared connector contract and the staged connector backlog for Datadog, OCI
+  Monitoring, CloudWatch, Azure Monitor, syslog, and other future
   connectors.
 
 ### Deployment, Security, And Quality
