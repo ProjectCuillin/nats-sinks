@@ -26,6 +26,8 @@ Observability is documented as a small set of focused pages:
 - [Elastic Observability Profile](elastic-observability.md): explains the
   Elastic-specific profile that reuses the OTLP connector and avoids direct
   Elasticsearch writes.
+- [Grafana Alloy Profile](grafana-alloy.md): explains the Alloy-specific
+  profile that exports approved OTLP metrics to a separate Alloy collector.
 - [NATS Server Monitoring Integration](nats-server-monitoring.md): explains the
   disabled-by-default connector for selected NATS monitoring endpoint fields.
 - Optional JetStream advisory observation is configured in
@@ -40,6 +42,8 @@ OTLP export follows the same separation: it is a connector under
 observability, not a delivery feature.
 The Elastic profile follows the same rule and is implemented as an
 Elastic-oriented OTLP profile under observability.
+The Grafana Alloy profile follows the same rule and is implemented as an OTLP
+handoff to a separate Alloy collector.
 
 ## Design Goals
 
@@ -249,6 +253,25 @@ Generated policies are disabled by default:
     "data_stream_dataset": "nats_sinks.metrics",
     "data_stream_namespace": "default"
   },
+  "grafana_alloy": {
+    "enabled": false,
+    "handoff_mode": "otlp_http",
+    "endpoint": null,
+    "timeout_seconds": 5,
+    "max_retries": 0,
+    "retry_backoff_seconds": 0.25,
+    "stale_after_seconds": null,
+    "max_request_bytes": 1048576,
+    "headers_env": {},
+    "receiver_label": "nats_sinks",
+    "batch_label": "nats_sinks_batch",
+    "exporter_label": "grafana_cloud",
+    "auth_label": "grafana_cloud_auth",
+    "upstream_endpoint_env": "GRAFANA_CLOUD_OTLP_ENDPOINT",
+    "upstream_auth_mode": "none",
+    "upstream_auth_username_env": null,
+    "upstream_auth_password_env": null
+  },
   "nats_server_monitoring": {
     "enabled": false,
     "base_url": null,
@@ -286,6 +309,13 @@ profile renders the same policy-approved metrics through the OTLP connector and
 adds only static, low-cardinality Elastic data stream hints. It does not write
 directly to Elasticsearch and does not use the Bulk API.
 
+The `grafana_alloy` object controls the Grafana Alloy profile. It is disabled
+by default and requires both `enabled=true` and `grafana_alloy.enabled=true`.
+The profile sends policy-approved OTLP/HTTP JSON metrics to an Alloy receiver,
+usually on loopback, and can generate a minimal Alloy River configuration
+snippet for the collector side. It does not manage Alloy and does not require
+the delivery worker to hold Grafana credentials.
+
 The `nats_server_monitoring` object controls the optional NATS monitoring
 connector. It is also disabled by default. When enabled, it polls only the
 approved NATS server monitoring endpoint paths and extracts only the approved
@@ -310,6 +340,7 @@ topology fields unless an operator has selected those exact fields.
 | `prometheus` | object | Prometheus connector settings. |
 | `otlp` | object | OpenTelemetry OTLP connector settings. |
 | `elastic` | object | Elastic Observability profile settings over the OTLP connector. |
+| `grafana_alloy` | object | Grafana Alloy profile settings over the OTLP connector, including generated River snippet settings. |
 | `nats_server_monitoring` | object | Optional connector settings for selected NATS server monitoring endpoint values. |
 
 The deny list wins over the allow list. This lets a broad allow rule such as
@@ -367,6 +398,31 @@ failure behavior, and service guidance.
 
 See [Elastic Observability Profile](elastic-observability.md) for full
 examples, Collector guidance, non-goals, and test coverage.
+
+## Grafana Alloy Profile Fields
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `grafana_alloy.enabled` | `false` | Enables Grafana Alloy export when the top-level policy is also enabled. |
+| `grafana_alloy.handoff_mode` | `otlp_http` | Current profile mode. The connector emits OTLP/HTTP JSON metrics to Alloy. |
+| `grafana_alloy.endpoint` | `null` | Local Alloy OTLP metrics endpoint. Enabled profiles require `/v1/metrics`. Plain `http` is allowed only for loopback hosts. |
+| `grafana_alloy.timeout_seconds` | `5` | Per-request timeout, validated from greater than `0` through `60` seconds. |
+| `grafana_alloy.max_retries` | `0` | Bounded retries after the initial attempt. |
+| `grafana_alloy.retry_backoff_seconds` | `0.25` | Delay between retry attempts. |
+| `grafana_alloy.stale_after_seconds` | `null` | Optional maximum snapshot age before export fails closed unless `--allow-stale` is used. |
+| `grafana_alloy.max_request_bytes` | `1048576` | Maximum rendered OTLP JSON request body size. |
+| `grafana_alloy.headers_env` | `{}` | Optional local Alloy receiver HTTP headers sourced from environment variables. Resolved values are not printed. |
+| `grafana_alloy.receiver_label` | `nats_sinks` | Alloy `otelcol.receiver.otlp` component label used in generated River snippets. |
+| `grafana_alloy.batch_label` | `nats_sinks_batch` | Alloy batch processor label used in generated River snippets. |
+| `grafana_alloy.exporter_label` | `grafana_cloud` | Alloy `otelcol.exporter.otlphttp` label used in generated River snippets. |
+| `grafana_alloy.auth_label` | `grafana_cloud_auth` | Alloy basic-auth component label used when generated snippets use basic auth. |
+| `grafana_alloy.upstream_endpoint_env` | `GRAFANA_CLOUD_OTLP_ENDPOINT` | Environment variable name read by Alloy for its upstream OTLP endpoint. |
+| `grafana_alloy.upstream_auth_mode` | `none` | Upstream auth mode for generated River snippets. Supported values are `none` and `basic`. |
+| `grafana_alloy.upstream_auth_username_env` | `null` | Environment variable name for Alloy basic-auth username. Required when `upstream_auth_mode` is `basic`. |
+| `grafana_alloy.upstream_auth_password_env` | `null` | Environment variable name for Alloy basic-auth password or API key. Required when `upstream_auth_mode` is `basic`. |
+
+See [Grafana Alloy Profile](grafana-alloy.md) for full examples, River config
+generation, service guidance, security notes, and test coverage.
 
 ## NATS Server Monitoring Fields
 
@@ -496,6 +552,7 @@ namespace=nats_sinks
 prometheus_enabled=false
 otlp_enabled=false
 elastic_enabled=false
+grafana_alloy_enabled=false
 nats_server_monitoring_enabled=false
 nats_server_monitoring_prometheus_enabled=false
 allowed_metrics=0
@@ -701,14 +758,14 @@ labels, or classified mission details.
 ## Future Connectors
 
 The observability core is intentionally connector-neutral. Prometheus textfile,
-Prometheus HTTP, OTLP, Elastic Observability, and NATS monitoring connectors are
-implemented today.
+Prometheus HTTP, OTLP, Elastic Observability, Grafana Alloy, and NATS monitoring
+connectors are implemented today.
 Future connectors may include:
 
 - StatsD for lightweight counter/timer forwarding,
 - Datadog for hosted operational dashboards,
 - Splunk HEC for security operations and incident-response workflows,
-- Grafana Alloy or Grafana Agent for unified collection pipelines,
+- Grafana Agent legacy migration notes where needed for existing estates,
 - Oracle Cloud Infrastructure Monitoring for OCI-native deployments,
 - Amazon CloudWatch for AWS deployments,
 - Azure Monitor for Microsoft cloud deployments,

@@ -51,6 +51,7 @@ NATS_MONITORING_ALLOWED_ENDPOINTS = {
 HTTP_HEADER_NAME_RE = re.compile(r"^[A-Za-z0-9!#$%&'*+.^_`|~-]+$")
 ENVIRONMENT_VARIABLE_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 ELASTIC_DATA_STREAM_COMPONENT_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$")
+GRAFANA_ALLOY_COMPONENT_LABEL_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
 
 
 def _validate_otlp_http_endpoint(value: str | None, *, field_name: str) -> str | None:
@@ -362,6 +363,104 @@ class ElasticObservabilityPolicy(BaseModel):
         return self
 
 
+class GrafanaAlloyObservabilityPolicy(BaseModel):
+    """Grafana Alloy profile over the shared OTLP connector.
+
+    The profile sends policy-approved metrics to a local or nearby Alloy
+    `otelcol.receiver.otlp` HTTP endpoint.  Alloy is then responsible for
+    batching, queueing, authentication, and forwarding into Grafana Cloud,
+    Mimir, or another OTLP-compatible destination.  The nats-sinks side remains
+    intentionally small and delivery-independent.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    handoff_mode: Literal["otlp_http"] = "otlp_http"
+    endpoint: str | None = None
+    timeout_seconds: float = Field(default=5.0, gt=0, le=60)
+    max_retries: int = Field(default=0, ge=0, le=10)
+    retry_backoff_seconds: float = Field(default=0.25, ge=0, le=60)
+    stale_after_seconds: float | None = Field(default=None, gt=0, le=86_400)
+    max_request_bytes: int = Field(default=1_048_576, ge=1024, le=10_485_760)
+    headers_env: dict[str, str] = Field(default_factory=dict)
+    receiver_label: str = "nats_sinks"
+    batch_label: str = "nats_sinks_batch"
+    exporter_label: str = "grafana_cloud"
+    auth_label: str = "grafana_cloud_auth"
+    upstream_endpoint_env: str = "GRAFANA_CLOUD_OTLP_ENDPOINT"
+    upstream_auth_mode: Literal["none", "basic"] = "none"
+    upstream_auth_username_env: str | None = None
+    upstream_auth_password_env: str | None = None
+
+    @field_validator("endpoint")
+    @classmethod
+    def validate_endpoint(cls, value: str | None) -> str | None:
+        """Validate the local Alloy OTLP/HTTP receiver endpoint."""
+
+        rendered = _validate_otlp_http_endpoint(value, field_name="grafana_alloy.endpoint")
+        if rendered is None:
+            return None
+        parsed = urlsplit(rendered)
+        if parsed.path != "/v1/metrics":
+            raise ValueError("grafana_alloy.endpoint must use the OTLP metrics path /v1/metrics")
+        return rendered
+
+    @field_validator("headers_env")
+    @classmethod
+    def validate_headers_env(cls, value: dict[str, str]) -> dict[str, str]:
+        """Validate optional local Alloy receiver header env-var sources."""
+
+        return _validate_http_headers_env(value, field_name="grafana_alloy.headers_env")
+
+    @field_validator("receiver_label", "batch_label", "exporter_label", "auth_label")
+    @classmethod
+    def validate_component_label(cls, value: str) -> str:
+        """Validate Alloy component labels as small explicit identifiers."""
+
+        rendered = value.strip()
+        if not GRAFANA_ALLOY_COMPONENT_LABEL_RE.fullmatch(rendered):
+            raise ValueError(
+                "grafana_alloy component labels must start with a letter or underscore "
+                "and contain only letters, digits, and underscores"
+            )
+        return rendered
+
+    @field_validator(
+        "upstream_endpoint_env", "upstream_auth_username_env", "upstream_auth_password_env"
+    )
+    @classmethod
+    def validate_upstream_env(cls, value: str | None) -> str | None:
+        """Validate upstream Alloy secret references as environment names only."""
+
+        if value is None:
+            return None
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("grafana_alloy upstream environment names must not be empty")
+        if len(rendered) > OTLP_HEADER_ENV_MAX_LENGTH:
+            raise ValueError("grafana_alloy upstream environment names are too long")
+        if not ENVIRONMENT_VARIABLE_NAME_RE.fullmatch(rendered):
+            raise ValueError("grafana_alloy upstream references must be environment variable names")
+        return rendered
+
+    @model_validator(mode="after")
+    def validate_enabled_endpoint_and_auth(self) -> GrafanaAlloyObservabilityPolicy:
+        """Require explicit local handoff and complete upstream auth settings."""
+
+        if self.enabled and self.endpoint is None:
+            raise ValueError(
+                "grafana_alloy.endpoint is required when grafana_alloy.enabled is true"
+            )
+        if self.upstream_auth_mode == "basic":
+            if self.upstream_auth_username_env is None or self.upstream_auth_password_env is None:
+                raise ValueError(
+                    "grafana_alloy basic upstream auth requires "
+                    "upstream_auth_username_env and upstream_auth_password_env"
+                )
+        return self
+
+
 class NatsServerMonitoringPolicy(BaseModel):
     """Policy for the optional NATS server monitoring connector.
 
@@ -517,6 +616,9 @@ class ObservabilityPolicy(BaseModel):
     prometheus: PrometheusTextfilePolicy = Field(default_factory=PrometheusTextfilePolicy)
     otlp: OtlpMetricsPolicy = Field(default_factory=OtlpMetricsPolicy)
     elastic: ElasticObservabilityPolicy = Field(default_factory=ElasticObservabilityPolicy)
+    grafana_alloy: GrafanaAlloyObservabilityPolicy = Field(
+        default_factory=GrafanaAlloyObservabilityPolicy
+    )
     nats_server_monitoring: NatsServerMonitoringPolicy = Field(
         default_factory=NatsServerMonitoringPolicy
     )

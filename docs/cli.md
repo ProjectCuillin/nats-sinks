@@ -17,7 +17,7 @@ core config, list metric names and subject hints, validate policy, and render
 policy-filtered Prometheus textfile output or run the optional native
 Prometheus HTTP endpoint. It can also export approved metrics to an
 OpenTelemetry Collector through OTLP/HTTP JSON, including the Elastic
-Observability profile.
+Observability and Grafana Alloy profiles.
 
 For readers new to this project, the CLI does not implement a separate
 delivery engine. It validates configuration, creates the selected sink, builds
@@ -42,6 +42,8 @@ nats-sink-observe init-prometheus-policy config.json observability.prometheus.js
 nats-sink-observe prometheus-http .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
 nats-sink-observe otlp-export .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
 nats-sink-observe elastic-export .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
+nats-sink-observe grafana-alloy-config observability.prometheus.json
+nats-sink-observe grafana-alloy-export .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
 nats-sink-observe nats-monitoring-poll observability.prometheus.json --dry-run
 ```
 
@@ -336,6 +338,7 @@ namespace=nats_sinks
 prometheus_enabled=false
 otlp_enabled=false
 elastic_enabled=false
+grafana_alloy_enabled=false
 nats_server_monitoring_enabled=false
 nats_server_monitoring_prometheus_enabled=false
 allowed_metrics=0
@@ -522,6 +525,70 @@ does not ACK messages and does not write directly to Elasticsearch. Full
 connector guidance is documented in
 [Elastic Observability Profile](elastic-observability.md).
 
+### `nats-sink-observe grafana-alloy-config`
+
+Renders a minimal Grafana Alloy River configuration snippet from the
+observability policy. The snippet configures an Alloy OTLP receiver, batch
+processor, and OTLP HTTP exporter using environment-variable references for
+upstream Grafana settings.
+
+```bash
+nats-sink-observe grafana-alloy-config \
+  /etc/nats-sinks/observability.prometheus.json
+```
+
+Example output:
+
+```river
+otelcol.receiver.otlp "nats_sinks" {
+  http {
+    endpoint = "127.0.0.1:4318"
+  }
+
+  output {
+    metrics = [otelcol.processor.batch.nats_sinks_batch.input]
+  }
+}
+```
+
+The rendered config is a starter snippet for operator review. It does not
+start Alloy and does not validate a whole Alloy deployment.
+
+### `nats-sink-observe grafana-alloy-export`
+
+Exports policy-approved metrics to a Grafana Alloy OTLP receiver. The command
+is disabled unless both the top-level observability policy and
+`grafana_alloy.enabled` are true. It uses the same local snapshot, allow and
+deny lists, stale-snapshot checks, timeout bounds, retry bounds, request-size
+bounds, and redaction posture as the other observability connectors.
+
+Dry-run mode prints the Grafana Alloy-profiled OTLP JSON body without opening a
+network connection:
+
+```bash
+nats-sink-observe grafana-alloy-export \
+  /var/lib/nats-sink/metrics.json \
+  /etc/nats-sinks/observability.prometheus.json \
+  --dry-run
+```
+
+Example dry-run output:
+
+```json
+{"resourceMetrics":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"nats-sinks"}},{"key":"nats_sinks.namespace","value":{"stringValue":"nats_sinks"}},{"key":"nats_sinks.observability.profile","value":{"stringValue":"grafana_alloy"}},{"key":"telemetry.collector","value":{"stringValue":"grafana_alloy"}}]},"scopeMetrics":[{"metrics":[{"description":"Raw JetStream messages fetched by the pull consumer.","name":"nats_sinks_messages_fetched_total","sum":{"aggregationTemporality":2,"dataPoints":[{"asDouble":256.0,"timeUnixNano":"1790000000000000000"}],"isMonotonic":true},"unit":"1"}],"scope":{"name":"nats-sinks.observability.grafana_alloy"}}]}]}
+```
+
+Example success output:
+
+```text
+Grafana Alloy export: attempted=true delivered=true attempts=1 status=200 message=Grafana Alloy export delivered
+```
+
+The command is an observability connector profile, not a delivery feature. It
+does not ACK messages, manage Alloy, or hold downstream Grafana credentials.
+Full connector guidance is documented in
+[Grafana Alloy Profile](grafana-alloy.md).
+
 ### `nats-sink-observe nats-monitoring-poll`
 
 Polls policy-approved NATS server monitoring endpoints and writes a sanitized
@@ -611,7 +678,7 @@ input, `3` for stale snapshots when staleness is enforced, and `4` when `get`
 cannot find a metric without a default value.
 
 `nats-sink-observe` returns `0` on success, `2` for invalid configuration,
-policy, snapshot, textfile output errors, or disabled native endpoint startup,
-and `3` when an enabled Prometheus or OTLP policy rejects a stale snapshot, a
-native HTTP dry-run returns an error response, or OTLP export exhausts its
-bounded delivery attempts.
+policy, snapshot, textfile output errors, disabled native endpoint startup, or
+profile render errors, and `3` when an enabled Prometheus, OTLP, Elastic, or
+Grafana Alloy policy rejects a stale snapshot, a native HTTP dry-run returns an
+error response, or OTLP-style export exhausts its bounded delivery attempts.

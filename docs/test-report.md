@@ -14,29 +14,36 @@ logs from live systems.
 | Field | Value |
 | --- | --- |
 | Overall result | Pass |
-| Report generated | 2026-05-23 Elastic Observability profile validation |
+| Report generated | 2026-05-24 Grafana Alloy profile validation |
 | Project version | `0.4.0` post-release development |
 | Python version | 3.12.4 |
-| Git revision checked | Issue `#105` workspace based on `release-v0.4.1` |
-| Worktree state | Active workspace adding the Elastic Observability profile while preserving optional core message authenticity verification, local Docker image work, data-centric security labels, encrypted edge spool-and-forward sink work, GoldenGate-inspired sink candidate backlog research, stream planning, branch workflow automation, connector framework, WebSocket guardrails, Oracle high-throughput staging, custody metadata, advisory observation, durable consumer management, richer consumer policy controls, NATS no-echo, OTLP export, secure-development hardening, strict JSON config loading, log-injection sanitization, secret scanning, public API compatibility tests, GitHub Dependency Graph manifests, sanitized backlog tooling, release-gated close automation, standardized SPDX headers, metrics snapshots and CLI, observability policy core, Prometheus and NATS monitoring connectors, Kubernetes examples, systemd installer, NATS reconnect tuning, least-privilege NATS permission templates, JetStream topology guidance, retry backoff with jitter, priority-aware lanes, synthetic mission testing, mission-support examples, SBOM generation, release checksums, hash-verified installation guidance, property-style tests, defence and mission-support blueprints, generic mission metadata, payload encryption, and Oracle/file/spool sink support |
+| Git revision checked | Issue `#106` workspace based on `release-v0.4.1` |
+| Worktree state | Active workspace adding the Grafana Alloy profile while preserving the Elastic Observability profile, optional core message authenticity verification, local Docker image work, data-centric security labels, encrypted edge spool-and-forward sink work, GoldenGate-inspired sink candidate backlog research, stream planning, branch workflow automation, connector framework, WebSocket guardrails, Oracle high-throughput staging, custody metadata, advisory observation, durable consumer management, richer consumer policy controls, NATS no-echo, OTLP export, secure-development hardening, strict JSON config loading, log-injection sanitization, secret scanning, public API compatibility tests, GitHub Dependency Graph manifests, sanitized backlog tooling, release-gated close automation, standardized SPDX headers, metrics snapshots and CLI, observability policy core, Prometheus and NATS monitoring connectors, Kubernetes examples, systemd installer, NATS reconnect tuning, least-privilege NATS permission templates, JetStream topology guidance, retry backoff with jitter, priority-aware lanes, synthetic mission testing, mission-support examples, SBOM generation, release checksums, hash-verified installation guidance, property-style tests, defence and mission-support blueprints, generic mission metadata, payload encryption, and Oracle/file/spool sink support |
 | Live NATS details | Redacted |
 | Live Oracle details | Redacted |
 
-This refresh covered issue `#105`, adding an Elastic Observability profile over
-the shared OTLP observability core. The profile remains disabled by default,
-uses the shared allow and deny policy, emits Elastic-safe static data stream
-routing hints, sources headers from environment variables, supports stale
-snapshot guardrails and dry-run rendering through `nats-sink-observe
-elastic-export`, and keeps direct Elasticsearch writes out of scope. Focused
-Elastic observability tests passed with `50 passed`. The full local validation
-suite passed through
-`scripts/check.sh`, including Ruff, mypy, dependency manifest validation,
-backlog and bug-report validation, Markdown link checks, documentation builds,
-pytest with `772 passed, 9 skipped`, encryption checks, sink checks, CLI smoke
-checks, security scanning, package build, SBOM generation, checksum generation,
-and Twine metadata validation. The skipped tests remain gated live NATS and
-Oracle integration tests that require explicit local environment flags or
-services.
+This refresh covered issue `#106`, adding a Grafana Alloy profile over the
+shared OTLP observability core. The profile remains disabled by default, uses
+the shared allow and deny policy, emits low-cardinality Alloy profile resource
+hints, sources local receiver headers from environment variables, generates
+sanitized Alloy River configuration snippets, supports stale snapshot guardrails
+and dry-run rendering through `nats-sink-observe grafana-alloy-export`, and
+keeps Alloy forwarding outside the delivery worker. Focused Alloy
+observability tests passed with `56 passed`. The full local validation suite
+also passed through `scripts/check.sh`, including formatting for `187` files,
+linting, type checking with no issues in `73` source files, the main pytest
+suite with `789 passed, 9 skipped`, the sink capability suite with `104 passed`,
+MkDocs builds for Read the Docs and GitHub Pages, security scanning,
+package build, SBOM generation, checksum generation, and Twine metadata
+validation. The skipped tests remain gated live NATS and Oracle integration
+tests that require explicit local environment flags or services.
+
+This refresh also preserves issue `#105`, adding an Elastic Observability
+profile over the shared OTLP observability core. The profile remains disabled
+by default, uses the shared allow and deny policy, emits Elastic-safe static
+data stream routing hints, sources headers from environment variables, supports
+stale snapshot guardrails and dry-run rendering through `nats-sink-observe
+elastic-export`, and keeps direct Elasticsearch writes out of scope.
 
 This refresh also preserves issue `#55`, adding optional message authenticity
 verification in the core runtime before payload encryption, policy checks,
@@ -663,9 +670,9 @@ ordering, DLQ-before-ACK ordering, and deterministic unhappy-path handling.
 
 | Check | Command | Result | Sanitized outcome |
 | --- | --- | --- | --- |
-| Formatting | `ruff format --check .` | Pass | 175 files already formatted |
+| Formatting | `ruff format --check .` | Pass | 187 files already formatted |
 | Linting | `ruff check .` | Pass | All checks passed, including synthetic harness and load-profile source, scripts, and tests |
-| Type checking | `mypy src` | Pass | No type issues in 67 source files |
+| Type checking | `mypy src` | Pass | No type issues in 73 source files |
 | Version consistency | `python scripts/check-version-consistency.py` | Pass | Package metadata, runtime `__version__`, README, docs home page, and changelog all report `0.4.0` |
 | Dependency manifest consistency | `python scripts/update-dependency-manifests.py --check` | Pass | Generated `requirements*.txt` files are in sync with `pyproject.toml` for GitHub Dependency Graph and Dependabot visibility |
 | Local backlog validation | `python scripts/sync-backlog-issues.py --check` | Pass | Validated 140 local backlog item JSON files; validation rejects common public-leak patterns before issue bodies are generated |
@@ -679,7 +686,7 @@ ordering, DLQ-before-ACK ordering, and deterministic unhappy-path handling.
 | JetStream topology documentation | `scripts/check-docs.sh` through `scripts/check.sh` | Pass | Added and built advanced topology guidance for mirrors, sources, transforms, republish, compression, placement, metadata, and idempotency review |
 | NATS server monitoring connector | `pytest tests/unit/test_nats_monitoring.py tests/unit/test_observability_cli.py` and `scripts/check-docs.sh` through `scripts/check.sh` | Pass | Added and built the server monitoring connector docs; tests cover disabled policy behavior, endpoint validation, malformed JSON handling, sanitized snapshots, optional Prometheus rendering, and CLI behavior without live network calls |
 | Security rule review count | `rg -c "^\\| SD-" docs/security-rule-review.md` | Pass | 316 controls recorded |
-| Unit and gated test suite | `pytest` through `scripts/check.sh` | Pass | 712 passed, 9 skipped |
+| Unit and gated test suite | `pytest` through `scripts/check.sh` | Pass | 789 passed, 9 skipped |
 | JetStream advisory focused checks | `pytest tests/unit/test_advisory.py tests/unit/test_config.py tests/unit/test_commit_then_ack_contract.py tests/unit/test_metrics.py tests/unit/test_public_api.py` | Pass | 101 passed, covering advisory parsing, subject filtering, safe parse failures, metrics, monitor lifecycle, configuration validation, public exports, and isolation from sink ACK behavior |
 | Consumer policy focused checks | `pytest tests/unit/test_consumer_management.py tests/unit/test_config.py tests/unit/test_commit_then_ack_contract.py tests/unit/test_public_api.py` | Pass | 93 passed, covering bind-only, create-if-missing, compatible existing consumers, incompatible drift, reconcile behavior, richer policy fields, plural filter subjects, BackOff validation, consumer metadata validation, runner startup ordering, configuration validation, and public API compatibility |
 | MkDocs build isolation regression | `pytest tests/unit/test_docs_build_isolation.py -q` and two parallel `scripts/check-docs.sh` runs | Pass | 3 focused tests passed; two overlapping docs helper runs built isolated Read the Docs and GitHub Pages output directories without colliding in `site/` |
@@ -691,7 +698,7 @@ ordering, DLQ-before-ACK ordering, and deterministic unhappy-path handling.
 | Release close live dry-run | `python scripts/close-released-backlog-issues.py --release v0.4.0 --dry-run` | Pass | The hardened close helper would close all release-labeled managed backlog issues with checked Acceptance Criteria and sanitized evidence comments after the associated release exists: issues `#59`, `#57`, `#56`, `#53`, `#50`, `#43`, `#40`, `#37`, `#29`, `#24`, `#23`, `#22`, `#21`, `#16`, and `#14` |
 | Bug close live dry-run | `python scripts/close-released-bug-issues.py --release v0.4.0 --dry-run` | Pass | The hardened bug close helper would close all completed release-labeled bug issues after the associated release exists, including issues `#96` through `#61`; issues `#95` and `#96` have the `completed` label, checked Acceptance Criteria, and sanitized release evidence comments |
 | Encryption capability suite | `scripts/check-encryption.sh` through `scripts/check.sh` | Pass | 108 encryption-focused and runner-ordering tests passed with generated temporary AES-256 key material that was deleted after the run |
-| Sink capability suite | `scripts/check-sinks.sh` | Pass | 85 sink-focused tests passed plus file, encrypted file, and Oracle CLI smoke checks |
+| Sink capability suite | `scripts/check-sinks.sh` | Pass | 104 sink-focused tests passed plus file, encrypted file, and Oracle CLI smoke checks |
 | Retry backoff focused checks | `pytest tests/unit/test_retry.py tests/unit/test_commit_then_ack_contract.py tests/unit/test_config.py` | Pass | 49 passed, covering fixed, linear, exponential, capped, jitter, no-jitter, active retry exhaustion, and config validation paths |
 | NATS connection option and event metrics checks | `pytest tests/unit/test_nats_connection_options.py tests/unit/test_nats_connection_events.py tests/unit/test_metrics.py tests/unit/test_metrics_cli.py` through `scripts/check.sh` | Pass | Covered centralized option construction, seed URLs, reconnect tuning, credentials-file auth, NKEY seed-file auth, TLS client certificates, local CA TLS, redaction, connection callback metrics, callback preservation, and metrics CLI behavior |
 | NATS authentication focused checks | `python -m pytest tests/unit/test_config.py tests/unit/test_nats_connection_options.py tests/unit/test_bug_hunt_non_json_boundaries.py tests/integration/test_nats_auth_workflows.py -q` | Pass | 85 passed, 1 skipped; the skipped test is the explicit live authentication workflow certification test gated by `NATS_SINKS_NATS_AUTH_INTEGRATION=1` |
@@ -713,6 +720,7 @@ ordering, DLQ-before-ACK ordering, and deterministic unhappy-path handling.
 | Synthetic harness file smoke | `python scripts/run-synthetic-harness.py --sink file --message-count 18 --compression gzip --format markdown` | Pass | Produced a sanitized file-sink report with 16 durable compressed files from 18 generated messages because duplicate redelivery keys map to existing files |
 | OTLP observability focused checks | `pytest tests/unit/test_otlp_observability.py tests/unit/test_observability_policy.py tests/unit/test_observability_cli.py tests/unit/test_public_api.py tests/unit/test_systemd_install_script.py` | Pass | 37 passed, covering disabled-by-default OTLP behavior, policy validation, allow-list filtering, OTLP request rendering, request-size bounds, environment-sourced headers, bounded retry behavior, CLI dry-run and disabled-policy behavior, public API compatibility, and systemd asset coverage |
 | Elastic observability focused checks | `pytest tests/unit/test_elastic_observability.py tests/unit/test_observability_policy.py tests/unit/test_observability_cli.py tests/unit/test_otlp_observability.py tests/unit/test_public_api.py -q` | Pass | 50 passed, covering disabled-by-default Elastic profile behavior, policy validation, allow-list and deny-list filtering, Elastic OTLP resource attributes, request-size bounds, environment-sourced headers, bounded retries, stale snapshot rejection, CLI dry-run behavior, and public API compatibility |
+| Grafana Alloy observability focused checks | `pytest tests/unit/test_grafana_alloy_observability.py tests/unit/test_observability_policy.py tests/unit/test_observability_cli.py tests/unit/test_otlp_observability.py tests/unit/test_public_api.py -q` | Pass | 56 passed, covering disabled-by-default Grafana Alloy profile behavior, policy validation, generated River snippets, allow-list and deny-list filtering, OTLP profile resource attributes, request-size bounds, environment-sourced headers, bounded retries, stale snapshot rejection, CLI dry-run behavior, and public API compatibility |
 | Observability focused checks | `pytest tests/unit/test_observability_policy.py tests/unit/test_nats_monitoring.py tests/unit/test_observability_cli.py tests/unit/test_public_api.py tests/unit/test_systemd_install_script.py` | Pass | Covered disabled policy generation, NATS monitoring endpoint validation, sanitized snapshot generation, optional Prometheus and OTLP behavior, CLI behavior, public API compatibility, and systemd asset coverage |
 | Observability CLI smoke | `python -m nats_sinks.cli.observability init-prometheus-policy ...`, `validate-policy`, and `prometheus-textfile --dry-run` | Pass | Generated and validated a disabled Prometheus policy from the file sink example; disabled policy rendered a no-metrics Prometheus comment without needing a snapshot |
 | Unified systemd installer checks | `sh -n scripts/install-systemd*.sh` and `pytest tests/unit/test_systemd_install_script.py` | Pass | Shell syntax passed for the unified installer and compatibility wrappers; unit tests confirmed OS detection branches, local-checkout detection, GitHub asset-fetch support, package-spec-aware tagged installs, Prometheus service assets, NATS monitoring service assets, and wrapper delegation |

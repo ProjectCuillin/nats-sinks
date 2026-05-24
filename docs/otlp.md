@@ -18,6 +18,9 @@ Datadog, Oracle Cloud Infrastructure Monitoring, or other supported backends.
 For Elastic-specific routing hints and operator guidance, use the
 [Elastic Observability Profile](elastic-observability.md), which reuses this
 same OTLP connector core.
+For Grafana Alloy receiver configuration and River snippet generation, use the
+[Grafana Alloy Profile](grafana-alloy.md), which also reuses this same OTLP
+connector core.
 
 Use Prometheus instead when your environment already scrapes node_exporter
 textfiles or a local Prometheus-compatible endpoint. Both approaches use the
@@ -112,8 +115,8 @@ nats-sink-observe init-prometheus-policy \
 
 The command name includes `prometheus` for backward compatibility with earlier
 releases, but the generated policy is the shared observability policy. It
-includes disabled sections for Prometheus, OTLP, Elastic Observability, and
-NATS server monitoring.
+includes disabled sections for Prometheus, OTLP, Elastic Observability,
+Grafana Alloy, and NATS server monitoring.
 
 Validate the policy:
 
@@ -131,6 +134,7 @@ namespace=nats_sinks
 prometheus_enabled=false
 otlp_enabled=false
 elastic_enabled=false
+grafana_alloy_enabled=false
 nats_server_monitoring_enabled=false
 nats_server_monitoring_prometheus_enabled=false
 allowed_metrics=0

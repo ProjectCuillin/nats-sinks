@@ -34,6 +34,13 @@ from nats_sinks.observability.elastic import (
     export_elastic_observability_metrics,
     render_elastic_otlp_metrics_json,
 )
+from nats_sinks.observability.grafana_alloy import (
+    DISABLED_GRAFANA_ALLOY_TEXT,
+    EMPTY_GRAFANA_ALLOY_TEXT,
+    export_grafana_alloy_metrics,
+    render_grafana_alloy_config,
+    render_grafana_alloy_otlp_metrics_json,
+)
 from nats_sinks.observability.nats_monitoring import (
     NatsMonitoringError,
     collect_nats_monitoring_snapshot,
@@ -156,6 +163,7 @@ def _policy_summary(policy: ObservabilityPolicy) -> str:
             f"prometheus_enabled={str(policy.prometheus.enabled).lower()}",
             f"otlp_enabled={str(policy.otlp.enabled).lower()}",
             f"elastic_enabled={str(policy.elastic.enabled).lower()}",
+            f"grafana_alloy_enabled={str(policy.grafana_alloy.enabled).lower()}",
             f"nats_server_monitoring_enabled={str(policy.nats_server_monitoring.enabled).lower()}",
             "nats_server_monitoring_prometheus_enabled="
             f"{str(policy.nats_server_monitoring.prometheus_enabled).lower()}",
@@ -607,6 +615,100 @@ def elastic_export(
         f"message={result.message}"
     )
     if result.message == EMPTY_ELASTIC_TEXT.strip():
+        return
+    if not result.delivered:
+        raise typer.Exit(3)
+
+
+@app.command("grafana-alloy-config")
+def grafana_alloy_config(
+    policy_file: Annotated[Path, typer.Argument(exists=True, readable=True)],
+) -> None:
+    """Render a minimal Grafana Alloy River config for the OTLP handoff."""
+
+    policy = _load_policy_or_exit(policy_file)
+    try:
+        rendered = render_grafana_alloy_config(policy)
+    except (ConfigurationError, ValueError) as exc:
+        typer.echo(f"Grafana Alloy config error: {exc}", err=True)
+        raise typer.Exit(2) from exc
+    typer.echo(rendered, nl=False)
+
+
+@app.command("grafana-alloy-export")
+def grafana_alloy_export(
+    snapshot_file: Annotated[
+        Path,
+        typer.Argument(help="Metrics snapshot JSON written by nats-sink."),
+    ],
+    policy_file: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="Render the Grafana Alloy OTLP JSON body to stdout instead of posting it.",
+        ),
+    ] = False,
+    allow_stale: Annotated[
+        bool,
+        typer.Option("--allow-stale", help="Warn but export when the snapshot is stale."),
+    ] = False,
+) -> None:
+    """Export approved metrics to a Grafana Alloy OTLP receiver.
+
+    This command is intentionally outside the delivery worker.  It reads only a
+    local metrics snapshot and sends policy-approved metrics to Alloy; failures
+    cannot change JetStream ACK, NAK, DLQ, retry, or sink behavior.
+    """
+
+    policy = _load_policy_or_exit(policy_file)
+    snapshot: dict[str, object] | None = None
+    if policy.enabled and policy.grafana_alloy.enabled:
+        snapshot = _load_snapshot_or_exit(snapshot_file)
+        try:
+            _check_staleness(
+                snapshot,
+                stale_after_seconds=policy.grafana_alloy.stale_after_seconds,
+                allow_stale=allow_stale,
+            )
+        except ValueError as exc:
+            typer.echo(f"Metrics snapshot error: {exc}", err=True)
+            raise typer.Exit(2) from exc
+
+    if not policy.enabled or not policy.grafana_alloy.enabled:
+        typer.echo(DISABLED_GRAFANA_ALLOY_TEXT, nl=False)
+        return
+    if snapshot is None:
+        typer.echo(
+            "Grafana Alloy export error: enabled Grafana Alloy export requires a metrics snapshot",
+            err=True,
+        )
+        raise typer.Exit(2)
+
+    if dry_run:
+        try:
+            rendered = render_grafana_alloy_otlp_metrics_json(snapshot, policy)
+        except (ConfigurationError, ValueError) as exc:
+            typer.echo(f"Grafana Alloy render error: {exc}", err=True)
+            raise typer.Exit(2) from exc
+        typer.echo(rendered.decode("utf-8"))
+        return
+
+    try:
+        result = export_grafana_alloy_metrics(snapshot, policy)
+    except (ConfigurationError, ValueError) as exc:
+        typer.echo(f"Grafana Alloy export error: {exc}", err=True)
+        raise typer.Exit(2) from exc
+
+    typer.echo(
+        "Grafana Alloy export: "
+        f"attempted={str(result.attempted).lower()} "
+        f"delivered={str(result.delivered).lower()} "
+        f"attempts={result.attempts} "
+        f"status={result.status_code if result.status_code is not None else 'none'} "
+        f"message={result.message}"
+    )
+    if result.message == EMPTY_GRAFANA_ALLOY_TEXT.strip():
         return
     if not result.delivered:
         raise typer.Exit(3)

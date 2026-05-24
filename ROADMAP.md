@@ -59,6 +59,8 @@ release, and closed only after the containing release is published.
 - OpenTelemetry OTLP metrics connector for deployments using collectors,
   implemented as a disabled-by-default observability command that reads local
   metrics snapshots and shares only policy-approved metric names.
+- Grafana Alloy observability profile over the shared OTLP connector,
+  including generated Alloy River snippets and disabled-by-default export.
 - NATS server monitoring diagnostic connector for selected endpoints such as
   `/jsz` and `/healthz`, implemented outside the delivery worker with explicit
   endpoint and field allow lists.
@@ -146,7 +148,7 @@ release, and closed only after the containing release is published.
 ## Phase 2
 
 - Individual observability connector backlog items for StatsD, Datadog,
-  Splunk HEC, Grafana Alloy, Oracle Cloud
+  Splunk HEC, Oracle Cloud
   Infrastructure Monitoring, Amazon CloudWatch, Azure Monitor, and syslog
   bridges, all following the shared disabled-by-default observability connector
   contract.

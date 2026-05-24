@@ -702,15 +702,16 @@ dashboards can migrate gradually.
 
 External sharing is configured separately through an observability policy, not
 inside the sink runtime config. Use [Observability](observability.md) for the
-policy model and its [Prometheus Integration](prometheus.md) and
-[OpenTelemetry OTLP Integration](otlp.md) and
-[Elastic Observability Profile](elastic-observability.md) sub-pages when you
-want to publish only approved metric names to node_exporter's textfile
-collector, the optional native Prometheus HTTP endpoint, an OpenTelemetry
-Collector, or an Elastic-oriented OTLP profile. The default generated policy
-keeps all Prometheus, OTLP, Elastic, and NATS server monitoring sharing
-disabled. The same observability policy also controls the optional
-NATS server monitoring connector for selected `/healthz`, `/jsz`, and related
+policy model, then use the [Prometheus Integration](prometheus.md),
+[OpenTelemetry OTLP Integration](otlp.md),
+[Elastic Observability Profile](elastic-observability.md), and
+[Grafana Alloy Profile](grafana-alloy.md) sub-pages when you want to publish
+only approved metric names to node_exporter's textfile collector, the optional
+native Prometheus HTTP endpoint, an OpenTelemetry Collector, an
+Elastic-oriented OTLP profile, or a Grafana Alloy receiver. The default
+generated policy keeps all Prometheus, OTLP, Elastic, Grafana Alloy, and NATS
+server monitoring sharing disabled. The same observability policy also
+controls the optional NATS server monitoring connector for selected `/healthz`, `/jsz`, and related
 endpoint fields. That connector is separate from `nats-sink run` and must be
 enabled explicitly through `nats_server_monitoring`.
 

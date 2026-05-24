@@ -24,6 +24,13 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   dry-run rendering, bounded retries and request sizes, CLI support through
   `nats-sink-observe elastic-export`, focused tests, and an Observability
   documentation sub-page.
+- Added a Grafana Alloy observability profile over the shared OTLP core,
+  including disabled-by-default policy controls, generated Alloy River
+  configuration snippets, environment-sourced header and upstream credential
+  references, dry-run rendering, bounded retries and request sizes, CLI support
+  through `nats-sink-observe grafana-alloy-export` and
+  `nats-sink-observe grafana-alloy-config`, focused tests, and an
+  Observability documentation sub-page.
 - Added centralized NATS authentication and TLS connection option construction
   for username/password, token, credentials-file, NKEY seed-file, local CA TLS,
   and TLS client certificate workflows, including identity-path redaction,

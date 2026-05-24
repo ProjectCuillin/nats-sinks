@@ -264,12 +264,14 @@ operations without hunting through a long flat list.
   OpenTelemetry Collector through OTLP/HTTP JSON.
 - [Elastic Observability Profile](elastic-observability.md): export approved
   metrics through an Elastic-oriented profile over the OTLP connector.
+- [Grafana Alloy Profile](grafana-alloy.md): export approved metrics through
+  an Alloy-oriented profile over the OTLP connector.
 - [NATS Server Monitoring](nats-server-monitoring.md): understand why endpoints
   such as `/jsz` and `/healthz` stay outside the delivery worker.
 - [Future Observability Connectors](observability-connectors.md): review the
   shared connector contract and the staged connector backlog for StatsD,
-  Datadog, Splunk HEC, Elastic, Grafana Alloy, OCI Monitoring, CloudWatch,
-  Azure Monitor, and syslog.
+  Datadog, Splunk HEC, OCI Monitoring, CloudWatch, Azure Monitor, syslog, and
+  other future connectors.
 
 ### Deployment, Security, And Quality
 
