@@ -69,6 +69,12 @@ from nats_sinks.observability.prometheus_http import (
     render_prometheus_http_response,
     serve_prometheus_http,
 )
+from nats_sinks.observability.splunk_hec import (
+    DISABLED_SPLUNK_HEC_TEXT,
+    EMPTY_SPLUNK_HEC_TEXT,
+    export_splunk_hec_metrics,
+    render_splunk_hec_event_json,
+)
 
 app = typer.Typer(help="Manage nats-sinks observability policies and connectors.")
 
@@ -164,6 +170,7 @@ def _policy_summary(policy: ObservabilityPolicy) -> str:
             f"otlp_enabled={str(policy.otlp.enabled).lower()}",
             f"elastic_enabled={str(policy.elastic.enabled).lower()}",
             f"grafana_alloy_enabled={str(policy.grafana_alloy.enabled).lower()}",
+            f"splunk_hec_enabled={str(policy.splunk_hec.enabled).lower()}",
             f"nats_server_monitoring_enabled={str(policy.nats_server_monitoring.enabled).lower()}",
             "nats_server_monitoring_prometheus_enabled="
             f"{str(policy.nats_server_monitoring.prometheus_enabled).lower()}",
@@ -709,6 +716,86 @@ def grafana_alloy_export(
         f"message={result.message}"
     )
     if result.message == EMPTY_GRAFANA_ALLOY_TEXT.strip():
+        return
+    if not result.delivered:
+        raise typer.Exit(3)
+
+
+@app.command("splunk-hec-export")
+def splunk_hec_export(
+    snapshot_file: Annotated[
+        Path,
+        typer.Argument(help="Metrics snapshot JSON written by nats-sink."),
+    ],
+    policy_file: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="Render the Splunk HEC JSON event body to stdout instead of posting it.",
+        ),
+    ] = False,
+    allow_stale: Annotated[
+        bool,
+        typer.Option("--allow-stale", help="Warn but export when the snapshot is stale."),
+    ] = False,
+) -> None:
+    """Export approved metrics to Splunk HTTP Event Collector.
+
+    This command is intentionally outside the delivery worker. It reads only a
+    local metrics snapshot and sends policy-approved aggregate metric fields to
+    Splunk HEC; failures cannot change JetStream ACK, NAK, DLQ, retry, or sink
+    behavior.
+    """
+
+    policy = _load_policy_or_exit(policy_file)
+    snapshot: dict[str, object] | None = None
+    if policy.enabled and policy.splunk_hec.enabled:
+        snapshot = _load_snapshot_or_exit(snapshot_file)
+        try:
+            _check_staleness(
+                snapshot,
+                stale_after_seconds=policy.splunk_hec.stale_after_seconds,
+                allow_stale=allow_stale,
+            )
+        except ValueError as exc:
+            typer.echo(f"Metrics snapshot error: {exc}", err=True)
+            raise typer.Exit(2) from exc
+
+    if not policy.enabled or not policy.splunk_hec.enabled:
+        typer.echo(DISABLED_SPLUNK_HEC_TEXT, nl=False)
+        return
+    if snapshot is None:
+        typer.echo(
+            "Splunk HEC export error: enabled Splunk HEC export requires a metrics snapshot",
+            err=True,
+        )
+        raise typer.Exit(2)
+
+    if dry_run:
+        try:
+            rendered = render_splunk_hec_event_json(snapshot, policy)
+        except (ConfigurationError, ValueError) as exc:
+            typer.echo(f"Splunk HEC render error: {exc}", err=True)
+            raise typer.Exit(2) from exc
+        typer.echo(rendered.decode("utf-8"))
+        return
+
+    try:
+        result = export_splunk_hec_metrics(snapshot, policy)
+    except (ConfigurationError, ValueError) as exc:
+        typer.echo(f"Splunk HEC export error: {exc}", err=True)
+        raise typer.Exit(2) from exc
+
+    typer.echo(
+        "Splunk HEC export: "
+        f"attempted={str(result.attempted).lower()} "
+        f"delivered={str(result.delivered).lower()} "
+        f"attempts={result.attempts} "
+        f"status={result.status_code if result.status_code is not None else 'none'} "
+        f"message={result.message}"
+    )
+    if result.message == EMPTY_SPLUNK_HEC_TEXT.strip():
         return
     if not result.delivered:
         raise typer.Exit(3)

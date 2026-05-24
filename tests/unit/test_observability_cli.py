@@ -532,6 +532,100 @@ def test_grafana_alloy_export_rejects_stale_snapshot_without_override(tmp_path: 
     assert "127.0.0.1" not in result.stderr
 
 
+def test_splunk_hec_export_disabled_policy_does_not_need_snapshot(tmp_path: Path) -> None:
+    config = _config_file(tmp_path / "config.json")
+    policy = tmp_path / "observability.prometheus.json"
+    runner.invoke(app, ["init-prometheus-policy", str(config), str(policy)])
+
+    result = runner.invoke(app, ["splunk-hec-export", str(tmp_path / "missing.json"), str(policy)])
+
+    assert result.exit_code == 0
+    assert "disabled by observability policy" in result.stdout
+
+
+def test_splunk_hec_export_dry_run_outputs_hec_metric_event(tmp_path: Path) -> None:
+    snapshot = _snapshot(tmp_path / "metrics.json")
+    policy = tmp_path / "observability.prometheus.json"
+    policy.write_text(
+        json.dumps(
+            {
+                "schema": "nats_sinks.observability.policy.v1",
+                "enabled": True,
+                "namespace": "mission_ops",
+                "allowed_metrics": ["messages_fetched_total"],
+                "allowed_metric_patterns": [],
+                "denied_metrics": [],
+                "denied_metric_patterns": [],
+                "include_observations": False,
+                "include_legacy": False,
+                "subjects": [],
+                "splunk_hec": {
+                    "enabled": True,
+                    "endpoint": "https://splunk-hec.example.test/services/collector/event",
+                    "token_env": "SPLUNK_HEC_TOKEN",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["splunk-hec-export", str(snapshot), str(policy), "--dry-run"])
+
+    assert result.exit_code == 0
+    assert '"event":"metric"' in result.stdout
+    assert "metric_name:mission_ops_messages_fetched_total" in result.stdout
+    assert "oracle_duplicates_total" not in result.stdout
+    assert "splunk-hec.example.test" not in result.stdout
+    assert "SPLUNK_HEC_TOKEN" not in result.stdout
+
+
+def test_splunk_hec_export_rejects_stale_snapshot_without_override(tmp_path: Path) -> None:
+    snapshot = tmp_path / "metrics.json"
+    snapshot.write_text(
+        json.dumps(
+            {
+                "schema": "nats_sinks.metrics.snapshot.v1",
+                "namespace": "mission_ops",
+                "generated_at_epoch_seconds": 1.0,
+                "counters": {"messages_fetched_total": 7},
+                "gauges": {},
+                "observations": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    policy = tmp_path / "observability.prometheus.json"
+    policy.write_text(
+        json.dumps(
+            {
+                "schema": "nats_sinks.observability.policy.v1",
+                "enabled": True,
+                "namespace": "mission_ops",
+                "allowed_metrics": ["messages_fetched_total"],
+                "allowed_metric_patterns": [],
+                "denied_metrics": [],
+                "denied_metric_patterns": [],
+                "include_observations": False,
+                "include_legacy": False,
+                "subjects": [],
+                "splunk_hec": {
+                    "enabled": True,
+                    "endpoint": "https://splunk-hec.example.test/services/collector/event",
+                    "token_env": "SPLUNK_HEC_TOKEN",
+                    "stale_after_seconds": 1,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["splunk-hec-export", str(snapshot), str(policy), "--dry-run"])
+
+    assert result.exit_code == 3
+    assert "Metrics snapshot is stale" in result.stderr
+    assert "splunk-hec.example.test" not in result.stderr
+
+
 def test_nats_monitoring_poll_dry_run_outputs_sanitized_snapshot(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

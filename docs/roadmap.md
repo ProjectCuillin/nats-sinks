@@ -49,6 +49,9 @@
   metrics snapshots and shares only policy-approved metric names.
 - Grafana Alloy observability profile over the shared OTLP connector,
   including generated Alloy River snippets and disabled-by-default export.
+- Splunk HEC observability connector for approved aggregate metrics in
+  security operations and incident-response environments, with token values
+  sourced from environment variables and HEC export kept outside delivery.
 - NATS server monitoring diagnostic connector for selected endpoints such as
   `/jsz` and `/healthz`, implemented outside the delivery worker with explicit
   endpoint and field allow lists.
@@ -131,9 +134,8 @@
 
 ## Phase 2
 
-- Individual observability connector backlog items for StatsD, Datadog,
-  Splunk HEC, Oracle Cloud
-  Infrastructure Monitoring, Amazon CloudWatch, Azure Monitor, and syslog
+- Individual observability connector backlog items for StatsD, Datadog, Oracle
+  Cloud Infrastructure Monitoring, Amazon CloudWatch, Azure Monitor, and syslog
   bridges, all following the shared disabled-by-default observability connector
   contract.
 - Headers-only JetStream delivery support split into validated consumer

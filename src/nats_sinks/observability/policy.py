@@ -52,6 +52,8 @@ HTTP_HEADER_NAME_RE = re.compile(r"^[A-Za-z0-9!#$%&'*+.^_`|~-]+$")
 ENVIRONMENT_VARIABLE_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 ELASTIC_DATA_STREAM_COMPONENT_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$")
 GRAFANA_ALLOY_COMPONENT_LABEL_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
+SPLUNK_HEC_INDEX_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_-]{0,127}$")
+SPLUNK_HEC_METADATA_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.:-]{0,127}$")
 
 
 def _validate_otlp_http_endpoint(value: str | None, *, field_name: str) -> str | None:
@@ -461,6 +463,115 @@ class GrafanaAlloyObservabilityPolicy(BaseModel):
         return self
 
 
+class SplunkHecObservabilityPolicy(BaseModel):
+    """Splunk HTTP Event Collector observability connector settings.
+
+    The connector sends one bounded HEC metric event containing only
+    policy-approved aggregate metrics.  It never sends message payloads,
+    subjects, classification labels, mission metadata, message IDs, file paths,
+    table names, or endpoint details.  HEC tokens are referenced by environment
+    variable name so secrets stay outside policy files and CLI arguments.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    endpoint: str | None = None
+    token_env: str | None = None
+    timeout_seconds: float = Field(default=5.0, gt=0, le=60)
+    max_retries: int = Field(default=0, ge=0, le=10)
+    retry_backoff_seconds: float = Field(default=0.25, ge=0, le=60)
+    stale_after_seconds: float | None = Field(default=None, gt=0, le=86_400)
+    max_request_bytes: int = Field(default=1_048_576, ge=1024, le=10_485_760)
+    verify_tls: Literal[True] = True
+    headers_env: dict[str, str] = Field(default_factory=dict)
+    source: str = "nats-sinks"
+    sourcetype: str = "nats_sinks:metrics"
+    host: str = "nats-sinks"
+    index: str | None = None
+
+    @field_validator("endpoint")
+    @classmethod
+    def validate_endpoint(cls, value: str | None) -> str | None:
+        """Validate the Splunk HEC event endpoint without embedded secrets."""
+
+        rendered = _validate_otlp_http_endpoint(value, field_name="splunk_hec.endpoint")
+        if rendered is None:
+            return None
+        parsed = urlsplit(rendered)
+        if parsed.path != "/services/collector/event":
+            raise ValueError(
+                "splunk_hec.endpoint must use the HEC JSON event path /services/collector/event"
+            )
+        return rendered
+
+    @field_validator("token_env")
+    @classmethod
+    def validate_token_env(cls, value: str | None) -> str | None:
+        """Validate the HEC token reference as an environment variable name."""
+
+        if value is None:
+            return None
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("splunk_hec.token_env must not be empty")
+        if len(rendered) > OTLP_HEADER_ENV_MAX_LENGTH:
+            raise ValueError("splunk_hec.token_env is too long")
+        if not ENVIRONMENT_VARIABLE_NAME_RE.fullmatch(rendered):
+            raise ValueError("splunk_hec.token_env must be an environment variable name")
+        return rendered
+
+    @field_validator("headers_env")
+    @classmethod
+    def validate_headers_env(cls, value: dict[str, str]) -> dict[str, str]:
+        """Validate optional additional HEC header env-var sources."""
+
+        rendered = _validate_http_headers_env(value, field_name="splunk_hec.headers_env")
+        if any(header.lower() == "authorization" for header in rendered):
+            raise ValueError("splunk_hec.headers_env must not override Authorization")
+        if any(header.lower() == "content-type" for header in rendered):
+            raise ValueError("splunk_hec.headers_env must not override Content-Type")
+        return rendered
+
+    @field_validator("source", "sourcetype", "host")
+    @classmethod
+    def validate_metadata_component(cls, value: str) -> str:
+        """Validate small low-cardinality HEC metadata components."""
+
+        rendered = value.strip()
+        if not SPLUNK_HEC_METADATA_RE.fullmatch(rendered):
+            raise ValueError(
+                "splunk_hec metadata values must start with a letter, digit, or underscore "
+                "and contain only letters, digits, underscores, dots, colons, and hyphens"
+            )
+        return rendered
+
+    @field_validator("index")
+    @classmethod
+    def validate_index(cls, value: str | None) -> str | None:
+        """Validate optional Splunk index routing as a small explicit name."""
+
+        if value is None:
+            return None
+        rendered = value.strip()
+        if not SPLUNK_HEC_INDEX_RE.fullmatch(rendered):
+            raise ValueError(
+                "splunk_hec.index must start with a letter, digit, or underscore "
+                "and contain only letters, digits, underscores, and hyphens"
+            )
+        return rendered
+
+    @model_validator(mode="after")
+    def validate_enabled_endpoint_and_token(self) -> SplunkHecObservabilityPolicy:
+        """Require explicit endpoint and token reference when HEC export is enabled."""
+
+        if self.enabled and self.endpoint is None:
+            raise ValueError("splunk_hec.endpoint is required when splunk_hec.enabled is true")
+        if self.enabled and self.token_env is None:
+            raise ValueError("splunk_hec.token_env is required when splunk_hec.enabled is true")
+        return self
+
+
 class NatsServerMonitoringPolicy(BaseModel):
     """Policy for the optional NATS server monitoring connector.
 
@@ -619,6 +730,7 @@ class ObservabilityPolicy(BaseModel):
     grafana_alloy: GrafanaAlloyObservabilityPolicy = Field(
         default_factory=GrafanaAlloyObservabilityPolicy
     )
+    splunk_hec: SplunkHecObservabilityPolicy = Field(default_factory=SplunkHecObservabilityPolicy)
     nats_server_monitoring: NatsServerMonitoringPolicy = Field(
         default_factory=NatsServerMonitoringPolicy
     )

@@ -3,7 +3,7 @@
   "title": "[Feature]: Add a Splunk HEC observability connector",
   "area": "Metrics and observability",
   "priority": "P3 - backlog candidate",
-  "target_release": "unscheduled",
+  "target_release": "v0.4.1",
   "labels": ["observability", "security", "testing"],
   "problem": "Splunk HTTP Event Collector is often used in security operations and incident-response workflows. nats-sinks currently has no managed Splunk connector, which may push teams toward local scripts that mix metrics and event payloads, bypass metric allow lists, or leak sensitive operational context into a SIEM.",
   "proposal": "Design and implement an optional Splunk HEC connector that follows the shared observability connector contract. It must be disabled by default, read approved metrics from the local metrics snapshot or shared read-only provider, apply the same observability policy allow and deny lists, use the same stale snapshot, dry-run, timeout, retry, and redaction behavior, and export only policy-approved metric names. The connector should render HEC-compatible metric events with bounded fields, safe source and sourcetype defaults, TLS verification, and token references sourced from environment variables or protected service configuration.",
