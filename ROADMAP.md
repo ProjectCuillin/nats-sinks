@@ -146,7 +146,7 @@ release, and closed only after the containing release is published.
 ## Phase 2
 
 - Individual observability connector backlog items for StatsD, Datadog,
-  Splunk HEC, Elastic Observability, Grafana Alloy, Oracle Cloud
+  Splunk HEC, Grafana Alloy, Oracle Cloud
   Infrastructure Monitoring, Amazon CloudWatch, Azure Monitor, and syslog
   bridges, all following the shared disabled-by-default observability connector
   contract.

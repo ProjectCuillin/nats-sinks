@@ -15,6 +15,9 @@ Use the OTLP connector when your platform team already operates an
 OpenTelemetry Collector and wants `nats-sinks` worker telemetry to flow through
 that collector into downstream systems such as Grafana, Elastic, Splunk,
 Datadog, Oracle Cloud Infrastructure Monitoring, or other supported backends.
+For Elastic-specific routing hints and operator guidance, use the
+[Elastic Observability Profile](elastic-observability.md), which reuses this
+same OTLP connector core.
 
 Use Prometheus instead when your environment already scrapes node_exporter
 textfiles or a local Prometheus-compatible endpoint. Both approaches use the
@@ -109,7 +112,8 @@ nats-sink-observe init-prometheus-policy \
 
 The command name includes `prometheus` for backward compatibility with earlier
 releases, but the generated policy is the shared observability policy. It
-includes disabled sections for Prometheus, OTLP, and NATS server monitoring.
+includes disabled sections for Prometheus, OTLP, Elastic Observability, and
+NATS server monitoring.
 
 Validate the policy:
 
@@ -126,6 +130,7 @@ enabled=false
 namespace=nats_sinks
 prometheus_enabled=false
 otlp_enabled=false
+elastic_enabled=false
 nats_server_monitoring_enabled=false
 nats_server_monitoring_prometheus_enabled=false
 allowed_metrics=0

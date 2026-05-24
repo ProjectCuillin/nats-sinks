@@ -84,6 +84,8 @@ def test_generated_policy_is_disabled_and_copies_safe_subject_hints(tmp_path: Pa
     assert policy.prometheus.http_endpoint.enabled is False
     assert policy.otlp.enabled is False
     assert policy.otlp.endpoint is None
+    assert policy.elastic.enabled is False
+    assert policy.elastic.endpoint is None
     assert policy.prometheus.http_endpoint.host == "127.0.0.1"
     assert policy.prometheus.http_endpoint.path == "/metrics"
     assert policy.nats_server_monitoring.enabled is False
@@ -171,3 +173,20 @@ def test_policy_rejects_unsafe_otlp_settings() -> None:
 
     with pytest.raises(ValueError, match="environment variable names"):
         ObservabilityPolicy(otlp={"headers_env": {"Authorization": "bad-env-name"}})
+
+
+def test_policy_rejects_unsafe_elastic_settings() -> None:
+    with pytest.raises(ValueError, match="endpoint is required"):
+        ObservabilityPolicy(enabled=True, elastic={"enabled": True})
+
+    with pytest.raises(ValueError, match="credentials"):
+        ObservabilityPolicy(elastic={"endpoint": "https://user:secret@example.test/v1/metrics"})
+
+    with pytest.raises(ValueError, match="plain http"):
+        ObservabilityPolicy(elastic={"endpoint": "http://collector.example.test/v1/metrics"})
+
+    with pytest.raises(ValueError, match="header names"):
+        ObservabilityPolicy(elastic={"headers_env": {"Bad Header": "ELASTIC_TOKEN"}})
+
+    with pytest.raises(ValueError, match="data_stream_namespace"):
+        ObservabilityPolicy(elastic={"data_stream_namespace": "bad value"})

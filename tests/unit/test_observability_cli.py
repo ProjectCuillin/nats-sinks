@@ -309,6 +309,99 @@ def test_otlp_export_dry_run_outputs_policy_filtered_json(tmp_path: Path) -> Non
     assert "oracle_duplicates_total" not in result.stdout
 
 
+def test_elastic_export_disabled_policy_does_not_need_snapshot(tmp_path: Path) -> None:
+    config = _config_file(tmp_path / "config.json")
+    policy = tmp_path / "observability.prometheus.json"
+    runner.invoke(app, ["init-prometheus-policy", str(config), str(policy)])
+
+    result = runner.invoke(app, ["elastic-export", str(tmp_path / "missing.json"), str(policy)])
+
+    assert result.exit_code == 0
+    assert "disabled by observability policy" in result.stdout
+
+
+def test_elastic_export_dry_run_outputs_profiled_otlp_json(tmp_path: Path) -> None:
+    snapshot = _snapshot(tmp_path / "metrics.json")
+    policy = tmp_path / "observability.prometheus.json"
+    policy.write_text(
+        json.dumps(
+            {
+                "schema": "nats_sinks.observability.policy.v1",
+                "enabled": True,
+                "namespace": "mission_ops",
+                "allowed_metrics": ["messages_fetched_total"],
+                "allowed_metric_patterns": [],
+                "denied_metrics": [],
+                "denied_metric_patterns": [],
+                "include_observations": False,
+                "include_legacy": False,
+                "subjects": [],
+                "elastic": {
+                    "enabled": True,
+                    "endpoint": "http://127.0.0.1:4318/v1/metrics",
+                    "data_stream_dataset": "nats_sinks.metrics",
+                    "data_stream_namespace": "default",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["elastic-export", str(snapshot), str(policy), "--dry-run"])
+
+    assert result.exit_code == 0
+    assert "mission_ops_messages_fetched_total" in result.stdout
+    assert "oracle_duplicates_total" not in result.stdout
+    assert "data_stream.dataset" in result.stdout
+    assert "nats-sinks.observability.elastic" in result.stdout
+
+
+def test_elastic_export_rejects_stale_snapshot_without_override(tmp_path: Path) -> None:
+    snapshot = tmp_path / "metrics.json"
+    snapshot.write_text(
+        json.dumps(
+            {
+                "schema": "nats_sinks.metrics.snapshot.v1",
+                "namespace": "mission_ops",
+                "generated_at_epoch_seconds": 1.0,
+                "counters": {"messages_fetched_total": 7},
+                "gauges": {},
+                "observations": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    policy = tmp_path / "observability.prometheus.json"
+    policy.write_text(
+        json.dumps(
+            {
+                "schema": "nats_sinks.observability.policy.v1",
+                "enabled": True,
+                "namespace": "mission_ops",
+                "allowed_metrics": ["messages_fetched_total"],
+                "allowed_metric_patterns": [],
+                "denied_metrics": [],
+                "denied_metric_patterns": [],
+                "include_observations": False,
+                "include_legacy": False,
+                "subjects": [],
+                "elastic": {
+                    "enabled": True,
+                    "endpoint": "http://127.0.0.1:4318/v1/metrics",
+                    "stale_after_seconds": 1,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["elastic-export", str(snapshot), str(policy), "--dry-run"])
+
+    assert result.exit_code == 3
+    assert "Metrics snapshot is stale" in result.stderr
+    assert "127.0.0.1" not in result.stderr
+
+
 def test_nats_monitoring_poll_dry_run_outputs_sanitized_snapshot(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

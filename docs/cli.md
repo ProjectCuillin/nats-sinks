@@ -16,7 +16,8 @@ observability platforms. It can generate a disabled Prometheus policy from the
 core config, list metric names and subject hints, validate policy, and render
 policy-filtered Prometheus textfile output or run the optional native
 Prometheus HTTP endpoint. It can also export approved metrics to an
-OpenTelemetry Collector through OTLP/HTTP JSON.
+OpenTelemetry Collector through OTLP/HTTP JSON, including the Elastic
+Observability profile.
 
 For readers new to this project, the CLI does not implement a separate
 delivery engine. It validates configuration, creates the selected sink, builds
@@ -40,6 +41,7 @@ nats-sink-metrics show .local/nats-sinks/metrics.json
 nats-sink-observe init-prometheus-policy config.json observability.prometheus.json
 nats-sink-observe prometheus-http .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
 nats-sink-observe otlp-export .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
+nats-sink-observe elastic-export .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
 nats-sink-observe nats-monitoring-poll observability.prometheus.json --dry-run
 ```
 
@@ -333,6 +335,7 @@ enabled=false
 namespace=nats_sinks
 prometheus_enabled=false
 otlp_enabled=false
+elastic_enabled=false
 nats_server_monitoring_enabled=false
 nats_server_monitoring_prometheus_enabled=false
 allowed_metrics=0
@@ -483,6 +486,41 @@ The output is intentionally sanitized. It does not print the collector URL,
 header values, payload bodies, subjects, table names, file paths, labels,
 classification values, or other sensitive deployment detail. Full connector
 guidance is documented in [OpenTelemetry OTLP Integration](otlp.md).
+
+### `nats-sink-observe elastic-export`
+
+Exports policy-approved metrics through the Elastic Observability OTLP profile.
+The command is disabled unless both the top-level observability policy and
+`elastic.enabled` are true. It uses the same local snapshot, allow and deny
+lists, stale-snapshot checks, timeout bounds, retry bounds, and redaction
+posture as the other observability connectors.
+
+Dry-run mode prints the Elastic-profiled OTLP JSON body without opening a
+network connection:
+
+```bash
+nats-sink-observe elastic-export \
+  /var/lib/nats-sink/metrics.json \
+  /etc/nats-sinks/observability.prometheus.json \
+  --dry-run
+```
+
+Example dry-run output:
+
+```json
+{"resourceMetrics":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"nats-sinks"}},{"key":"nats_sinks.namespace","value":{"stringValue":"nats_sinks"}},{"key":"data_stream.dataset","value":{"stringValue":"nats_sinks.metrics"}},{"key":"data_stream.namespace","value":{"stringValue":"default"}},{"key":"nats_sinks.observability.profile","value":{"stringValue":"elastic"}}]},"scopeMetrics":[{"metrics":[{"description":"Raw JetStream messages fetched by the pull consumer.","name":"nats_sinks_messages_fetched_total","sum":{"aggregationTemporality":2,"dataPoints":[{"asDouble":256.0,"timeUnixNano":"1790000000000000000"}],"isMonotonic":true},"unit":"1"}],"scope":{"name":"nats-sinks.observability.elastic"}}]}]}
+```
+
+Example success output:
+
+```text
+Elastic Observability export: attempted=true delivered=true attempts=1 status=200 message=Elastic Observability export delivered
+```
+
+The command is an observability connector profile, not a delivery feature. It
+does not ACK messages and does not write directly to Elasticsearch. Full
+connector guidance is documented in
+[Elastic Observability Profile](elastic-observability.md).
 
 ### `nats-sink-observe nats-monitoring-poll`
 

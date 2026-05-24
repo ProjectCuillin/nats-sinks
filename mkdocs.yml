@@ -56,6 +56,7 @@ nav:
       - Metrics Snapshot And CLI: metrics.md
       - Prometheus Integration: prometheus.md
       - OpenTelemetry OTLP Integration: otlp.md
+      - Elastic Observability Profile: elastic-observability.md
       - NATS Server Monitoring: nats-server-monitoring.md
       - Subject-Aware Observability Evaluation: subject-aware-observability-evaluation.md
       - Future Connectors: observability-connectors.md

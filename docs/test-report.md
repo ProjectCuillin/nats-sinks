@@ -14,30 +14,38 @@ logs from live systems.
 | Field | Value |
 | --- | --- |
 | Overall result | Pass |
-| Report generated | 2026-05-23 message authenticity verification validation |
+| Report generated | 2026-05-23 Elastic Observability profile validation |
 | Project version | `0.4.0` post-release development |
 | Python version | 3.12.4 |
-| Git revision checked | Issue `#55` workspace based on `release-v0.4.1` |
-| Worktree state | Active workspace adding optional core message authenticity verification while preserving local Docker image work, data-centric security labels, encrypted edge spool-and-forward sink work, GoldenGate-inspired sink candidate backlog research, stream planning, branch workflow automation, connector framework, WebSocket guardrails, Oracle high-throughput staging, custody metadata, advisory observation, durable consumer management, richer consumer policy controls, NATS no-echo, OTLP export, secure-development hardening, strict JSON config loading, log-injection sanitization, secret scanning, public API compatibility tests, GitHub Dependency Graph manifests, sanitized backlog tooling, release-gated close automation, standardized SPDX headers, metrics snapshots and CLI, observability policy core, Prometheus and NATS monitoring connectors, Kubernetes examples, systemd installer, NATS reconnect tuning, least-privilege NATS permission templates, JetStream topology guidance, retry backoff with jitter, priority-aware lanes, synthetic mission testing, mission-support examples, SBOM generation, release checksums, hash-verified installation guidance, property-style tests, defence and mission-support blueprints, generic mission metadata, payload encryption, and Oracle/file/spool sink support |
+| Git revision checked | Issue `#105` workspace based on `release-v0.4.1` |
+| Worktree state | Active workspace adding the Elastic Observability profile while preserving optional core message authenticity verification, local Docker image work, data-centric security labels, encrypted edge spool-and-forward sink work, GoldenGate-inspired sink candidate backlog research, stream planning, branch workflow automation, connector framework, WebSocket guardrails, Oracle high-throughput staging, custody metadata, advisory observation, durable consumer management, richer consumer policy controls, NATS no-echo, OTLP export, secure-development hardening, strict JSON config loading, log-injection sanitization, secret scanning, public API compatibility tests, GitHub Dependency Graph manifests, sanitized backlog tooling, release-gated close automation, standardized SPDX headers, metrics snapshots and CLI, observability policy core, Prometheus and NATS monitoring connectors, Kubernetes examples, systemd installer, NATS reconnect tuning, least-privilege NATS permission templates, JetStream topology guidance, retry backoff with jitter, priority-aware lanes, synthetic mission testing, mission-support examples, SBOM generation, release checksums, hash-verified installation guidance, property-style tests, defence and mission-support blueprints, generic mission metadata, payload encryption, and Oracle/file/spool sink support |
 | Live NATS details | Redacted |
 | Live Oracle details | Redacted |
 
-This refresh covered issue `#55`, adding optional message authenticity
+This refresh covered issue `#105`, adding an Elastic Observability profile over
+the shared OTLP observability core. The profile remains disabled by default,
+uses the shared allow and deny policy, emits Elastic-safe static data stream
+routing hints, sources headers from environment variables, supports stale
+snapshot guardrails and dry-run rendering through `nats-sink-observe
+elastic-export`, and keeps direct Elasticsearch writes out of scope. Focused
+Elastic observability tests passed with `50 passed`. The full local validation
+suite passed through
+`scripts/check.sh`, including Ruff, mypy, dependency manifest validation,
+backlog and bug-report validation, Markdown link checks, documentation builds,
+pytest with `772 passed, 9 skipped`, encryption checks, sink checks, CLI smoke
+checks, security scanning, package build, SBOM generation, checksum generation,
+and Twine metadata validation. The skipped tests remain gated live NATS and
+Oracle integration tests that require explicit local environment flags or
+services.
+
+This refresh also preserves issue `#55`, adding optional message authenticity
 verification in the core runtime before payload encryption, policy checks,
 custody hashing, priority lanes, or sink delivery. The implementation supports
 subject-scoped HMAC-SHA256 and Ed25519 rules, a canonical signed document over
 the payload SHA-256 and selected normalized metadata, environment-backed
 verification keys, sanitized rejection reasons, aggregate authenticity metrics,
 public producer helper APIs, and DLQ-before-ACK handling for verification
-failures. Focused authenticity tests passed with `10 passed`. The full local
-validation suite passed through `scripts/check.sh`, including Ruff, mypy,
-dependency manifest validation, backlog and bug-report validation, Markdown
-link checks, documentation builds, pytest with `757 passed, 9 skipped`,
-encryption checks, sink checks, CLI smoke checks, security scanning, package
-build, SBOM
-generation, checksum generation, and Twine metadata validation. The skipped
-tests remain gated live NATS and Oracle integration tests that require
-explicit local environment flags or services.
+failures.
 
 This refresh preserves issue `#54`, which added read-only Oracle lineage query
 helpers and the `nats-sink query-lineage` CLI command without affecting sink
@@ -704,6 +712,7 @@ ordering, DLQ-before-ACK ordering, and deterministic unhappy-path handling.
 | Synthetic harness core smoke | `python scripts/run-synthetic-harness.py --message-count 18` | Pass | Produced a sanitized core report with 18 messages, 16 unique idempotency keys, 2 duplicates, 2 stale messages, 2 malformed JSON text messages, and 2 encrypted-marker messages |
 | Synthetic harness file smoke | `python scripts/run-synthetic-harness.py --sink file --message-count 18 --compression gzip --format markdown` | Pass | Produced a sanitized file-sink report with 16 durable compressed files from 18 generated messages because duplicate redelivery keys map to existing files |
 | OTLP observability focused checks | `pytest tests/unit/test_otlp_observability.py tests/unit/test_observability_policy.py tests/unit/test_observability_cli.py tests/unit/test_public_api.py tests/unit/test_systemd_install_script.py` | Pass | 37 passed, covering disabled-by-default OTLP behavior, policy validation, allow-list filtering, OTLP request rendering, request-size bounds, environment-sourced headers, bounded retry behavior, CLI dry-run and disabled-policy behavior, public API compatibility, and systemd asset coverage |
+| Elastic observability focused checks | `pytest tests/unit/test_elastic_observability.py tests/unit/test_observability_policy.py tests/unit/test_observability_cli.py tests/unit/test_otlp_observability.py tests/unit/test_public_api.py -q` | Pass | 50 passed, covering disabled-by-default Elastic profile behavior, policy validation, allow-list and deny-list filtering, Elastic OTLP resource attributes, request-size bounds, environment-sourced headers, bounded retries, stale snapshot rejection, CLI dry-run behavior, and public API compatibility |
 | Observability focused checks | `pytest tests/unit/test_observability_policy.py tests/unit/test_nats_monitoring.py tests/unit/test_observability_cli.py tests/unit/test_public_api.py tests/unit/test_systemd_install_script.py` | Pass | Covered disabled policy generation, NATS monitoring endpoint validation, sanitized snapshot generation, optional Prometheus and OTLP behavior, CLI behavior, public API compatibility, and systemd asset coverage |
 | Observability CLI smoke | `python -m nats_sinks.cli.observability init-prometheus-policy ...`, `validate-policy`, and `prometheus-textfile --dry-run` | Pass | Generated and validated a disabled Prometheus policy from the file sink example; disabled policy rendered a no-metrics Prometheus comment without needing a snapshot |
 | Unified systemd installer checks | `sh -n scripts/install-systemd*.sh` and `pytest tests/unit/test_systemd_install_script.py` | Pass | Shell syntax passed for the unified installer and compatibility wrappers; unit tests confirmed OS detection branches, local-checkout detection, GitHub asset-fetch support, package-spec-aware tagged installs, Prometheus service assets, NATS monitoring service assets, and wrapper delegation |
