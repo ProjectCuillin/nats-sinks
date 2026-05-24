@@ -5,14 +5,18 @@ stack for developer smoke testing. The stack starts a NATS JetStream container
 and a `nats-sink` container that writes test messages to the production file
 sink.
 
-This image is intentionally a local testing image. It is useful for validating
-the CLI, JSON configuration, NATS connectivity, pull-consumer behavior, and
-file-sink output without installing `nats-sink` directly on the host. The image
-is built from Oracle Linux 9 slim so the local container path remains aligned
-with Oracle-centric Linux and OCI deployment expectations, while still keeping
-the image small and easy to rebuild. It is not yet the hardened public
-production image. Production hardening, signing, registry publication, and
-automated release image publication are tracked as separate backlog items.
+This stack is intentionally a local testing workflow. It is useful for
+validating the CLI, JSON configuration, NATS connectivity, pull-consumer
+behavior, and file-sink output without installing `nats-sink` directly on the
+host. The image is built from Oracle Linux 9 slim so the local container path
+remains aligned with Oracle-centric Linux and OCI deployment expectations,
+while still keeping the image small and easy to rebuild.
+
+The same Dockerfile now carries a production hardening baseline: non-root
+execution, explicit OCI metadata, read-only-root-compatible runtime paths, and
+a no-side-effect healthcheck stance. Production operators should still read
+[Production Container Hardening](container-hardening.md) before treating the
+image as an approved deployment artifact.
 
 ## What The Stack Provides
 
@@ -114,11 +118,17 @@ container-registry.oracle.com/os/oraclelinux:9-slim
 
 During the image build, Python 3.11 and `pip` are installed from Oracle Linux
 package repositories. The build then installs `nats-sinks` from the repository
-source tree, creates a non-root `nats-sinks` user, and exposes these paths as
-volumes:
+source tree, removes package-manager caches, creates a fixed non-root runtime
+identity, and exposes these paths as volumes:
 
 - `/etc/nats-sinks` for mounted JSON configuration.
 - `/var/lib/nats-sinks` for mounted state, output files, or local test data.
+
+The runtime user is UID/GID `10001`. Keep mounted output directories writable
+for that identity. The image also expects `/tmp` to be writable when a platform
+uses a read-only root filesystem. The local Compose file provides `/tmp` as a
+tmpfs and runs the `nats-sink` service with `read_only: true`, all Linux
+capabilities dropped, and `no-new-privileges:true`.
 
 The image entry point is:
 
@@ -210,25 +220,30 @@ valid JSON remains JSON and non-JSON payloads are wrapped in a JSON envelope.
 The local image follows useful baseline practices:
 
 - It is based on Oracle Linux 9 slim.
-- It runs as a non-root user.
+- It runs as non-root UID/GID `10001`.
 - It does not bake secrets into the image.
 - It expects configuration to be mounted read-only.
 - It writes only to explicitly mounted output paths.
 - It keeps the Docker build context small through `.dockerignore`.
+- It declares no image-level healthcheck, so probes cannot accidentally fetch,
+  write, DLQ, or ACK messages.
+- It can be used with a read-only root filesystem when the required writable
+  paths are mounted explicitly.
 
-The image is not yet a hardened production image. The hardening follow-up
-should evaluate:
+The image is hardened enough to serve as a reviewable baseline, but an
+operator-controlled production deployment still needs environment-specific
+evidence and policy. Review:
 
-- pinned image digests,
-- vulnerability scanning,
-- SBOM attachment,
+- pinned base-image digests or internal registry mirrors,
+- vulnerability scanning and risk acceptance,
+- SBOM attachment for the container image,
 - provenance and signing,
-- read-only root filesystem behavior,
-- minimal runtime package set,
-- stricter Linux capabilities,
-- OCI registry publication,
-- release automation,
-- operator guidance for Kubernetes and systemd use.
+- namespace, network, and runtime policy,
+- registry publication and immutability, and
+- operator guidance for Kubernetes, systemd, Docker, or Podman.
+
+The full production guidance is documented in
+[Production Container Hardening](container-hardening.md).
 
 ## Test Evidence
 

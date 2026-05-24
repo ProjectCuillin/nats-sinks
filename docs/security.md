@@ -207,6 +207,11 @@ NATS runtime account authorization templates are documented in
 Kubernetes-specific deployment examples, including service accounts,
 security contexts, Secret references, NetworkPolicy guidance, and resource
 limits, are documented in [Kubernetes Deployment](kubernetes.md).
+Container image hardening guidance, including Oracle Linux slim image
+construction, non-root UID/GID `10001`, read-only root filesystem behavior,
+writable mount boundaries, OCI labels, vulnerability scanning expectations,
+and defence-oriented accreditation caveats, is documented in
+[Production Container Hardening](container-hardening.md).
 
 The detailed maintainer-requested control review is tracked in
 [Security Rule Review](security-rule-review.md). That page records the current

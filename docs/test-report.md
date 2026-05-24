@@ -14,13 +14,33 @@ logs from live systems.
 | Field | Value |
 | --- | --- |
 | Overall result | Pass |
-| Report generated | 2026-05-24 Syslog observability validation |
+| Report generated | 2026-05-24 Production container hardening validation |
 | Project version | `0.4.0` post-release development |
 | Python version | 3.12.4 |
-| Git revision checked | Issue `#110` workspace based on `release-v0.4.1` |
-| Worktree state | Active workspace adding the syslog observability bridge while preserving the StatsD connector, Splunk HEC connector, Grafana Alloy profile, Elastic Observability profile, optional core message authenticity verification, local Docker image work, data-centric security labels, encrypted edge spool-and-forward sink work, GoldenGate-inspired sink candidate backlog research, stream planning, branch workflow automation, connector framework, WebSocket guardrails, Oracle high-throughput staging, custody metadata, advisory observation, durable consumer management, richer consumer policy controls, NATS no-echo, OTLP export, secure-development hardening, strict JSON config loading, log-injection sanitization, secret scanning, public API compatibility tests, GitHub Dependency Graph manifests, sanitized backlog tooling, release-gated close automation, standardized SPDX headers, metrics snapshots and CLI, observability policy core, Prometheus and NATS monitoring connectors, Kubernetes examples, systemd installer, NATS reconnect tuning, least-privilege NATS permission templates, JetStream topology guidance, retry backoff with jitter, priority-aware lanes, synthetic mission testing, mission-support examples, SBOM generation, release checksums, hash-verified installation guidance, property-style tests, defence and mission-support blueprints, generic mission metadata, payload encryption, and Oracle/file/spool sink support |
+| Git revision checked | Issue `#223` workspace based on `release-v0.4.1` |
+| Worktree state | Active workspace adding production container hardening while preserving the syslog, StatsD, Splunk HEC, Grafana Alloy, Elastic Observability, optional core message authenticity verification, local Docker image, data-centric security labels, encrypted edge spool-and-forward sink, GoldenGate-inspired sink candidate backlog research, stream planning, branch workflow automation, connector framework, WebSocket guardrails, Oracle high-throughput staging, custody metadata, advisory observation, durable consumer management, richer consumer policy controls, NATS no-echo, OTLP export, secure-development hardening, strict JSON config loading, log-injection sanitization, secret scanning, public API compatibility tests, GitHub Dependency Graph manifests, sanitized backlog tooling, release-gated close automation, standardized SPDX headers, metrics snapshots and CLI, observability policy core, Prometheus and NATS monitoring connectors, Kubernetes examples, systemd installer, NATS reconnect tuning, least-privilege NATS permission templates, JetStream topology guidance, retry backoff with jitter, priority-aware lanes, synthetic mission testing, mission-support examples, SBOM generation, release checksums, hash-verified installation guidance, property-style tests, defence and mission-support blueprints, generic mission metadata, payload encryption, and Oracle/file/spool sink support |
 | Live NATS details | Redacted |
 | Live Oracle details | Redacted |
+
+This refresh covered issue `#223`, adding a production container hardening
+baseline for the Oracle Linux slim image while preserving the local
+Docker/NATS/file-sink smoke workflow. The image now uses fixed non-root
+UID/GID `10001`, expanded OCI labels, read-only-root-compatible Compose
+settings, explicit writable path documentation, no image-level healthcheck side
+effects, and expanded `.dockerignore` exclusions for local and secret material.
+Focused Docker asset tests passed with `10 passed`. The local Docker smoke test
+also passed, building the image, starting a temporary NATS JetStream service,
+publishing deterministic messages, running `nats-sink`, and verifying `8`
+persisted file-sink records. Docker image inspection confirmed the runtime user
+as `10001:10001` and the expected OCI label set. The full local validation
+suite also passed through `scripts/check.sh`, including formatting for `193`
+files, linting, type checking with no issues in `76` source files, the main
+pytest suite with `834 passed, 9 skipped`, the encryption and sink contract
+suite with `123 passed`, the sink capability suite with `104 passed`, MkDocs
+builds for Read the Docs and GitHub Pages, high-confidence secret scanning,
+Bandit, package build, SBOM generation, checksum generation, and Twine
+metadata validation. The skipped tests remain gated live NATS and Oracle
+integration tests that require explicit local environment flags or services.
 
 This refresh covered issue `#110`, adding a syslog observability bridge over
 the shared local metrics snapshot and observability policy model. The bridge

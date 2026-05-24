@@ -196,7 +196,9 @@ release, and closed only after the containing release is published.
   Solace, managed Kafka compatibility profiles, Cosmos DB profiles, and
   MariaDB.
 - HTTP sink.
-- Hardened public Docker image and release publication automation.
+- Public Docker image release publication automation, including signed image
+  publication, container-specific provenance, and release-attached container
+  evidence.
 - Optional dedicated secret-manager connectors for encryption keys when a
   future release can keep provider dependencies isolated behind extras.
 - Expanded property-based or dedicated fuzz tooling if the deterministic

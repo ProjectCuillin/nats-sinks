@@ -68,6 +68,13 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   file-sink configuration, a `scripts/run-docker-local-smoke.py` runner that
   builds the image, publishes test messages, verifies persisted files, and
   avoids local NATS port collisions, plus Docker documentation and unit tests.
+- Added production container hardening for issue #223, including fixed
+  non-root UID/GID `10001`, read-only-root-compatible local Compose settings,
+  stricter Docker build metadata, explicit OCI labels, no image-level
+  healthcheck side effects, expanded `.dockerignore` exclusions, deterministic
+  Docker asset tests, and detailed operator guidance for writable paths, SBOM
+  evidence, vulnerability scanning, provenance, and defence-oriented
+  accreditation caveats.
 - Added guarded non-main pull request auto-approval tooling for ready issue,
   feature, and bug branches raised by the local workflow. The helper refuses
   release pull requests targeting `main`, can verify the expected PR author,

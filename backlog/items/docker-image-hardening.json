@@ -3,7 +3,7 @@
   "title": "[Feature]: Harden the nats-sinks production container image",
   "area": "Operations and deployment",
   "priority": "P2 - next minor release candidate",
-  "target_release": "unscheduled",
+  "target_release": "v0.4.1",
   "labels": ["deployment", "security", "release"],
   "problem": "Issue #12 adds a local Docker image and NATS Compose test stack for developer smoke testing, but production operators still need a hardened, reviewable container image before using nats-sinks as a long-lived containerized service in controlled or mission-oriented environments.",
   "proposal": "Harden the container image as a production deployment artifact while preserving the existing local testing image workflow. Evaluate pinned base image digests, minimal runtime packages, non-root execution, read-only filesystem compatibility, explicit writable mounts, restrictive Linux capabilities, vulnerability scanning, SBOM attachment, provenance, signing, image labels, and clear separation between local testing and production deployment guidance.",

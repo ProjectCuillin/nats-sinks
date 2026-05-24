@@ -79,7 +79,7 @@ Before applying any manifest, customize these values:
 
 | Area | Values to review |
 | --- | --- |
-| Image | Replace `ghcr.io/projectcuillin/nats-sinks:0.4.0` with the image registry and tag approved for your environment. |
+| Image | Replace `ghcr.io/projectcuillin/nats-sinks:0.4.0` with the image registry, tag, and digest approved for your environment. Review [Production Container Hardening](container-hardening.md) before promotion. |
 | NATS | Replace the example NATS URL, stream, consumer, subject, DLQ subject, TLS CA mount, and authentication settings. |
 | Sink | Replace the file sink with the sink and destination settings required by your deployment. Oracle deployments should use Secret references and wallet or TLS material mounted from approved secrets. |
 | Secrets | Replace the placeholder Secret with a cluster secret manager, sealed-secret workflow, External Secrets operator, or another approved secret-injection mechanism. |
@@ -159,6 +159,14 @@ This follows least privilege. If your image or sink needs writable paths, mount
 explicit `emptyDir` or persistent volumes only at those paths. Avoid broad
 filesystem write access. Avoid mounting the Kubernetes service account token
 unless a future feature explicitly needs Kubernetes API access.
+
+The current container image runs as UID/GID `10001` and is designed to work
+with `readOnlyRootFilesystem: true` when `/tmp` and the selected runtime state
+paths are mounted explicitly. The examples mount `/tmp`, file output, and
+metrics snapshot paths. Oracle-only deployments may not need file-output
+storage, while spool deployments need a protected persistent mount for
+encrypted spool custody. See [Production Container Hardening](container-hardening.md)
+for the full writable-path and supply-chain evidence checklist.
 
 ## Graceful Shutdown
 

@@ -57,10 +57,30 @@ def test_dockerfile_uses_project_entrypoint_and_non_root_user() -> None:
     dockerfile = (REPO_ROOT / "Dockerfile").read_text(encoding="utf-8")
 
     assert "python3.11 -m pip install" in dockerfile
-    assert "microdnf install -y python3.11 python3.11-pip" in dockerfile
-    assert "useradd --system" in dockerfile
-    assert "USER nats-sinks:nats-sinks" in dockerfile
+    assert "microdnf install -y --setopt=install_weak_deps=0" in dockerfile
+    assert "useradd --uid 10001 --gid 10001" in dockerfile
+    assert "USER 10001:10001" in dockerfile
     assert 'ENTRYPOINT ["nats-sink"]' in dockerfile
+
+
+def test_dockerfile_declares_hardening_runtime_invariants() -> None:
+    """The production image should advertise stable hardening boundaries."""
+
+    dockerfile = (REPO_ROOT / "Dockerfile").read_text(encoding="utf-8")
+
+    assert "org.opencontainers.image.documentation" in dockerfile
+    assert "org.opencontainers.image.version" in dockerfile
+    assert "org.opencontainers.image.revision" in dockerfile
+    assert "org.opencontainers.image.created" in dockerfile
+    assert (
+        'org.opencontainers.image.base.name="container-registry.oracle.com/os/oraclelinux:9-slim"'
+        in dockerfile
+    )
+    assert "PIP_NO_CACHE_DIR=1" in dockerfile
+    assert "XDG_CACHE_HOME=/tmp/nats-sinks-cache" in dockerfile
+    assert "chmod -R go-w /opt/nats-sinks" in dockerfile
+    assert "STOPSIGNAL SIGTERM" in dockerfile
+    assert "HEALTHCHECK NONE" in dockerfile
 
 
 def test_dockerignore_excludes_private_and_generated_paths() -> None:
@@ -73,9 +93,11 @@ def test_dockerignore_excludes_private_and_generated_paths() -> None:
     }
 
     assert ".local" in ignored
+    assert ".env" in ignored
     assert ".git" in ignored
     assert "dist" in ignored
     assert "site" in ignored
+    assert "*.log" in ignored
     assert "*.key" in ignored
     assert "*.p12" in ignored
 
@@ -93,6 +115,10 @@ def test_docker_compose_stack_declares_nats_and_sink_services() -> None:
     assert services["nats-sink"]["image"] == "${NATS_SINKS_IMAGE:-nats-sinks:local}"
     assert services["nats-sink"]["depends_on"] == ["nats"]
     assert services["nats-sink"]["command"] == ["run", "/etc/nats-sinks/config.json"]
+    assert services["nats-sink"]["read_only"] is True
+    assert services["nats-sink"]["tmpfs"] == ["/tmp:rw,noexec,nosuid,nodev"]  # noqa: S108
+    assert services["nats-sink"]["cap_drop"] == ["ALL"]
+    assert services["nats-sink"]["security_opt"] == ["no-new-privileges:true"]
     assert any(
         mount.endswith(":/etc/nats-sinks/config.json:ro")
         for mount in services["nats-sink"]["volumes"]

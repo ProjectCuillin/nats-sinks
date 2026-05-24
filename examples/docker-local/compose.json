@@ -29,6 +29,16 @@
       "environment": {
         "PYTHONUNBUFFERED": "1"
       },
+      "read_only": true,
+      "tmpfs": [
+        "/tmp:rw,noexec,nosuid,nodev"
+      ],
+      "cap_drop": [
+        "ALL"
+      ],
+      "security_opt": [
+        "no-new-privileges:true"
+      ],
       "volumes": [
         "./config.json:/etc/nats-sinks/config.json:ro",
         "${NATS_SINKS_DOCKER_OUTPUT_DIR:-../../.local/docker-file-sink}:/var/lib/nats-sinks/file:rw"

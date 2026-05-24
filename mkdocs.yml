@@ -67,6 +67,7 @@ nav:
   - Deployment:
       - Operations: operations.md
       - Local Docker Stack: docker.md
+      - Production Container Hardening: container-hardening.md
       - Service Deployment: service-deployment.md
       - Kubernetes Deployment: kubernetes.md
   - Security And Supply Chain:
