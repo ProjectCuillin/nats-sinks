@@ -303,6 +303,7 @@ The observability CLI provides policy and connector commands:
 | `nats-sink-observe elastic-export SNAPSHOT POLICY` | Dry-run or send approved metrics through the Elastic OTLP profile. |
 | `nats-sink-observe grafana-alloy-export SNAPSHOT POLICY` | Dry-run or send approved metrics through the Grafana Alloy profile. |
 | `nats-sink-observe splunk-hec-export SNAPSHOT POLICY` | Dry-run or send approved aggregate metrics to Splunk HEC. |
+| `nats-sink-observe statsd-export SNAPSHOT POLICY` | Dry-run or send approved best-effort metric datagrams to StatsD. |
 
 The global version flag is available too:
 

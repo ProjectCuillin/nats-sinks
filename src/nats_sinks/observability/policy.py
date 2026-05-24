@@ -38,6 +38,9 @@ OTLP_HEADER_NAME_MAX_LENGTH = 128
 OTLP_HEADER_ENV_MAX_LENGTH = 128
 NATS_MONITORING_ENDPOINT_MAX_LENGTH = 128
 NATS_MONITORING_FIELD_MAX_LENGTH = 256
+STATSD_MAX_DATAGRAM_BYTES = 65_507
+STATSD_METRIC_PREFIX_MAX_LENGTH = 128
+STATSD_SOCKET_PATH_MAX_LENGTH = 512
 NATS_MONITORING_ALLOWED_ENDPOINTS = {
     "/varz",
     "/connz",
@@ -54,6 +57,7 @@ ELASTIC_DATA_STREAM_COMPONENT_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]{0,12
 GRAFANA_ALLOY_COMPONENT_LABEL_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
 SPLUNK_HEC_INDEX_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_-]{0,127}$")
 SPLUNK_HEC_METADATA_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.:-]{0,127}$")
+STATSD_METRIC_PREFIX_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.-]{0,127}$")
 
 
 def _validate_otlp_http_endpoint(value: str | None, *, field_name: str) -> str | None:
@@ -572,6 +576,97 @@ class SplunkHecObservabilityPolicy(BaseModel):
         return self
 
 
+class StatsdObservabilityPolicy(BaseModel):
+    """StatsD observability connector settings.
+
+    The connector emits one datagram per policy-approved aggregate metric.  It
+    is intentionally best-effort and observational: UDP and Unix datagram
+    delivery can be lossy, and failures must never affect JetStream delivery or
+    sink write behavior.  Metric names are generated from internal metric names
+    and an optional static prefix only; subjects, payload values, classification
+    values, labels, mission metadata, and destination details are not exported.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    transport: Literal["udp", "unixgram"] = "udp"
+    host: str = "127.0.0.1"
+    port: int = Field(default=8125, ge=1, le=65_535)
+    socket_path: str | None = None
+    metric_prefix: str | None = None
+    timeout_seconds: float = Field(default=1.0, gt=0, le=60)
+    max_retries: int = Field(default=0, ge=0, le=10)
+    retry_backoff_seconds: float = Field(default=0.25, ge=0, le=60)
+    stale_after_seconds: float | None = Field(default=None, gt=0, le=86_400)
+    max_datagram_bytes: int = Field(default=1432, ge=128, le=STATSD_MAX_DATAGRAM_BYTES)
+
+    @field_validator("host")
+    @classmethod
+    def validate_host(cls, value: str) -> str:
+        """Validate the UDP target host without accepting path-like text."""
+
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("statsd.host must not be empty")
+        if any(character in rendered for character in "\x00\n\r\t /"):
+            raise ValueError(
+                "statsd.host must not contain whitespace, slashes, or control characters"
+            )
+        return rendered
+
+    @field_validator("socket_path")
+    @classmethod
+    def validate_socket_path(cls, value: str | None) -> str | None:
+        """Validate the optional Unix datagram socket path."""
+
+        if value is None:
+            return None
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("statsd.socket_path must not be empty")
+        if len(rendered) > STATSD_SOCKET_PATH_MAX_LENGTH:
+            raise ValueError(
+                f"statsd.socket_path must be at most {STATSD_SOCKET_PATH_MAX_LENGTH} characters"
+            )
+        if any(character in rendered for character in "\x00\n\r"):
+            raise ValueError("statsd.socket_path must not contain control characters")
+        if Path(rendered).name in {"", ".", ".."}:
+            raise ValueError("statsd.socket_path must name a socket path")
+        return rendered
+
+    @field_validator("metric_prefix")
+    @classmethod
+    def validate_metric_prefix(cls, value: str | None) -> str | None:
+        """Validate an optional static StatsD metric prefix."""
+
+        if value is None:
+            return None
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("statsd.metric_prefix must not be empty")
+        if len(rendered) > STATSD_METRIC_PREFIX_MAX_LENGTH:
+            raise ValueError(
+                f"statsd.metric_prefix must be at most {STATSD_METRIC_PREFIX_MAX_LENGTH} characters"
+            )
+        if not STATSD_METRIC_PREFIX_RE.fullmatch(rendered):
+            raise ValueError(
+                "statsd.metric_prefix must start with a letter or underscore and contain only "
+                "letters, digits, underscores, dots, and hyphens"
+            )
+        return rendered.strip(".")
+
+    @model_validator(mode="after")
+    def validate_transport_settings(self) -> StatsdObservabilityPolicy:
+        """Require transport-specific settings only when StatsD is enabled."""
+
+        if not self.enabled:
+            return self
+        if self.transport == "unixgram" and self.socket_path is None:
+            raise ValueError("statsd.socket_path is required when statsd.transport is unixgram")
+        return self
+
+
 class NatsServerMonitoringPolicy(BaseModel):
     """Policy for the optional NATS server monitoring connector.
 
@@ -731,6 +826,7 @@ class ObservabilityPolicy(BaseModel):
         default_factory=GrafanaAlloyObservabilityPolicy
     )
     splunk_hec: SplunkHecObservabilityPolicy = Field(default_factory=SplunkHecObservabilityPolicy)
+    statsd: StatsdObservabilityPolicy = Field(default_factory=StatsdObservabilityPolicy)
     nats_server_monitoring: NatsServerMonitoringPolicy = Field(
         default_factory=NatsServerMonitoringPolicy
     )

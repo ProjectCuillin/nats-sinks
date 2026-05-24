@@ -31,6 +31,8 @@ Observability is documented as a small set of focused pages:
 - [Splunk HEC Integration](splunk-hec.md): explains the Splunk HTTP Event
   Collector connector for approved aggregate metrics in SIEM and
   incident-response environments.
+- [StatsD Integration](statsd.md): explains best-effort UDP and Unix datagram
+  export to StatsD-compatible aggregators.
 - [NATS Server Monitoring Integration](nats-server-monitoring.md): explains the
   disabled-by-default connector for selected NATS monitoring endpoint fields.
 - Optional JetStream advisory observation is configured in
@@ -49,6 +51,8 @@ The Grafana Alloy profile follows the same rule and is implemented as an OTLP
 handoff to a separate Alloy collector.
 The Splunk HEC connector follows the same rule and emits one bounded
 policy-approved metric event to Splunk's HTTP Event Collector.
+The StatsD connector follows the same rule and emits bounded best-effort
+datagrams to a StatsD-compatible local or network listener.
 
 ## Design Goals
 
@@ -293,6 +297,19 @@ Generated policies are disabled by default:
     "host": "nats-sinks",
     "index": null
   },
+  "statsd": {
+    "enabled": false,
+    "transport": "udp",
+    "host": "127.0.0.1",
+    "port": 8125,
+    "socket_path": null,
+    "metric_prefix": null,
+    "timeout_seconds": 1,
+    "max_retries": 0,
+    "retry_backoff_seconds": 0.25,
+    "stale_after_seconds": null,
+    "max_datagram_bytes": 1432
+  },
   "nats_server_monitoring": {
     "enabled": false,
     "base_url": null,
@@ -343,6 +360,12 @@ is disabled by default and requires both `enabled=true` and
 containing only approved aggregate metric fields. HEC tokens are referenced by
 environment variable name and resolved only at export time.
 
+The `statsd` object controls the StatsD connector. It is disabled by default
+and requires both `enabled=true` and `statsd.enabled=true`. The connector sends
+one bounded datagram per approved aggregate metric over UDP or a Unix datagram
+socket. StatsD is best-effort observability and must not be treated as durable
+delivery evidence.
+
 The `nats_server_monitoring` object controls the optional NATS monitoring
 connector. It is also disabled by default. When enabled, it polls only the
 approved NATS server monitoring endpoint paths and extracts only the approved
@@ -369,6 +392,7 @@ topology fields unless an operator has selected those exact fields.
 | `elastic` | object | Elastic Observability profile settings over the OTLP connector. |
 | `grafana_alloy` | object | Grafana Alloy profile settings over the OTLP connector, including generated River snippet settings. |
 | `splunk_hec` | object | Splunk HTTP Event Collector settings for approved aggregate metric events. |
+| `statsd` | object | StatsD connector settings for approved best-effort metric datagrams. |
 | `nats_server_monitoring` | object | Optional connector settings for selected NATS server monitoring endpoint values. |
 
 The deny list wins over the allow list. This lets a broad allow rule such as
@@ -473,6 +497,25 @@ generation, service guidance, security notes, and test coverage.
 
 See [Splunk HEC Integration](splunk-hec.md) for full examples, HEC event
 format, service guidance, security notes, and test coverage.
+
+## StatsD Connector Fields
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `statsd.enabled` | `false` | Enables StatsD export when the top-level policy is also enabled. |
+| `statsd.transport` | `udp` | Transport mode. Supported values are `udp` and `unixgram`. |
+| `statsd.host` | `127.0.0.1` | UDP target host. Keep loopback unless an approved network path exists. |
+| `statsd.port` | `8125` | UDP target port, validated from `1` through `65535`. |
+| `statsd.socket_path` | `null` | Unix datagram socket path. Required when `transport` is `unixgram`. |
+| `statsd.metric_prefix` | `null` | Optional StatsD metric prefix. When unset, the policy namespace is used. |
+| `statsd.timeout_seconds` | `1` | Socket timeout, validated from greater than `0` through `60` seconds. |
+| `statsd.max_retries` | `0` | Bounded retries after the initial send attempt. |
+| `statsd.retry_backoff_seconds` | `0.25` | Delay between retry attempts when a local send operation fails. |
+| `statsd.stale_after_seconds` | `null` | Optional maximum snapshot age before export fails closed unless `--allow-stale` is used. |
+| `statsd.max_datagram_bytes` | `1432` | Maximum size for each rendered datagram. |
+
+See [StatsD Integration](statsd.md) for full examples, datagram format,
+transport limitations, service guidance, security notes, and test coverage.
 
 ## NATS Server Monitoring Fields
 
@@ -604,6 +647,7 @@ otlp_enabled=false
 elastic_enabled=false
 grafana_alloy_enabled=false
 splunk_hec_enabled=false
+statsd_enabled=false
 nats_server_monitoring_enabled=false
 nats_server_monitoring_prometheus_enabled=false
 allowed_metrics=0
@@ -809,11 +853,10 @@ labels, or classified mission details.
 ## Future Connectors
 
 The observability core is intentionally connector-neutral. Prometheus textfile,
-Prometheus HTTP, OTLP, Elastic Observability, Grafana Alloy, Splunk HEC, and
-NATS monitoring connectors are implemented today.
+Prometheus HTTP, OTLP, Elastic Observability, Grafana Alloy, Splunk HEC, StatsD,
+and NATS monitoring connectors are implemented today.
 Future connectors may include:
 
-- StatsD for lightweight counter/timer forwarding,
 - Datadog for hosted operational dashboards,
 - Grafana Agent legacy migration notes where needed for existing estates,
 - Oracle Cloud Infrastructure Monitoring for OCI-native deployments,

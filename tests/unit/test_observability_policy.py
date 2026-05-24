@@ -91,6 +91,10 @@ def test_generated_policy_is_disabled_and_copies_safe_subject_hints(tmp_path: Pa
     assert policy.splunk_hec.enabled is False
     assert policy.splunk_hec.endpoint is None
     assert policy.splunk_hec.token_env is None
+    assert policy.statsd.enabled is False
+    assert policy.statsd.transport == "udp"
+    assert policy.statsd.host == "127.0.0.1"
+    assert policy.statsd.port == 8125
     assert policy.prometheus.http_endpoint.host == "127.0.0.1"
     assert policy.prometheus.http_endpoint.path == "/metrics"
     assert policy.nats_server_monitoring.enabled is False
@@ -267,3 +271,20 @@ def test_policy_rejects_unsafe_splunk_hec_settings() -> None:
 
     with pytest.raises(ValueError, match="index"):
         ObservabilityPolicy(splunk_hec={"index": "bad.index"})
+
+
+def test_policy_rejects_unsafe_statsd_settings() -> None:
+    with pytest.raises(ValueError, match="socket_path is required"):
+        ObservabilityPolicy(enabled=True, statsd={"enabled": True, "transport": "unixgram"})
+
+    with pytest.raises(ValueError, match="host"):
+        ObservabilityPolicy(statsd={"host": "127.0.0.1 /bad"})
+
+    with pytest.raises(ValueError, match="socket_path"):
+        ObservabilityPolicy(statsd={"socket_path": "bad\npath"})
+
+    with pytest.raises(ValueError, match="metric_prefix"):
+        ObservabilityPolicy(statsd={"metric_prefix": "bad prefix"})
+
+    with pytest.raises(ValueError, match="max_datagram_bytes"):
+        ObservabilityPolicy(statsd={"max_datagram_bytes": 70_000})

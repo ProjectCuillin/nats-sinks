@@ -75,6 +75,12 @@ from nats_sinks.observability.splunk_hec import (
     export_splunk_hec_metrics,
     render_splunk_hec_event_json,
 )
+from nats_sinks.observability.statsd import (
+    DISABLED_STATSD_TEXT,
+    EMPTY_STATSD_TEXT,
+    export_statsd_metrics,
+    render_statsd_lines,
+)
 
 app = typer.Typer(help="Manage nats-sinks observability policies and connectors.")
 
@@ -171,6 +177,7 @@ def _policy_summary(policy: ObservabilityPolicy) -> str:
             f"elastic_enabled={str(policy.elastic.enabled).lower()}",
             f"grafana_alloy_enabled={str(policy.grafana_alloy.enabled).lower()}",
             f"splunk_hec_enabled={str(policy.splunk_hec.enabled).lower()}",
+            f"statsd_enabled={str(policy.statsd.enabled).lower()}",
             f"nats_server_monitoring_enabled={str(policy.nats_server_monitoring.enabled).lower()}",
             "nats_server_monitoring_prometheus_enabled="
             f"{str(policy.nats_server_monitoring.prometheus_enabled).lower()}",
@@ -796,6 +803,85 @@ def splunk_hec_export(
         f"message={result.message}"
     )
     if result.message == EMPTY_SPLUNK_HEC_TEXT.strip():
+        return
+    if not result.delivered:
+        raise typer.Exit(3)
+
+
+@app.command("statsd-export")
+def statsd_export(
+    snapshot_file: Annotated[
+        Path,
+        typer.Argument(help="Metrics snapshot JSON written by nats-sink."),
+    ],
+    policy_file: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="Render StatsD lines to stdout instead of sending datagrams.",
+        ),
+    ] = False,
+    allow_stale: Annotated[
+        bool,
+        typer.Option("--allow-stale", help="Warn but export when the snapshot is stale."),
+    ] = False,
+) -> None:
+    """Export approved metrics to StatsD.
+
+    StatsD output is best-effort observability.  It reads only a local metrics
+    snapshot, applies the shared allow and deny policy, and sends bounded
+    datagrams to the configured StatsD target.  Failures cannot change
+    JetStream ACK, NAK, DLQ, retry, or sink behavior.
+    """
+
+    policy = _load_policy_or_exit(policy_file)
+    snapshot: dict[str, object] | None = None
+    if policy.enabled and policy.statsd.enabled:
+        snapshot = _load_snapshot_or_exit(snapshot_file)
+        try:
+            _check_staleness(
+                snapshot,
+                stale_after_seconds=policy.statsd.stale_after_seconds,
+                allow_stale=allow_stale,
+            )
+        except ValueError as exc:
+            typer.echo(f"Metrics snapshot error: {exc}", err=True)
+            raise typer.Exit(2) from exc
+
+    if not policy.enabled or not policy.statsd.enabled:
+        typer.echo(DISABLED_STATSD_TEXT, nl=False)
+        return
+    if snapshot is None:
+        typer.echo(
+            "StatsD export error: enabled StatsD export requires a metrics snapshot", err=True
+        )
+        raise typer.Exit(2)
+
+    if dry_run:
+        try:
+            rendered = render_statsd_lines(snapshot, policy)
+        except (ConfigurationError, ValueError) as exc:
+            typer.echo(f"StatsD render error: {exc}", err=True)
+            raise typer.Exit(2) from exc
+        typer.echo(rendered, nl=False)
+        return
+
+    try:
+        result = export_statsd_metrics(snapshot, policy)
+    except (ConfigurationError, ValueError) as exc:
+        typer.echo(f"StatsD export error: {exc}", err=True)
+        raise typer.Exit(2) from exc
+
+    typer.echo(
+        "StatsD export: "
+        f"attempted={str(result.attempted).lower()} "
+        f"delivered={str(result.delivered).lower()} "
+        f"attempts={result.attempts} "
+        f"datagrams={result.datagrams} "
+        f"message={result.message}"
+    )
+    if result.message == EMPTY_STATSD_TEXT.strip():
         return
     if not result.delivered:
         raise typer.Exit(3)

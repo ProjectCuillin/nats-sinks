@@ -37,6 +37,12 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   rendering, bounded retries and request sizes, CLI support through
   `nats-sink-observe splunk-hec-export`, focused tests, and an Observability
   documentation sub-page.
+- Added a StatsD observability connector for approved best-effort metric
+  datagrams, including disabled-by-default policy controls, UDP and Unix
+  datagram transport modes, safe metric-name normalization, dry-run rendering,
+  bounded datagram sizes, bounded retries, CLI support through
+  `nats-sink-observe statsd-export`, focused tests, and an Observability
+  documentation sub-page.
 - Added centralized NATS authentication and TLS connection option construction
   for username/password, token, credentials-file, NKEY seed-file, local CA TLS,
   and TLS client certificate workflows, including identity-path redaction,
