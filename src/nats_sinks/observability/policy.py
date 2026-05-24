@@ -41,6 +41,13 @@ NATS_MONITORING_FIELD_MAX_LENGTH = 256
 STATSD_MAX_DATAGRAM_BYTES = 65_507
 STATSD_METRIC_PREFIX_MAX_LENGTH = 128
 STATSD_SOCKET_PATH_MAX_LENGTH = 512
+SYSLOG_MAX_MESSAGE_BYTES = 8_192
+SYSLOG_HOSTNAME_MAX_LENGTH = 255
+SYSLOG_APP_NAME_MAX_LENGTH = 48
+SYSLOG_PROCID_MAX_LENGTH = 128
+SYSLOG_MSGID_MAX_LENGTH = 32
+SYSLOG_STRUCTURED_DATA_ID_MAX_LENGTH = 32
+SYSLOG_SOCKET_PATH_MAX_LENGTH = 512
 NATS_MONITORING_ALLOWED_ENDPOINTS = {
     "/varz",
     "/connz",
@@ -58,6 +65,8 @@ GRAFANA_ALLOY_COMPONENT_LABEL_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
 SPLUNK_HEC_INDEX_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_-]{0,127}$")
 SPLUNK_HEC_METADATA_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.:-]{0,127}$")
 STATSD_METRIC_PREFIX_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.-]{0,127}$")
+SYSLOG_PRINTABLE_RE = re.compile(r"^[!-~]+$")
+SYSLOG_STRUCTURED_DATA_ID_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,32}$")
 
 
 def _validate_otlp_http_endpoint(value: str | None, *, field_name: str) -> str | None:
@@ -133,6 +142,21 @@ def _validate_elastic_data_stream_component(value: str, *, field_name: str) -> s
         )
     if rendered in {".", ".."}:
         raise ValueError(f"{field_name} must not be a relative path marker")
+    return rendered
+
+
+def _validate_syslog_printable_field(value: str, *, field_name: str, max_length: int) -> str:
+    """Validate one RFC 5424 header field or the nil marker."""
+
+    rendered = value.strip()
+    if not rendered:
+        raise ValueError(f"{field_name} must not be empty")
+    if len(rendered) > max_length:
+        raise ValueError(f"{field_name} must be at most {max_length} characters")
+    if rendered == "-":
+        return rendered
+    if not SYSLOG_PRINTABLE_RE.fullmatch(rendered):
+        raise ValueError(f"{field_name} must contain only printable ASCII without spaces")
     return rendered
 
 
@@ -667,6 +691,180 @@ class StatsdObservabilityPolicy(BaseModel):
         return self
 
 
+class SyslogObservabilityPolicy(BaseModel):
+    """Syslog observability bridge settings.
+
+    The bridge emits one RFC 5424-style structured syslog message per
+    policy-approved aggregate metric.  It is intentionally best-effort and
+    observational: datagram transports can be lossy, receivers can drop data,
+    and failures must never affect JetStream delivery or sink writes.  The
+    message body is empty and all approved values live in bounded structured
+    data parameters.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    transport: Literal["udp", "unixgram"] = "udp"
+    host: str = "127.0.0.1"
+    port: int = Field(default=514, ge=1, le=65_535)
+    socket_path: str | None = None
+    facility: Literal[
+        "kern",
+        "user",
+        "mail",
+        "daemon",
+        "auth",
+        "syslog",
+        "lpr",
+        "news",
+        "uucp",
+        "cron",
+        "authpriv",
+        "ftp",
+        "ntp",
+        "audit",
+        "alert",
+        "clock",
+        "local0",
+        "local1",
+        "local2",
+        "local3",
+        "local4",
+        "local5",
+        "local6",
+        "local7",
+    ] = "local0"
+    severity: Literal[
+        "emergency",
+        "alert",
+        "critical",
+        "error",
+        "warning",
+        "notice",
+        "info",
+        "debug",
+    ] = "info"
+    hostname: str = "-"
+    app_name: str = "nats-sinks"
+    procid: str = "-"
+    msgid: str = "metrics"
+    structured_data_id: str = "nats_sinks"
+    timeout_seconds: float = Field(default=1.0, gt=0, le=60)
+    max_retries: int = Field(default=0, ge=0, le=10)
+    retry_backoff_seconds: float = Field(default=0.25, ge=0, le=60)
+    stale_after_seconds: float | None = Field(default=None, gt=0, le=86_400)
+    max_message_bytes: int = Field(default=1024, ge=128, le=SYSLOG_MAX_MESSAGE_BYTES)
+
+    @field_validator("host")
+    @classmethod
+    def validate_host(cls, value: str) -> str:
+        """Validate the UDP target host without accepting path-like text."""
+
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("syslog.host must not be empty")
+        if any(character in rendered for character in "\x00\n\r\t /"):
+            raise ValueError(
+                "syslog.host must not contain whitespace, slashes, or control characters"
+            )
+        return rendered
+
+    @field_validator("socket_path")
+    @classmethod
+    def validate_socket_path(cls, value: str | None) -> str | None:
+        """Validate the optional Unix datagram socket path."""
+
+        if value is None:
+            return None
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("syslog.socket_path must not be empty")
+        if len(rendered) > SYSLOG_SOCKET_PATH_MAX_LENGTH:
+            raise ValueError(
+                f"syslog.socket_path must be at most {SYSLOG_SOCKET_PATH_MAX_LENGTH} characters"
+            )
+        if any(character in rendered for character in "\x00\n\r"):
+            raise ValueError("syslog.socket_path must not contain control characters")
+        if Path(rendered).name in {"", ".", ".."}:
+            raise ValueError("syslog.socket_path must name a socket path")
+        return rendered
+
+    @field_validator("hostname")
+    @classmethod
+    def validate_hostname(cls, value: str) -> str:
+        """Validate the RFC 5424 hostname field without using local host lookup."""
+
+        return _validate_syslog_printable_field(
+            value,
+            field_name="syslog.hostname",
+            max_length=SYSLOG_HOSTNAME_MAX_LENGTH,
+        )
+
+    @field_validator("app_name")
+    @classmethod
+    def validate_app_name(cls, value: str) -> str:
+        """Validate the RFC 5424 application name field."""
+
+        return _validate_syslog_printable_field(
+            value,
+            field_name="syslog.app_name",
+            max_length=SYSLOG_APP_NAME_MAX_LENGTH,
+        )
+
+    @field_validator("procid")
+    @classmethod
+    def validate_procid(cls, value: str) -> str:
+        """Validate the RFC 5424 process identifier field."""
+
+        return _validate_syslog_printable_field(
+            value,
+            field_name="syslog.procid",
+            max_length=SYSLOG_PROCID_MAX_LENGTH,
+        )
+
+    @field_validator("msgid")
+    @classmethod
+    def validate_msgid(cls, value: str) -> str:
+        """Validate the RFC 5424 message identifier field."""
+
+        return _validate_syslog_printable_field(
+            value,
+            field_name="syslog.msgid",
+            max_length=SYSLOG_MSGID_MAX_LENGTH,
+        )
+
+    @field_validator("structured_data_id")
+    @classmethod
+    def validate_structured_data_id(cls, value: str) -> str:
+        """Validate the bounded structured-data identifier used for metrics."""
+
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("syslog.structured_data_id must not be empty")
+        if len(rendered) > SYSLOG_STRUCTURED_DATA_ID_MAX_LENGTH:
+            raise ValueError(
+                "syslog.structured_data_id must be at most "
+                f"{SYSLOG_STRUCTURED_DATA_ID_MAX_LENGTH} characters"
+            )
+        if not SYSLOG_STRUCTURED_DATA_ID_RE.fullmatch(rendered):
+            raise ValueError(
+                "syslog.structured_data_id may contain only letters, digits, underscores, "
+                "dots, colons, and hyphens"
+            )
+        return rendered
+
+    @model_validator(mode="after")
+    def validate_transport_settings(self) -> SyslogObservabilityPolicy:
+        """Require transport-specific settings only when syslog is enabled."""
+
+        if not self.enabled:
+            return self
+        if self.transport == "unixgram" and self.socket_path is None:
+            raise ValueError("syslog.socket_path is required when syslog.transport is unixgram")
+        return self
+
+
 class NatsServerMonitoringPolicy(BaseModel):
     """Policy for the optional NATS server monitoring connector.
 
@@ -827,6 +1025,7 @@ class ObservabilityPolicy(BaseModel):
     )
     splunk_hec: SplunkHecObservabilityPolicy = Field(default_factory=SplunkHecObservabilityPolicy)
     statsd: StatsdObservabilityPolicy = Field(default_factory=StatsdObservabilityPolicy)
+    syslog: SyslogObservabilityPolicy = Field(default_factory=SyslogObservabilityPolicy)
     nats_server_monitoring: NatsServerMonitoringPolicy = Field(
         default_factory=NatsServerMonitoringPolicy
     )

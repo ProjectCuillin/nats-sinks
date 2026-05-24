@@ -43,6 +43,12 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   bounded datagram sizes, bounded retries, CLI support through
   `nats-sink-observe statsd-export`, focused tests, and an Observability
   documentation sub-page.
+- Added a syslog observability bridge for approved RFC 5424-style aggregate
+  metric messages, including disabled-by-default policy controls, UDP and Unix
+  datagram transport modes, bounded message sizes, structured-data escaping,
+  dry-run rendering, bounded retries, CLI support through
+  `nats-sink-observe syslog-export`, focused tests, and an Observability
+  documentation sub-page.
 - Added centralized NATS authentication and TLS connection option construction
   for username/password, token, credentials-file, NKEY seed-file, local CA TLS,
   and TLS client certificate workflows, including identity-path redaction,

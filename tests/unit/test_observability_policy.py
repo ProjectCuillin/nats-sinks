@@ -95,6 +95,11 @@ def test_generated_policy_is_disabled_and_copies_safe_subject_hints(tmp_path: Pa
     assert policy.statsd.transport == "udp"
     assert policy.statsd.host == "127.0.0.1"
     assert policy.statsd.port == 8125
+    assert policy.syslog.enabled is False
+    assert policy.syslog.transport == "udp"
+    assert policy.syslog.host == "127.0.0.1"
+    assert policy.syslog.port == 514
+    assert policy.syslog.hostname == "-"
     assert policy.prometheus.http_endpoint.host == "127.0.0.1"
     assert policy.prometheus.http_endpoint.path == "/metrics"
     assert policy.nats_server_monitoring.enabled is False
@@ -288,3 +293,23 @@ def test_policy_rejects_unsafe_statsd_settings() -> None:
 
     with pytest.raises(ValueError, match="max_datagram_bytes"):
         ObservabilityPolicy(statsd={"max_datagram_bytes": 70_000})
+
+
+def test_policy_rejects_unsafe_syslog_settings() -> None:
+    with pytest.raises(ValueError, match="socket_path is required"):
+        ObservabilityPolicy(enabled=True, syslog={"enabled": True, "transport": "unixgram"})
+
+    with pytest.raises(ValueError, match="host"):
+        ObservabilityPolicy(syslog={"host": "127.0.0.1 /bad"})
+
+    with pytest.raises(ValueError, match="socket_path"):
+        ObservabilityPolicy(syslog={"socket_path": "bad\npath"})
+
+    with pytest.raises(ValueError, match="app_name"):
+        ObservabilityPolicy(syslog={"app_name": "bad value"})
+
+    with pytest.raises(ValueError, match="structured_data_id"):
+        ObservabilityPolicy(syslog={"structured_data_id": "bad value"})
+
+    with pytest.raises(ValueError, match="max_message_bytes"):
+        ObservabilityPolicy(syslog={"max_message_bytes": 70_000})

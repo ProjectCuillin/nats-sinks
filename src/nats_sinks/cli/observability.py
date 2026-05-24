@@ -81,6 +81,12 @@ from nats_sinks.observability.statsd import (
     export_statsd_metrics,
     render_statsd_lines,
 )
+from nats_sinks.observability.syslog import (
+    DISABLED_SYSLOG_TEXT,
+    EMPTY_SYSLOG_TEXT,
+    export_syslog_metrics,
+    render_syslog_messages,
+)
 
 app = typer.Typer(help="Manage nats-sinks observability policies and connectors.")
 
@@ -178,6 +184,7 @@ def _policy_summary(policy: ObservabilityPolicy) -> str:
             f"grafana_alloy_enabled={str(policy.grafana_alloy.enabled).lower()}",
             f"splunk_hec_enabled={str(policy.splunk_hec.enabled).lower()}",
             f"statsd_enabled={str(policy.statsd.enabled).lower()}",
+            f"syslog_enabled={str(policy.syslog.enabled).lower()}",
             f"nats_server_monitoring_enabled={str(policy.nats_server_monitoring.enabled).lower()}",
             "nats_server_monitoring_prometheus_enabled="
             f"{str(policy.nats_server_monitoring.prometheus_enabled).lower()}",
@@ -882,6 +889,85 @@ def statsd_export(
         f"message={result.message}"
     )
     if result.message == EMPTY_STATSD_TEXT.strip():
+        return
+    if not result.delivered:
+        raise typer.Exit(3)
+
+
+@app.command("syslog-export")
+def syslog_export(
+    snapshot_file: Annotated[
+        Path,
+        typer.Argument(help="Metrics snapshot JSON written by nats-sink."),
+    ],
+    policy_file: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="Render RFC 5424-style syslog messages to stdout instead of sending datagrams.",
+        ),
+    ] = False,
+    allow_stale: Annotated[
+        bool,
+        typer.Option("--allow-stale", help="Warn but export when the snapshot is stale."),
+    ] = False,
+) -> None:
+    """Export approved metrics as RFC 5424-style syslog messages.
+
+    The syslog bridge is best-effort observability.  It reads only a local
+    metrics snapshot, applies the shared allow and deny policy, and sends
+    bounded structured messages to the configured syslog target.  Failures
+    cannot change JetStream ACK, NAK, DLQ, retry, or sink behavior.
+    """
+
+    policy = _load_policy_or_exit(policy_file)
+    snapshot: dict[str, object] | None = None
+    if policy.enabled and policy.syslog.enabled:
+        snapshot = _load_snapshot_or_exit(snapshot_file)
+        try:
+            _check_staleness(
+                snapshot,
+                stale_after_seconds=policy.syslog.stale_after_seconds,
+                allow_stale=allow_stale,
+            )
+        except ValueError as exc:
+            typer.echo(f"Metrics snapshot error: {exc}", err=True)
+            raise typer.Exit(2) from exc
+
+    if not policy.enabled or not policy.syslog.enabled:
+        typer.echo(DISABLED_SYSLOG_TEXT, nl=False)
+        return
+    if snapshot is None:
+        typer.echo(
+            "Syslog export error: enabled syslog export requires a metrics snapshot", err=True
+        )
+        raise typer.Exit(2)
+
+    if dry_run:
+        try:
+            rendered = render_syslog_messages(snapshot, policy)
+        except (ConfigurationError, ValueError) as exc:
+            typer.echo(f"Syslog render error: {exc}", err=True)
+            raise typer.Exit(2) from exc
+        typer.echo(rendered, nl=False)
+        return
+
+    try:
+        result = export_syslog_metrics(snapshot, policy)
+    except (ConfigurationError, ValueError) as exc:
+        typer.echo(f"Syslog export error: {exc}", err=True)
+        raise typer.Exit(2) from exc
+
+    typer.echo(
+        "Syslog export: "
+        f"attempted={str(result.attempted).lower()} "
+        f"delivered={str(result.delivered).lower()} "
+        f"attempts={result.attempts} "
+        f"messages={result.messages} "
+        f"message={result.message}"
+    )
+    if result.message == EMPTY_SYSLOG_TEXT.strip():
         return
     if not result.delivered:
         raise typer.Exit(3)

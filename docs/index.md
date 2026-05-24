@@ -270,11 +270,13 @@ operations without hunting through a long flat list.
   Splunk HTTP Event Collector for security operations and incident response.
 - [StatsD Integration](statsd.md): export approved aggregate metrics as
   best-effort UDP or Unix datagrams to StatsD-compatible aggregators.
+- [Syslog Bridge](syslog.md): export approved aggregate metrics as bounded
+  RFC 5424-style messages to syslog pipelines.
 - [NATS Server Monitoring](nats-server-monitoring.md): understand why endpoints
   such as `/jsz` and `/healthz` stay outside the delivery worker.
 - [Future Observability Connectors](observability-connectors.md): review the
   shared connector contract and the staged connector backlog for Datadog, OCI
-  Monitoring, CloudWatch, Azure Monitor, syslog, and other future
+  Monitoring, CloudWatch, Azure Monitor, and other future
   connectors.
 
 ### Deployment, Security, And Quality

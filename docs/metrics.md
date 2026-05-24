@@ -69,13 +69,14 @@ flowchart LR
     Observe --> Textfile[Prometheus textfile]
     Observe --> Http[Optional Prometheus HTTP endpoint]
     Observe --> OTLP[OpenTelemetry Collector]
+    Observe --> Syslog[Syslog bridge]
 ```
 
 The runner emits metric suffixes such as `messages_fetched_total`. A recorder
 stores or exports those values. `JsonFileMetrics` writes a compact local JSON
 document that the metrics CLI can read. Larger deployments can implement the
 same `MetricsRecorder` protocol and send values to Prometheus, OpenTelemetry,
-StatsD, or a platform-native telemetry service.
+StatsD, syslog, or a platform-native telemetry service.
 
 Metrics are observational only. They must never change ACK ordering, inspect
 plaintext payloads, mutate envelopes, or decide whether a message is successful.
@@ -304,6 +305,7 @@ The observability CLI provides policy and connector commands:
 | `nats-sink-observe grafana-alloy-export SNAPSHOT POLICY` | Dry-run or send approved metrics through the Grafana Alloy profile. |
 | `nats-sink-observe splunk-hec-export SNAPSHOT POLICY` | Dry-run or send approved aggregate metrics to Splunk HEC. |
 | `nats-sink-observe statsd-export SNAPSHOT POLICY` | Dry-run or send approved best-effort metric datagrams to StatsD. |
+| `nats-sink-observe syslog-export SNAPSHOT POLICY` | Dry-run or send approved RFC 5424-style metric messages to syslog. |
 
 The global version flag is available too:
 
