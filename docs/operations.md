@@ -38,6 +38,13 @@ Typical command:
 nats-sink run /etc/nats-sinks/config.json
 ```
 
+Containerized deployments should use the hardened Oracle Linux slim image
+baseline documented in [Production Container Hardening](container-hardening.md).
+That page describes the non-root UID/GID, read-only-root filesystem behavior,
+writable mount expectations, OCI image labels, SBOM and vulnerability-scanning
+evidence, and the careful language operators should use when mapping the image
+to DoD, DISA, NSA/CISA, NIST, CIS, or NATO-aligned security review processes.
+
 Kubernetes deployment examples are provided in
 [Kubernetes Deployment](kubernetes.md). They show JSON runtime configuration in
 ConfigMaps, Secret references for credentials, restrictive security contexts,

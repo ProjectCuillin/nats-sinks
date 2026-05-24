@@ -139,6 +139,30 @@ Only wheels and source distributions are sent to PyPI. SBOM files and
 `SHA256SUMS` are uploaded as GitHub Actions artifacts and attached to the
 GitHub Release page.
 
+## Container Image Evidence
+
+The Python package SBOM is release evidence for the package distribution. A
+container image also contains operating-system packages, image metadata, and
+runtime configuration expectations. Operators who build or publish the
+`nats-sinks` container should generate container-specific evidence in the same
+approval workflow:
+
+- record the source Git revision and final image digest;
+- generate a container SBOM with an approved tool such as Syft, Trivy, Docker
+  Scout, or an internal platform scanner;
+- scan the final image with the vulnerability tool accepted by the consuming
+  environment;
+- sign the image or attach signed provenance where the registry supports it;
+- keep the scanner output sanitized before it is copied into public issues or
+  external reports; and
+- retain any risk-acceptance decisions with the deployment evidence package.
+
+The tracked Dockerfile includes OCI labels for source, documentation, version,
+revision, creation time, license, vendor, and base image. Those labels help
+link a running image back to the release evidence without embedding secrets or
+environment-specific data. See [Production Container Hardening](container-hardening.md)
+for the complete container hardening checklist.
+
 ## Security Notes
 
 SBOM files are safe to publish as release evidence, but they still disclose

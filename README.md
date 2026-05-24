@@ -179,6 +179,11 @@ used immediately:
   developer smoke testing with a temporary NATS JetStream service and the file
   sink. See
   [Local Docker Stack](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/docker.md).
+- A production container hardening baseline for the Oracle Linux slim image,
+  including non-root UID/GID `10001`, read-only-root-compatible runtime
+  guidance, OCI image labels, writable-path documentation, SBOM and
+  vulnerability-scanning expectations, and careful accreditation caveats. See
+  [Production Container Hardening](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/container-hardening.md).
 - Mission-support operational examples that show complete patterns for
   restricted event storage, disconnected file handoff, DLQ triage and replay
   preparation, and destination outage recovery. See
@@ -1110,7 +1115,8 @@ Phase 2:
   bucket guidance.
 - Kafka, search, warehouse, document database, key-value, and wide-column
   backend evaluation through the sink framework.
-- Hardened public Docker image and release publication automation.
+- Public Docker image release publication automation, including signed image
+  publication and container-specific provenance attachments.
 - Expanded live certification runbooks for NATS TLS certificate, NKEY, and
   decentralized JWT deployments across representative server policies.
 - Deeper sequence-based and timestamp-based JetStream replay-start controls.

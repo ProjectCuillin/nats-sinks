@@ -124,6 +124,11 @@ The current release provides the following production-ready foundation:
 - [Kubernetes deployment examples](kubernetes.md) with JSON ConfigMaps, Secret
   references, restrictive security contexts, resource limits, graceful
   shutdown settings, and optional Prometheus observability sidecars.
+- [Production container hardening](container-hardening.md) for the Oracle
+  Linux slim image, including non-root UID/GID `10001`,
+  read-only-root-compatible runtime guidance, explicit writable paths, OCI
+  labels, SBOM and vulnerability-scanning expectations, and careful defence
+  accreditation caveats.
 - `nats_sinks.oracle.OracleSink`, a production Oracle Database sink with
   connection pooling, idempotent `merge` and `insert_ignore` modes, Oracle
   Autonomous Database connection options for OCI deployments,
