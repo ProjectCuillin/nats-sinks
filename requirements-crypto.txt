@@ -4,4 +4,4 @@
 
 -r requirements.txt
 
-cryptography>=42,<47
+cryptography>=42,<49
