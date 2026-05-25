@@ -18,6 +18,7 @@ The most important top-level imports are:
 ```python
 from nats_sinks import JetStreamSinkRunner, NatsEnvelope, Sink
 from nats_sinks.file import FileSink
+from nats_sinks.mysql import MySqlSink
 from nats_sinks.oracle import OracleSink
 from nats_sinks.sinks import SinkConnector, SinkRegistry
 ```
@@ -74,8 +75,8 @@ The tests also cover:
 - sink extension points such as `Sink`, `HealthCheckableSink`,
   `SchemaAwareSink`, `FlushableSink`, `SinkRegistry`, `SinkConnector`,
   `load_entry_point_connectors`, and `normalize_connector_name`,
-- production sink package exports for `nats_sinks.file` and
-  `nats_sinks.oracle`,
+- production sink package exports for `nats_sinks.file`, `nats_sinks.mysql`,
+  and `nats_sinks.oracle`,
 - documented configuration helpers such as `load_config` and
   `redacted_config`,
 - command entry points for `nats-sink`, `nats-sink-metrics`, and
@@ -136,14 +137,14 @@ scripts/check.sh
 When a feature should become part of the supported Python API, update the code,
 documentation, and compatibility test together.
 
-For example, if a future first-party Oracle MySQL sink is added, the intended
-public import would likely be:
+For example, the first-party Oracle MySQL sink exposes this stable public
+import:
 
 ```python
 from nats_sinks.mysql import MySqlSink
 ```
 
-The release-ready change should then include:
+When adding another first-party sink, use the same release-ready checklist:
 
 1. `src/nats_sinks/mysql/__init__.py` exporting `MySqlSink`.
 2. Documentation showing the import.

@@ -40,6 +40,7 @@ nav:
       - Feature Gap Analysis: nats-feature-gap-analysis.md
   - Sinks:
       - Oracle Sink: oracle-sink.md
+      - Oracle MySQL Sink: mysql-sink.md
       - File Sink: file-sink.md
       - Edge Spool Sink: spool-sink.md
       - GoldenGate-Inspired Sink Candidates: goldengate-sink-candidate-research.md

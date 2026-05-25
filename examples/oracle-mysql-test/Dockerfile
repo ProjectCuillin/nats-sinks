@@ -14,7 +14,7 @@ ENV ORACLE_MYSQL_TEST_DATABASE="nats_sinks_test" \
     ORACLE_MYSQL_PORT="3306"
 
 LABEL org.opencontainers.image.title="nats-sinks Oracle MySQL test database" \
-      org.opencontainers.image.description="Short-lived Oracle MySQL test database image for future nats-sinks Oracle MySQL sink development." \
+      org.opencontainers.image.description="Short-lived Oracle MySQL test database image for nats-sinks Oracle MySQL sink development and e2e certification." \
       org.opencontainers.image.source="https://github.com/ProjectCuillin/nats-sinks" \
       org.opencontainers.image.url="https://github.com/ProjectCuillin/nats-sinks" \
       org.opencontainers.image.documentation="https://nats-sinks.readthedocs.io/en/latest/oracle-mysql-test-container/" \

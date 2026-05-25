@@ -60,6 +60,7 @@ PEM_BLOCK_RE = re.compile(r"-----BEGIN [A-Z0-9 ]+-----")
 AREAS = {
     "Core runtime and delivery semantics",
     "Oracle sink",
+    "Oracle MySQL sink",
     "File sink",
     "Future sink",
     "CLI",

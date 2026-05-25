@@ -30,6 +30,7 @@ from nats_sinks import (
     Sink as ReadmeSink,
 )
 from nats_sinks.file import FileSink as ReadmeFileSink
+from nats_sinks.mysql import MySqlSink as ReadmeMySqlSink
 from nats_sinks.oracle import OracleSink as ReadmeOracleSink
 from nats_sinks.spool import SpoolSink as ReadmeSpoolSink
 
@@ -209,6 +210,14 @@ PUBLIC_API_CONTRACT: dict[str, tuple[str, ...]] = {
         "build_oracle_lineage_query",
         "render_lineage_result_text",
         "resolve_lineage_table",
+    ),
+    "nats_sinks.mysql": (
+        "MySqlColumnMapping",
+        "MySqlIdempotencyConfig",
+        "MySqlSink",
+        "MySqlSinkConfig",
+        "MySqlTableRoute",
+        "MySqlWriteMode",
     ),
     "nats_sinks.spool": (
         "SPOOL_RECORD_SCHEMA",
@@ -417,6 +426,7 @@ def test_public_api_smoke_imports_match_readme_examples() -> None:
     assert ReadmeNatsEnvelope is nats_sinks.NatsEnvelope
     assert ReadmeSink is nats_sinks.Sink
     assert ReadmeFileSink is nats_sinks.FileSink
+    assert ReadmeMySqlSink.__name__ == "MySqlSink"
     assert ReadmeOracleSink.__name__ == "OracleSink"
     assert ReadmeSpoolSink is nats_sinks.SpoolSink
 

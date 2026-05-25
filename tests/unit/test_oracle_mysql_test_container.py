@@ -3,10 +3,11 @@
 
 """Tests for the Oracle MySQL test database container assets.
 
-The Oracle MySQL test container is intentionally a development aid for the
-future Oracle MySQL sink.  These unit tests do not require Docker.  They inspect
-the Dockerfile, entrypoint, and smoke runner so CI can protect the security
-contract even on runners that cannot build or start local containers.
+The Oracle MySQL test container is intentionally a development and e2e
+certification aid for the Oracle MySQL sink.  These unit tests do not require
+Docker.  They inspect the Dockerfile, entrypoint, and smoke runner so CI can
+protect the security contract even on runners that cannot build or start local
+containers.
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DOCKERFILE = REPO_ROOT / "examples" / "oracle-mysql-test" / "Dockerfile"
 ENTRYPOINT = REPO_ROOT / "examples" / "oracle-mysql-test" / "entrypoint.sh"
 SMOKE_SCRIPT = REPO_ROOT / "scripts" / "run-oracle-mysql-container-smoke.py"
+SINK_E2E_SCRIPT = REPO_ROOT / "scripts" / "run-mysql-sink-e2e.py"
 
 
 def _load_smoke_script() -> ModuleType:
@@ -205,3 +207,20 @@ def test_oracle_mysql_smoke_script_cleanup_is_default_behavior() -> None:
     assert '["docker", "rm", "-f", container_name]' in script
     assert '["docker", "volume", "rm", "-f", volume_name]' in script
     assert "shutil.rmtree(secret_dir)" in script
+
+
+def test_oracle_mysql_sink_e2e_script_reuses_container_assets_safely() -> None:
+    """The sink e2e runner should preserve the same short-lived-container rules."""
+
+    script = SINK_E2E_SCRIPT.read_text(encoding="utf-8")
+
+    assert "SPDX-License-Identifier: Apache-2.0" in script
+    assert "run-oracle-mysql-container-smoke.py" in script
+    assert "NATS_SINKS_MYSQL_PASSWORD_ENV" in script
+    assert "NATS_SINKS_MYSQL_PASSWORD" in script
+    assert "--preserve-artifacts" in script
+    assert "--read-only" in script
+    assert "--cap-drop" in script
+    assert "no-new-privileges:true" in script
+    assert "secrets_to_redact=(app_password,)" in script
+    assert "smoke.cleanup(container_name, volume_name, secret_dir" in script

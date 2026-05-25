@@ -149,6 +149,14 @@ class MetricNames:
     ORACLE_DUPLICATE_NOOP_TOTAL = "oracle_duplicate_noop_total"
     ORACLE_MERGE_ROWS_TOTAL = "oracle_merge_rows_total"
     ORACLE_MERGE_OUTCOME_UNKNOWN_TOTAL = "oracle_merge_outcome_unknown_total"
+    MYSQL_EXECUTE_SECONDS = "mysql_execute_seconds"
+    MYSQL_COMMIT_SECONDS = "mysql_commit_seconds"
+    MYSQL_CONFLICTS_TOTAL = "mysql_conflicts_total"
+    MYSQL_DUPLICATES_TOTAL = "mysql_duplicates_total"
+    MYSQL_DUPLICATE_IGNORED_TOTAL = "mysql_duplicate_ignored_total"
+    MYSQL_DUPLICATE_NOOP_TOTAL = "mysql_duplicate_noop_total"
+    MYSQL_UPSERT_ROWS_TOTAL = "mysql_upsert_rows_total"
+    MYSQL_UPSERT_OUTCOME_UNKNOWN_TOTAL = "mysql_upsert_outcome_unknown_total"
     LAST_SINK_SUCCESS_EPOCH_SECONDS = "last_sink_success_epoch_seconds"
     CURRENT_BATCH_MESSAGES = "current_batch_messages"
 
@@ -547,6 +555,46 @@ METRIC_SPECS: tuple[MetricSpec, ...] = (
         MetricNames.ORACLE_MERGE_OUTCOME_UNKNOWN_TOTAL,
         "counter",
         "Oracle merge rows where insert-versus-match outcome is not reliably exposed.",
+    ),
+    MetricSpec(
+        MetricNames.MYSQL_EXECUTE_SECONDS,
+        "histogram",
+        "Elapsed seconds spent executing Oracle MySQL batch write statements before commit.",
+    ),
+    MetricSpec(
+        MetricNames.MYSQL_COMMIT_SECONDS,
+        "histogram",
+        "Elapsed seconds spent committing Oracle MySQL transactions.",
+    ),
+    MetricSpec(
+        MetricNames.MYSQL_CONFLICTS_TOTAL,
+        "counter",
+        "Oracle MySQL write conflicts observed by MySqlSink, such as duplicate-key conflicts.",
+    ),
+    MetricSpec(
+        MetricNames.MYSQL_DUPLICATES_TOTAL,
+        "counter",
+        "Oracle MySQL rows identified as duplicate prior processing through idempotent handling.",
+    ),
+    MetricSpec(
+        MetricNames.MYSQL_DUPLICATE_IGNORED_TOTAL,
+        "counter",
+        "Oracle MySQL duplicate rows safely ignored by insert_ignore mode.",
+    ),
+    MetricSpec(
+        MetricNames.MYSQL_DUPLICATE_NOOP_TOTAL,
+        "counter",
+        "Oracle MySQL duplicate rows safely left unchanged by upsert mode with no update columns.",
+    ),
+    MetricSpec(
+        MetricNames.MYSQL_UPSERT_ROWS_TOTAL,
+        "counter",
+        "Oracle MySQL rows committed through upsert mode.",
+    ),
+    MetricSpec(
+        MetricNames.MYSQL_UPSERT_OUTCOME_UNKNOWN_TOTAL,
+        "counter",
+        "Oracle MySQL upsert rows where insert-versus-match outcome is not reliably exposed.",
     ),
     MetricSpec(
         MetricNames.LAST_SINK_SUCCESS_EPOCH_SECONDS,

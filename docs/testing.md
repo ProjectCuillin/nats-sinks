@@ -174,13 +174,14 @@ The test creates a unique child directory under `NATS_SINKS_FILE_E2E_DIRECTORY`
 for each run. Keep that directory under `.local/` or another ignored location
 when retaining files.
 
-## Oracle MySQL Test Container
+## Oracle MySQL Sink And Test Container
 
-The repository includes a local Oracle MySQL test database container for future
-Oracle MySQL sink development. This asset is intentionally separate from the
-production Oracle Database sink and does not implement an Oracle MySQL sink.
-It provides a clean local database backend that future sink tests can use for
-transactions, schema validation, duplicate handling, and throughput work.
+The repository includes a local Oracle MySQL test database container and a
+container-backed e2e test for the first-party Oracle MySQL sink. The container
+is intentionally separate from the production Oracle Database sink. It provides
+a clean local database backend for transactions, schema validation, duplicate
+handling, routed writes, and throughput work without requiring a long-lived
+developer database.
 
 Run the deterministic asset tests without Docker:
 
@@ -200,6 +201,33 @@ Expected sanitized output:
 Oracle MySQL container smoke test passed with one verified test record.
 ```
 
+Run the Oracle MySQL sink e2e test against a fresh short-lived container:
+
+```bash
+python scripts/run-mysql-sink-e2e.py
+```
+
+Expected sanitized output:
+
+```text
+Oracle MySQL sink container e2e test passed.
+```
+
+That e2e runner builds the same Oracle Linux 9 slim based Oracle MySQL image,
+starts a fresh container with generated credentials, exposes it only on a
+random loopback port, runs `tests/integration/test_mysql_sink.py`, and removes
+the container, Docker volume, and generated secret files by default.
+
+The integration test validates:
+
+- `MySqlSink.start`, `healthcheck`, `ensure_schema`, `write_batch`, and `stop`;
+- idempotent `upsert` with no-op duplicate redelivery;
+- subject-to-table routing;
+- metadata persistence for priority, classification, and labels;
+- non-JSON payload wrapping;
+- empty payload handling;
+- Oracle MySQL duplicate/upsert metrics through the shared metrics recorder.
+
 The smoke test builds the Oracle Linux 9 slim based Oracle MySQL image, starts
 a fresh short-lived container with generated random credentials, waits for
 readiness, creates a test table, inserts and reads one row, and removes the
@@ -207,8 +235,9 @@ container, Docker volume, and generated secret files by default. Use
 `--preserve-artifacts` only for local debugging and clean up preserved files
 under `.local/oracle-mysql-test/` afterward.
 
-See [Oracle MySQL Test Container](oracle-mysql-test-container.md) for the
-complete security model, runtime sequence, capability exception, and
+See [Oracle MySQL Sink](mysql-sink.md) for sink configuration and
+[Oracle MySQL Test Container](oracle-mysql-test-container.md) for the complete
+container security model, runtime sequence, capability exception, and
 troubleshooting guidance.
 
 ## Local WebSocket End-To-End Test
@@ -472,6 +501,7 @@ available level:
 | Sink | Unit tests | Smoke tests | End-to-end tests |
 | --- | --- | --- | --- |
 | Oracle | SQL, mapping, routing, payload, idempotency, encrypted payload storage, and contract tests. | `nats-sink validate examples/oracle-jetstream/config.json`; live `test-sink` when Oracle env is available. | Live NATS-to-Oracle e2e when `.local` integration env is available. |
+| Oracle MySQL | SQL, mapping, routing, payload, idempotency, TLS configuration, metrics, and contract tests. | `nats-sink validate examples/oracle-mysql-basic/config.json`; `python scripts/run-oracle-mysql-container-smoke.py`. | Local short-lived Oracle MySQL container e2e with `python scripts/run-mysql-sink-e2e.py`. |
 | File | Path mapping, payload, duplicate policy, compression, encryption, healthcheck, filesystem errors, and fuzz-style path safety tests. | `nats-sink validate examples/file-basic/config.json`; `nats-sink test-sink examples/file-basic/config.json`. | Local deterministic runner-to-file e2e in `tests/integration/test_file_sink_e2e.py`, with uncompressed, gzip, and encrypted output. |
 
 If a live external-service test is not run, the latest test report must say so

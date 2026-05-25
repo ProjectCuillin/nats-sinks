@@ -38,6 +38,7 @@ from nats_sinks.core.stream_management import (
     build_stream_management_plan,
 )
 from nats_sinks.file import FileSink
+from nats_sinks.mysql import MySqlSink
 from nats_sinks.oracle import (
     OracleLineageReader,
     OracleSink,
@@ -65,7 +66,7 @@ def _version_callback(value: bool) -> None:
 def _registry(plugins: SinkPluginConfig | None = None) -> SinkRegistry:
     """Build the explicit sink connector registry.
 
-    Oracle Database and FileSink are first-party built-ins and are always
+    Oracle Database, Oracle MySQL, and FileSink are first-party built-ins and are always
     registered.  External connectors are loaded only when the JSON config
     explicitly enables plugin discovery and allow-lists the connector name.
     """
@@ -92,6 +93,18 @@ def _registry(plugins: SinkPluginConfig | None = None) -> SinkRegistry:
             requires_extra="oracle",
             documentation="docs/oracle-sink.md",
             certification=("commit-then-ack", "unit", "integration", "live-e2e"),
+        )
+    )
+    registry.register_connector(
+        SinkConnector(
+            name="mysql",
+            factory=MySqlSink.from_mapping,
+            summary="Built-in Oracle MySQL sink.",
+            built_in=True,
+            production_ready=True,
+            requires_extra="mysql",
+            documentation="docs/mysql-sink.md",
+            certification=("commit-then-ack", "unit", "integration", "container-e2e"),
         )
     )
     registry.register_connector(

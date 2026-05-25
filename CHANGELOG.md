@@ -12,6 +12,13 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Added
 
+- Added the first-party Oracle MySQL sink for issue #101, including
+  `nats_sinks.mysql.MySqlSink`, optional `nats-sinks[mysql]` dependency
+  metadata, strict identifier validation, bound SQL values, TLS CA/client
+  certificate options, subject-to-table routing, idempotent `upsert` and
+  `insert_ignore` modes, payload envelope handling for non-JSON bodies, message
+  metadata preservation, Oracle MySQL duplicate/upsert metrics, container-backed
+  e2e certification, examples, and dedicated documentation.
 - Added optional core message authenticity verification before sink writes,
   including subject-scoped HMAC-SHA256 and Ed25519 rules, canonical signed
   payload and metadata documents, sanitized verification failures,
@@ -130,8 +137,8 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   duplicate redelivery, ACK-boundary protection, and log-redaction checks, with
   Oracle and file sink coverage included in the deterministic sink check suite.
 - Added researched backlog items for first-party Oracle-family sink candidates:
-  OCI Object Storage, Oracle MySQL, Oracle Berkeley DB, Oracle NoSQL Database,
-  and OCI Streaming.
+  OCI Object Storage, Oracle Berkeley DB, Oracle NoSQL Database, and OCI
+  Streaming.
 - Added high-priority Palantir Foundry and Palantir Gotham sink backlog items,
   each requiring local fake-client or contract-harness testing before any live
   certification claim.
@@ -161,10 +168,8 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   mission metadata fields, message ID, or subject. The helper uses bind
   variables for lookup values, validates configured tables and columns, omits
   payload output by default, and does not affect sink writes or ACK behavior.
-- Added a researched backlog item for a future Oracle MySQL sink, including
-  initial design direction for Oracle MySQL Connector/Python, idempotent
-  upserts, TLS, least-privilege access, test planning, and documentation
-  scope.
+- Added Oracle MySQL sink research and converted the result into the
+  production sink implementation tracked by issue #101.
 - Added a fail-closed pre-sink policy gate that runs after normalization,
   message metadata, mission metadata, and optional payload encryption but before
   any destination write. The gate supports subject-scoped requirements for
@@ -302,6 +307,13 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Fixed
 
+- Fixed Oracle MySQL sink connection-pool startup by normalizing positive
+  fractional `connection_timeout` values to integer seconds before passing
+  options to Oracle MySQL Connector/Python, with a regression test and
+  container-backed e2e verification.
+- Fixed Oracle MySQL SQL-builder static-analysis evidence by placing reviewed
+  Bandit B608 suppressions on the exact validated SQL f-string line reported
+  by the scanner, with regression coverage for the annotation placement.
 - Fixed the local Docker smoke runner so expected transient NATS startup
   connection failures use a quiet error callback and NATS stream seeding
   failures are reported as concise `SmokeTestError` messages instead of raw

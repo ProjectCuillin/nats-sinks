@@ -142,23 +142,27 @@ async def test_file_sink_certification(tmp_path: Path) -> None:
 ```
 
 The helpers intentionally do not decide what durable success means for a sink.
-The destination-specific assertion must prove that evidence. For Oracle this
-can be a fake connection that records `commit()`. For the file sink this can be
-the presence and content of the atomically placed output file.
+The destination-specific assertion must prove that evidence. For Oracle
+Database and Oracle MySQL this can be a fake connection that records
+`commit()`. For the file sink this can be the presence and content of the
+atomically placed output file.
 
 ## Built-In Sink Certification Status
 
 | Sink | Certification coverage |
 | --- | --- |
 | Oracle Database | Unit contract tests cover commit-before-success, rollback on failure, duplicate-safe modes, payload normalization, metadata columns, encryption envelopes, error translation, and SQL identifier validation. Live Oracle tests are opt-in through ignored local environment files. |
+| Oracle MySQL | Unit contract tests cover commit-before-success, rollback on failure, duplicate-safe modes, payload normalization, metadata columns, TLS option validation, Oracle MySQL metrics, error translation, and SQL identifier validation. Container-backed e2e tests run against a short-lived Oracle MySQL test database. |
 | File | Unit and file e2e tests cover atomic file placement, duplicate handling, gzip compression, payload modes, encrypted payload envelopes, metadata preservation, path sanitization, health checks, and no ACK ownership. |
 
-The reusable helpers are now applied to both built-in sinks where practical:
+The reusable helpers are now applied to built-in sinks where practical:
 
 - file sink lifecycle, write, duplicate-redelivery, and log-redaction helper
   coverage,
 - Oracle sink durable-success helper coverage using a fake connection pool that
-  proves `commit()` occurs before `write_batch(...)` returns.
+  proves `commit()` occurs before `write_batch(...)` returns,
+- Oracle MySQL sink durable-success helper coverage using a fake connection
+  pool and the same certification helper pattern.
 
 ## Production-Ready Connector Requirements
 
