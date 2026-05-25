@@ -84,7 +84,10 @@ scripts/run-release-validation.sh --repo ProjectCuillin/nats-sinks
 ```
 
 The pull request is the review boundary before `main`. Branch protection should
-require CI, CODEOWNER review, resolved conversations, and no direct pushes. See
+require the release pull request governance check, dependency review, resolved
+conversations, and no direct pushes. In the current solo-maintainer model it
+must not require CODEOWNER approval or a second approving review, because
+GitHub blocks self-approval and that would deadlock releases. See
 [Hierarchical Branch Development And Release Workflow](branch-workflow.md).
 Before merging any pull request, use
 `python scripts/merge-pr-with-comment.py --pr <number> --comment-file <file>`

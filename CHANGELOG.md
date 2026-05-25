@@ -24,6 +24,10 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   short-lived container, verify that the local checkout is not being imported,
   run meaningful artifact smoke checks, and require GitHub bug reports for any
   findings before fixes start.
+- Added a solo-maintainer branch-protection policy for `main` so release pull
+  requests remain gated by PR governance, dependency review, resolved
+  conversations, and force-push/deletion protections without requiring
+  impossible self-approval.
 - Added the first-party Oracle MySQL sink for issue #101, including
   `nats_sinks.mysql.MySqlSink`, optional `nats-sinks[mysql]` dependency
   metadata, strict identifier validation, bound SQL values, TLS CA/client

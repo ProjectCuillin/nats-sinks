@@ -114,9 +114,12 @@ silent loss after an early ACK is not.
   explicitly changes the release policy. Do not create release tags from
   unmerged work branches; the release workflow rejects tags that are not
   already contained in `main`.
-- Treat `main` branch protection as part of the safety model. CODEOWNER review,
-  required CI, stale-review dismissal, resolved conversations, and no force
-  pushes are expected for every release-boundary merge.
+- Treat `main` branch protection as part of the safety model. The repository
+  currently uses a solo-maintainer release model: require pull requests,
+  release pull request governance, dependency review, resolved conversations,
+  no force pushes, and no branch deletion. Do not require CODEOWNER review or
+  one approving review for `main`, because GitHub blocks self-approval and that
+  would deadlock releases for a one-person repository.
 - Treat GitHub Issues as the live backlog and `CHANGELOG.md` as the shipped
   release history. Before implementing user-visible work, look for a matching
   GitHub issue or prepare a detailed feature request unless the change is a

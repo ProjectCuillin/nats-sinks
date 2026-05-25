@@ -1,8 +1,8 @@
 # SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
 
-# All repository changes require maintainer review before they can be merged to
-# the protected main branch. GitHub branch protection should require CODEOWNER
-# review so this file becomes an enforceable release-control boundary rather
-# than only a notification preference.
+# Maintainer ownership remains documented here for GitHub review suggestions
+# and future multi-maintainer operation. In the current solo-maintainer model,
+# branch protection must not require CODEOWNER approval because GitHub blocks
+# self-approval and would deadlock releases.
 * @louwersj

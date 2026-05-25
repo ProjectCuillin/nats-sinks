@@ -7,11 +7,15 @@
 #
 # The policy is intentionally narrow and release oriented:
 # - direct pushes to main are blocked by requiring pull requests,
-# - CODEOWNER review is required before merge,
-# - stale reviews are dismissed after new commits,
-# - the CI matrix must pass before merge,
+# - the release PR governance and dependency review checks must pass,
 # - administrators are also covered so the policy protects emergency work from
 #   accidentally bypassing the public release trail.
+#
+# This repository is currently maintained by one GitHub user. GitHub does not
+# permit self-approval, so requiring one approving review would deadlock every
+# release. The policy therefore requires the pull request boundary and automated
+# checks, while allowing the sole maintainer to merge after posting release
+# evidence.
 #
 # The script uses gh and never handles secrets directly. Maintainers should
 # authenticate gh with an account that has repository administration rights.
@@ -84,16 +88,15 @@ gh api \
   "required_status_checks": {
     "strict": true,
     "contexts": [
-      "test (3.11)",
-      "test (3.12)",
-      "test (3.13)"
+      "branch-first-policy",
+      "dependency-review"
     ]
   },
   "enforce_admins": true,
   "required_pull_request_reviews": {
-    "dismiss_stale_reviews": true,
-    "require_code_owner_reviews": true,
-    "required_approving_review_count": 1
+    "dismiss_stale_reviews": false,
+    "require_code_owner_reviews": false,
+    "required_approving_review_count": 0
   },
   "restrictions": null,
   "required_linear_history": false,

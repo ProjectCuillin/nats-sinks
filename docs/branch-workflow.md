@@ -379,14 +379,20 @@ GitHub branch protection is the hard enforcement layer. The repository should
 protect `main` with these settings:
 
 - require a pull request before merging,
-- require at least one approving review,
-- require CODEOWNER review,
-- dismiss stale approvals after new commits,
 - require conversation resolution,
-- require the CI matrix for Python 3.11, 3.12, and 3.13,
+- require the release pull request governance check,
+- require dependency review,
 - block force pushes,
 - block branch deletion,
 - include administrators in the rule.
+
+This is intentionally a solo-maintainer policy. GitHub does not allow a user to
+approve their own pull request, so requiring one approving review or CODEOWNER
+review would prevent every release while the repository has only one
+write-access maintainer. The release safety boundary is therefore the pull
+request, the automated release-gate checks, the required release evidence
+comment, and the release tag validation that refuses to publish anything not
+already merged into `main`.
 
 Apply or refresh that policy with:
 

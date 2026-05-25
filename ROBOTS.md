@@ -70,8 +70,11 @@ This repository is safety-sensitive infrastructure code. Follow these rules:
 - Release tags must point at commits already merged into `main`; do not tag
   unmerged work branches.
 - Keep `main` protected through GitHub branch protection. Require pull
-  requests, CODEOWNER review, stale-review dismissal, resolved conversations,
-  and the supported Python CI matrix before merge. Use
+  requests, release pull request governance, dependency review, resolved
+  conversations, no force pushes, and no branch deletion. This repository is a
+  solo-maintainer repository, so do not require a second approving review or
+  CODEOWNER review for `main`: GitHub blocks self-approval and that setting
+  deadlocks releases. Use
   `scripts/apply-branch-protection.sh` when the repository policy needs to be
   applied or repaired.
 - Treat GitHub Issues as the live backlog and `CHANGELOG.md` as the shipped
