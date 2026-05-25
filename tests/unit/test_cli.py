@@ -11,6 +11,7 @@ from typer.testing import CliRunner
 from nats_sinks import InMemoryMetrics, MetricNames, SinkPluginConfig, __version__
 from nats_sinks.cli.main import _attach_metrics_to_sink, _registry, app
 from nats_sinks.core.errors import ConfigurationError
+from nats_sinks.mysql import MySqlSink
 from nats_sinks.oracle import OracleSink
 
 
@@ -157,11 +158,29 @@ def test_cli_metrics_hook_attaches_oracle_sink_counters() -> None:
     assert metrics.counters[MetricNames.ORACLE_DUPLICATES_TOTAL] == 1
 
 
+def test_cli_metrics_hook_attaches_mysql_sink_counters() -> None:
+    metrics = InMemoryMetrics()
+    sink = MySqlSink(
+        host="127.0.0.1",
+        database="nats_sinks_test",
+        user="app_user",
+        password="example",  # noqa: S106 - local test placeholder
+        table="NATS_SINK_EVENTS",
+        mode="insert_ignore",
+    )
+
+    _attach_metrics_to_sink(sink, metrics)
+    sink._record_duplicate_ignored(1)
+
+    assert metrics.counters[MetricNames.MYSQL_DUPLICATES_TOTAL] == 1
+
+
 def test_cli_registry_always_exposes_first_party_connectors() -> None:
     registry = _registry()
 
-    assert registry.names() == ("file", "oracle", "spool")
+    assert registry.names() == ("file", "mysql", "oracle", "spool")
     assert registry.connector("file").built_in is True
+    assert registry.connector("mysql").requires_extra == "mysql"
     assert registry.connector("oracle").production_ready is True
     assert registry.connector("spool").requires_extra == "crypto"
 

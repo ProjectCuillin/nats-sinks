@@ -14,48 +14,47 @@ generated database passwords, or full raw logs from live systems.
 | Field | Value |
 | --- | --- |
 | Overall result | Pass |
-| Report generated | 2026-05-25 issue `#247` Oracle MySQL test container validation |
+| Report generated | 2026-05-25 issue `#101` Oracle MySQL sink validation |
 | Project version | `0.4.0` post-release development for `v0.4.1` |
 | Python version | 3.12.4 |
-| Git revision checked | Branch `issue-247-oracle-mysql-test-container`, base revision `e954d14` with local issue changes |
-| Live NATS details | Not used by this issue-specific Docker test |
-| Live Oracle Database details | Not used by this issue-specific Docker test |
-| Live Oracle MySQL details | Local short-lived Docker container only; generated credentials and container identifiers redacted |
+| Git revision checked | Branch `issue-101-oracle-mysql-sink`, base revision `f064e34` with local issue changes |
+| Live NATS details | Not used by the Oracle MySQL sink container test |
+| Live Oracle Database details | Not used by the Oracle MySQL sink container test |
+| Live Oracle MySQL details | Local short-lived Docker container only; generated credentials, ports, container names, and container identifiers redacted |
 
-This refresh covered issue `#247`, adding a local Oracle MySQL test database
-container for future Oracle MySQL sink development. The implementation adds an
-Oracle Linux 9 slim based Dockerfile, explicit Oracle MySQL 9.7.0 LTS package
-selection, a test-only entrypoint, generated per-run credentials, loopback-only
-random host-port exposure, cleanup-by-default behavior, deterministic unit
-tests, dedicated documentation, and a Docker smoke runner that verifies table
-creation plus one insert/read cycle. The Oracle MySQL sink itself remains
-separate backlog work and was not implemented by this issue.
+This refresh covered issue `#101`, adding a first-party Oracle MySQL sink to
+the same extensible sink framework used by the Oracle Database and file sinks.
+The implementation adds safe configuration validation, commit-before-success
+delivery semantics, optional table creation, idempotent write modes,
+subject-to-table routing, envelope-compatible payload handling, mission
+metadata support, metrics, documentation, Python import support, CLI registry
+support, and a repeatable local Oracle MySQL container end-to-end test.
 
 ```mermaid
 flowchart LR
-    Assets[Oracle MySQL container assets] --> Unit[Deterministic unit tests]
-    Assets --> Smoke[Local Docker smoke test]
-    Docs[Documentation updates] --> MkDocs[Read the Docs and GitHub Pages builds]
-    Unit --> Report[Sanitized latest report]
-    Smoke --> Report
-    MkDocs --> Report
-    Check[Full scripts/check.sh suite] --> Report
+    NATS[NATS JetStream message] --> Core[nats-sinks core envelope and metadata]
+    Core --> MySQL[Oracle MySQL sink]
+    MySQL --> Commit[Database commit]
+    Commit --> Ack[Message may be acknowledged]
+    MySQL --> Metrics[Sink metrics]
+    Tests[Unit and container e2e tests] --> Report[Sanitized latest report]
+    Docs[Documentation builds] --> Report
 ```
 
 ## Core And Repository Validation
 
 | Check | Result |
 | --- | --- |
-| Ruff format | Pass, `195 files already formatted` after formatting the new test file |
+| Ruff format | Pass, `211 files already formatted` |
 | Ruff lint | Pass |
-| Mypy | Pass, no issues in `76` source files |
+| Mypy | Pass, no issues in `85` source files |
 | Version metadata consistency | Pass for `0.4.0` |
 | Dependency manifests | Pass, manifest files up to date |
 | Backlog item validation | Pass, `141` backlog items validated |
-| Bug report validation | Pass, `65` bug report items validated |
+| Bug report validation | Pass, `67` bug report items validated |
 | PyPI-facing Markdown links | Pass |
 | Secret scan | Pass, no high-confidence secret material found |
-| Bandit | Pass with existing reviewed `nosec` warnings for Oracle dynamic SQL builders |
+| Bandit | Pass with reviewed `nosec` annotations for validated SQL identifier builders |
 | Package build | Pass, sdist and wheel built |
 | SBOM generation | Pass, CycloneDX JSON and XML generated |
 | Checksum generation | Pass, `dist/SHA256SUMS` generated |
@@ -65,72 +64,85 @@ flowchart LR
 
 | Test Area | Command | Result |
 | --- | --- | --- |
-| Oracle MySQL container focused unit tests | `python -m pytest tests/unit/test_oracle_mysql_test_container.py -q` | Pass, `10 passed` |
-| Docker asset focused tests | `python -m pytest tests/unit/test_oracle_mysql_test_container.py tests/unit/test_docker_assets.py -q` | Pass, `20 passed` |
-| Main repository test suite | `scripts/check.sh` | Pass, `844 passed, 9 skipped` |
+| Oracle MySQL sink focused unit tests | `python -m pytest tests/unit/test_mysql_sql.py tests/unit/test_mysql_mapping.py tests/unit/test_mysql_sink_contract.py tests/unit/test_bug_249_oracle_mysql_timeout.py tests/unit/test_oracle_mysql_test_container.py tests/unit/test_cli.py tests/unit/test_public_api.py tests/unit/test_sink_certification.py -q` | Pass, `64 passed` |
+| Oracle MySQL timeout regression | `python -m pytest tests/unit/test_bug_249_oracle_mysql_timeout.py tests/unit/test_mysql_sink_contract.py -q` | Pass, `12 passed` |
+| Oracle MySQL SQL annotation regression | `python -m pytest tests/unit/test_bug_250_mysql_sql_bandit_annotations.py tests/unit/test_mysql_sql.py -q` | Pass, `11 passed` |
+| Oracle MySQL container end-to-end test | `python scripts/run-mysql-sink-e2e.py` | Pass |
+| Main repository test suite | `scripts/check.sh` | Pass, `877 passed, 10 skipped` |
 | Encryption and sink contract subset | `scripts/check.sh` | Pass, `123 passed` |
-| Sink capability subset | `scripts/check.sh` | Pass, `104 passed` |
+| Sink capability subset | `scripts/check.sh` | Pass, `105 passed` |
 | Documentation builds | `scripts/check.sh` | Pass for Read the Docs and GitHub Pages MkDocs builds |
 
 The skipped tests are the existing environment-gated live NATS and Oracle
 Database integration tests. They require explicit local services or environment
-flags and were not required for issue `#247`.
+flags and were not required for issue `#101`. The Oracle MySQL sink was tested
+through a short-lived local Oracle MySQL container created by the repository
+test runner.
 
-## Oracle MySQL Docker Smoke Evidence
+## Oracle MySQL Sink Evidence
 
-The optional local Docker smoke test was executed with the local Docker daemon:
+The optional local Oracle MySQL sink end-to-end test was executed with the local
+Docker daemon:
 
 ```bash
-python scripts/run-oracle-mysql-container-smoke.py
+python scripts/run-mysql-sink-e2e.py
 ```
 
 Sanitized result:
 
 ```text
-Oracle MySQL container smoke test passed with one verified test record.
+Oracle MySQL sink container e2e test passed.
 ```
 
-The smoke test verified:
+The test verified:
 
-- local image build from Oracle Linux 9 slim;
-- Oracle MySQL 9.7.0 LTS package installation from Oracle package repositories;
-- fresh generated root and application credentials;
-- random container name, Docker volume, and loopback host port;
-- Oracle MySQL readiness through the generated test account;
-- test table creation;
-- one insert/read verification cycle;
+- a fresh Oracle MySQL test container with generated credentials;
+- loopback-only random host-port exposure;
+- automatic test table creation through the Oracle MySQL sink;
+- commit-before-success processing;
+- JSON payload persistence;
+- non-JSON payload envelope persistence;
+- empty-message handling;
+- priority, classification, labels, mission metadata, and security labels;
+- subject-to-table routing;
+- duplicate handling through idempotency configuration;
 - cleanup of the container, Docker volume, and generated secret files by
   default.
 
-Docker image inspection confirmed the expected image metadata:
+Docker cleanup was checked after the run. No `nats-sinks` Oracle MySQL test
+container or volume remained active.
 
-```text
-base.name=container-registry.oracle.com/os/oraclelinux:9-slim
-version=9.7.0
-```
+## Issues Found During Validation
 
-During development, two hardened-runtime startup issues were found and fixed
-inside the feature branch before completion:
+Two issues were found during implementation testing and handled through the
+repository bug workflow:
 
-- the initial `--cap-drop ALL` profile was too restrictive for a fresh Oracle
-  MySQL data-volume bootstrap, so the smoke runner now drops all capabilities
-  and adds only `CHOWN`, `DAC_OVERRIDE`, `FOWNER`, `SETGID`, and `SETUID`;
-- Oracle MySQL initialization attempted to write its default error log under
-  `/var/log` on a read-only root filesystem, so initialization logging now uses
-  the writable `/tmp` tmpfs path.
+- issue `#249`: the Oracle MySQL sink passed a fractional connection timeout to
+  the database driver; the sink now normalizes configured positive seconds to an
+  integer driver timeout while preserving user-facing configuration precision;
+- issue `#250`: one SQL builder suppression comment was not on the exact line
+  reported by Bandit; the annotation now sits on the validated SQL construction
+  line and a regression test protects the placement.
 
-No generated passwords, container IDs, local host paths, or private endpoints
-are included in this report.
+Both bugs have dedicated regression tests and are marked for inclusion in
+`v0.4.1`.
 
 ## Documentation Evidence
 
 The following documentation was updated and built successfully:
 
+- [Oracle MySQL Sink](mysql-sink.md)
 - [Oracle MySQL Test Container](oracle-mysql-test-container.md)
-- [Testing](testing.md)
-- [Local Docker Stack](docker.md)
+- [Configuration](configuration.md)
+- [Docker](docker.md)
+- [Metrics](metrics.md)
+- [Public API](public-api.md)
+- [Python Usage](python-usage.md)
+- [Sink Certification](sink-certification.md)
 - [Sink Framework](sink-framework.md)
+- [Testing](testing.md)
 - [Roadmap](roadmap.md)
-- [Home](index.md)
 
-The README and changelog were also updated for issue `#247`.
+The README, changelog, MkDocs navigation, example configuration, dependency
+manifest, public API checks, sink certification checks, and CLI registry tests
+were also updated for issue `#101`.

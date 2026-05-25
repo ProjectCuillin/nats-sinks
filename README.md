@@ -18,7 +18,7 @@ messages into another durable system, such as Oracle Database, Oracle
 Autonomous Database on Oracle Cloud Infrastructure (OCI), or another approved
 storage backend.
 
-`nats-sinks` is a Python package for building outbound NATS JetStream sink consumers. It provides a reusable runtime that owns JetStream delivery semantics and delegates destination writes to sink implementations. The current production sinks are Oracle Database, including OCI-hosted Oracle Autonomous Database deployments, and local files.
+`nats-sinks` is a Python package for building outbound NATS JetStream sink consumers. It provides a reusable runtime that owns JetStream delivery semantics and delegates destination writes to sink implementations. The current production sinks are Oracle Database, including OCI-hosted Oracle Autonomous Database deployments, Oracle MySQL, and local files.
 
 The project is intentionally suitable for mission-oriented environments such as
 defence logistics, operational reporting, secure platform telemetry, and
@@ -107,6 +107,10 @@ used immediately:
   and `insert_ignore` idempotent modes, optional high-throughput staging-table
   merge mode, subject-to-table routing, metadata persistence, payload
   normalization, and explicit transaction commit before ACK.
+- `nats_sinks.mysql.MySqlSink`, the production Oracle MySQL sink with
+  connection pooling, TLS CA support, `upsert` and `insert_ignore` idempotent
+  modes, subject-to-table routing, metadata persistence, payload
+  normalization, and explicit transaction commit before ACK.
 - `nats_sinks.file.FileSink`, the production local file sink with deterministic
   filenames, atomic temporary-file placement, optional `fsync`, duplicate
   handling, optional Python standard-library gzip compression, metadata
@@ -115,7 +119,8 @@ used immediately:
   sink for disconnected operation, bounded local custody, deterministic
   idempotency, priority-aware replay, and explicit replay into a final
   destination sink when connectivity returns.
-- A safe sink connector framework with first-party Oracle, file, and spool
+- A safe sink connector framework with first-party Oracle Database,
+  Oracle MySQL, file, and spool
   connectors, stable `SinkConnector` metadata, explicit `SinkRegistry` resolution, and
   disabled-by-default allow-listed entry-point discovery for reviewed external
   connectors.
@@ -179,8 +184,8 @@ used immediately:
   developer smoke testing with a temporary NATS JetStream service and the file
   sink. See
   [Local Docker Stack](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/docker.md).
-- A local Oracle MySQL test database container for future Oracle MySQL sink
-  development, based on Oracle Linux 9 slim and Oracle MySQL 9.7.0 LTS, with
+- A local Oracle MySQL test database container for Oracle MySQL sink
+  development and e2e testing, based on Oracle Linux 9 slim and Oracle MySQL 9.7.0 LTS, with
   random per-run credentials, loopback-only exposure, cleanup by default, and
   deterministic asset tests. See
   [Oracle MySQL Test Container](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/oracle-mysql-test-container.md).
@@ -209,6 +214,7 @@ used immediately:
 Production sink modules shipped today:
 
 - `nats_sinks.oracle`
+- `nats_sinks.mysql`
 - `nats_sinks.file`
 - `nats_sinks.spool`
 
@@ -223,6 +229,8 @@ Included today:
 - Immutable `NatsEnvelope` abstraction.
 - Explicit sink protocol and safe sink registry.
 - Oracle sink with idempotent production modes.
+- Oracle MySQL sink with idempotent production modes and container-backed e2e
+  testing.
 - File sink with atomic local JSON file writes and deterministic duplicate
   handling.
 - Edge spool sink with encrypted local records and replay into a final sink.
@@ -466,6 +474,7 @@ Inspect the snapshot from another terminal:
 nats-sink-metrics show .local/nats-sinks/metrics.json --format table
 nats-sink-metrics show .local/nats-sinks/metrics.json --format shell --kind counter
 nats-sink-metrics show .local/nats-sinks/metrics.json --metric "oracle_*"
+nats-sink-metrics show .local/nats-sinks/metrics.json --metric "mysql_*"
 nats-sink-metrics show .local/nats-sinks/metrics.json --metric "event_*" --metric "events_*"
 nats-sink-metrics get .local/nats-sinks/metrics.json messages_failed_total --default 0
 ```
@@ -789,8 +798,10 @@ Read-only Oracle lineage query helpers are documented in
 The metrics CLI reads only a local JSON snapshot written by the runner when
 `metrics.enabled` and `metrics.snapshot_file` are configured. It supports
 table, JSON, JSONL, shell, names, and Prometheus text output so developers can
-pipe results into service checks and scripts. Oracle duplicate/conflict
-counters are visible through the same command with `--metric "oracle_*"`.
+pipe results into service checks and scripts. Oracle Database
+duplicate/conflict counters are visible through the same command with
+`--metric "oracle_*"`, and Oracle MySQL duplicate/upsert counters are visible
+with `--metric "mysql_*"`.
 Event freshness and staleness metrics are visible with `--metric "event_*"`
 and `--metric "events_*"` when metrics are enabled. See
 [Metrics](https://nats-sinks.readthedocs.io/en/latest/metrics/) for examples.
@@ -872,6 +883,11 @@ Destination-specific details are split into dedicated pages:
   covers Oracle connection types, Autonomous Database, table DDL,
   least-privilege users, idempotent write modes, subject-to-table routing,
   payload storage, metadata columns, and Oracle-specific performance guidance.
+- [Oracle MySQL Sink](https://nats-sinks.readthedocs.io/en/latest/mysql-sink/)
+  covers Oracle MySQL connection settings, TLS CA files, recommended table
+  DDL, least-privilege users, idempotent `upsert` and `insert_ignore` modes,
+  subject-to-table routing, payload storage, metadata columns, and the local
+  container-backed e2e test.
 - [File Sink](https://nats-sinks.readthedocs.io/en/latest/file-sink/) covers
   local file output, atomic write behavior, deterministic file names, duplicate
   policies, gzip compression, filesystem safety, and file-specific performance
@@ -885,7 +901,7 @@ The generic sink framework is documented separately in
 [Sink Framework](https://nats-sinks.readthedocs.io/en/latest/sink-framework/)
 and the reusable release gate is documented in
 [Sink Certification](https://nats-sinks.readthedocs.io/en/latest/sink-certification/).
-That boundary is deliberate: Oracle, file, and spool sinks use the same core
+That boundary is deliberate: Oracle Database, Oracle MySQL, file, and spool sinks use the same core
 delivery semantics, the same envelope contract, and the same
 commit-then-acknowledge rule. Future sinks must provide comparable
 certification evidence before they are described as production-ready.
@@ -954,7 +970,7 @@ Important failure cases:
 ## Development
 
 ```bash
-python -m pip install -e ".[dev,oracle,crypto,docs]"
+python -m pip install -e ".[dev,oracle,mysql,crypto,docs]"
 ruff format --check .
 ruff check .
 mypy src
@@ -1053,6 +1069,7 @@ documented in
 src/nats_sinks/core      Core runtime, config, envelope, runner, DLQ
 src/nats_sinks/sinks     Sink protocols and registry
 src/nats_sinks/oracle    Oracle sink implementation
+src/nats_sinks/mysql     Oracle MySQL sink implementation
 src/nats_sinks/file      Local file sink implementation
 src/nats_sinks/cli       CLI entry point
 tests/unit               Deterministic unit tests
@@ -1071,6 +1088,7 @@ Phase 1:
 
 - Core runtime.
 - Oracle sink.
+- Oracle MySQL sink.
 - File sink.
 - NATS reconnect tuning and connection event metrics.
 - WebSocket connection guardrails, optional headers, and local certification
@@ -1108,12 +1126,11 @@ Phase 1:
 Phase 2:
 
 - More idempotency strategies.
-- First-party Oracle-family sink designs for OCI Object Storage, Oracle MySQL,
+- First-party Oracle-family sink designs for OCI Object Storage,
   Oracle Berkeley DB, Oracle NoSQL Database, and OCI Streaming.
 - High-priority Palantir Foundry and Palantir Gotham connector evaluations
   with local contract mocks before any live certification claim.
-- Oracle MySQL sink design for Oracle MySQL and Oracle MySQL HeatWave
-  deployments.
+- Additional Oracle MySQL HeatWave tuning and certification guidance.
 - HTTP sink.
 - S3 sink design with deterministic object keys.
 - Native OCI Object Storage sink design with deterministic object keys,

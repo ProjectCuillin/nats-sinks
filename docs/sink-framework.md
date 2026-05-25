@@ -288,6 +288,7 @@ flowchart LR
     Registry --> Optional[Optional allow-listed entry points]
     BuiltIn --> File[FileSink]
     BuiltIn --> Oracle[OracleSink]
+    BuiltIn --> MySQL[MySqlSink]
     BuiltIn --> Spool[SpoolSink]
     Optional --> ThirdParty[Reviewed external connector]
     ThirdParty --> Contract[Sink protocol and certification tests]
@@ -298,22 +299,21 @@ Today, the first-party production connectors are built in:
 | Connector | Config value | Import path | Status |
 | --- | --- | --- | --- |
 | Oracle Database | `oracle` | `nats_sinks.oracle.OracleSink` | Production connector in this repository. |
+| Oracle MySQL | `mysql` | `nats_sinks.mysql.MySqlSink` | Production connector in this repository. |
 | File | `file` | `nats_sinks.file.FileSink` | Production connector in this repository. |
 | Edge spool | `spool` | `nats_sinks.spool.SpoolSink` | Production connector in this repository. |
 
-Future Oracle-family sinks such as OCI Object Storage, Oracle MySQL,
-Oracle Berkeley DB, Oracle NoSQL Database, and OCI Streaming are intended to
+Future Oracle-family sinks such as OCI Object Storage, Oracle Berkeley DB,
+Oracle NoSQL Database, and OCI Streaming are intended to
 be first-party connectors in this repository unless project governance decides
 otherwise later. They should use the same connector descriptor and certification
-tests as Oracle Database and FileSink, but they do not need external plugin
-discovery.
+tests as Oracle Database, Oracle MySQL, FileSink, and SpoolSink, but they do
+not need external plugin discovery.
 
-The repository already includes a local
-[Oracle MySQL test database container](oracle-mysql-test-container.md) so the
-future Oracle MySQL sink can be developed against a repeatable Oracle Linux 9
-slim based database target. That test container is infrastructure for future
-sink certification; it is not itself a sink connector and does not change the
-current production connector list.
+The repository includes a local
+[Oracle MySQL test database container](oracle-mysql-test-container.md) used by
+the [Oracle MySQL Sink](mysql-sink.md) e2e certification path. The container is
+test infrastructure, not a production database image.
 
 Optional third-party connector discovery is intentionally disabled by default.
 When enabled, it uses Python packaging entry points under the group
@@ -422,6 +422,7 @@ Current production sinks and their durable success boundaries:
 | Sink | Module | Durable success boundary |
 | --- | --- | --- |
 | Oracle | `nats_sinks.oracle` | Oracle transaction committed. |
+| Oracle MySQL | `nats_sinks.mysql` | Oracle MySQL transaction committed. |
 | File | `nats_sinks.file` | Output file atomically placed after temporary write, flush, and configured fsync behavior. |
 | Edge spool | `nats_sinks.spool` | Encrypted spool record atomically placed after temporary write, flush, and configured fsync behavior. |
 

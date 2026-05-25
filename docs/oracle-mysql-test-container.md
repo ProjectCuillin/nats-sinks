@@ -1,9 +1,9 @@
 # Oracle MySQL Test Database Container
 
 The Oracle MySQL test database container is a local development and validation
-asset for the future Oracle MySQL sink. It gives maintainers a repeatable,
-short-lived Oracle MySQL database backend before the sink itself is implemented.
-It is not a production database image, and it is not the Oracle MySQL sink.
+asset for the Oracle MySQL sink. It gives maintainers a repeatable,
+short-lived Oracle MySQL database backend for connector certification and
+regression testing. It is not a production database image.
 
 The image is built from Oracle Linux 9 slim and installs Oracle MySQL Community
 Server from Oracle package repositories. As of 2026-05-25, the selected
@@ -29,11 +29,13 @@ The feature adds:
 - `scripts/run-oracle-mysql-container-smoke.py`, a local smoke runner that
   builds the image, starts a fresh container, waits for readiness, writes and
   reads one test record, and removes temporary artifacts by default;
+- `scripts/run-mysql-sink-e2e.py`, a local e2e runner that uses the same
+  short-lived container to test the first-party Oracle MySQL sink;
 - deterministic unit tests that inspect the Dockerfile, entrypoint, and smoke
   runner without requiring Docker.
 
-It does not add `nats_sinks.oracle_mysql`, does not write NATS messages into
-Oracle MySQL, and does not change commit-then-acknowledge delivery behavior.
+The container itself does not change commit-then-acknowledge delivery behavior.
+It is a disposable database target used by `MySqlSink` tests.
 
 ```mermaid
 flowchart LR
@@ -48,15 +50,14 @@ flowchart LR
 
 ## Why It Exists
 
-The project intends to support an Oracle MySQL sink later. That sink will need
-real database behavior for transaction timing, idempotent upserts, schema
-validation, TLS configuration, least-privilege accounts, duplicate handling,
-and high-rate writes.
+The Oracle MySQL sink needs real database behavior for transaction timing,
+idempotent upserts, schema validation, TLS configuration, least-privilege
+accounts, duplicate handling, and high-rate writes.
 
 Building this test database container first prevents Oracle MySQL sink
 development from depending on ad hoc local installations, stale manual setup
 steps, hardcoded passwords, or private database endpoints. It also lets the
-future sink certification suite start a clean database target for every run.
+sink certification suite start a clean database target for every run.
 
 ## Files
 
@@ -65,6 +66,7 @@ future sink certification suite start a clean database target for every run.
 | `examples/oracle-mysql-test/Dockerfile` | Builds the Oracle MySQL test database image from Oracle Linux 9 slim. |
 | `examples/oracle-mysql-test/entrypoint.sh` | Initializes the data directory, creates the test database and user, and starts Oracle MySQL. |
 | `scripts/run-oracle-mysql-container-smoke.py` | Builds, runs, verifies, and cleans up the local Oracle MySQL test container. |
+| `scripts/run-mysql-sink-e2e.py` | Runs the Oracle MySQL sink e2e test against a fresh short-lived container. |
 | `tests/unit/test_oracle_mysql_test_container.py` | Validates the container assets without requiring a Docker daemon. |
 
 ## Security Model
@@ -136,7 +138,7 @@ python -m pytest tests/unit/test_oracle_mysql_test_container.py -q
 Expected output:
 
 ```text
-10 passed
+11 passed
 ```
 
 These tests cover:
@@ -192,6 +194,55 @@ When `--preserve-artifacts` is used, remove the preserved container, volume,
 and `.local/oracle-mysql-test/` directory after inspection. Preserved secret
 files are local-only but still sensitive.
 
+## Running The Oracle MySQL Sink E2E Test
+
+Run the first-party Oracle MySQL sink e2e test from the repository root:
+
+```bash
+python scripts/run-mysql-sink-e2e.py
+```
+
+Expected sanitized output:
+
+```text
+Oracle MySQL sink container e2e test passed.
+```
+
+The e2e runner reuses the smoke-test image and startup posture, then runs:
+
+```bash
+python -m pytest tests/integration/test_mysql_sink.py -q
+```
+
+It passes generated connection settings through environment variables:
+
+- `NATS_SINKS_MYSQL_INTEGRATION=1`
+- `NATS_SINKS_MYSQL_HOST`
+- `NATS_SINKS_MYSQL_PORT`
+- `NATS_SINKS_MYSQL_DATABASE`
+- `NATS_SINKS_MYSQL_USER`
+- `NATS_SINKS_MYSQL_PASSWORD_ENV`
+- `NATS_SINKS_MYSQL_PASSWORD`
+- `NATS_SINKS_MYSQL_TABLE`
+- `NATS_SINKS_MYSQL_DROP_TABLE_BEFORE=true`
+
+Those values are created for the short-lived run and should not be copied into
+documentation, issues, pull requests, or logs. Generated passwords are redacted
+from command failure text.
+
+The Oracle MySQL sink e2e test verifies:
+
+- startup and healthcheck;
+- opt-in schema creation;
+- idempotent `upsert` writes;
+- no-op duplicate redelivery;
+- subject-to-table routing;
+- priority, classification, and labels persistence;
+- non-JSON text payload wrapping;
+- empty payload handling;
+- Oracle MySQL duplicate/upsert metrics;
+- cleanup of the container, Docker volume, and generated secrets by default.
+
 ## Collision Avoidance
 
 The smoke runner avoids common local conflicts:
@@ -244,12 +295,20 @@ Do not paste raw logs into public issues if they contain host-specific paths,
 container IDs, internal registry URLs, or generated credentials. Summarize the
 failure category instead.
 
-## Relationship To The Future Oracle MySQL Sink
+## Relationship To The Oracle MySQL Sink
 
-The future Oracle MySQL sink should use this container as a local integration
-target, but it should remain separate code. That sink will need its own module,
-configuration schema, sink certification tests, documentation page, examples,
-and release evidence.
+The Oracle MySQL sink uses this container as a local integration target, but
+the container and sink remain separate code paths. The container owns the
+short-lived database backend. The sink owns JetStream envelope persistence,
+commit-before-success behavior, idempotent duplicate handling, subject routing,
+payload normalization, and destination metrics.
 
-This container is the database proving ground. The sink will be the JetStream
-delivery component.
+Run the full sink e2e path with:
+
+```bash
+python scripts/run-mysql-sink-e2e.py
+```
+
+That command builds the Oracle MySQL test image, starts a fresh container,
+runs `tests/integration/test_mysql_sink.py`, and removes the container, Docker
+volume, and generated secret files by default.

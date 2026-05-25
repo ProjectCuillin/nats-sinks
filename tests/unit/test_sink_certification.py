@@ -12,6 +12,7 @@ import pytest
 
 from nats_sinks import NatsEnvelope, Sink
 from nats_sinks.file import FileSink
+from nats_sinks.mysql import MySqlSink
 from nats_sinks.oracle import OracleSink
 from nats_sinks.testing import (
     SinkCertificationCase,
@@ -116,6 +117,47 @@ class _OraclePool:
         return self.connection
 
 
+class _MySqlCursor:
+    def __init__(self) -> None:
+        self.executions: list[tuple[str, list[tuple[Any, ...]]]] = []
+        self.rowcount = 1
+        self.closed = False
+
+    def executemany(self, sql: str, rows: list[tuple[Any, ...]]) -> None:
+        self.executions.append((sql, rows))
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class _MySqlConnection:
+    def __init__(self) -> None:
+        self.cursor_instance = _MySqlCursor()
+        self.committed = False
+        self.rolled_back = False
+        self.closed = False
+
+    def cursor(self) -> _MySqlCursor:
+        return self.cursor_instance
+
+    def commit(self) -> None:
+        self.committed = True
+
+    def rollback(self) -> None:
+        self.rolled_back = True
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class _MySqlPool:
+    def __init__(self) -> None:
+        self.connection = _MySqlConnection()
+
+    def get_connection(self) -> _MySqlConnection:
+        return self.connection
+
+
 class _CertifiedOracleSink(OracleSink):
     """Oracle sink test double that uses a fake pool instead of a live database."""
 
@@ -123,6 +165,27 @@ class _CertifiedOracleSink(OracleSink):
         self.certification_pool = pool
         super().__init__(
             dsn="localhost:1521/FREEPDB1",
+            user="app_user",
+            password="example",  # noqa: S106 - local non-secret test placeholder.
+            table="NATS_SINK_EVENTS",
+            mode="insert",
+        )
+
+    async def start(self) -> None:
+        self._pool = self.certification_pool
+
+    async def stop(self) -> None:
+        self._pool = None
+
+
+class _CertifiedMySqlSink(MySqlSink):
+    """Oracle MySQL sink test double that uses a fake pool."""
+
+    def __init__(self, pool: _MySqlPool) -> None:
+        self.certification_pool = pool
+        super().__init__(
+            host="127.0.0.1",
+            database="nats_sinks_test",
             user="app_user",
             password="example",  # noqa: S106 - local non-secret test placeholder.
             table="NATS_SINK_EVENTS",
@@ -177,6 +240,33 @@ async def test_oracle_sink_passes_durable_success_certification() -> None:
 
     case = SinkCertificationCase(
         name="oracle",
+        sink_factory=make_sink,
+        messages=(certification_envelope(),),
+        after_write=assert_committed,
+    )
+
+    await certify_sink_write_success(case)
+
+
+@pytest.mark.asyncio
+async def test_mysql_sink_passes_durable_success_certification() -> None:
+    pool = _MySqlPool()
+
+    def make_sink() -> Sink:
+        return _CertifiedMySqlSink(pool)
+
+    def assert_committed(sink: Sink, messages: Sequence[NatsEnvelope]) -> None:
+        del sink
+        assert pool.connection.committed is True
+        assert pool.connection.rolled_back is False
+        assert pool.connection.closed is True
+        assert len(pool.connection.cursor_instance.executions) == 1
+        _sql, rows = pool.connection.cursor_instance.executions[0]
+        assert len(rows) == len(messages)
+        assert "certification.events.created" in rows[0]
+
+    case = SinkCertificationCase(
+        name="mysql",
         sink_factory=make_sink,
         messages=(certification_envelope(),),
         after_write=assert_committed,

@@ -28,12 +28,13 @@ from nats_sinks import (
     Sink,
 )
 from nats_sinks.file import FileSink
+from nats_sinks.mysql import MySqlSink
 from nats_sinks.oracle import OracleSink
 ```
 
 The examples below use the file sink because it has no external dependency.
-Oracle follows the same runner pattern and is imported from
-`nats_sinks.oracle`.
+Oracle Database and Oracle MySQL follow the same runner pattern and are
+imported from `nats_sinks.oracle` and `nats_sinks.mysql`.
 
 The most common embedded setup is:
 
@@ -216,9 +217,10 @@ runner = JetStreamSinkRunner(
 )
 ```
 
-Oracle-specific counters use the same recorder. When embedding `OracleSink`,
-pass the recorder to both the sink and the runner so duplicate/conflict
-observations appear beside core delivery counters:
+Oracle Database and Oracle MySQL sink-specific counters use the same recorder.
+When embedding `OracleSink` or `MySqlSink`, pass the recorder to both the sink
+and the runner so duplicate/conflict observations appear beside core delivery
+counters:
 
 ```python
 from nats_sinks import JsonFileMetrics, JetStreamSinkRunner, MetricNames
@@ -246,6 +248,36 @@ runner = JetStreamSinkRunner(
 # After traffic is processed, this counter shows duplicate rows that Oracle
 # safely absorbed through idempotent handling.
 duplicates = metrics.counters[MetricNames.ORACLE_DUPLICATES_TOTAL]
+```
+
+The Oracle MySQL pattern is the same and uses the `mysql_*` metric names:
+
+```python
+from nats_sinks import JsonFileMetrics, JetStreamSinkRunner, MetricNames
+from nats_sinks.mysql import MySqlSink
+
+metrics = JsonFileMetrics(".local/nats-sinks/metrics.json", namespace="nats_sinks")
+sink = MySqlSink(
+    host="127.0.0.1",
+    port=3306,
+    database="nats_sinks",
+    user="app_user",
+    password_env="ORACLE_MYSQL_PASSWORD",
+    table="NATS_SINK_EVENTS",
+    mode="insert_ignore",
+    metrics=metrics,
+)
+
+runner = JetStreamSinkRunner(
+    nats_url="nats://localhost:4222",
+    stream="ORDERS",
+    consumer="orders-mysql-sink",
+    subject="orders.*",
+    sink=sink,
+    metrics=metrics,
+)
+
+duplicates = metrics.counters[MetricNames.MYSQL_DUPLICATES_TOTAL]
 ```
 
 Read the same snapshot from Python:

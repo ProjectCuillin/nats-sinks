@@ -265,15 +265,22 @@ This smoke test exercises an actual local NATS container, the built local
 ## Oracle MySQL Test Database Container
 
 The Docker documentation also includes a separate local Oracle MySQL test
-database container for future Oracle MySQL sink work. It is not part of the
-file-sink/NATS Compose stack above. It exists so maintainers can test Oracle
-MySQL connectivity, startup, schema creation, writes, reads, and cleanup before
-the Oracle MySQL sink itself is implemented.
+database container for Oracle MySQL sink development and e2e certification. It
+is not part of the file-sink/NATS Compose stack above. It exists so maintainers
+can test Oracle MySQL connectivity, startup, schema creation, writes, reads,
+cleanup, and the `MySqlSink` commit-before-success boundary without relying on
+a long-lived shared database.
 
 Run the smoke test:
 
 ```bash
 python scripts/run-oracle-mysql-container-smoke.py
+```
+
+Run the Oracle MySQL sink e2e test:
+
+```bash
+python scripts/run-mysql-sink-e2e.py
 ```
 
 Expected sanitized output:

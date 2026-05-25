@@ -2,8 +2,10 @@
 
 `nats-sinks` includes a small metrics layer for operators and developers who
 need to understand how a sink process is behaving. Metrics are intentionally
-destination-neutral: Oracle, file, and future sinks share the same core
-counters, gauges, observations, and Python hooks.
+destination-neutral where possible: Oracle Database, Oracle MySQL, file, and
+future sinks share the same core counters, gauges, observations, and Python
+hooks, while destination-specific counters use clear prefixes such as
+`oracle_*` and `mysql_*`.
 
 The current release provides a dependency-free local snapshot recorder and a
 standalone inspection command:
@@ -23,8 +25,8 @@ nats-sink-observe init-prometheus-policy \
 This command is separate from `nats-sink`. The `nats-sink` command runs and
 manages sink processing. The `nats-sink-metrics` command reads a local JSON
 metrics snapshot and renders it in human-readable or script-friendly formats.
-It never connects to NATS, Oracle, the file sink directory, or any future
-destination backend.
+It never connects to NATS, Oracle Database, Oracle MySQL, the file sink
+directory, or any future destination backend.
 
 The `nats-sink-observe` command owns external sharing. It can render a
 Prometheus textfile for node_exporter, run an optional native Prometheus HTTP
@@ -653,6 +655,54 @@ for row in oracle_rows:
     print(row.name, row.value)
 ```
 
+## Oracle MySQL Duplicate And Upsert Metrics
+
+Oracle MySQL duplicate and upsert metrics are emitted by `MySqlSink` when the
+write path can observe duplicate-safe behavior through Oracle MySQL execution
+metadata. The counters are aggregate-only. They do not include table names,
+subjects, message IDs, payload text, classification values, labels, or
+constraint names.
+
+The Oracle MySQL-specific counters are:
+
+| Metric suffix | Type | Meaning |
+| --- | --- | --- |
+| `mysql_conflicts_total` | counter | Oracle MySQL duplicate-key conflicts observed while writing a batch. |
+| `mysql_duplicates_total` | counter | Rows identified as duplicate prior processing through an idempotent Oracle MySQL write path. |
+| `mysql_duplicate_ignored_total` | counter | Duplicate rows safely ignored by `insert_ignore` mode. |
+| `mysql_duplicate_noop_total` | counter | Duplicate rows safely left unchanged by `upsert` with `upsert_update_columns: []`. |
+| `mysql_upsert_rows_total` | counter | Rows committed through Oracle MySQL `upsert` mode. |
+| `mysql_upsert_outcome_unknown_total` | counter | `upsert` rows where Oracle MySQL did not reliably expose whether the row inserted or matched. |
+
+Show Oracle MySQL counters:
+
+```bash
+nats-sink-metrics show .local/nats-sinks/metrics.json --metric "mysql_*"
+```
+
+Example output:
+
+```text
+kind     name                                value  description
+counter  mysql_duplicates_total                  3  Oracle MySQL rows identified as duplicate prior processing through idempotent handling.
+counter  mysql_duplicate_noop_total              3  Oracle MySQL duplicate rows safely left unchanged by upsert mode with no update columns.
+counter  mysql_upsert_rows_total                64  Oracle MySQL rows committed through upsert mode.
+counter  mysql_upsert_outcome_unknown_total     61  Oracle MySQL upsert rows where insert-versus-match outcome is not reliably exposed.
+```
+
+Python applications can read the same metrics from the local snapshot:
+
+```python
+from nats_sinks import load_metrics_snapshot, metric_rows_from_snapshot
+
+snapshot = load_metrics_snapshot(".local/nats-sinks/metrics.json")
+rows = metric_rows_from_snapshot(snapshot)
+mysql_rows = [row for row in rows if row.name.startswith("mysql_")]
+
+for row in mysql_rows:
+    print(row.name, row.value)
+```
+
 ## JSON Output
 
 Use JSON output for tools that want one structured document:
@@ -795,6 +845,8 @@ sink_batches_written_total
 sink_batch_write_seconds
 oracle_execute_seconds
 oracle_commit_seconds
+mysql_execute_seconds
+mysql_commit_seconds
 message_ack_seconds
 message_term_seconds
 retry_backoff_delay_seconds
@@ -1049,6 +1101,14 @@ The preferred metric suffixes are:
 | `oracle_duplicate_noop_total` | counter | Oracle duplicate rows safely left unchanged by `merge` mode with no update columns. |
 | `oracle_merge_rows_total` | counter | Oracle rows committed through `merge` mode. |
 | `oracle_merge_outcome_unknown_total` | counter | Oracle merge rows where insert-versus-match outcome is not reliably exposed. |
+| `mysql_execute_seconds` | observation | Seconds spent executing Oracle MySQL batch write statements before commit. |
+| `mysql_commit_seconds` | observation | Seconds spent committing Oracle MySQL transactions. |
+| `mysql_conflicts_total` | counter | Oracle MySQL duplicate-key conflicts observed while writing a batch. |
+| `mysql_duplicates_total` | counter | Oracle MySQL rows identified as duplicate prior processing through idempotent handling. |
+| `mysql_duplicate_ignored_total` | counter | Oracle MySQL duplicate rows safely ignored by `insert_ignore` mode. |
+| `mysql_duplicate_noop_total` | counter | Oracle MySQL duplicate rows safely left unchanged by `upsert` mode with no update columns. |
+| `mysql_upsert_rows_total` | counter | Oracle MySQL rows committed through `upsert` mode. |
+| `mysql_upsert_outcome_unknown_total` | counter | Oracle MySQL upsert rows where insert-versus-match outcome is not reliably exposed. |
 | `last_sink_success_epoch_seconds` | gauge | Unix epoch seconds for the latest durable sink success followed by ACK. |
 | `current_batch_messages` | gauge | Number of messages in the active batch currently being processed. |
 

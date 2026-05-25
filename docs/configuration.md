@@ -12,8 +12,8 @@ where it will write.
 ## Minimal Configuration
 
 The minimal example uses the local file sink because it does not require a
-database or credentials. Oracle uses the same generic runtime sections and adds
-Oracle-specific fields inside the `sink` object.
+database or credentials. Oracle Database and Oracle MySQL use the same generic
+runtime sections and add destination-specific fields inside the `sink` object.
 
 ```json
 {
@@ -1494,12 +1494,13 @@ remaining fields to the selected sink validator.
 
 | Field | Required | Default | Valid values | Description |
 | --- | --- | --- | --- | --- |
-| `type` | yes | none | `file`, `oracle`, or `spool` in the current release. | Selects the production sink implementation. Future sinks should add new values without changing the generic core sections. |
+| `type` | yes | none | `file`, `oracle`, `mysql`, or `spool` in the current release. | Selects the production sink implementation. Future sinks should add new values without changing the generic core sections. |
 
 All other fields under `sink` are sink-specific:
 
 - `file` fields are documented in [File Sink](file-sink.md),
 - `oracle` fields are documented in [Oracle Sink](oracle-sink.md),
+- `mysql` fields are documented in [Oracle MySQL Sink](mysql-sink.md),
 - `spool` fields are documented in [Edge Spool Sink](spool-sink.md).
 
 ### `plugins`
@@ -1507,8 +1508,8 @@ All other fields under `sink` are sink-specific:
 The `plugins` section controls optional discovery for externally installed sink
 connectors. It is disabled by default because Python plugin loading is a
 code-execution and supply-chain trust boundary. You do not need this section
-for the built-in Oracle Database sink, built-in FileSink, or built-in
-SpoolSink.
+for the built-in Oracle Database sink, built-in Oracle MySQL sink, built-in
+FileSink, or built-in SpoolSink.
 
 | Field | Required | Default | Valid values | Description |
 | --- | --- | --- | --- | --- |
@@ -1538,8 +1539,8 @@ group `nats_sinks.sinks`, and only if the package returns a valid
 contain a module path or class path. This is intentional: runtime configuration
 must not be able to choose arbitrary imports.
 
-First-party future Oracle-family sinks, such as OCI Object Storage, Oracle
-MySQL, Oracle Berkeley DB, Oracle NoSQL Database, and OCI Streaming, are
+First-party future Oracle-family sinks, such as OCI Object Storage,
+Oracle Berkeley DB, Oracle NoSQL Database, and OCI Streaming, are
 expected to be added as built-in connectors in this repository unless project
 governance changes that decision. They should not require `plugins.enabled`.
 
@@ -1593,6 +1594,10 @@ secret-handling guidance, and examples. The current production sinks are:
   generic configuration page. Route-specific Oracle idempotency overrides are
   also documented on the Oracle page because they depend on Oracle table
   design and constraints.
+- `"type": "mysql"` for Oracle MySQL. Detailed Oracle MySQL connection
+  options, TLS certificate handling, table routing, payload modes, column
+  mappings, idempotent `upsert` and `insert_ignore` modes, and the local
+  container-backed e2e test live in [Oracle MySQL Sink](mysql-sink.md).
 - `"type": "file"` for local JSON file output. File durability, duplicate
   policies, deterministic file names, optional gzip compression, and filesystem
   safety live in [File Sink](file-sink.md).
@@ -1601,9 +1606,9 @@ secret-handling guidance, and examples. The current production sinks are:
   priority-aware replay, and cleanup policy live in [Edge Spool Sink](spool-sink.md).
 
 This separation is part of the compatibility contract. Adding a future
-`postgres`, `http`, or `s3` sink should add new sink-specific fields under
-`"sink"` without requiring existing Oracle, file, or spool users to change the
-rest of their configuration.
+`http`, `s3`, or another database sink should add new sink-specific fields
+under `"sink"` without requiring existing Oracle Database, Oracle MySQL, file,
+or spool users to change the rest of their configuration.
 
 ## Payload Storage Modes
 

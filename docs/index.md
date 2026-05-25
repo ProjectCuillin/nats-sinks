@@ -130,14 +130,18 @@ The current release provides the following production-ready foundation:
   labels, SBOM and vulnerability-scanning expectations, and careful defence
   accreditation caveats.
 - [Oracle MySQL test database container](oracle-mysql-test-container.md), a
-  local Oracle Linux 9 slim and Oracle MySQL 9.7.0 LTS test target for future
-  Oracle MySQL sink development, with random per-run credentials, loopback-only
-  exposure, cleanup by default, and deterministic unit tests.
+  local Oracle Linux 9 slim and Oracle MySQL 9.7.0 LTS test target for Oracle
+  MySQL sink development and e2e testing, with random per-run credentials,
+  loopback-only exposure, cleanup by default, and deterministic unit tests.
 - `nats_sinks.oracle.OracleSink`, a production Oracle Database sink with
   connection pooling, idempotent `merge` and `insert_ignore` modes, Oracle
   Autonomous Database connection options for OCI deployments,
   subject-to-table routing, metadata persistence, and transaction commit before
   ACK.
+- `nats_sinks.mysql.MySqlSink`, a production Oracle MySQL sink with connection
+  pooling, TLS CA support, idempotent `upsert` and `insert_ignore` modes,
+  subject-to-table routing, metadata persistence, payload normalization, and
+  transaction commit before ACK.
 - `nats_sinks.file.FileSink`, a production local file sink with atomic JSON
   file placement, deterministic filenames, duplicate handling, optional gzip
   compression, metadata persistence, and the same payload normalization contract
@@ -165,6 +169,7 @@ metadata for routing and audit.
 | Sink | Import | Main Use Case | Durable Success Boundary |
 | --- | --- | --- | --- |
 | Oracle Database | `from nats_sinks.oracle import OracleSink` | Persist JetStream messages into Oracle tables with idempotent writes. | Oracle transaction committed. |
+| Oracle MySQL | `from nats_sinks.mysql import MySqlSink` | Persist JetStream messages into Oracle MySQL tables with idempotent writes. | Oracle MySQL transaction committed. |
 | Local files | `from nats_sinks.file import FileSink` | Write one JSON or gzip-compressed JSON document per message for local handoff, audit, development, or simple archival flows. | Final file atomically placed after flush and optional `fsync`. |
 | Edge spool | `from nats_sinks.spool import SpoolSink` | Commit encrypted local custody during disconnected operation, then replay later to Oracle, file, or another sink. | Encrypted spool record atomically placed after flush and optional `fsync`. |
 
