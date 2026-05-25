@@ -4,5 +4,5 @@
 
 -r requirements.txt
 
-cryptography>=42,<47
+cryptography>=42,<49
 oracledb>=2.3,<5
