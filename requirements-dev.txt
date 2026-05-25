@@ -6,7 +6,7 @@
 
 bandit[toml]>=1.7,<2
 build>=1.2,<2
-cryptography>=42,<47
+cryptography>=42,<49
 cyclonedx-bom>=6,<7
 mypy>=1.10,<3
 pytest>=8.2,<10
