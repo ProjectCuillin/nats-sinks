@@ -41,7 +41,9 @@ def _snapshot(path: Path) -> dict[str, object]:
     increment_metric(metrics, MetricNames.MESSAGES_FETCHED_TOTAL, 12)
     increment_metric(metrics, MetricNames.MESSAGES_ACKED_TOTAL, 11)
     increment_metric(metrics, MetricNames.ORACLE_DUPLICATES_TOTAL, 2)
+    increment_metric(metrics, MetricNames.EVENTS_STALE_AT_RECEIVE_TOTAL, 1)
     observe_metric(metrics, MetricNames.SINK_BATCH_WRITE_SECONDS, 0.25)
+    observe_metric(metrics, MetricNames.EVENT_AGE_AT_RECEIVE_SECONDS, 42.0)
     set_metric_value(metrics, MetricNames.CURRENT_BATCH_MESSAGES, 4.0)
     return metrics.snapshot()
 
@@ -117,6 +119,22 @@ def test_observations_are_excluded_by_default_and_optional(tmp_path: Path) -> No
     assert "mission_ops_sink_batch_write_seconds_count 1" in render_prometheus_textfile(
         snapshot, observation_policy
     )
+
+
+def test_pattern_allow_list_can_export_freshness_metrics(tmp_path: Path) -> None:
+    policy = ObservabilityPolicy(
+        enabled=True,
+        namespace="mission_ops",
+        allowed_metric_patterns=["event_*", "events_*"],
+        include_observations=True,
+        prometheus=PrometheusTextfilePolicy(enabled=True),
+    )
+
+    rendered = render_prometheus_textfile(_snapshot(tmp_path / "metrics.json"), policy)
+
+    assert "mission_ops_events_stale_at_receive_total 1" in rendered
+    assert "mission_ops_event_age_at_receive_seconds_count 1" in rendered
+    assert "mission_ops_messages_fetched_total" not in rendered
 
 
 def test_prometheus_textfile_writer_uses_atomic_output(tmp_path: Path) -> None:

@@ -1,0 +1,23 @@
+{
+  "id": "sap-hana-sink",
+  "title": "[Feature]: Evaluate a SAP HANA sink",
+  "area": "Future sink",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "security", "testing"],
+  "problem": "Oracle GoldenGate connectivity material lists SAP HANA. nats-sinks does not yet have a SAP HANA sink or HANA-specific SQL profile.",
+  "proposal": "Research a SAP HANA sink with parameterized writes, explicit transactions, strict identifier validation, idempotent merge or upsert behavior, and optional staging for larger batches. The evaluation should determine driver maturity, async behavior, cloud versus on-prem differences, and compatibility with payload encryption metadata.",
+  "users": "SAP data platform users and integration teams that need auditable NATS event persistence in HANA.",
+  "delivery_semantics": "Success may be returned only after the HANA transaction commits. Duplicate redelivery must be handled by deterministic keys and documented duplicate policies.",
+  "security": "HANA credentials, connection strings, schema names, and payloads must be redacted. SQL values must use bind parameters; identifiers must be allow-listed.",
+  "acceptance": [
+    "Research identifies the supported Python driver and deployment variants.",
+    "The design documents idempotent write modes.",
+    "Configuration validation is fail-closed.",
+    "Unit tests use fakes and no live HANA instance.",
+    "Documentation covers least privilege and operational caveats."
+  ],
+  "tests": "Add mocked driver and SQL generation tests if implemented. Gate live SAP HANA tests.",
+  "documentation": "Add SAP HANA sink evaluation documentation and roadmap entry.",
+  "closeout": "Close after release of the research or implementation."
+}

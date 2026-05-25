@@ -11,10 +11,10 @@ durably complete.
 
 The central ordering is non-negotiable: receive, validate, write, commit, ACK.
 If sink writing fails, the runner does not ACK.  If a permanent failure is sent
-to DLQ, the runner ACKs the original message only after DLQ publication
-succeeds.  If durable commit succeeds but ACK fails or the process crashes
-before ACK, redelivery may occur and must be handled through idempotent sink
-behavior.
+to DLQ, the runner ACKs or terminally acknowledges the original message only
+after DLQ publication succeeds.  If durable commit succeeds but ACK fails or
+the process crashes before ACK, redelivery may occur and must be handled
+through idempotent sink behavior.
 """
 
 from __future__ import annotations
@@ -23,16 +23,32 @@ import inspect
 import logging
 import time
 from collections.abc import Mapping, Sequence
+from datetime import UTC, datetime
 from typing import Any
 
+from nats_sinks.core.advisory import JetStreamAdvisoryMonitor
+from nats_sinks.core.authenticity import (
+    MessageAuthenticator,
+    message_authenticity_violation_error,
+)
 from nats_sinks.core.config import (
+    ConsumerManagementConfig,
+    CustodyConfig,
     DeadLetterConfig,
     DeliveryConfig,
     EncryptionConfig,
+    JetStreamAdvisoryConfig,
+    MessageAuthenticityConfig,
     MessageMetadataConfig,
+    MetricsConfig,
     MissionMetadataConfig,
+    PreSinkPolicyConfig,
+    SecurityLabelProfileConfig,
+    SizePolicyConfig,
 )
 from nats_sinks.core.consumer import envelope_from_nats_message
+from nats_sinks.core.consumer_management import ensure_jetstream_consumer
+from nats_sinks.core.custody import attach_custody_metadata
 from nats_sinks.core.dlq import build_dead_letter_payload
 from nats_sinks.core.encryption import PayloadEncryptor, PayloadTransformer
 from nats_sinks.core.envelope import NatsEnvelope
@@ -44,6 +60,7 @@ from nats_sinks.core.errors import (
     SinkError,
     TemporarySinkError,
 )
+from nats_sinks.core.freshness import record_event_freshness_metrics
 from nats_sinks.core.metrics import (
     MetricNames,
     MetricsRecorder,
@@ -52,8 +69,10 @@ from nats_sinks.core.metrics import (
     observe_metric,
     set_metric_value,
 )
+from nats_sinks.core.policy import evaluate_pre_sink_policy, policy_violation_error
 from nats_sinks.core.priority import order_by_priority_lanes
 from nats_sinks.core.retry import RetryPolicy
+from nats_sinks.core.size_policy import evaluate_size_policy, size_policy_violation_error
 from nats_sinks.sinks.base import Sink
 
 LOGGER = logging.getLogger(__name__)
@@ -85,11 +104,19 @@ class JetStreamSinkRunner:
         sink: Sink,
         durable: bool = True,
         delivery: DeliveryConfig | None = None,
+        consumer_management: ConsumerManagementConfig | None = None,
         dead_letter: DeadLetterConfig | None = None,
         message_metadata: MessageMetadataConfig | None = None,
+        message_authenticity: MessageAuthenticityConfig | None = None,
         mission_metadata: MissionMetadataConfig | None = None,
+        security_labels: SecurityLabelProfileConfig | None = None,
         encryption: EncryptionConfig | None = None,
+        custody: CustodyConfig | None = None,
+        advisories: JetStreamAdvisoryConfig | None = None,
+        size_policy: SizePolicyConfig | None = None,
+        pre_sink_policy: PreSinkPolicyConfig | None = None,
         metrics: MetricsRecorder | None = None,
+        metrics_config: MetricsConfig | None = None,
         nats_options: Mapping[str, Any] | None = None,
         jetstream: Any | None = None,
         nats_connection: Any | None = None,
@@ -102,6 +129,7 @@ class JetStreamSinkRunner:
         self.sink = sink
         self.durable = durable
         self.delivery = delivery or DeliveryConfig()
+        self.consumer_management = consumer_management or ConsumerManagementConfig()
         self.retry_policy = RetryPolicy(
             max_retries=self.delivery.max_retries,
             backoff_ms=self.delivery.retry_backoff_ms,
@@ -112,18 +140,27 @@ class JetStreamSinkRunner:
         )
         self.dead_letter = dead_letter or DeadLetterConfig()
         self.message_metadata = message_metadata or MessageMetadataConfig()
+        self.message_authenticity = message_authenticity or MessageAuthenticityConfig()
         self.mission_metadata = mission_metadata or MissionMetadataConfig()
+        self.security_labels = security_labels or SecurityLabelProfileConfig()
         self.encryption = encryption or EncryptionConfig()
+        self.custody = custody or CustodyConfig()
+        self.advisories = advisories or JetStreamAdvisoryConfig()
+        self.size_policy = size_policy or SizePolicyConfig()
+        self.pre_sink_policy = pre_sink_policy or PreSinkPolicyConfig()
         self.metrics = metrics or NoopMetrics()
+        self.metrics_config = metrics_config or MetricsConfig()
         self.nats_options = dict(nats_options or {})
         self._payload_encryptor = (
             payload_encryptor
             if payload_encryptor is not None
             else PayloadEncryptor.from_config(self.encryption)
         )
+        self._message_authenticator = MessageAuthenticator.from_config(self.message_authenticity)
         self._js = jetstream
         self._nc = nats_connection
         self._subscription: Any | None = None
+        self._advisory_monitor: JetStreamAdvisoryMonitor | None = None
         self._stop_requested = False
 
         if self.delivery.ack_policy != "after_sink_commit":
@@ -135,18 +172,21 @@ class JetStreamSinkRunner:
         """Start sink and connect to NATS if a JetStream context was not injected."""
 
         await self.sink.start()
-        if self._js is not None:
-            return
+        if self._js is None:
+            import nats  # noqa: PLC0415 - keep client import lazy for import-safe package usage.
 
-        import nats  # noqa: PLC0415 - keep client import lazy for import-safe package usage.
+            self._nc = await nats.connect(**self._nats_connect_options())
+            self._js = self._nc.jetstream()
 
-        self._nc = await nats.connect(**self._nats_connect_options())
-        self._js = self._nc.jetstream()
+        await self._start_advisory_monitor()
 
     async def stop(self) -> None:
         """Stop the runner and release resources."""
 
         self._stop_requested = True
+        if self._advisory_monitor is not None:
+            await self._advisory_monitor.stop()
+            self._advisory_monitor = None
         await self.sink.stop()
         if self._nc is not None:
             close = getattr(self._nc, "close", None)
@@ -157,6 +197,23 @@ class JetStreamSinkRunner:
         """Request cooperative shutdown."""
 
         self._stop_requested = True
+
+    async def _start_advisory_monitor(self) -> None:
+        """Start the optional observational JetStream advisory monitor."""
+
+        if not self.advisories.enabled:
+            return
+        if self._nc is None:
+            raise ConfigurationError(
+                "advisories.enabled requires a NATS connection; provide nats_connection "
+                "when injecting a JetStream context"
+            )
+        self._advisory_monitor = JetStreamAdvisoryMonitor(
+            self._nc,
+            config=self.advisories,
+            metrics=self.metrics,
+        )
+        await self._advisory_monitor.start()
 
     def _nats_connect_options(self) -> dict[str, Any]:
         """Build NATS connection options and attach connection-event metrics.
@@ -230,6 +287,14 @@ class JetStreamSinkRunner:
         try:
             if self._js is None:
                 raise ConfigurationError("JetStream context is not available")
+            await ensure_jetstream_consumer(
+                self._js,
+                stream=self.stream,
+                durable_name=self.consumer,
+                subject=self.subject,
+                durable=self.durable,
+                config=self.consumer_management,
+            )
             self._subscription = await self._js.pull_subscribe(
                 self.subject,
                 durable=self.consumer if self.durable else None,
@@ -261,7 +326,10 @@ class JetStreamSinkRunner:
         finally:
             await self.stop()
 
-    async def process_raw_batch(self, raw_messages: Sequence[Any]) -> None:  # noqa: PLR0911, PLR0915
+    async def process_raw_batch(  # noqa: PLR0911, PLR0912, PLR0915
+        self,
+        raw_messages: Sequence[Any],
+    ) -> None:
         """Process a batch of raw NATS messages.
 
         ACK is sent only after sink.write_batch returns success. On permanent failures,
@@ -271,7 +339,8 @@ class JetStreamSinkRunner:
         if not raw_messages:
             return
 
-        increment_metric(self.metrics, MetricNames.MESSAGES_FETCHED_TOTAL, len(raw_messages))
+        raw_message_list = list(raw_messages)
+        increment_metric(self.metrics, MetricNames.MESSAGES_FETCHED_TOTAL, len(raw_message_list))
         increment_metric(self.metrics, MetricNames.BATCHES_FETCHED_TOTAL)
         mapping_started = time.perf_counter()
         try:
@@ -280,8 +349,9 @@ class JetStreamSinkRunner:
                     raw_message,
                     message_metadata=self.message_metadata,
                     mission_metadata=self.mission_metadata,
+                    security_labels=self.security_labels,
                 )
-                for raw_message in raw_messages
+                for raw_message in raw_message_list
             ]
             observe_metric(
                 self.metrics,
@@ -300,18 +370,18 @@ class JetStreamSinkRunner:
                         raw_message,
                         message_metadata=self.message_metadata,
                     )
-                    for raw_message in raw_messages
+                    for raw_message in raw_message_list
                 ]
             except Exception as fallback_exc:
                 await self._handle_temporary_failure(
-                    raw_messages,
+                    raw_message_list,
                     fallback_exc,
                     context="message normalization failure",
                     error_metric=MetricNames.MESSAGE_NORMALIZATION_ERRORS_TOTAL,
                     log_exception=True,
                 )
                 return
-            await self._handle_permanent_failure(raw_messages, fallback_envelopes, exc)
+            await self._handle_permanent_failure(raw_message_list, fallback_envelopes, exc)
             return
         except Exception as exc:
             observe_metric(
@@ -320,13 +390,75 @@ class JetStreamSinkRunner:
                 time.perf_counter() - mapping_started,
             )
             await self._handle_temporary_failure(
-                raw_messages,
+                raw_message_list,
                 exc,
                 context="message normalization failure",
                 error_metric=MetricNames.MESSAGE_NORMALIZATION_ERRORS_TOTAL,
                 log_exception=True,
             )
             return
+
+        if self._message_authenticator is not None:
+            try:
+                authenticity_evaluation = self._message_authenticator.evaluate(envelopes)
+            except PermanentSinkError as exc:
+                await self._handle_policy_rejections(
+                    raw_message_list,
+                    envelopes,
+                    exc,
+                    context="message authenticity verification failure",
+                )
+                return
+            except Exception as exc:
+                await self._handle_temporary_failure(
+                    raw_message_list,
+                    exc,
+                    context="message authenticity evaluation failure",
+                    error_metric=MetricNames.MESSAGE_AUTHENTICITY_EVALUATION_ERRORS_TOTAL,
+                    log_exception=True,
+                )
+                return
+
+            if authenticity_evaluation.accepted_indexes:
+                increment_metric(
+                    self.metrics,
+                    MetricNames.MESSAGE_AUTHENTICITY_MESSAGES_PASSED_TOTAL,
+                    len(authenticity_evaluation.accepted_indexes),
+                )
+                increment_metric(
+                    self.metrics,
+                    MetricNames.MESSAGE_AUTHENTICITY_BATCHES_PASSED_TOTAL,
+                )
+            if authenticity_evaluation.rejected_indexes:
+                increment_metric(
+                    self.metrics,
+                    MetricNames.MESSAGE_AUTHENTICITY_MESSAGES_REJECTED_TOTAL,
+                    len(authenticity_evaluation.rejected_indexes),
+                )
+                increment_metric(
+                    self.metrics,
+                    MetricNames.MESSAGE_AUTHENTICITY_BATCHES_REJECTED_TOTAL,
+                )
+
+            if authenticity_evaluation.has_rejections:
+                rejected_raw = [
+                    raw_message_list[index] for index in authenticity_evaluation.rejected_indexes
+                ]
+                rejected_envelopes = [
+                    envelopes[index] for index in authenticity_evaluation.rejected_indexes
+                ]
+                await self._handle_policy_rejections(
+                    rejected_raw,
+                    rejected_envelopes,
+                    message_authenticity_violation_error(authenticity_evaluation.violations),
+                    context="message authenticity verification failure",
+                )
+                raw_message_list = [
+                    raw_message_list[index] for index in authenticity_evaluation.accepted_indexes
+                ]
+                envelopes = [envelopes[index] for index in authenticity_evaluation.accepted_indexes]
+                if not raw_message_list:
+                    return
         try:
             if self._payload_encryptor is not None:
                 # Payload encryption happens in the core immediately before
@@ -336,13 +468,135 @@ class JetStreamSinkRunner:
                 envelopes = self._payload_encryptor.encrypt_batch(envelopes)
         except Exception as exc:
             await self._handle_temporary_failure(
-                raw_messages,
+                raw_message_list,
                 exc,
                 context="payload encryption failure",
                 error_metric=MetricNames.PAYLOAD_ENCRYPTION_ERRORS_TOTAL,
                 log_exception=True,
             )
             return
+        try:
+            size_evaluation = evaluate_size_policy(envelopes, self.size_policy)
+        except PermanentSinkError as exc:
+            await self._handle_policy_rejections(
+                raw_message_list,
+                envelopes,
+                exc,
+                context="size policy rejection",
+            )
+            return
+        except Exception as exc:
+            await self._handle_temporary_failure(
+                raw_message_list,
+                exc,
+                context="size policy evaluation failure",
+                error_metric=MetricNames.SIZE_POLICY_EVALUATION_ERRORS_TOTAL,
+                log_exception=True,
+            )
+            return
+
+        if self.size_policy.enabled:
+            if size_evaluation.accepted_indexes:
+                increment_metric(
+                    self.metrics,
+                    MetricNames.SIZE_POLICY_MESSAGES_PASSED_TOTAL,
+                    len(size_evaluation.accepted_indexes),
+                )
+                increment_metric(self.metrics, MetricNames.SIZE_POLICY_BATCHES_PASSED_TOTAL)
+            if size_evaluation.rejected_indexes:
+                increment_metric(
+                    self.metrics,
+                    MetricNames.SIZE_POLICY_MESSAGES_REJECTED_TOTAL,
+                    len(size_evaluation.rejected_indexes),
+                )
+                increment_metric(self.metrics, MetricNames.SIZE_POLICY_BATCHES_REJECTED_TOTAL)
+
+        if size_evaluation.has_rejections:
+            rejected_raw = [raw_message_list[index] for index in size_evaluation.rejected_indexes]
+            rejected_envelopes = [envelopes[index] for index in size_evaluation.rejected_indexes]
+            await self._handle_policy_rejections(
+                rejected_raw,
+                rejected_envelopes,
+                size_policy_violation_error(size_evaluation.violations),
+                context="size policy rejection",
+            )
+            raw_message_list = [
+                raw_message_list[index] for index in size_evaluation.accepted_indexes
+            ]
+            envelopes = [envelopes[index] for index in size_evaluation.accepted_indexes]
+            if not raw_message_list:
+                return
+
+        try:
+            policy_evaluation = evaluate_pre_sink_policy(envelopes, self.pre_sink_policy)
+        except PermanentSinkError as exc:
+            await self._handle_policy_rejections(raw_message_list, envelopes, exc)
+            return
+        except Exception as exc:
+            await self._handle_temporary_failure(
+                raw_message_list,
+                exc,
+                context="pre-sink policy evaluation failure",
+                error_metric=MetricNames.POLICY_EVALUATION_ERRORS_TOTAL,
+                log_exception=True,
+            )
+            return
+
+        if self.pre_sink_policy.enabled:
+            if policy_evaluation.accepted_indexes:
+                increment_metric(
+                    self.metrics,
+                    MetricNames.POLICY_MESSAGES_PASSED_TOTAL,
+                    len(policy_evaluation.accepted_indexes),
+                )
+                increment_metric(self.metrics, MetricNames.POLICY_BATCHES_PASSED_TOTAL)
+            if policy_evaluation.rejected_indexes:
+                increment_metric(
+                    self.metrics,
+                    MetricNames.POLICY_MESSAGES_REJECTED_TOTAL,
+                    len(policy_evaluation.rejected_indexes),
+                )
+                increment_metric(self.metrics, MetricNames.POLICY_BATCHES_REJECTED_TOTAL)
+
+        if policy_evaluation.has_rejections:
+            rejected_raw = [raw_message_list[index] for index in policy_evaluation.rejected_indexes]
+            rejected_envelopes = [envelopes[index] for index in policy_evaluation.rejected_indexes]
+            await self._handle_policy_rejections(
+                rejected_raw,
+                rejected_envelopes,
+                policy_violation_error(policy_evaluation.violations),
+            )
+            raw_message_list = [
+                raw_message_list[index] for index in policy_evaluation.accepted_indexes
+            ]
+            envelopes = [envelopes[index] for index in policy_evaluation.accepted_indexes]
+            if not raw_message_list:
+                return
+
+        try:
+            # Custody evidence is computed in the core after payload
+            # transformation and policy acceptance, but before sink delivery.
+            # A failure here is a permanent pre-sink failure and must not ACK
+            # the original message unless DLQ publication succeeds first.
+            envelopes = attach_custody_metadata(envelopes, config=self.custody)
+        except PermanentSinkError as exc:
+            await self._handle_policy_rejections(
+                raw_message_list,
+                envelopes,
+                exc,
+                context="custody metadata generation failure",
+            )
+            return
+        except Exception as exc:
+            await self._handle_temporary_failure(
+                raw_message_list,
+                exc,
+                context="custody metadata generation failure",
+                error_metric=MetricNames.MESSAGE_NORMALIZATION_ERRORS_TOTAL,
+                log_exception=True,
+            )
+            return
+
         try:
             # Priority-lane scheduling is intentionally placed after all core
             # normalization and transformation work, but before sink delivery.
@@ -354,7 +608,7 @@ class JetStreamSinkRunner:
                 metrics=self.metrics,
             )
         except PermanentSinkError as exc:
-            await self._handle_permanent_failure(raw_messages, envelopes, exc)
+            await self._handle_permanent_failure(raw_message_list, envelopes, exc)
             return
         increment_metric(self.metrics, MetricNames.MESSAGES_PREPARED_TOTAL, len(envelopes))
         set_metric_value(self.metrics, MetricNames.CURRENT_BATCH_MESSAGES, float(len(envelopes)))
@@ -363,17 +617,17 @@ class JetStreamSinkRunner:
         try:
             await self.sink.write_batch(envelopes)
         except PermanentSinkError as exc:
-            await self._handle_permanent_failure(raw_messages, envelopes, exc)
+            await self._handle_permanent_failure(raw_message_list, envelopes, exc)
             return
         except TemporarySinkError as exc:
-            await self._handle_temporary_failure(raw_messages, exc)
+            await self._handle_temporary_failure(raw_message_list, exc)
             return
         except SinkError as exc:
-            await self._handle_temporary_failure(raw_messages, exc)
+            await self._handle_temporary_failure(raw_message_list, exc)
             return
         except Exception as exc:
             await self._handle_temporary_failure(
-                raw_messages,
+                raw_message_list,
                 exc,
                 context="unexpected sink failure",
                 log_exception=True,
@@ -381,17 +635,26 @@ class JetStreamSinkRunner:
             return
 
         elapsed = time.perf_counter() - started
+        stored_at = datetime.now(UTC)
         observe_metric(self.metrics, MetricNames.SINK_BATCH_WRITE_SECONDS, elapsed)
         increment_metric(self.metrics, MetricNames.SINK_BATCHES_WRITTEN_TOTAL)
         increment_metric(self.metrics, MetricNames.MESSAGES_WRITTEN_TOTAL, len(envelopes))
+        record_event_freshness_metrics(
+            self.metrics,
+            envelopes,
+            stored_at=stored_at,
+            enabled=self.metrics_config.event_freshness_enabled,
+            stale_after_seconds=self.metrics_config.event_stale_after_seconds,
+            future_skew_tolerance_seconds=self.metrics_config.event_future_skew_tolerance_seconds,
+        )
         ack_started = time.perf_counter()
-        await self._ack_all(raw_messages)
+        await self._ack_all(raw_message_list)
         observe_metric(
             self.metrics,
             MetricNames.MESSAGE_ACK_SECONDS,
             time.perf_counter() - ack_started,
         )
-        increment_metric(self.metrics, MetricNames.MESSAGES_ACKED_TOTAL, len(raw_messages))
+        increment_metric(self.metrics, MetricNames.MESSAGES_ACKED_TOTAL, len(raw_message_list))
         set_metric_value(self.metrics, MetricNames.LAST_SINK_SUCCESS_EPOCH_SECONDS, time.time())
 
     async def _handle_temporary_failure(
@@ -489,8 +752,68 @@ class JetStreamSinkRunner:
 
         await self._publish_dlq(envelopes, error)
         increment_metric(self.metrics, MetricNames.MESSAGES_DLQ_TOTAL, len(envelopes))
+        if self.dead_letter.ack_term_after_publish:
+            LOGGER.info(
+                "permanent failure published to DLQ; sending terminal acknowledgement "
+                "for %s original JetStream message(s)",
+                len(raw_messages),
+            )
+            term_started = time.perf_counter()
+            await self._term_all(raw_messages)
+            observe_metric(
+                self.metrics,
+                MetricNames.MESSAGE_TERM_SECONDS,
+                time.perf_counter() - term_started,
+            )
+            return
+
         ack_started = time.perf_counter()
-        await self._ack_all(raw_messages)
+        await self._ack_all(raw_messages, context="after successful DLQ publication")
+        observe_metric(
+            self.metrics,
+            MetricNames.MESSAGE_ACK_SECONDS,
+            time.perf_counter() - ack_started,
+        )
+        increment_metric(self.metrics, MetricNames.MESSAGES_ACKED_TOTAL, len(raw_messages))
+
+    async def _handle_policy_rejections(
+        self,
+        raw_messages: Sequence[Any],
+        envelopes: Sequence[NatsEnvelope],
+        error: PermanentSinkError,
+        *,
+        context: str = "pre-sink policy rejection",
+    ) -> None:
+        """Handle messages rejected before sink delivery.
+
+        Pre-sink rejections are permanent message failures, but they are not
+        sink write failures.  They therefore use DLQ-before-ACK handling
+        without incrementing sink error counters or calling `sink.write_batch`.
+        """
+
+        increment_metric(self.metrics, MetricNames.MESSAGES_FAILED_TOTAL, len(raw_messages))
+        if not self.dead_letter.enabled:
+            LOGGER.error(
+                "%s and DLQ disabled; rejected messages left unacked: %s",
+                context,
+                error,
+            )
+            return
+
+        await self._publish_dlq(envelopes, error)
+        increment_metric(self.metrics, MetricNames.MESSAGES_DLQ_TOTAL, len(envelopes))
+        if self.dead_letter.ack_term_after_publish:
+            term_started = time.perf_counter()
+            await self._term_all(raw_messages)
+            observe_metric(
+                self.metrics,
+                MetricNames.MESSAGE_TERM_SECONDS,
+                time.perf_counter() - term_started,
+            )
+            return
+
+        ack_started = time.perf_counter()
+        await self._ack_all(raw_messages, context=f"after successful {context} DLQ publication")
         observe_metric(
             self.metrics,
             MetricNames.MESSAGE_ACK_SECONDS,
@@ -527,7 +850,12 @@ class JetStreamSinkRunner:
             msg = "failed to publish permanent failure to DLQ; original message was not ACKed"
             raise DeadLetterError(msg) from exc
 
-    async def _ack_all(self, raw_messages: Sequence[Any]) -> None:
+    async def _ack_all(
+        self,
+        raw_messages: Sequence[Any],
+        *,
+        context: str = "after durable sink success",
+    ) -> None:
         acknowledged = 0
         try:
             for raw_message in raw_messages:
@@ -536,7 +864,33 @@ class JetStreamSinkRunner:
         except Exception as exc:
             failed_or_unknown = max(len(raw_messages) - acknowledged, 1)
             increment_metric(self.metrics, MetricNames.ACK_ERRORS_TOTAL, failed_or_unknown)
-            raise AckError("failed to ACK JetStream message after durable sink success") from exc
+            raise AckError(f"failed to ACK JetStream message {context}") from exc
+
+    async def _term_all(self, raw_messages: Sequence[Any]) -> None:
+        """Send JetStream terminal acknowledgements after DLQ success only.
+
+        `AckTerm` is intentionally separate from `_ack_all` because it does not
+        mean "the message was successfully processed".  It means the permanent
+        failure was already preserved in DLQ and this opt-in runtime should stop
+        further redelivery.  If Term fails, redelivery is safer than silently
+        pretending the terminal acknowledgement completed.
+        """
+
+        terminated = 0
+        try:
+            for raw_message in raw_messages:
+                term = getattr(raw_message, "term", None)
+                if term is None:
+                    raise AttributeError("raw JetStream message does not expose term()")
+                await _maybe_await(term())
+                terminated += 1
+                increment_metric(self.metrics, MetricNames.MESSAGES_TERMINATED_TOTAL)
+        except Exception as exc:
+            failed_or_unknown = max(len(raw_messages) - terminated, 1)
+            increment_metric(self.metrics, MetricNames.TERM_ERRORS_TOTAL, failed_or_unknown)
+            raise AckError(
+                "failed to AckTerm JetStream message after successful DLQ publication"
+            ) from exc
 
     async def _nak_all(self, raw_messages: Sequence[Any], *, delay: float) -> None:
         for raw_message in raw_messages:

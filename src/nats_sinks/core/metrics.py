@@ -72,6 +72,7 @@ class MetricNames:
     MESSAGES_PREPARED_TOTAL = "messages_prepared_total"
     MESSAGES_WRITTEN_TOTAL = "messages_written_total"
     MESSAGES_ACKED_TOTAL = "messages_acked_total"
+    MESSAGES_TERMINATED_TOTAL = "messages_terminated_total"
     MESSAGES_NACKED_TOTAL = "messages_nacked_total"
     MESSAGES_FAILED_TOTAL = "messages_failed_total"
     MESSAGES_DLQ_TOTAL = "messages_dlq_total"
@@ -83,25 +84,79 @@ class MetricNames:
     ORACLE_EXECUTE_SECONDS = "oracle_execute_seconds"
     ORACLE_COMMIT_SECONDS = "oracle_commit_seconds"
     MESSAGE_ACK_SECONDS = "message_ack_seconds"
+    MESSAGE_TERM_SECONDS = "message_term_seconds"
     RETRY_BACKOFF_DELAY_SECONDS = "retry_backoff_delay_seconds"
     SINK_WRITE_ERRORS_TOTAL = "sink_write_errors_total"
     MESSAGE_NORMALIZATION_ERRORS_TOTAL = "message_normalization_errors_total"
     PAYLOAD_ENCRYPTION_ERRORS_TOTAL = "payload_encryption_errors_total"
     DLQ_PUBLISH_ERRORS_TOTAL = "dlq_publish_errors_total"
     ACK_ERRORS_TOTAL = "ack_errors_total"
+    TERM_ERRORS_TOTAL = "term_errors_total"
     NATS_CONNECTION_DISCONNECTED_TOTAL = "nats_connection_disconnected_total"
     NATS_CONNECTION_RECONNECTED_TOTAL = "nats_connection_reconnected_total"
     NATS_CONNECTION_CLOSED_TOTAL = "nats_connection_closed_total"
     NATS_DISCOVERED_SERVERS_TOTAL = "nats_discovered_servers_total"
     NATS_ASYNC_ERRORS_TOTAL = "nats_async_errors_total"
+    JETSTREAM_ADVISORIES_RECEIVED_TOTAL = "jetstream_advisories_received_total"
+    JETSTREAM_ADVISORIES_FILTERED_TOTAL = "jetstream_advisories_filtered_total"
+    JETSTREAM_ADVISORY_PARSE_ERRORS_TOTAL = "jetstream_advisory_parse_errors_total"
+    JETSTREAM_ADVISORY_UNSUPPORTED_TOTAL = "jetstream_advisory_unsupported_total"
+    JETSTREAM_ADVISORY_MAX_DELIVER_TOTAL = "jetstream_advisory_max_deliver_total"
+    JETSTREAM_ADVISORY_NAK_TOTAL = "jetstream_advisory_nak_total"
+    JETSTREAM_ADVISORY_TERMINATED_TOTAL = "jetstream_advisory_terminated_total"
+    JETSTREAM_ADVISORY_STREAM_QUORUM_LOST_TOTAL = "jetstream_advisory_stream_quorum_lost_total"
+    JETSTREAM_ADVISORY_CONSUMER_QUORUM_LOST_TOTAL = "jetstream_advisory_consumer_quorum_lost_total"
+    JETSTREAM_ADVISORY_STREAM_LEADER_ELECTED_TOTAL = (
+        "jetstream_advisory_stream_leader_elected_total"
+    )
+    JETSTREAM_ADVISORY_CONSUMER_LEADER_ELECTED_TOTAL = (
+        "jetstream_advisory_consumer_leader_elected_total"
+    )
+    JETSTREAM_ADVISORY_STREAM_ACTION_TOTAL = "jetstream_advisory_stream_action_total"
+    JETSTREAM_ADVISORY_CONSUMER_ACTION_TOTAL = "jetstream_advisory_consumer_action_total"
+    JETSTREAM_ADVISORY_API_AUDIT_TOTAL = "jetstream_advisory_api_audit_total"
     PRIORITY_LANE_BATCHES_TOTAL = "priority_lane_batches_total"
     PRIORITY_LANE_MESSAGES_TOTAL = "priority_lane_messages_total"
     PRIORITY_LANE_DEFAULTED_TOTAL = "priority_lane_defaulted_total"
     PRIORITY_LANE_REJECTED_TOTAL = "priority_lane_rejected_total"
     CURRENT_PRIORITY_LANES_ACTIVE = "current_priority_lanes_active"
+    POLICY_MESSAGES_PASSED_TOTAL = "policy_messages_passed_total"
+    POLICY_MESSAGES_REJECTED_TOTAL = "policy_messages_rejected_total"
+    POLICY_BATCHES_PASSED_TOTAL = "policy_batches_passed_total"
+    POLICY_BATCHES_REJECTED_TOTAL = "policy_batches_rejected_total"
+    POLICY_EVALUATION_ERRORS_TOTAL = "policy_evaluation_errors_total"
+    MESSAGE_AUTHENTICITY_MESSAGES_PASSED_TOTAL = "message_authenticity_messages_passed_total"
+    MESSAGE_AUTHENTICITY_MESSAGES_REJECTED_TOTAL = "message_authenticity_messages_rejected_total"
+    MESSAGE_AUTHENTICITY_BATCHES_PASSED_TOTAL = "message_authenticity_batches_passed_total"
+    MESSAGE_AUTHENTICITY_BATCHES_REJECTED_TOTAL = "message_authenticity_batches_rejected_total"
+    MESSAGE_AUTHENTICITY_EVALUATION_ERRORS_TOTAL = "message_authenticity_evaluation_errors_total"
+    SIZE_POLICY_MESSAGES_PASSED_TOTAL = "size_policy_messages_passed_total"
+    SIZE_POLICY_MESSAGES_REJECTED_TOTAL = "size_policy_messages_rejected_total"
+    SIZE_POLICY_BATCHES_PASSED_TOTAL = "size_policy_batches_passed_total"
+    SIZE_POLICY_BATCHES_REJECTED_TOTAL = "size_policy_batches_rejected_total"
+    SIZE_POLICY_EVALUATION_ERRORS_TOTAL = "size_policy_evaluation_errors_total"
+    EVENT_AGE_AT_RECEIVE_SECONDS = "event_age_at_receive_seconds"
+    EVENT_AGE_AT_STORE_SECONDS = "event_age_at_store_seconds"
+    EVENTS_STALE_AT_RECEIVE_TOTAL = "events_stale_at_receive_total"
+    EVENTS_STALE_AT_STORE_TOTAL = "events_stale_at_store_total"
+    EVENT_CREATION_TIMESTAMP_MISSING_TOTAL = "event_creation_timestamp_missing_total"
+    EVENT_CREATION_TIMESTAMP_MALFORMED_TOTAL = "event_creation_timestamp_malformed_total"
+    EVENT_CREATION_TIMESTAMP_FUTURE_TOTAL = "event_creation_timestamp_future_total"
+    EVENT_SOURCE_CLOCK_SKEW_SECONDS = "event_source_clock_skew_seconds"
     ORACLE_CONFLICTS_TOTAL = "oracle_conflicts_total"
     ORACLE_DUPLICATES_TOTAL = "oracle_duplicates_total"
     ORACLE_DUPLICATE_IGNORED_TOTAL = "oracle_duplicate_ignored_total"
+    ORACLE_DUPLICATE_NOOP_TOTAL = "oracle_duplicate_noop_total"
+    ORACLE_MERGE_ROWS_TOTAL = "oracle_merge_rows_total"
+    ORACLE_MERGE_OUTCOME_UNKNOWN_TOTAL = "oracle_merge_outcome_unknown_total"
+    MYSQL_EXECUTE_SECONDS = "mysql_execute_seconds"
+    MYSQL_COMMIT_SECONDS = "mysql_commit_seconds"
+    MYSQL_CONFLICTS_TOTAL = "mysql_conflicts_total"
+    MYSQL_DUPLICATES_TOTAL = "mysql_duplicates_total"
+    MYSQL_DUPLICATE_IGNORED_TOTAL = "mysql_duplicate_ignored_total"
+    MYSQL_DUPLICATE_NOOP_TOTAL = "mysql_duplicate_noop_total"
+    MYSQL_UPSERT_ROWS_TOTAL = "mysql_upsert_rows_total"
+    MYSQL_UPSERT_OUTCOME_UNKNOWN_TOTAL = "mysql_upsert_outcome_unknown_total"
     LAST_SINK_SUCCESS_EPOCH_SECONDS = "last_sink_success_epoch_seconds"
     CURRENT_BATCH_MESSAGES = "current_batch_messages"
 
@@ -135,6 +190,11 @@ METRIC_SPECS: tuple[MetricSpec, ...] = (
         MetricNames.MESSAGES_ACKED_TOTAL,
         "counter",
         "Messages acknowledged to JetStream after durable success or DLQ success.",
+    ),
+    MetricSpec(
+        MetricNames.MESSAGES_TERMINATED_TOTAL,
+        "counter",
+        "Messages terminally acknowledged to JetStream after successful DLQ publication.",
     ),
     MetricSpec(
         MetricNames.MESSAGES_NACKED_TOTAL,
@@ -192,6 +252,11 @@ METRIC_SPECS: tuple[MetricSpec, ...] = (
         "Elapsed seconds spent ACKing JetStream messages after durable success.",
     ),
     MetricSpec(
+        MetricNames.MESSAGE_TERM_SECONDS,
+        "histogram",
+        "Elapsed seconds spent sending terminal acknowledgements after DLQ publication.",
+    ),
+    MetricSpec(
         MetricNames.RETRY_BACKOFF_DELAY_SECONDS,
         "histogram",
         "Retry delay seconds selected for retryable failures before delayed NAK.",
@@ -222,6 +287,11 @@ METRIC_SPECS: tuple[MetricSpec, ...] = (
         "Messages whose JetStream ACK failed after durable success.",
     ),
     MetricSpec(
+        MetricNames.TERM_ERRORS_TOTAL,
+        "counter",
+        "Messages whose terminal acknowledgement failed after successful DLQ publication.",
+    ),
+    MetricSpec(
         MetricNames.NATS_CONNECTION_DISCONNECTED_TOTAL,
         "counter",
         "NATS client disconnect events observed by the runner.",
@@ -245,6 +315,76 @@ METRIC_SPECS: tuple[MetricSpec, ...] = (
         MetricNames.NATS_ASYNC_ERRORS_TOTAL,
         "counter",
         "NATS asynchronous error callback events observed by the runner.",
+    ),
+    MetricSpec(
+        MetricNames.JETSTREAM_ADVISORIES_RECEIVED_TOTAL,
+        "counter",
+        "JetStream advisory messages accepted by the optional advisory monitor.",
+    ),
+    MetricSpec(
+        MetricNames.JETSTREAM_ADVISORIES_FILTERED_TOTAL,
+        "counter",
+        "JetStream advisory messages ignored because they did not match allowed subjects.",
+    ),
+    MetricSpec(
+        MetricNames.JETSTREAM_ADVISORY_PARSE_ERRORS_TOTAL,
+        "counter",
+        "JetStream advisory messages rejected by safe JSON parsing and validation.",
+    ),
+    MetricSpec(
+        MetricNames.JETSTREAM_ADVISORY_UNSUPPORTED_TOTAL,
+        "counter",
+        "JetStream advisory messages observed with unsupported advisory kinds.",
+    ),
+    MetricSpec(
+        MetricNames.JETSTREAM_ADVISORY_MAX_DELIVER_TOTAL,
+        "counter",
+        "JetStream max-deliver advisories observed without exposing stream or consumer names.",
+    ),
+    MetricSpec(
+        MetricNames.JETSTREAM_ADVISORY_NAK_TOTAL,
+        "counter",
+        "JetStream NAK advisories observed without exposing stream or consumer names.",
+    ),
+    MetricSpec(
+        MetricNames.JETSTREAM_ADVISORY_TERMINATED_TOTAL,
+        "counter",
+        "JetStream terminal-ack advisories observed without exposing stream or consumer names.",
+    ),
+    MetricSpec(
+        MetricNames.JETSTREAM_ADVISORY_STREAM_QUORUM_LOST_TOTAL,
+        "counter",
+        "JetStream stream quorum-lost advisories observed as aggregate events.",
+    ),
+    MetricSpec(
+        MetricNames.JETSTREAM_ADVISORY_CONSUMER_QUORUM_LOST_TOTAL,
+        "counter",
+        "JetStream consumer quorum-lost advisories observed as aggregate events.",
+    ),
+    MetricSpec(
+        MetricNames.JETSTREAM_ADVISORY_STREAM_LEADER_ELECTED_TOTAL,
+        "counter",
+        "JetStream stream leader-election advisories observed as aggregate events.",
+    ),
+    MetricSpec(
+        MetricNames.JETSTREAM_ADVISORY_CONSUMER_LEADER_ELECTED_TOTAL,
+        "counter",
+        "JetStream consumer leader-election advisories observed as aggregate events.",
+    ),
+    MetricSpec(
+        MetricNames.JETSTREAM_ADVISORY_STREAM_ACTION_TOTAL,
+        "counter",
+        "JetStream stream action advisories observed as aggregate events.",
+    ),
+    MetricSpec(
+        MetricNames.JETSTREAM_ADVISORY_CONSUMER_ACTION_TOTAL,
+        "counter",
+        "JetStream consumer action advisories observed as aggregate events.",
+    ),
+    MetricSpec(
+        MetricNames.JETSTREAM_ADVISORY_API_AUDIT_TOTAL,
+        "counter",
+        "JetStream API audit advisories observed as aggregate events.",
     ),
     MetricSpec(
         MetricNames.PRIORITY_LANE_BATCHES_TOTAL,
@@ -272,6 +412,121 @@ METRIC_SPECS: tuple[MetricSpec, ...] = (
         "Number of configured priority lanes represented in the active scheduled batch.",
     ),
     MetricSpec(
+        MetricNames.POLICY_MESSAGES_PASSED_TOTAL,
+        "counter",
+        "Messages accepted by the pre-sink policy gate before sink delivery.",
+    ),
+    MetricSpec(
+        MetricNames.POLICY_MESSAGES_REJECTED_TOTAL,
+        "counter",
+        "Messages rejected by the pre-sink policy gate before sink delivery.",
+    ),
+    MetricSpec(
+        MetricNames.POLICY_BATCHES_PASSED_TOTAL,
+        "counter",
+        "Batches with at least one message accepted by the pre-sink policy gate.",
+    ),
+    MetricSpec(
+        MetricNames.POLICY_BATCHES_REJECTED_TOTAL,
+        "counter",
+        "Batches with at least one message rejected by the pre-sink policy gate.",
+    ),
+    MetricSpec(
+        MetricNames.POLICY_EVALUATION_ERRORS_TOTAL,
+        "counter",
+        "Messages left redeliverable because policy evaluation failed unexpectedly.",
+    ),
+    MetricSpec(
+        MetricNames.MESSAGE_AUTHENTICITY_MESSAGES_PASSED_TOTAL,
+        "counter",
+        "Messages accepted by message authenticity verification before sink delivery.",
+    ),
+    MetricSpec(
+        MetricNames.MESSAGE_AUTHENTICITY_MESSAGES_REJECTED_TOTAL,
+        "counter",
+        "Messages rejected by message authenticity verification before sink delivery.",
+    ),
+    MetricSpec(
+        MetricNames.MESSAGE_AUTHENTICITY_BATCHES_PASSED_TOTAL,
+        "counter",
+        "Batches with at least one message accepted by message authenticity verification.",
+    ),
+    MetricSpec(
+        MetricNames.MESSAGE_AUTHENTICITY_BATCHES_REJECTED_TOTAL,
+        "counter",
+        "Batches with at least one message rejected by message authenticity verification.",
+    ),
+    MetricSpec(
+        MetricNames.MESSAGE_AUTHENTICITY_EVALUATION_ERRORS_TOTAL,
+        "counter",
+        "Messages left redeliverable because authenticity evaluation failed unexpectedly.",
+    ),
+    MetricSpec(
+        MetricNames.SIZE_POLICY_MESSAGES_PASSED_TOTAL,
+        "counter",
+        "Messages accepted by the core size policy before sink delivery.",
+    ),
+    MetricSpec(
+        MetricNames.SIZE_POLICY_MESSAGES_REJECTED_TOTAL,
+        "counter",
+        "Messages rejected by the core size policy before sink delivery.",
+    ),
+    MetricSpec(
+        MetricNames.SIZE_POLICY_BATCHES_PASSED_TOTAL,
+        "counter",
+        "Batches with at least one message accepted by the core size policy.",
+    ),
+    MetricSpec(
+        MetricNames.SIZE_POLICY_BATCHES_REJECTED_TOTAL,
+        "counter",
+        "Batches with at least one message rejected by the core size policy.",
+    ),
+    MetricSpec(
+        MetricNames.SIZE_POLICY_EVALUATION_ERRORS_TOTAL,
+        "counter",
+        "Messages left redeliverable because size-policy evaluation failed unexpectedly.",
+    ),
+    MetricSpec(
+        MetricNames.EVENT_AGE_AT_RECEIVE_SECONDS,
+        "histogram",
+        "Observed event age in seconds when the runner received the message.",
+    ),
+    MetricSpec(
+        MetricNames.EVENT_AGE_AT_STORE_SECONDS,
+        "histogram",
+        "Observed event age in seconds after the sink reported durable success.",
+    ),
+    MetricSpec(
+        MetricNames.EVENTS_STALE_AT_RECEIVE_TOTAL,
+        "counter",
+        "Events older than the configured stale threshold at runner receive time.",
+    ),
+    MetricSpec(
+        MetricNames.EVENTS_STALE_AT_STORE_TOTAL,
+        "counter",
+        "Events older than the configured stale threshold after durable sink success.",
+    ),
+    MetricSpec(
+        MetricNames.EVENT_CREATION_TIMESTAMP_MISSING_TOTAL,
+        "counter",
+        "Messages without a usable publisher or JetStream creation timestamp.",
+    ),
+    MetricSpec(
+        MetricNames.EVENT_CREATION_TIMESTAMP_MALFORMED_TOTAL,
+        "counter",
+        "Messages with a malformed publisher creation timestamp header.",
+    ),
+    MetricSpec(
+        MetricNames.EVENT_CREATION_TIMESTAMP_FUTURE_TOTAL,
+        "counter",
+        "Messages whose creation timestamp is beyond the configured future-skew tolerance.",
+    ),
+    MetricSpec(
+        MetricNames.EVENT_SOURCE_CLOCK_SKEW_SECONDS,
+        "histogram",
+        "Positive source clock skew seconds observed for future-dated messages.",
+    ),
+    MetricSpec(
         MetricNames.ORACLE_CONFLICTS_TOTAL,
         "counter",
         "Oracle write conflicts observed by OracleSink, such as duplicate-key conflicts.",
@@ -285,6 +540,61 @@ METRIC_SPECS: tuple[MetricSpec, ...] = (
         MetricNames.ORACLE_DUPLICATE_IGNORED_TOTAL,
         "counter",
         "Oracle duplicate rows safely ignored by insert_ignore mode.",
+    ),
+    MetricSpec(
+        MetricNames.ORACLE_DUPLICATE_NOOP_TOTAL,
+        "counter",
+        "Oracle duplicate rows safely left unchanged by merge mode with no update columns.",
+    ),
+    MetricSpec(
+        MetricNames.ORACLE_MERGE_ROWS_TOTAL,
+        "counter",
+        "Oracle rows committed through merge mode.",
+    ),
+    MetricSpec(
+        MetricNames.ORACLE_MERGE_OUTCOME_UNKNOWN_TOTAL,
+        "counter",
+        "Oracle merge rows where insert-versus-match outcome is not reliably exposed.",
+    ),
+    MetricSpec(
+        MetricNames.MYSQL_EXECUTE_SECONDS,
+        "histogram",
+        "Elapsed seconds spent executing Oracle MySQL batch write statements before commit.",
+    ),
+    MetricSpec(
+        MetricNames.MYSQL_COMMIT_SECONDS,
+        "histogram",
+        "Elapsed seconds spent committing Oracle MySQL transactions.",
+    ),
+    MetricSpec(
+        MetricNames.MYSQL_CONFLICTS_TOTAL,
+        "counter",
+        "Oracle MySQL write conflicts observed by MySqlSink, such as duplicate-key conflicts.",
+    ),
+    MetricSpec(
+        MetricNames.MYSQL_DUPLICATES_TOTAL,
+        "counter",
+        "Oracle MySQL rows identified as duplicate prior processing through idempotent handling.",
+    ),
+    MetricSpec(
+        MetricNames.MYSQL_DUPLICATE_IGNORED_TOTAL,
+        "counter",
+        "Oracle MySQL duplicate rows safely ignored by insert_ignore mode.",
+    ),
+    MetricSpec(
+        MetricNames.MYSQL_DUPLICATE_NOOP_TOTAL,
+        "counter",
+        "Oracle MySQL duplicate rows safely left unchanged by upsert mode with no update columns.",
+    ),
+    MetricSpec(
+        MetricNames.MYSQL_UPSERT_ROWS_TOTAL,
+        "counter",
+        "Oracle MySQL rows committed through upsert mode.",
+    ),
+    MetricSpec(
+        MetricNames.MYSQL_UPSERT_OUTCOME_UNKNOWN_TOTAL,
+        "counter",
+        "Oracle MySQL upsert rows where insert-versus-match outcome is not reliably exposed.",
     ),
     MetricSpec(
         MetricNames.LAST_SINK_SUCCESS_EPOCH_SECONDS,

@@ -18,19 +18,28 @@ contract as the CLI.
 ## Recommended Imports
 
 ```python
-from nats_sinks import EncryptionConfig, JetStreamSinkRunner, NatsEnvelope, Sink
+from nats_sinks import (
+    ConsumerManagementConfig,
+    CustodyConfig,
+    EncryptionConfig,
+    JetStreamAdvisoryConfig,
+    JetStreamSinkRunner,
+    NatsEnvelope,
+    Sink,
+)
 from nats_sinks.file import FileSink
+from nats_sinks.mysql import MySqlSink
 from nats_sinks.oracle import OracleSink
 ```
 
 The examples below use the file sink because it has no external dependency.
-Oracle follows the same runner pattern and is imported from
-`nats_sinks.oracle`.
+Oracle Database and Oracle MySQL follow the same runner pattern and are
+imported from `nats_sinks.oracle` and `nats_sinks.mysql`.
 
 The most common embedded setup is:
 
 ```python
-from nats_sinks import JetStreamSinkRunner
+from nats_sinks import ConsumerManagementConfig, JetStreamSinkRunner
 from nats_sinks.file import FileSink
 
 sink = FileSink(
@@ -46,10 +55,23 @@ runner = JetStreamSinkRunner(
     consumer="orders-file-sink",
     subject="orders.*",
     sink=sink,
+    consumer_management=ConsumerManagementConfig(mode="bind_only"),
 )
 
 await runner.run()
 ```
+
+`ConsumerManagementConfig` is optional. Embedded applications use it when they
+want the same explicit durable-consumer startup behavior as JSON
+configuration. It only controls startup binding, creation, and drift checks;
+the runner still owns every ACK decision after messages are fetched.
+
+The same object also carries richer JetStream consumer policy settings:
+`filter_subjects`, `backoff_seconds`, `max_deliver`, `max_ack_pending`,
+`max_waiting`, `headers_only`, `num_replicas`, `memory_storage`, and bounded
+consumer `metadata`. Invalid combinations, such as `backoff_seconds` without
+`max_deliver`, fail during configuration validation before the runner can
+fetch messages.
 
 ## Enabling Payload Encryption
 
@@ -83,6 +105,61 @@ The sink receives encrypted payload bytes in a standard
 `_nats_sinks_encryption` JSON envelope. Metadata such as subject, stream
 sequence, and headers remains clear. See [Payload Encryption](payload-encryption.md)
 for decryption helpers and operational guidance.
+
+Authorized replay or verification tools can register more than one key
+generation with `PayloadKeyRegistry`:
+
+```python
+from nats_sinks import EncryptionConfig, PayloadKeyRegistry
+
+registry = PayloadKeyRegistry(
+    [
+        EncryptionConfig(
+            enabled=True,
+            key_id="orders-prod-2026-05",
+            key_b64_env="NATS_SINKS_PAYLOAD_KEY_2026_05_B64",
+        ),
+        EncryptionConfig(
+            enabled=True,
+            key_id="orders-prod-2026-06",
+            key_b64_env="NATS_SINKS_PAYLOAD_KEY_2026_06_B64",
+        ),
+    ]
+)
+
+plaintext = registry.decrypt_payload(stored_payload)
+```
+
+## Enabling Custody Metadata
+
+Applications can also enable tamper-evident custody metadata through the
+runner. The core computes deterministic hashes before calling the sink, and the
+sink persists the custody object with the durable record.
+
+```python
+from nats_sinks import CustodyConfig, JetStreamSinkRunner
+from nats_sinks.file import FileSink
+
+sink = FileSink(directory="/var/lib/nats-sinks/events")
+
+runner = JetStreamSinkRunner(
+    nats_url="nats://localhost:4222",
+    stream="ORDERS",
+    consumer="orders-file-sink",
+    subject="orders.*",
+    sink=sink,
+    custody=CustodyConfig(
+        enabled=True,
+        algorithm="sha256",
+        key_id="custody-policy-v1",
+    ),
+)
+```
+
+Custody hashes are not encryption and not digital signatures. They are evidence
+values that can be recomputed later to detect unexpected changes to stored
+payloads or metadata. See
+[Tamper-Evident Custody Metadata](tamper-evident-custody.md).
 
 ## Capturing Metrics In Embedded Code
 
@@ -118,10 +195,15 @@ written = metrics.counters[MetricNames.MESSAGES_WRITTEN_TOTAL]
 Write a local snapshot for the standalone metrics CLI:
 
 ```python
-from nats_sinks import JsonFileMetrics, JetStreamSinkRunner
+from nats_sinks import JsonFileMetrics, JetStreamSinkRunner, MetricsConfig
 from nats_sinks.file import FileSink
 
 metrics = JsonFileMetrics(".local/nats-sinks/metrics.json", namespace="nats_sinks")
+metrics_config = MetricsConfig(
+    event_freshness_enabled=True,
+    event_stale_after_seconds=300,
+    event_future_skew_tolerance_seconds=5,
+)
 sink = FileSink(directory="/var/lib/nats-sinks/events")
 
 runner = JetStreamSinkRunner(
@@ -131,12 +213,14 @@ runner = JetStreamSinkRunner(
     subject="orders.*",
     sink=sink,
     metrics=metrics,
+    metrics_config=metrics_config,
 )
 ```
 
-Oracle-specific counters use the same recorder. When embedding `OracleSink`,
-pass the recorder to both the sink and the runner so duplicate/conflict
-observations appear beside core delivery counters:
+Oracle Database and Oracle MySQL sink-specific counters use the same recorder.
+When embedding `OracleSink` or `MySqlSink`, pass the recorder to both the sink
+and the runner so duplicate/conflict observations appear beside core delivery
+counters:
 
 ```python
 from nats_sinks import JsonFileMetrics, JetStreamSinkRunner, MetricNames
@@ -166,6 +250,36 @@ runner = JetStreamSinkRunner(
 duplicates = metrics.counters[MetricNames.ORACLE_DUPLICATES_TOTAL]
 ```
 
+The Oracle MySQL pattern is the same and uses the `mysql_*` metric names:
+
+```python
+from nats_sinks import JsonFileMetrics, JetStreamSinkRunner, MetricNames
+from nats_sinks.mysql import MySqlSink
+
+metrics = JsonFileMetrics(".local/nats-sinks/metrics.json", namespace="nats_sinks")
+sink = MySqlSink(
+    host="127.0.0.1",
+    port=3306,
+    database="nats_sinks",
+    user="app_user",
+    password_env="ORACLE_MYSQL_PASSWORD",
+    table="NATS_SINK_EVENTS",
+    mode="insert_ignore",
+    metrics=metrics,
+)
+
+runner = JetStreamSinkRunner(
+    nats_url="nats://localhost:4222",
+    stream="ORDERS",
+    consumer="orders-mysql-sink",
+    subject="orders.*",
+    sink=sink,
+    metrics=metrics,
+)
+
+duplicates = metrics.counters[MetricNames.MYSQL_DUPLICATES_TOTAL]
+```
+
 Read the same snapshot from Python:
 
 ```python
@@ -182,6 +296,36 @@ Metrics are observational only. A metrics recorder must not ACK, NAK, mutate
 messages, inspect plaintext payloads, or block durable sink completion. See
 [Metrics](metrics.md) for the snapshot CLI, Python helpers, supported names,
 output formats, and compatibility aliases.
+
+## Observing JetStream Advisories
+
+Embedded services can enable the optional advisory observer in the same way the
+JSON config does. The observer subscribes to selected
+`$JS.EVENT.ADVISORY...` subjects and records aggregate counters through the
+configured metrics recorder. It does not write advisories to a sink and does
+not influence ACK decisions.
+
+```python
+from nats_sinks import InMemoryMetrics, JetStreamAdvisoryConfig, JetStreamSinkRunner
+
+metrics = InMemoryMetrics()
+
+runner = JetStreamSinkRunner(
+    nats_url="nats://localhost:4222",
+    stream="ORDERS",
+    consumer="orders-file-sink",
+    subject="orders.*",
+    sink=sink,
+    metrics=metrics,
+    advisories=JetStreamAdvisoryConfig(
+        enabled=True,
+        subjects=("$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES.*.*",),
+    ),
+)
+```
+
+Use [Configuration](configuration.md#advisories) for the full option reference
+and [Metrics](metrics.md#jetstream-advisory-metrics) for the counter names.
 
 ## Embedding In An Async Service
 

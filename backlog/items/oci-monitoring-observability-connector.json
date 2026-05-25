@@ -1,0 +1,26 @@
+{
+  "id": "oci-monitoring-observability-connector",
+  "title": "[Feature]: Add an OCI Monitoring observability connector",
+  "area": "Metrics and observability",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["observability", "security", "deployment", "testing"],
+  "problem": "Oracle Cloud Infrastructure Monitoring is a natural target for OCI deployments and Oracle-heavy nats-sinks users. nats-sinks currently has local snapshots and Prometheus connectors but no OCI-native custom metric connector. Operators may otherwise use scripts that bypass policy controls, over-share dimensions, or use overly broad OCI credentials.",
+  "proposal": "Design and implement an optional OCI Monitoring connector that follows the shared observability connector contract. It must be disabled by default, read approved metrics from the local metrics snapshot or shared read-only provider, apply the same observability policy allow and deny lists, use the same stale snapshot, dry-run, timeout, retry, and redaction behavior, and export only policy-approved metric names. The connector should support least-privilege OCI authentication options such as instance principals, resource principals, workload identity where available, or protected configuration references, and it should map approved metrics to OCI custom metrics with bounded dimensions.",
+  "users": "OCI operators, Oracle platform teams, Oracle Autonomous Database users, and maintainers who need a cloud-native connector aligned with the Oracle-oriented parts of the project.",
+  "delivery_semantics": "OCI Monitoring export must remain outside the delivery path. OCI API errors, signer failures, region misconfiguration, throttling, or metric rejection must not affect ACK, NAK, DLQ, retry, sink writes, or idempotency.",
+  "security": "The connector must use least-privilege OCI policies, avoid command-line secrets, redact tenancy and credential details, verify TLS by default, and avoid sensitive dimensions such as subjects, classification values, labels, mission metadata, table names, file paths, hostnames, usernames, and message identifiers by default.",
+  "acceptance": [
+    "OCI Monitoring support is optional and disabled by default.",
+    "The connector uses the shared observability policy model and bounded OCI dimension mapping.",
+    "OCI identity options and least-privilege policy guidance are documented.",
+    "API timeout, retry, throttling, and stale snapshot behavior are tested.",
+    "Documentation is added as a sub-page under the Observability documentation section."
+  ],
+  "tests": "Add unit tests for disabled policy, allow and deny filtering, OCI metric payload mapping, dimension suppression, signer configuration redaction, timeout and retry behavior, stale snapshots, dry-run output, and sanitized logging. Add optional integration guidance for an OCI test tenancy behind environment-gated markers.",
+  "documentation": "Add an OCI Monitoring sub-page under the Observability documentation section. The page must include configuration, authentication choices, least-privilege policy examples, security defaults, sample output, service deployment, and tests.",
+  "closeout": "Close after the release containing OCI Monitoring connector support is published. Include the release tag, authentication modes, tests run, documentation links, and any follow-up OCI dimension or alarm examples.",
+  "relationships": {
+    "related": ["#10"]
+  }
+}

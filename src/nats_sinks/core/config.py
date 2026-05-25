@@ -35,12 +35,27 @@ from urllib.parse import urlsplit
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic import ValidationError as PydanticValidationError
 
+from nats_sinks.core.advisory import (
+    DEFAULT_ADVISORY_MAX_PAYLOAD_BYTES,
+    DEFAULT_ADVISORY_SUBJECTS,
+    MAX_ADVISORY_PAYLOAD_BYTES,
+    MAX_ADVISORY_SUBJECTS,
+    validate_advisory_subject,
+)
+from nats_sinks.core.custody import (
+    CUSTODY_SUPPORTED_ALGORITHMS,
+    MAX_CUSTODY_KEY_ID_LENGTH,
+    validate_custody_algorithm,
+    validate_custody_key_id,
+)
 from nats_sinks.core.errors import ConfigurationError
 from nats_sinks.core.errors import ValidationError as FrameworkValidationError
 from nats_sinks.core.message_metadata import (
     DEFAULT_CLASSIFICATION_HEADER,
     DEFAULT_LABELS_HEADER,
     DEFAULT_PRIORITY_HEADER,
+    LABEL_SEPARATOR,
+    contains_ascii_control_characters,
     normalise_labels_value,
     normalise_metadata_value,
 )
@@ -49,6 +64,12 @@ from nats_sinks.core.mission_metadata import (
     DEFAULT_MISSION_METADATA_HEADER,
     MAX_MISSION_METADATA_BYTES,
     normalize_mission_metadata_object,
+)
+from nats_sinks.core.security_labels import (
+    DEFAULT_MAX_SECURITY_LABEL_BYTES,
+    DEFAULT_SECURITY_LABELS_HEADER,
+    MAX_SECURITY_LABEL_BYTES,
+    normalize_security_label_profile,
 )
 from nats_sinks.core.subjects import matches_subject, validate_subject_pattern
 
@@ -59,16 +80,94 @@ SENSITIVE_KEY_PARTS = (
     "private_key",
     "credentials",
     "creds",
+    "cert_file",
+    "key_file",
+    "nkey_seed",
     "key_b64",
     "key_material",
 )
 AES_256_KEY_BYTES = 32
 MAX_ENCRYPTION_KEY_ID_LENGTH = 128
+MAX_AUTHENTICITY_KEY_ID_LENGTH = 128
+MAX_AUTHENTICITY_SIGNATURE_LENGTH = 1024
+MIN_HMAC_SHA256_KEY_BYTES = 32
+MAX_HMAC_SHA256_KEY_BYTES = 1024
+ED25519_PUBLIC_KEY_BYTES = 32
+AUTHENTICITY_SIGNED_FIELDS = frozenset(
+    {
+        "subject",
+        "message_id",
+        "priority",
+        "classification",
+        "labels",
+        "mission_metadata",
+        "security_labels",
+    }
+)
+DEFAULT_AUTHENTICITY_SIGNED_FIELDS = ("subject", "message_id")
 MAX_CONFIG_BYTES = 1_048_576
 NATS_ALLOWED_URL_SCHEMES = frozenset({"nats", "tls", "ws", "wss"})
+NATS_WEBSOCKET_URL_SCHEMES = frozenset({"ws", "wss"})
+NATS_NON_WEBSOCKET_URL_SCHEMES = frozenset({"nats", "tls"})
+MAX_CONSUMER_FILTER_SUBJECTS = 64
+MAX_CONSUMER_BACKOFF_ENTRIES = 128
+MAX_CONSUMER_BACKOFF_SECONDS = 604_800
+MAX_CONSUMER_METADATA_KEYS = 32
+MAX_CONSUMER_METADATA_KEY_LENGTH = 128
+MAX_CONSUMER_METADATA_VALUE_LENGTH = 512
+CONSUMER_METADATA_KEY_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.:/-]{0,127}$")
 PRIORITY_LANE_NAME_RE = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
+PRE_SINK_POLICY_MISSION_KEY_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.:-]{0,127}$")
+WEBSOCKET_HEADER_NAME_RE = re.compile(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,128}$")
+WEBSOCKET_HEADER_ENV_RE = re.compile(r"^[A-Z_][A-Z0-9_]{0,127}$")
 ASCII_CONTROL_MAX = 31
 ASCII_DELETE = 127
+MAX_WEBSOCKET_HEADERS = 32
+MAX_WEBSOCKET_HEADER_VALUE_LENGTH = 2048
+WEBSOCKET_DANGEROUS_HEADERS = frozenset(
+    {
+        "connection",
+        "content-length",
+        "host",
+        "sec-websocket-accept",
+        "sec-websocket-extensions",
+        "sec-websocket-key",
+        "sec-websocket-protocol",
+        "sec-websocket-version",
+        "transfer-encoding",
+        "upgrade",
+    }
+)
+WEBSOCKET_ENV_ONLY_HEADERS = frozenset(
+    {
+        "authorization",
+        "cookie",
+        "proxy-authorization",
+        "x-api-key",
+        "x-auth-token",
+    }
+)
+MAX_POLICY_LABEL_LENGTH = 128
+MAX_POLICY_PAYLOAD_BYTES = 1_073_741_824
+DEFAULT_SIZE_POLICY_MAX_PAYLOAD_BYTES = 16_777_216
+DEFAULT_SIZE_POLICY_MAX_HEADERS_BYTES = 65_536
+DEFAULT_SIZE_POLICY_MAX_STANDARD_METADATA_BYTES = 262_144
+DEFAULT_SIZE_POLICY_MAX_NORMALIZED_RECORD_BYTES = 20_971_520
+MAX_SIZE_POLICY_BYTES = 1_073_741_824
+MAX_SIZE_POLICY_COUNT = 1_000_000
+SINK_PLUGIN_NAME_RE = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
+MAX_SINK_PLUGIN_NAMES = 32
+POLICY_SECRET_KEY_PARTS = (
+    "password",
+    "passwd",
+    "pwd",
+    "token",
+    "secret",
+    "private_key",
+    "credential",
+    "api_key",
+    "key_material",
+)
 
 
 def _validate_nats_server_url(value: str, *, field: str) -> str:
@@ -85,6 +184,199 @@ def _validate_nats_server_url(value: str, *, field: str) -> str:
         raise ValueError(f"{field} must use one of these schemes: {allowed}")
     if not parsed.netloc:
         raise ValueError(f"{field} must include a host")
+    if parsed.username is not None or parsed.password is not None:
+        raise ValueError(
+            f"{field} must not include credentials; use nats.user, nats.password_env, "
+            "nats.token_env, nats.creds_file, or nats.nkey_seed_file instead"
+        )
+    return rendered
+
+
+def _validate_nats_identity_path(value: str | None, *, field: str) -> str | None:
+    """Validate file path fields that point at NATS identity or TLS material.
+
+    The configuration loader intentionally does not require these files to
+    exist.  In Kubernetes, systemd, and container deployments the files may be
+    mounted only at runtime.  The boundary still validates the string shape so
+    control characters, invisible whitespace, and empty paths cannot flow into
+    TLS or authentication setup.
+    """
+
+    if value is None:
+        return None
+    rendered = value.strip()
+    if not rendered:
+        raise ValueError(f"{field} must not be empty")
+    if rendered != value:
+        raise ValueError(f"{field} must not have surrounding whitespace")
+    if any(
+        ord(character) <= ASCII_CONTROL_MAX or ord(character) == ASCII_DELETE
+        for character in rendered
+    ):
+        raise ValueError(f"{field} must not contain control characters")
+    return rendered
+
+
+def _nats_url_scheme(value: str) -> str:
+    """Return the already-validated NATS URL scheme."""
+
+    return urlsplit(value).scheme
+
+
+def _validate_websocket_transport_mix(urls: list[str]) -> None:
+    """Reject seed lists that mix WebSocket and non-WebSocket transports.
+
+    `nats-py` selects different transport implementations for WebSocket and
+    normal TCP/TLS connections.  Rejecting mixed seed lists before connection
+    setup gives operators a deterministic error instead of a late transport
+    failure after startup begins.
+    """
+
+    schemes = {_nats_url_scheme(url) for url in urls}
+    if schemes & NATS_WEBSOCKET_URL_SCHEMES and schemes & NATS_NON_WEBSOCKET_URL_SCHEMES:
+        raise ValueError(
+            "nats.urls must not mix WebSocket transports (ws or wss) with "
+            "non-WebSocket transports (nats or tls)"
+        )
+
+
+def _is_websocket_transport(urls: list[str]) -> bool:
+    """Return true when the effective NATS seed list uses WebSocket transport."""
+
+    return any(_nats_url_scheme(url) in NATS_WEBSOCKET_URL_SCHEMES for url in urls)
+
+
+def _validate_websocket_header_name(name: str, *, source: str) -> str:
+    """Validate one WebSocket connection header name.
+
+    The value is sent during the WebSocket handshake and may be logged by
+    proxies outside this process, so the project keeps the accepted grammar
+    intentionally narrow and rejects protocol-owned headers.
+    """
+
+    rendered = name.strip()
+    if rendered != name or not WEBSOCKET_HEADER_NAME_RE.fullmatch(rendered):
+        raise ValueError(
+            f"{source} header names must be HTTP token names without surrounding whitespace"
+        )
+    if rendered.casefold() in WEBSOCKET_DANGEROUS_HEADERS:
+        raise ValueError(f"{source} must not configure WebSocket protocol header {rendered!r}")
+    return rendered
+
+
+def _validate_websocket_header_value(value: str, *, source: str) -> str:
+    """Validate one WebSocket connection header value."""
+
+    if len(value) > MAX_WEBSOCKET_HEADER_VALUE_LENGTH:
+        raise ValueError(
+            f"{source} values must be at most {MAX_WEBSOCKET_HEADER_VALUE_LENGTH} characters"
+        )
+    if any(ord(char) <= ASCII_CONTROL_MAX or ord(char) == ASCII_DELETE for char in value):
+        raise ValueError(f"{source} values must not contain control characters")
+    if value.strip() != value:
+        raise ValueError(f"{source} values must not have surrounding whitespace")
+    return value
+
+
+def _validate_metadata_header_name(value: str, *, source: str) -> str:
+    """Validate an operator-configured metadata header name.
+
+    Metadata header names are user-controlled configuration. The runtime keeps
+    the accepted grammar deliberately simple: trim surrounding whitespace,
+    reject empty names, and reject every ASCII control character so extraction
+    remains predictable and safe to audit.
+    """
+
+    rendered = value.strip()
+    if not rendered:
+        raise ValueError(f"{source} must not be empty")
+    if contains_ascii_control_characters(rendered):
+        raise ValueError(f"{source} must not contain control characters")
+    return rendered
+
+
+def _normalize_metadata_default(value: object, *, source: str) -> str | None:
+    """Normalize and validate one configured scalar message metadata default."""
+
+    normalized = normalise_metadata_value(value)
+    if normalized is None:
+        return None
+    if contains_ascii_control_characters(normalized):
+        raise ValueError(f"{source} must not contain control characters")
+    return normalized
+
+
+def _normalize_configured_labels(value: object, *, source: str) -> tuple[str, ...]:
+    """Normalize configured labels while rejecting ambiguous list items.
+
+    Strings may use the documented semicolon-separated form.  When an operator
+    supplies labels as a JSON array, each array item already represents one
+    label, so accepting a semicolon inside an item would make scalar storage
+    ambiguous.  The check is therefore stricter for array input while preserving
+    the documented string shorthand.
+    """
+
+    if isinstance(value, (list, tuple, set, frozenset)):
+        for item in value:
+            rendered = normalise_metadata_value(item)
+            if rendered is None:
+                continue
+            if LABEL_SEPARATOR in rendered:
+                raise ValueError(f"{source} list items must not contain the semicolon separator")
+
+    labels = normalise_labels_value(value)
+    for label in labels:
+        if contains_ascii_control_characters(label):
+            raise ValueError(f"{source} must not contain control characters")
+    return labels
+
+
+def _validate_websocket_header_env_name(value: str, *, source: str) -> str:
+    """Validate an environment variable name used as a header value source."""
+
+    rendered = value.strip()
+    if rendered != value or not WEBSOCKET_HEADER_ENV_RE.fullmatch(rendered):
+        raise ValueError(
+            f"{source} environment variable names must use uppercase letters, digits, or '_'"
+        )
+    return rendered
+
+
+def _validate_websocket_header_mapping(
+    value: object,
+    *,
+    source: str,
+    env_values: bool,
+) -> dict[str, str]:
+    """Validate direct or environment-sourced WebSocket header configuration."""
+
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError(f"{source} must be an object with header names as keys")
+    if len(value) > MAX_WEBSOCKET_HEADERS:
+        raise ValueError(f"{source} supports at most {MAX_WEBSOCKET_HEADERS} headers")
+
+    rendered: dict[str, str] = {}
+    seen: set[str] = set()
+    for raw_name, raw_value in value.items():
+        if not isinstance(raw_name, str) or not isinstance(raw_value, str):
+            raise ValueError(f"{source} header names and values must be strings")
+        name = _validate_websocket_header_name(raw_name, source=source)
+        lowered_name = name.casefold()
+        if lowered_name in seen:
+            raise ValueError(f"{source} must not contain duplicate header names")
+        if not env_values and lowered_name in WEBSOCKET_ENV_ONLY_HEADERS:
+            raise ValueError(
+                f"{source}.{name} must use nats.websocket_headers_env so the value "
+                "comes from the runtime environment and is redacted everywhere"
+            )
+        seen.add(lowered_name)
+        rendered[name] = (
+            _validate_websocket_header_env_name(raw_value, source=f"{source}.{name}")
+            if env_values
+            else _validate_websocket_header_value(raw_value, source=f"{source}.{name}")
+        )
     return rendered
 
 
@@ -103,6 +395,41 @@ def _decode_aes_256_key(value: str, *, source: str) -> bytes:
         raise ConfigurationError(f"{source} must be base64 encoded") from exc
     if len(decoded) != AES_256_KEY_BYTES:
         raise ConfigurationError(f"{source} must decode to exactly 32 bytes for AES-256")
+    return decoded
+
+
+def _decode_authenticity_key(
+    value: str,
+    *,
+    algorithm: str,
+    source: str,
+) -> bytes:
+    """Decode and bound message-authenticity verification key material.
+
+    HMAC-SHA256 uses a shared secret and Ed25519 uses a public verification
+    key.  Both values cross the configuration trust boundary as base64 text, so
+    they are validated before the runner starts.  The decoded material is never
+    logged or included in public issue comments.
+    """
+
+    try:
+        decoded = base64.b64decode(value.encode("ascii"), validate=True)
+    except (UnicodeEncodeError, binascii.Error) as exc:
+        raise ConfigurationError(f"{source} must be base64 encoded") from exc
+    if algorithm == "hmac-sha256":
+        if not MIN_HMAC_SHA256_KEY_BYTES <= len(decoded) <= MAX_HMAC_SHA256_KEY_BYTES:
+            raise ConfigurationError(
+                f"{source} must decode to {MIN_HMAC_SHA256_KEY_BYTES}-"
+                f"{MAX_HMAC_SHA256_KEY_BYTES} bytes for HMAC-SHA256"
+            )
+    elif algorithm == "ed25519":
+        if len(decoded) != ED25519_PUBLIC_KEY_BYTES:
+            raise ConfigurationError(
+                f"{source} must decode to exactly {ED25519_PUBLIC_KEY_BYTES} bytes "
+                "for Ed25519 public keys"
+            )
+    else:
+        raise ConfigurationError("message_authenticity algorithm is not supported")
     return decoded
 
 
@@ -142,6 +469,12 @@ class NatsConfig(BaseModel):
     tls_cert_file: str | None = None
     tls_key_file: str | None = None
     tls_verify: bool = True
+    websocket_headers: dict[str, str] = Field(default_factory=dict)
+    websocket_headers_env: dict[str, str] = Field(default_factory=dict)
+    # Keep server-side echo suppression opt-in so ordinary JetStream pull
+    # consumers preserve the same connection behavior unless an operator has a
+    # specific same-connection publish/subscribe reason to enable it.
+    no_echo: bool = False
     allow_reconnect: bool = True
     connect_timeout_seconds: int = Field(default=2, ge=1, le=300)
     reconnect_time_wait_seconds: int = Field(default=2, ge=0, le=3600)
@@ -175,6 +508,24 @@ class NatsConfig(BaseModel):
             raise ValueError("configure a single NATS authentication method")
         if self.tls_key_file is not None and self.tls_cert_file is None:
             raise ValueError("nats.tls_key_file requires nats.tls_cert_file")
+        effective_urls = self.urls or [self.url]
+        _validate_websocket_transport_mix(effective_urls)
+        if (self.websocket_headers or self.websocket_headers_env) and not _is_websocket_transport(
+            effective_urls
+        ):
+            raise ValueError(
+                "nats.websocket_headers and nats.websocket_headers_env require ws:// "
+                "or wss:// transport"
+            )
+        header_names = {name.casefold() for name in self.websocket_headers}
+        header_env_names = {name.casefold() for name in self.websocket_headers_env}
+        duplicates = sorted(header_names & header_env_names)
+        if duplicates:
+            joined = ", ".join(duplicates)
+            raise ValueError(
+                "nats.websocket_headers and nats.websocket_headers_env must not "
+                f"configure the same header twice: {joined}"
+            )
         return self
 
     @field_validator("url")
@@ -193,6 +544,47 @@ class NatsConfig(BaseModel):
         for item in value:
             rendered_urls.append(_validate_nats_server_url(item, field="nats.urls"))
         return rendered_urls
+
+    @field_validator(
+        "creds_file",
+        "nkey_seed_file",
+        "tls_ca_file",
+        "tls_cert_file",
+        "tls_key_file",
+    )
+    @classmethod
+    def validate_identity_file_path(cls, value: str | None, info: Any) -> str | None:
+        """Validate optional paths to NATS identity and TLS files.
+
+        File existence is checked later by `nats-py` or `ssl` when a live
+        connection is opened.  Keeping path validation here still gives users a
+        deterministic configuration error for malformed values while allowing
+        runtime-mounted secret files.
+        """
+
+        return _validate_nats_identity_path(value, field=f"nats.{info.field_name}")
+
+    @field_validator("websocket_headers", mode="before")
+    @classmethod
+    def validate_websocket_headers(cls, value: object) -> dict[str, str]:
+        """Validate non-sensitive WebSocket headers declared directly in JSON."""
+
+        return _validate_websocket_header_mapping(
+            value,
+            source="nats.websocket_headers",
+            env_values=False,
+        )
+
+    @field_validator("websocket_headers_env", mode="before")
+    @classmethod
+    def validate_websocket_headers_env(cls, value: object) -> dict[str, str]:
+        """Validate WebSocket headers whose values are resolved from env vars."""
+
+        return _validate_websocket_header_mapping(
+            value,
+            source="nats.websocket_headers_env",
+            env_values=True,
+        )
 
     def resolve_password(self) -> str | None:
         """Resolve the NATS password only when opening a connection."""
@@ -217,6 +609,181 @@ class NatsConfig(BaseModel):
         if token is None:
             raise ConfigurationError(f"environment variable {self.token_env} is not set")
         return token
+
+    def resolve_websocket_headers(self) -> dict[str, str]:
+        """Resolve and validate optional WebSocket connection headers.
+
+        Direct headers are intended for non-sensitive routing hints.  Sensitive
+        values, such as authorization material expected by a reverse proxy,
+        should use `websocket_headers_env` so the JSON configuration and
+        redacted effective configuration never contain the value.
+        """
+
+        headers = dict(self.websocket_headers)
+        for name, env_name in self.websocket_headers_env.items():
+            value = os.getenv(env_name)
+            if value is None:
+                raise ConfigurationError(f"environment variable {env_name} is not set")
+            headers[name] = _validate_websocket_header_value(
+                value,
+                source=f"environment variable {env_name}",
+            )
+        return headers
+
+
+class ConsumerManagementConfig(BaseModel):
+    """How the runner prepares the durable JetStream pull consumer.
+
+    Consumer configuration is part of the delivery contract.  The default mode
+    preserves the existing "create the durable consumer when it is missing"
+    behavior, but it now makes that behavior explicit and validates compatible
+    existing consumers before fetching messages.  Operators that pre-create
+    consumers with a separate administrative identity can choose `bind_only`.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Literal["bind_only", "create_if_missing", "reconcile"] = "create_if_missing"
+    filter_subjects: tuple[str, ...] = Field(default_factory=tuple)
+    deliver_policy: Literal["all", "last", "new", "last_per_subject"] = "all"
+    replay_policy: Literal["instant", "original"] = "instant"
+    ack_wait_seconds: float | None = Field(default=None, gt=0, le=86_400)
+    max_deliver: int | None = Field(default=None, ge=1, le=1_000_000)
+    backoff_seconds: tuple[float, ...] | None = None
+    max_ack_pending: int | None = Field(default=None, ge=1, le=1_000_000)
+    max_waiting: int | None = Field(default=None, ge=1, le=1_000_000)
+    headers_only: bool | None = None
+    num_replicas: int | None = Field(default=None, ge=0, le=5)
+    memory_storage: bool | None = None
+    metadata: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("filter_subjects", mode="before")
+    @classmethod
+    def normalize_filter_subjects(cls, value: object) -> tuple[str, ...]:
+        """Validate optional multi-filter subject lists before startup."""
+
+        if value is None:
+            return ()
+        if not isinstance(value, (list, tuple)):
+            raise ValueError("consumer_management.filter_subjects must be a list of NATS subjects")
+        if len(value) > MAX_CONSUMER_FILTER_SUBJECTS:
+            raise ValueError(
+                "consumer_management.filter_subjects supports at most "
+                f"{MAX_CONSUMER_FILTER_SUBJECTS} entries"
+            )
+        rendered: list[str] = []
+        seen: set[str] = set()
+        for item in value:
+            subject = validate_subject_pattern(item)
+            if subject in seen:
+                raise ValueError(f"duplicate consumer_management.filter_subjects entry {subject!r}")
+            rendered.append(subject)
+            seen.add(subject)
+        return tuple(rendered)
+
+    @field_validator("backoff_seconds", mode="before")
+    @classmethod
+    def normalize_backoff_seconds(cls, value: object) -> tuple[float, ...] | None:
+        """Validate server-side BackOff values as bounded positive seconds."""
+
+        if value is None:
+            return None
+        if not isinstance(value, (list, tuple)):
+            raise ValueError(
+                "consumer_management.backoff_seconds must be a list of positive seconds"
+            )
+        if not value:
+            raise ValueError(
+                "consumer_management.backoff_seconds must not be empty when configured"
+            )
+        if len(value) > MAX_CONSUMER_BACKOFF_ENTRIES:
+            raise ValueError(
+                "consumer_management.backoff_seconds supports at most "
+                f"{MAX_CONSUMER_BACKOFF_ENTRIES} entries"
+            )
+        rendered: list[float] = []
+        for item in value:
+            if isinstance(item, bool) or not isinstance(item, (int, float)):
+                raise ValueError("consumer_management.backoff_seconds entries must be numeric")
+            seconds = float(item)
+            if seconds <= 0 or seconds > MAX_CONSUMER_BACKOFF_SECONDS:
+                raise ValueError(
+                    "consumer_management.backoff_seconds entries must be greater than 0 "
+                    f"and at most {MAX_CONSUMER_BACKOFF_SECONDS}"
+                )
+            rendered.append(seconds)
+        return tuple(rendered)
+
+    @field_validator("metadata", mode="before")
+    @classmethod
+    def validate_metadata(cls, value: object) -> dict[str, str]:
+        """Validate optional consumer metadata before it reaches JetStream."""
+
+        if value is None:
+            return {}
+        if not isinstance(value, dict):
+            raise ValueError(
+                "consumer_management.metadata must be an object with string keys and values"
+            )
+        if len(value) > MAX_CONSUMER_METADATA_KEYS:
+            raise ValueError(
+                "consumer_management.metadata supports at most "
+                f"{MAX_CONSUMER_METADATA_KEYS} entries"
+            )
+        rendered: dict[str, str] = {}
+        for raw_key, raw_value in value.items():
+            if not isinstance(raw_key, str) or not isinstance(raw_value, str):
+                raise ValueError("consumer_management.metadata keys and values must be strings")
+            key = raw_key.strip()
+            if key != raw_key or not CONSUMER_METADATA_KEY_RE.fullmatch(key):
+                raise ValueError(
+                    "consumer_management.metadata keys must start with a letter and contain "
+                    "only letters, digits, '.', '_', ':', '/', or '-'"
+                )
+            lowered_key = key.lower()
+            if any(secret_part in lowered_key for secret_part in SENSITIVE_KEY_PARTS):
+                raise ValueError(
+                    "consumer_management.metadata keys must not describe secret material"
+                )
+            if raw_value.strip() != raw_value:
+                raise ValueError(
+                    "consumer_management.metadata values must not have surrounding whitespace"
+                )
+            if len(raw_value) > MAX_CONSUMER_METADATA_VALUE_LENGTH:
+                raise ValueError(
+                    "consumer_management.metadata values must be at most "
+                    f"{MAX_CONSUMER_METADATA_VALUE_LENGTH} characters"
+                )
+            if any(
+                ord(character) <= ASCII_CONTROL_MAX or ord(character) == ASCII_DELETE
+                for character in raw_value
+            ):
+                raise ValueError(
+                    "consumer_management.metadata values must not contain control characters"
+                )
+            rendered[key] = raw_value
+        return rendered
+
+    @model_validator(mode="after")
+    def validate_policy_combinations(self) -> ConsumerManagementConfig:
+        """Reject JetStream policy combinations that are ambiguous for sinks."""
+
+        if self.backoff_seconds is not None:
+            if self.ack_wait_seconds is not None:
+                raise ValueError(
+                    "consumer_management.backoff_seconds overrides AckWait; "
+                    "configure backoff_seconds or ack_wait_seconds, not both"
+                )
+            if self.max_deliver is None:
+                raise ValueError(
+                    "consumer_management.max_deliver is required when backoff_seconds is set"
+                )
+            if len(self.backoff_seconds) > self.max_deliver:
+                raise ValueError(
+                    "consumer_management.backoff_seconds length must be less than or equal "
+                    "to max_deliver"
+                )
+        return self
 
 
 class PriorityLaneConfig(BaseModel):
@@ -388,7 +955,13 @@ class DeliveryConfig(BaseModel):
 
 
 class DeadLetterConfig(BaseModel):
-    """Dead-letter queue publication settings."""
+    """Dead-letter queue publication settings.
+
+    `ack_term_after_publish` is deliberately disabled by default.  When it is
+    enabled, the runner sends JetStream `AckTerm` only after the DLQ publish has
+    succeeded.  It is never a sink-success acknowledgement and must not be used
+    as a shortcut around commit-then-acknowledge processing.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -397,6 +970,211 @@ class DeadLetterConfig(BaseModel):
     include_payload: bool = True
     include_headers: bool = True
     include_error: bool = True
+    ack_term_after_publish: bool = False
+
+
+class PreSinkPolicyRuleConfig(BaseModel):
+    """One allow-listed pre-sink policy rule.
+
+    Rules are data-only configuration, not executable expressions. Every
+    enabled rule is evaluated against matching subjects before any sink sees
+    the message. If a rule fails, the message follows the permanent-failure
+    path and can be published to DLQ before ACK.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    subject: str = ">"
+    require_priority: bool = False
+    require_classification: bool = False
+    required_labels: tuple[str, ...] = Field(default_factory=tuple)
+    require_mission_metadata: bool = False
+    require_encrypted_payload: bool = False
+    max_payload_bytes: int | None = Field(default=None, ge=0, le=MAX_POLICY_PAYLOAD_BYTES)
+    allowed_mission_metadata_keys: tuple[str, ...] | None = None
+
+    @field_validator("subject")
+    @classmethod
+    def validate_subject(cls, value: str) -> str:
+        """Validate policy subject patterns with the same NATS syntax as routing."""
+
+        return validate_subject_pattern(value)
+
+    @field_validator("required_labels", mode="before")
+    @classmethod
+    def normalize_required_labels(cls, value: object) -> tuple[str, ...]:
+        """Normalize and bound required labels before runtime policy checks."""
+
+        labels = normalise_labels_value(value)
+        for label in labels:
+            if len(label) > MAX_POLICY_LABEL_LENGTH:
+                raise ValueError(
+                    f"policy required labels must not exceed {MAX_POLICY_LABEL_LENGTH} characters"
+                )
+            if any(
+                ord(character) <= ASCII_CONTROL_MAX or ord(character) == ASCII_DELETE
+                for character in label
+            ):
+                raise ValueError("policy required labels must not contain control characters")
+        return labels
+
+    @field_validator("allowed_mission_metadata_keys", mode="before")
+    @classmethod
+    def normalize_allowed_mission_metadata_keys(
+        cls,
+        value: object,
+    ) -> tuple[str, ...] | None:
+        """Validate root mission-metadata keys used by the policy allow list."""
+
+        if value is None:
+            return None
+        if isinstance(value, str):
+            raw_values = [value]
+        elif isinstance(value, (list, tuple, set, frozenset)):
+            raw_values = list(value)
+        else:
+            raise ValueError("policy allowed_mission_metadata_keys must be a string or list")
+
+        keys: list[str] = []
+        seen: set[str] = set()
+        for item in raw_values:
+            if not isinstance(item, str):
+                raise ValueError("policy allowed_mission_metadata_keys must contain strings")
+            key = item.strip()
+            if not key:
+                raise ValueError("policy allowed_mission_metadata_keys must not contain blanks")
+            if "\n" in key or "\r" in key or "\x00" in key:
+                raise ValueError(
+                    "policy allowed_mission_metadata_keys must not contain control characters"
+                )
+            if PRE_SINK_POLICY_MISSION_KEY_RE.fullmatch(key) is None:
+                raise ValueError(
+                    "policy allowed_mission_metadata_keys must start with a letter and contain "
+                    "only letters, numbers, underscores, dots, colons, or hyphens"
+                )
+            key_lower = key.lower()
+            if any(part in key_lower for part in POLICY_SECRET_KEY_PARTS):
+                raise ValueError(
+                    "policy allowed_mission_metadata_keys must not contain secret-like names"
+                )
+            if key in seen:
+                continue
+            keys.append(key)
+            seen.add(key)
+        return tuple(keys)
+
+    @model_validator(mode="after")
+    def validate_rule_has_check(self) -> PreSinkPolicyRuleConfig:
+        """Reject no-op policy rules that would make reviews misleading."""
+
+        has_allowed_keys_check = "allowed_mission_metadata_keys" in self.model_fields_set
+        if not (
+            self.require_priority
+            or self.require_classification
+            or self.required_labels
+            or self.require_mission_metadata
+            or self.require_encrypted_payload
+            or self.max_payload_bytes is not None
+            or has_allowed_keys_check
+        ):
+            raise ValueError("pre-sink policy rule must configure at least one check")
+        return self
+
+
+class PreSinkPolicyConfig(BaseModel):
+    """Destination-neutral policy gate evaluated before sink writes.
+
+    The gate is disabled by default. Once enabled, configuration intentionally
+    fails closed: at least one explicit rule is required, and unmatched subjects
+    are rejected unless the operator opts into `unmatched_subject_action=allow`.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    unmatched_subject_action: Literal["allow", "reject"] = "reject"
+    rules: list[PreSinkPolicyRuleConfig] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_enabled_policy_has_rules(self) -> PreSinkPolicyConfig:
+        """Require explicit rules before enabling the pre-sink gate."""
+
+        if self.enabled and not self.rules:
+            raise ValueError("pre_sink_policy.enabled requires at least one rule")
+        return self
+
+
+class SizePolicyConfig(BaseModel):
+    """Optional destination-neutral payload and metadata size policy.
+
+    The policy is disabled by default to preserve compatibility with existing
+    deployments.  When enabled, it fails closed before any sink receives a
+    message.  Violations are permanent validation failures, so the runner can
+    publish them to DLQ before ACK according to the normal commit-then-ACK
+    rules.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    max_payload_bytes: int = Field(
+        default=DEFAULT_SIZE_POLICY_MAX_PAYLOAD_BYTES,
+        ge=0,
+        le=MAX_SIZE_POLICY_BYTES,
+    )
+    max_header_count: int = Field(default=128, ge=0, le=MAX_SIZE_POLICY_COUNT)
+    max_header_name_bytes: int = Field(default=256, ge=1, le=65_536)
+    max_header_value_bytes: int = Field(default=8192, ge=0, le=MAX_SIZE_POLICY_BYTES)
+    max_headers_bytes: int = Field(
+        default=DEFAULT_SIZE_POLICY_MAX_HEADERS_BYTES,
+        ge=0,
+        le=MAX_SIZE_POLICY_BYTES,
+    )
+    max_label_count: int = Field(default=64, ge=0, le=MAX_SIZE_POLICY_COUNT)
+    max_label_bytes: int = Field(default=128, ge=1, le=65_536)
+    max_labels_bytes: int = Field(default=4096, ge=0, le=MAX_SIZE_POLICY_BYTES)
+    max_mission_metadata_bytes: int = Field(
+        default=DEFAULT_MAX_MISSION_METADATA_BYTES,
+        ge=0,
+        le=MAX_SIZE_POLICY_BYTES,
+    )
+    max_standard_metadata_bytes: int = Field(
+        default=DEFAULT_SIZE_POLICY_MAX_STANDARD_METADATA_BYTES,
+        ge=0,
+        le=MAX_SIZE_POLICY_BYTES,
+    )
+    max_normalized_record_bytes: int = Field(
+        default=DEFAULT_SIZE_POLICY_MAX_NORMALIZED_RECORD_BYTES,
+        ge=0,
+        le=MAX_SIZE_POLICY_BYTES,
+    )
+    max_batch_messages: int = Field(default=10_000, ge=1, le=MAX_SIZE_POLICY_COUNT)
+
+    @model_validator(mode="after")
+    def validate_aggregate_limits(self) -> SizePolicyConfig:
+        """Reject aggregate limits that are lower than their component limits."""
+
+        if self.max_headers_bytes < self.max_header_name_bytes:
+            raise ValueError(
+                "size_policy.max_headers_bytes must be greater than or equal to "
+                "size_policy.max_header_name_bytes"
+            )
+        if self.max_headers_bytes < self.max_header_value_bytes:
+            raise ValueError(
+                "size_policy.max_headers_bytes must be greater than or equal to "
+                "size_policy.max_header_value_bytes"
+            )
+        if self.max_labels_bytes < self.max_label_bytes:
+            raise ValueError(
+                "size_policy.max_labels_bytes must be greater than or equal to "
+                "size_policy.max_label_bytes"
+            )
+        if self.max_normalized_record_bytes < self.max_payload_bytes:
+            raise ValueError(
+                "size_policy.max_normalized_record_bytes must be greater than or equal to "
+                "size_policy.max_payload_bytes"
+            )
+        return self
 
 
 class LoggingConfig(BaseModel):
@@ -418,13 +1196,22 @@ class LoggingConfig(BaseModel):
 
 
 class MetricsConfig(BaseModel):
-    """Metrics settings."""
+    """Metrics settings.
+
+    Runtime metrics are local operational evidence by default.  Snapshot and
+    freshness settings deliberately avoid subject or source labels because those
+    values can expose mission, tenant, or topology information when exported to
+    observability systems.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     enabled: bool = False
     namespace: str = "nats_sinks"
     snapshot_file: str | None = None
+    event_freshness_enabled: bool = True
+    event_stale_after_seconds: float | None = Field(default=300.0, ge=0, le=31_536_000)
+    event_future_skew_tolerance_seconds: float = Field(default=5.0, ge=0, le=86_400)
 
     @field_validator("namespace")
     @classmethod
@@ -450,6 +1237,64 @@ class MetricsConfig(BaseModel):
         return rendered
 
 
+class JetStreamAdvisoryConfig(BaseModel):
+    """Optional observation of selected JetStream server advisories.
+
+    NATS publishes JetStream advisories as ordinary NATS messages below
+    ``$JS.EVENT.ADVISORY.>``.  This configuration controls a separate,
+    disabled-by-default observer that can subscribe to selected advisory
+    subjects and increment sanitized, low-cardinality counters.  It does not
+    read sink payloads, does not write to any destination, and does not make
+    ACK/NAK decisions for source messages.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    subjects: tuple[str, ...] = Field(default_factory=lambda: DEFAULT_ADVISORY_SUBJECTS)
+    max_payload_bytes: int = Field(
+        default=DEFAULT_ADVISORY_MAX_PAYLOAD_BYTES,
+        ge=0,
+        le=MAX_ADVISORY_PAYLOAD_BYTES,
+    )
+    log_events: bool = False
+
+    @field_validator("subjects", mode="before")
+    @classmethod
+    def normalize_subjects(cls, value: object) -> object:
+        """Validate advisory subscription subjects before runtime startup."""
+
+        if value is None:
+            return DEFAULT_ADVISORY_SUBJECTS
+        if isinstance(value, str):
+            raise ValueError("advisories.subjects must be a list of advisory subject patterns")
+        if not isinstance(value, list | tuple):
+            raise ValueError("advisories.subjects must be a list of advisory subject patterns")
+        if not value:
+            raise ValueError("advisories.subjects must contain at least one subject")
+        if len(value) > MAX_ADVISORY_SUBJECTS:
+            raise ValueError(
+                f"advisories.subjects must not contain more than {MAX_ADVISORY_SUBJECTS} entries"
+            )
+        rendered: list[str] = []
+        for subject in value:
+            try:
+                rendered.append(validate_advisory_subject(subject))
+            except FrameworkValidationError as exc:
+                raise ValueError(str(exc)) from exc
+        if len(rendered) != len(set(rendered)):
+            raise ValueError("advisories.subjects must not contain duplicate subjects")
+        return tuple(rendered)
+
+    @model_validator(mode="after")
+    def validate_enabled_subjects(self) -> JetStreamAdvisoryConfig:
+        """Fail closed when advisory observation is enabled without subjects."""
+
+        if self.enabled and not self.subjects:
+            raise ValueError("advisories.enabled requires at least one advisory subject")
+        return self
+
+
 class MessageMetadataFieldConfig(BaseModel):
     """How the core resolves one application-level metadata field.
 
@@ -469,21 +1314,14 @@ class MessageMetadataFieldConfig(BaseModel):
     def validate_header(cls, value: str) -> str:
         """Require a usable header name for runtime extraction."""
 
-        rendered = value.strip()
-        if not rendered:
-            raise ValueError("message metadata header must not be empty")
-        if "\n" in rendered or "\r" in rendered:
-            raise ValueError("message metadata header must not contain newlines")
-        return rendered
+        return _validate_metadata_header_name(value, source="message metadata header")
 
     @field_validator("default", mode="before")
     @classmethod
     def normalize_default(cls, value: object) -> object:
         """Treat blank defaults as null so config output is predictable."""
 
-        if value is None:
-            return None
-        return normalise_metadata_value(value)
+        return _normalize_metadata_default(value, source="message metadata default")
 
 
 class MessageMetadataLabelsConfig(BaseModel):
@@ -504,19 +1342,14 @@ class MessageMetadataLabelsConfig(BaseModel):
     def validate_header(cls, value: str) -> str:
         """Require a usable header name for runtime extraction."""
 
-        rendered = value.strip()
-        if not rendered:
-            raise ValueError("message metadata labels header must not be empty")
-        if "\n" in rendered or "\r" in rendered:
-            raise ValueError("message metadata labels header must not contain newlines")
-        return rendered
+        return _validate_metadata_header_name(value, source="message metadata labels header")
 
     @field_validator("default", mode="before")
     @classmethod
     def normalize_default(cls, value: object) -> tuple[str, ...]:
         """Accept semicolon-separated text or JSON arrays for label defaults."""
 
-        return normalise_labels_value(value)
+        return _normalize_configured_labels(value, source="message metadata labels default")
 
 
 class MessageMetadataRuleConfig(BaseModel):
@@ -548,16 +1381,14 @@ class MessageMetadataRuleConfig(BaseModel):
     def normalize_default(cls, value: object) -> object:
         """Normalize rule defaults exactly like global metadata defaults."""
 
-        if value is None:
-            return None
-        return normalise_metadata_value(value)
+        return _normalize_metadata_default(value, source="message metadata rule default")
 
     @field_validator("labels", mode="before")
     @classmethod
     def normalize_labels_default(cls, value: object) -> tuple[str, ...]:
         """Accept semicolon-separated text or JSON arrays for rule labels."""
 
-        return normalise_labels_value(value)
+        return _normalize_configured_labels(value, source="message metadata rule labels")
 
     @model_validator(mode="after")
     def validate_rule_has_default(self) -> MessageMetadataRuleConfig:
@@ -780,7 +1611,7 @@ class MissionMetadataConfig(BaseModel):
             rendered = item.strip()
             if not rendered:
                 raise ValueError("mission_metadata.allowed_profiles must not contain empty values")
-            if "\n" in rendered or "\r" in rendered or "\x00" in rendered:
+            if contains_ascii_control_characters(rendered):
                 raise ValueError(
                     "mission_metadata.allowed_profiles must not contain control characters"
                 )
@@ -812,6 +1643,185 @@ class MissionMetadataConfig(BaseModel):
                         max_bytes=self.max_bytes,
                         allowed_profiles=self.allowed_profiles,
                         source=f"mission metadata rule {rule.subject}",
+                    )
+                except FrameworkValidationError as exc:
+                    raise ValueError(str(exc)) from exc
+        return self
+
+
+def _normalize_string_allow_list(value: object, *, field_name: str) -> tuple[str, ...]:
+    """Normalize operator-defined allow lists for security-sensitive metadata."""
+
+    if value is None:
+        return ()
+    if isinstance(value, str):
+        raw_items = [value]
+    elif isinstance(value, (list, tuple, set, frozenset)):
+        raw_items = list(value)
+    else:
+        raise ValueError(f"{field_name} must be a list of strings")
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for item in raw_items:
+        if not isinstance(item, str):
+            raise ValueError(f"{field_name} must contain only strings")
+        rendered = item.strip()
+        if not rendered:
+            raise ValueError(f"{field_name} must not contain empty values")
+        if contains_ascii_control_characters(rendered):
+            raise ValueError(f"{field_name} must not contain control characters")
+        if rendered in seen:
+            continue
+        normalized.append(rendered)
+        seen.add(rendered)
+    return tuple(normalized)
+
+
+class SecurityLabelRuleConfig(BaseModel):
+    """Subject-specific default for the data-centric security label profile.
+
+    A rule supplies a validated JSON profile only when the configured security
+    label header is absent.  Setting `profile` to `null` explicitly clears the
+    global default for matching subjects.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    subject: str
+    profile: dict[str, Any] | None = None
+
+    @field_validator("subject")
+    @classmethod
+    def validate_subject(cls, value: str) -> str:
+        """Validate rule subjects with the same syntax as NATS wildcards."""
+
+        return validate_subject_pattern(value)
+
+    @field_validator("profile", mode="before")
+    @classmethod
+    def validate_profile(cls, value: object) -> object:
+        """Validate configured profile defaults before runtime processing."""
+
+        if value is None:
+            return None
+        try:
+            return normalize_security_label_profile(
+                value,
+                max_bytes=MAX_SECURITY_LABEL_BYTES,
+                source="security label rule",
+            )
+        except FrameworkValidationError as exc:
+            raise ValueError(str(exc)) from exc
+
+    @model_validator(mode="after")
+    def validate_rule_has_profile_field(self) -> SecurityLabelRuleConfig:
+        """Reject no-op rules that match a subject without setting profile."""
+
+        if "profile" not in self.model_fields_set:
+            raise ValueError("security label rule must set profile, including null if desired")
+        return self
+
+
+class SecurityLabelProfileConfig(BaseModel):
+    """Optional data-centric security label profile configuration.
+
+    The profile is disabled by default.  When enabled, a publisher can provide
+    structured labels in a NATS header, while operators can define global and
+    subject-aware defaults.  Optional allow lists let deployments fail closed
+    when classification, releasability, caveat, priority, or retention values
+    fall outside an approved vocabulary.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    header: str = DEFAULT_SECURITY_LABELS_HEADER
+    default: dict[str, Any] | None = None
+    rules: list[SecurityLabelRuleConfig] = Field(default_factory=list)
+    max_bytes: int = Field(
+        default=DEFAULT_MAX_SECURITY_LABEL_BYTES,
+        ge=1,
+        le=MAX_SECURITY_LABEL_BYTES,
+    )
+    allowed_priorities: tuple[str, ...] = Field(default_factory=tuple)
+    allowed_classifications: tuple[str, ...] = Field(default_factory=tuple)
+    allowed_releasability: tuple[str, ...] = Field(default_factory=tuple)
+    allowed_handling_caveats: tuple[str, ...] = Field(default_factory=tuple)
+    allowed_retention_categories: tuple[str, ...] = Field(default_factory=tuple)
+
+    @field_validator("header")
+    @classmethod
+    def validate_header(cls, value: str) -> str:
+        """Require a safe header name for security label extraction."""
+
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("security_labels.header must not be empty")
+        if "\n" in rendered or "\r" in rendered or "\x00" in rendered:
+            raise ValueError("security_labels.header must not contain control characters")
+        return rendered
+
+    @field_validator("default", mode="before")
+    @classmethod
+    def validate_default(cls, value: object) -> object:
+        """Validate optional global default profile."""
+
+        if value is None:
+            return None
+        try:
+            return normalize_security_label_profile(
+                value,
+                max_bytes=MAX_SECURITY_LABEL_BYTES,
+                source="security label default",
+            )
+        except FrameworkValidationError as exc:
+            raise ValueError(str(exc)) from exc
+
+    @field_validator(
+        "allowed_priorities",
+        "allowed_classifications",
+        "allowed_releasability",
+        "allowed_handling_caveats",
+        "allowed_retention_categories",
+        mode="before",
+    )
+    @classmethod
+    def validate_allow_list(cls, value: object, info: Any) -> tuple[str, ...]:
+        """Normalize configured vocabularies without accepting ambiguous values."""
+
+        return _normalize_string_allow_list(value, field_name=f"security_labels.{info.field_name}")
+
+    @model_validator(mode="after")
+    def validate_defaults_against_effective_limits(self) -> SecurityLabelProfileConfig:
+        """Recheck defaults with operator-provided size and vocabulary limits."""
+
+        if self.default is not None:
+            try:
+                self.default = normalize_security_label_profile(
+                    self.default,
+                    max_bytes=self.max_bytes,
+                    allowed_priorities=self.allowed_priorities,
+                    allowed_classifications=self.allowed_classifications,
+                    allowed_releasability=self.allowed_releasability,
+                    allowed_handling_caveats=self.allowed_handling_caveats,
+                    allowed_retention_categories=self.allowed_retention_categories,
+                    source="security label default",
+                )
+            except FrameworkValidationError as exc:
+                raise ValueError(str(exc)) from exc
+        for rule in self.rules:
+            if rule.profile is not None:
+                try:
+                    rule.profile = normalize_security_label_profile(
+                        rule.profile,
+                        max_bytes=self.max_bytes,
+                        allowed_priorities=self.allowed_priorities,
+                        allowed_classifications=self.allowed_classifications,
+                        allowed_releasability=self.allowed_releasability,
+                        allowed_handling_caveats=self.allowed_handling_caveats,
+                        allowed_retention_categories=self.allowed_retention_categories,
+                        source=f"security label rule {rule.subject}",
                     )
                 except FrameworkValidationError as exc:
                     raise ValueError(str(exc)) from exc
@@ -1021,6 +2031,265 @@ class EncryptionConfig(BaseModel):
         return rule.key_b64 is None and rule.key_b64_env is None
 
 
+class MessageAuthenticityRuleConfig(BaseModel):
+    """One subject-specific message authenticity verification rule.
+
+    The rule describes the exact cryptographic verification material expected
+    for matching subjects.  A disabled rule is an explicit exemption and should
+    be used sparingly; enabled rules fail closed when a signature, key
+    identifier, or algorithm header is missing or mismatched.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    subject: str
+    enabled: bool = True
+    algorithm: Literal["hmac-sha256", "ed25519"] = "hmac-sha256"
+    key_id: str | None = None
+    key_b64: str | None = None
+    key_b64_env: str | None = None
+    signed_fields: tuple[str, ...] = DEFAULT_AUTHENTICITY_SIGNED_FIELDS
+
+    @field_validator("subject")
+    @classmethod
+    def validate_subject(cls, value: str) -> str:
+        """Validate rule subjects with the same syntax as NATS wildcards."""
+
+        return validate_subject_pattern(value)
+
+    @field_validator("algorithm", mode="before")
+    @classmethod
+    def normalize_algorithm(cls, value: object) -> object:
+        """Accept common casing variants while storing canonical algorithm names."""
+
+        if isinstance(value, str):
+            return value.strip().lower().replace("_", "-")
+        return value
+
+    @field_validator("key_id")
+    @classmethod
+    def validate_key_id(cls, value: str | None) -> str | None:
+        """Validate a non-secret verification key identifier."""
+
+        if value is None:
+            return None
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("message_authenticity rule key_id must not be empty")
+        if len(rendered) > MAX_AUTHENTICITY_KEY_ID_LENGTH:
+            raise ValueError(
+                "message_authenticity rule key_id must not exceed "
+                f"{MAX_AUTHENTICITY_KEY_ID_LENGTH} characters"
+            )
+        if contains_ascii_control_characters(rendered):
+            raise ValueError("message_authenticity rule key_id must not contain control characters")
+        return rendered
+
+    @field_validator("key_b64_env")
+    @classmethod
+    def validate_key_env(cls, value: str | None) -> str | None:
+        """Validate the environment variable name used for verification keys."""
+
+        if value is None:
+            return None
+        return _validate_websocket_header_env_name(
+            value,
+            source="message_authenticity rule key_b64_env",
+        )
+
+    @field_validator("signed_fields", mode="before")
+    @classmethod
+    def normalize_signed_fields(cls, value: object) -> tuple[str, ...]:
+        """Normalize and allow-list metadata fields included in signatures."""
+
+        if value is None:
+            return DEFAULT_AUTHENTICITY_SIGNED_FIELDS
+        if isinstance(value, str):
+            raw_items = [value]
+        elif isinstance(value, (list, tuple, set, frozenset)):
+            raw_items = list(value)
+        else:
+            raise ValueError("message_authenticity signed_fields must be a string or list")
+
+        rendered: list[str] = []
+        seen: set[str] = set()
+        for item in raw_items:
+            if not isinstance(item, str):
+                raise ValueError("message_authenticity signed_fields entries must be strings")
+            field_name = item.strip().lower().replace("-", "_")
+            if field_name not in AUTHENTICITY_SIGNED_FIELDS:
+                allowed = ", ".join(sorted(AUTHENTICITY_SIGNED_FIELDS))
+                raise ValueError(
+                    f"message_authenticity signed_fields entries must be one of: {allowed}"
+                )
+            if field_name in seen:
+                continue
+            rendered.append(field_name)
+            seen.add(field_name)
+        return tuple(rendered)
+
+    @model_validator(mode="after")
+    def validate_key_sources(self) -> MessageAuthenticityRuleConfig:
+        """Reject ambiguous or incomplete verification key configuration."""
+
+        if self.key_b64 is not None and self.key_b64_env is not None:
+            raise ValueError("configure either message_authenticity rule key_b64 or key_b64_env")
+        if not self.enabled:
+            return self
+        if self.key_id is None:
+            raise ValueError("message_authenticity enabled rules require key_id")
+        if self.key_b64 is None and self.key_b64_env is None:
+            raise ValueError("message_authenticity enabled rules require key_b64_env or key_b64")
+        if self.key_b64 is not None:
+            _decode_authenticity_key(
+                self.key_b64,
+                algorithm=self.algorithm,
+                source=f"message_authenticity rule {self.subject}.key_b64",
+            )
+        return self
+
+    def resolve_key(self) -> bytes:
+        """Resolve verification key material at the runtime boundary."""
+
+        if self.key_b64 is not None:
+            return _decode_authenticity_key(
+                self.key_b64,
+                algorithm=self.algorithm,
+                source=f"message_authenticity rule {self.subject}.key_b64",
+            )
+        if self.key_b64_env is None:
+            raise ConfigurationError("message_authenticity verification key is not configured")
+        value = os.getenv(self.key_b64_env)
+        if value is None:
+            raise ConfigurationError(f"environment variable {self.key_b64_env} is not set")
+        return _decode_authenticity_key(
+            value,
+            algorithm=self.algorithm,
+            source=f"environment variable {self.key_b64_env}",
+        )
+
+
+class MessageAuthenticityConfig(BaseModel):
+    """Destination-neutral message-level authenticity verification.
+
+    NATS authentication and TLS protect broker access and transport, but they
+    do not prove that a specific message body was produced by an authorized
+    publisher.  This optional gate verifies a producer-supplied signature before
+    any sink receives a message.  Verification failures are permanent pre-sink
+    failures and follow the normal DLQ-before-ACK path.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    unmatched_subject_action: Literal["allow", "reject"] = "reject"
+    signature_header: str = "Nats-Sinks-Authenticity-Signature"
+    algorithm_header: str = "Nats-Sinks-Authenticity-Algorithm"
+    key_id_header: str = "Nats-Sinks-Authenticity-Key-Id"
+    rules: list[MessageAuthenticityRuleConfig] = Field(default_factory=list)
+
+    @field_validator("signature_header", "algorithm_header", "key_id_header")
+    @classmethod
+    def validate_header_name(cls, value: str, info: Any) -> str:
+        """Validate operator-selected authenticity metadata header names."""
+
+        return _validate_metadata_header_name(
+            value, source=f"message_authenticity.{info.field_name}"
+        )
+
+    @model_validator(mode="after")
+    def validate_enabled_rules(self) -> MessageAuthenticityConfig:
+        """Require explicit rules before enabling verification."""
+
+        header_names = [
+            self.signature_header.casefold(),
+            self.algorithm_header.casefold(),
+            self.key_id_header.casefold(),
+        ]
+        if len(set(header_names)) != len(header_names):
+            raise ValueError("message_authenticity header names must be distinct")
+        if self.enabled and not self.rules:
+            raise ValueError("message_authenticity.enabled requires at least one rule")
+        return self
+
+
+class CustodyConfig(BaseModel):
+    """Optional tamper-evident metadata computed before sink delivery.
+
+    Custody metadata is disabled by default because hashes can reveal that two
+    messages had the same payload or metadata.  When enabled, the core computes
+    deterministic hashes over the framework-normalized payload and metadata
+    before calling the sink.  The sink then persists that evidence with the
+    record it commits.  A custody failure is a permanent pre-sink validation
+    failure, so the runner will not ACK the message unless configured DLQ
+    publication succeeds first.
+
+    The first implementation supports unkeyed SHA-256 and SHA-512 evidence.
+    The optional `key_id` is a non-secret policy/version identifier reserved
+    for deployments and future keyed-hash or signature extensions.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    algorithm: Literal["sha256", "sha512"] = "sha256"
+    hash_payload: bool = True
+    hash_metadata: bool = True
+    include_previous_hash: bool = False
+    previous_hash_header: str = "Nats-Sinks-Previous-Custody-Hash"
+    key_id: str | None = None
+    max_hash_input_bytes: int = Field(default=16_777_216, ge=1024, le=1_073_741_824)
+
+    @field_validator("algorithm", mode="before")
+    @classmethod
+    def normalize_algorithm(cls, value: object) -> object:
+        """Accept safe casing variants while keeping a canonical value."""
+
+        if isinstance(value, str):
+            try:
+                return validate_custody_algorithm(value)
+            except FrameworkValidationError as exc:
+                raise ValueError(str(exc)) from exc
+        return value
+
+    @field_validator("previous_hash_header")
+    @classmethod
+    def validate_previous_hash_header(cls, value: str) -> str:
+        """Require a safe header name for optional hash chaining."""
+
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("custody.previous_hash_header must not be empty")
+        if "\n" in rendered or "\r" in rendered or "\x00" in rendered:
+            raise ValueError("custody.previous_hash_header must not contain control characters")
+        return rendered
+
+    @field_validator("key_id", mode="before")
+    @classmethod
+    def normalize_key_id(cls, value: object) -> object:
+        """Validate optional custody key or policy identifiers."""
+
+        try:
+            return validate_custody_key_id(value)
+        except FrameworkValidationError as exc:
+            raise ValueError(str(exc)) from exc
+
+    @model_validator(mode="after")
+    def validate_hash_scope(self) -> CustodyConfig:
+        """Require at least one hash so enabled custody has meaningful evidence."""
+
+        if self.enabled and not (self.hash_payload or self.hash_metadata):
+            raise ValueError("custody.enabled requires hash_payload or hash_metadata")
+        if self.key_id is not None and len(self.key_id) > MAX_CUSTODY_KEY_ID_LENGTH:
+            raise ValueError(
+                f"custody.key_id must not exceed {MAX_CUSTODY_KEY_ID_LENGTH} characters"
+            )
+        if self.algorithm not in CUSTODY_SUPPORTED_ALGORITHMS:
+            allowed = ", ".join(sorted(CUSTODY_SUPPORTED_ALGORITHMS))
+            raise ValueError(f"custody.algorithm must be one of: {allowed}")
+        return self
+
+
 class SinkConfig(BaseModel):
     """Raw sink configuration selected through the safe registry."""
 
@@ -1029,19 +2298,84 @@ class SinkConfig(BaseModel):
     type: str
 
 
+class SinkPluginConfig(BaseModel):
+    """Optional allow-listed discovery for externally installed sink connectors.
+
+    The default is deliberately disabled because Python entry-point loading is
+    a code-execution boundary.  Built-in sinks such as Oracle and File do not
+    need this setting.  Operators enable it only when they have installed and
+    reviewed a trusted connector package and want the CLI registry to load that
+    specific sink name.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    allowed_sinks: tuple[str, ...] = Field(default_factory=tuple)
+    require_production_ready: bool = True
+
+    @field_validator("allowed_sinks", mode="before")
+    @classmethod
+    def normalize_allowed_sinks(cls, value: object) -> tuple[str, ...]:
+        """Normalize and validate the external connector allow-list."""
+
+        if value is None:
+            return ()
+        if not isinstance(value, list | tuple):
+            raise ValueError("plugins.allowed_sinks must be a list of sink names")
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for item in value:
+            if not isinstance(item, str):
+                raise ValueError("plugins.allowed_sinks entries must be strings")
+            name = item.strip().lower()
+            if not SINK_PLUGIN_NAME_RE.fullmatch(name):
+                raise ValueError(
+                    "plugins.allowed_sinks entries must start with a lowercase letter and "
+                    "contain only lowercase letters, digits, '_' or '-'"
+                )
+            if name in seen:
+                raise ValueError(f"plugins.allowed_sinks contains duplicate sink name {name!r}")
+            seen.add(name)
+            normalized.append(name)
+        if len(normalized) > MAX_SINK_PLUGIN_NAMES:
+            raise ValueError(
+                f"plugins.allowed_sinks supports at most {MAX_SINK_PLUGIN_NAMES} names"
+            )
+        return tuple(normalized)
+
+    @model_validator(mode="after")
+    def validate_enabled_policy(self) -> SinkPluginConfig:
+        """Require an explicit allow-list when plugin discovery is enabled."""
+
+        if self.enabled and not self.allowed_sinks:
+            raise ValueError("plugins.enabled requires at least one allowed sink name")
+        return self
+
+
 class AppConfig(BaseModel):
     """Top-level application configuration."""
 
     model_config = ConfigDict(extra="forbid")
 
     nats: NatsConfig
+    consumer_management: ConsumerManagementConfig = Field(default_factory=ConsumerManagementConfig)
     delivery: DeliveryConfig = Field(default_factory=DeliveryConfig)
     dead_letter: DeadLetterConfig = Field(default_factory=DeadLetterConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     metrics: MetricsConfig = Field(default_factory=MetricsConfig)
+    advisories: JetStreamAdvisoryConfig = Field(default_factory=JetStreamAdvisoryConfig)
     message_metadata: MessageMetadataConfig = Field(default_factory=MessageMetadataConfig)
     mission_metadata: MissionMetadataConfig = Field(default_factory=MissionMetadataConfig)
+    security_labels: SecurityLabelProfileConfig = Field(default_factory=SecurityLabelProfileConfig)
     encryption: EncryptionConfig = Field(default_factory=EncryptionConfig)
+    message_authenticity: MessageAuthenticityConfig = Field(
+        default_factory=MessageAuthenticityConfig
+    )
+    custody: CustodyConfig = Field(default_factory=CustodyConfig)
+    size_policy: SizePolicyConfig = Field(default_factory=SizePolicyConfig)
+    pre_sink_policy: PreSinkPolicyConfig = Field(default_factory=PreSinkPolicyConfig)
+    plugins: SinkPluginConfig = Field(default_factory=SinkPluginConfig)
     sink: SinkConfig
 
 
@@ -1050,11 +2384,26 @@ ENV_OVERRIDES: dict[str, tuple[str, ...]] = {
     "NATS_SINKS_NATS_STREAM": ("nats", "stream"),
     "NATS_SINKS_NATS_CONSUMER": ("nats", "consumer"),
     "NATS_SINKS_NATS_SUBJECT": ("nats", "subject"),
+    "NATS_SINKS_NATS_NO_ECHO": ("nats", "no_echo"),
+    "NATS_SINKS_CONSUMER_MANAGEMENT_MODE": ("consumer_management", "mode"),
     "NATS_SINKS_LOG_LEVEL": ("logging", "level"),
     "NATS_SINKS_ENCRYPTION_ENABLED": ("encryption", "enabled"),
     "NATS_SINKS_ENCRYPTION_ALGORITHM": ("encryption", "algorithm"),
     "NATS_SINKS_ENCRYPTION_KEY_ID": ("encryption", "key_id"),
     "NATS_SINKS_ENCRYPTION_KEY_B64_ENV": ("encryption", "key_b64_env"),
+    "NATS_SINKS_MESSAGE_AUTHENTICITY_ENABLED": ("message_authenticity", "enabled"),
+    "NATS_SINKS_MESSAGE_AUTHENTICITY_SIGNATURE_HEADER": (
+        "message_authenticity",
+        "signature_header",
+    ),
+    "NATS_SINKS_MESSAGE_AUTHENTICITY_ALGORITHM_HEADER": (
+        "message_authenticity",
+        "algorithm_header",
+    ),
+    "NATS_SINKS_MESSAGE_AUTHENTICITY_KEY_ID_HEADER": (
+        "message_authenticity",
+        "key_id_header",
+    ),
     "NATS_SINKS_PRIORITY_HEADER": ("message_metadata", "priority", "header"),
     "NATS_SINKS_PRIORITY_DEFAULT": ("message_metadata", "priority", "default"),
     "NATS_SINKS_CLASSIFICATION_HEADER": (
@@ -1071,6 +2420,12 @@ ENV_OVERRIDES: dict[str, tuple[str, ...]] = {
     "NATS_SINKS_LABELS_DEFAULT": ("message_metadata", "labels", "default"),
     "NATS_SINKS_MISSION_METADATA_ENABLED": ("mission_metadata", "enabled"),
     "NATS_SINKS_MISSION_METADATA_HEADER": ("mission_metadata", "header"),
+    "NATS_SINKS_SECURITY_LABELS_ENABLED": ("security_labels", "enabled"),
+    "NATS_SINKS_SECURITY_LABELS_HEADER": ("security_labels", "header"),
+    "NATS_SINKS_CUSTODY_ENABLED": ("custody", "enabled"),
+    "NATS_SINKS_CUSTODY_ALGORITHM": ("custody", "algorithm"),
+    "NATS_SINKS_CUSTODY_KEY_ID": ("custody", "key_id"),
+    "NATS_SINKS_ADVISORIES_ENABLED": ("advisories", "enabled"),
     "NATS_SINKS_SINK_TYPE": ("sink", "type"),
 }
 
@@ -1161,6 +2516,8 @@ def _redact_value(key: str, value: Any) -> Any:
     if value is None:
         return None
     key_lower = key.lower()
+    if key_lower in {"websocket_headers", "websocket_headers_env"} and isinstance(value, dict):
+        return {str(header_name): "********" for header_name in value}
     if any(part in key_lower for part in SENSITIVE_KEY_PARTS):
         return "********"
     if key_lower in {"dsn", "url"} and isinstance(value, str) and "@" in value:

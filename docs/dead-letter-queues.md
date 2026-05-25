@@ -18,6 +18,14 @@ Examples:
 - invalid JSON payload,
 - missing required idempotency field,
 - validation failure,
+- message authenticity verification failure such as a missing signature,
+  mismatched key identifier, or invalid signature,
+- size-policy rejection such as oversized payload, too many headers, labels
+  outside the configured bounds, or a normalized record that exceeds the
+  deployment contract,
+- pre-sink policy rejection such as missing classification, missing required
+  labels, unencrypted payload on a subject that requires encryption, or a
+  payload that exceeds an approved size limit,
 - non-retryable destination error.
 
 ## ACK Rule
@@ -28,21 +36,62 @@ If DLQ publish fails, the original message remains unacked and eligible for
 redelivery. This keeps the failure visible to JetStream rather than silently
 discarding a message that still needs operator attention.
 
+## Terminal Acknowledgements
+
+The default runtime uses the conservative DLQ flow: publish the DLQ record, wait
+for publication success, and then ACK the original message.
+
+Deployments that consume JetStream terminal-delivery advisories can explicitly
+enable `dead_letter.ack_term_after_publish`. When enabled, the runner still
+publishes the DLQ record first, but sends `AckTerm` instead of normal ACK after
+that publication succeeds. This is a terminal failure path, not a successful
+sink-write path.
+
+If DLQ publication fails, the runner sends neither ACK nor `AckTerm`; the
+original message remains eligible for redelivery. If `AckTerm` fails after DLQ
+publication, the failure is counted and raised. Redelivery may occur, and DLQ
+handling must remain safe for duplicate publication attempts.
+
+See [ADR 0005: AckTerm And AckNext Evaluation](adr/0005-ackterm-acknext-evaluation.md)
+for the design decision and safety limits.
+
 ## Flow
 
 ```mermaid
 sequenceDiagram
     participant JS as JetStream
     participant R as Runner
+    participant A as Authenticity
+    participant Z as Size policy
+    participant P as Pre-sink policy
     participant S as Sink
     participant Q as DLQ Subject
 
     JS->>R: Deliver message
-    R->>S: write_batch
-    S-->>R: PermanentSinkError
+    R->>A: Evaluate optional message authenticity
+    alt Authenticity rejects
+        A-->>R: PolicyViolationError
+    else Authenticity passes or disabled
+        R->>Z: Evaluate optional size policy
+    end
+    alt Size policy rejects
+        Z-->>R: SizePolicyViolationError
+    else Size policy passes
+        R->>P: Evaluate optional semantic policy
+    end
+    alt Pre-sink policy rejects
+        P-->>R: PolicyViolationError
+    else Policy passes
+        R->>S: write_batch
+        S-->>R: PermanentSinkError
+    end
     R->>Q: Publish DLQ JSON
     Q-->>R: Publish success
-    R->>JS: ACK original
+    alt Default policy
+        R->>JS: ACK original
+    else ack_term_after_publish
+        R->>JS: AckTerm original
+    end
 ```
 
 ## Payload Shape

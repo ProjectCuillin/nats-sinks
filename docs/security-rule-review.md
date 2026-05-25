@@ -52,7 +52,7 @@ is merged.
 | `Oracle` | `src/nats_sinks/oracle/*`, `tests/unit/test_oracle_*.py`, `docs/oracle-sink.md` |
 | `File` | `src/nats_sinks/file/*`, `tests/unit/test_file_*.py`, `docs/file-sink.md` |
 | `CI` | `.github/workflows/*`, `scripts/check.sh`, `scripts/security.sh`, `scripts/secret-scan.sh` |
-| `Observability` | `src/nats_sinks/observability/*`, `src/nats_sinks/cli/observability.py`, `docs/observability.md`, `docs/prometheus.md` |
+| `Observability` | `src/nats_sinks/observability/*`, `src/nats_sinks/cli/observability.py`, `docs/observability.md`, `docs/prometheus.md`, `docs/otlp.md` |
 | `Docs` | `README.md`, `docs/*.md`, `ROBOTS.md`, `AGENTS.md`, `CHANGELOG.md` |
 | `N/A` | No current web, session, upload, native-extension, SSRF, or password-authentication surface. |
 
@@ -74,7 +74,7 @@ is merged.
 | SD-012 | Use allow-list validation for values, formats, types, lengths, ranges, extensions, schemes, and enums. | Already covered | Pydantic literals, SQL identifier regex, file extension validators |
 | SD-013 | Reject malformed input early instead of repairing or guessing. | Applied | Config duplicate-key/null-root/size checks |
 | SD-014 | Normalize paths, URLs, encodings, Unicode, hostnames, and filenames before validation or comparison. | Already covered | File path resolution, subject component sanitizer, UTF-8 config validation |
-| SD-015 | Enforce maximum sizes for bodies, files, JSON, strings, arrays, recursion depth, and batches. | Partially covered | Delivery batch bounds and config size; payload-size policy remains roadmap |
+| SD-015 | Enforce maximum sizes for bodies, files, JSON, strings, arrays, recursion depth, and batches. | Applied | Delivery batch bounds, config size, mission metadata bounds, and optional core `size_policy` for payload, headers, labels, metadata, record, and batch size |
 | SD-016 | Parse structured input with real parsers. | Already covered | JSON parser, Pydantic, no YAML |
 | SD-017 | Treat data from databases, caches, logs, and queues as untrusted when it can originate externally. | Already covered | Envelope normalization, Oracle JSON normalization in tests |
 | SD-018 | Store validated data in typed internal structures. | Already covered | Pydantic configs, dataclass envelope, typed sink protocols |
@@ -102,7 +102,7 @@ is merged.
 | SD-040 | Avoid unsafe pointer arithmetic and manual lifetime management. | Not applicable | No native code |
 | SD-041 | Run native parsers for untrusted files in sandboxed worker processes. | Not applicable | No native file parser |
 | SD-042 | Treat segfaults and nondeterministic native failures as security bugs. | Roadmap | Add incident guidance if native extensions are introduced |
-| SD-043 | Do not expose raw memory views or writable buffers to untrusted plugins. | Not applicable | No plugin execution API |
+| SD-043 | Do not expose raw memory views or writable buffers to untrusted plugins. | Applied | Sink connector discovery uses typed descriptors and allow-listed entry points; no raw buffer or plugin scripting API is exposed |
 | SD-044 | Prefer maintained libraries for image, archive, crypto, XML, PDF, font, and media parsing. | Already covered | Cryptography library for crypto; no media parsers |
 | SD-045 | Add regression tests for crashes, leaks, hangs, bounds errors, or native exceptions. | Roadmap | Regression policy documented; no native incidents |
 | SD-046 | Validate integer ranges before arithmetic affecting memory, indexes, permissions, prices, or timeouts. | Already covered | Pydantic bounds on config fields |
@@ -175,11 +175,11 @@ is merged.
 | SD-113 | Use authenticated encryption modes for application data. | Already covered | AES-256-GCM and AES-256-CCM |
 | SD-114 | Never reuse nonces/IVs/salts/one-time keys where uniqueness is required. | Already covered | Crypto library random nonce generation |
 | SD-115 | Keep cryptographic keys separate from encrypted data. | Already covered | `key_b64_env`, docs; direct keys test-only |
-| SD-116 | Rotate keys with versioning. | Roadmap | Key rotation/multi-key decryption in roadmap |
+| SD-116 | Rotate keys with versioning. | Applied | Payload envelopes include `key_id`; `PayloadKeyRegistry` supports multi-key decryption during rotation windows; provider-managed automatic rotation remains future optional connector work |
 | SD-117 | Use TLS for network communication. | Already covered | NATS TLS options and docs |
 | SD-118 | Do not disable certificate or hostname validation for convenience. | Already covered | TLS verify true by default, docs warn |
 | SD-119 | Use modern hashes for integrity/signatures and password hashes for passwords. | Already covered | SHA-256 for diagnostics only; no password hashes |
-| SD-120 | Use HMAC or digital signatures for authenticity instead of plain hashes. | Roadmap | Needed if message authenticity feature is added |
+| SD-120 | Use HMAC or digital signatures for authenticity instead of plain hashes. | Applied | Optional message authenticity verification supports HMAC-SHA256 and Ed25519 before sink delivery |
 | SD-121 | Do not treat Base64, hex, JWT body data, or URL encoding as encryption. | Already covered | Docs explicitly distinguish key encoding/encryption |
 | SD-122 | Keep secrets out of source, history, logs, tickets, fixtures, images, and bundles. | Applied | Secret scan, docs |
 | SD-123 | Load secrets from managed stores or secure runtime config. | Already covered | `password_env`, `token_env`, `key_b64_env` |
@@ -214,7 +214,7 @@ is merged.
 | SD-152 | Disable external entity resolution and network access for XML parsing. | Not applicable | No XML parsing |
 | SD-153 | Protect XML parsers against XXE, entity expansion, DTD abuse, and nesting. | Not applicable | No XML parsing |
 | SD-154 | Use safe YAML loaders only. | Already covered | YAML removed; JSON only |
-| SD-155 | Limit JSON body size, nesting depth, object count, array length, and string length. | Partially covered | Config file size applied; detailed depth/count limits roadmap |
+| SD-155 | Limit JSON body size, nesting depth, object count, array length, and string length. | Applied | Config size, duplicate-key checks, mission metadata depth/count/string bounds, and optional core `size_policy` for sink-bound records |
 | SD-156 | Reject duplicate or ambiguous JSON keys where security-sensitive. | Applied | Config duplicate-key rejection |
 | SD-157 | Avoid parser differentials across frontend/backend/proxy/downstream services. | Already covered | Single JSON parser path for config |
 | SD-158 | Treat content type as advisory and verify payload format. | Not applicable | No HTTP content-type boundary |
@@ -403,15 +403,13 @@ The current hardening pass produced code and documentation changes where the
 controls matched the present package surface. The most important follow-up
 items are:
 
-1. Add payload and metadata size policies for deployments that need hard upper
-   bounds beyond JetStream and destination-side limits.
-2. Evaluate whether Hypothesis or another dedicated property-testing tool is
+1. Evaluate whether Hypothesis or another dedicated property-testing tool is
    needed after the deterministic bounded generator suite reaches its limits.
-3. Add a repeatable load-test profile covering NATS fetch, sink mapping,
+2. Add a repeatable load-test profile covering NATS fetch, sink mapping,
    backend write, commit, ACK, retries, and DLQ behavior.
-4. Add hash-verified install guidance for high-trust environments.
-5. Add more explicit container/Kubernetes hardening guidance once official
+3. Add hash-verified install guidance for high-trust environments.
+4. Add more explicit container/Kubernetes hardening guidance once official
    container images are introduced.
-6. Reopen the web/session/SSRF/upload/native-code controls before adding an
+5. Reopen the web/session/SSRF/upload/native-code controls before adding an
    HTTP sink with outbound user-configured destinations, a web UI, upload
    handling, archive parsing, or native extensions.

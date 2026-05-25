@@ -1,0 +1,31 @@
+{
+  "id": "optional-sink-ack-gate-wait-policy",
+  "title": "[Feature]: Add optional sink ACK-gating and bounded wait policy",
+  "area": "Core runtime and delivery semantics",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "unscheduled",
+  "labels": ["nats", "sink-new", "security"],
+  "problem": "Fan-out deployments may include sinks that are part of the required business custody path and sinks that are useful but not required before ACK, such as a secondary archive, diagnostic file copy, or non-critical side copy. The core needs a way to declare which selected sinks must commit before ACK and which selected sinks are optional, while still making the risk of optional delivery explicit and bounded.",
+  "proposal": "Add per-child-sink ACK-gating policy for fan-out routes. Each selected child sink should be marked as required by default. Required sinks must durably succeed before ACK. Optional sinks should be explicitly configured with a bounded minimum wait and timeout policy. If an optional sink minimum wait is not configured, the system should use a documented per-sink-type default so behavior is predictable. Initial default candidates should be conservative and reviewed during implementation, for example a longer default for transactional or network-backed sinks and a shorter default for local file or observability-style sinks. Operators must be able to inspect the effective policy through redacted config output. The documented example must show oracle_secret as required, file_audit as optional with an explicit minimum_wait_ms value, and oracle_unclass as required on a separate NATO UNCLASS route.",
+  "users": "Operators who need a primary sink to control ACK while also attempting secondary copies that should not block the main event custody path indefinitely.",
+  "delivery_semantics": "The project invariant remains that ACK happens only after all required durable side effects complete successfully. Optional sinks are explicitly outside the required ACK contract. If an optional sink has not confirmed durable success before ACK, the system must not claim that optional copy is guaranteed. This mode must be opt-in, visible in logs and metrics, and documented as a trade-off that can lose the optional copy while preserving the required delivery path.",
+  "security": "Optional sinks must not become a path for silent loss of required business state. Configuration should fail closed by making every sink required unless it is explicitly marked optional. Logs must describe optional timeout or failure using sink names and categories without payloads, secrets, connection strings, file paths beyond safe redacted forms, or sensitive operational labels.",
+  "acceptance": [
+    "Every selected child sink is required by default.",
+    "Operators can mark selected child sinks optional with bounded minimum wait and timeout controls.",
+    "Per-sink-type default wait values are documented and visible in effective config when optional sinks omit explicit wait values.",
+    "nats-sink validate rejects optional sink wait policies that are negative, unbounded, placed on unknown sinks, or incompatible with the selected sink type.",
+    "Tests cover explicit optional wait values and omitted optional wait values for each initially supported sink type.",
+    "Tests prove ACK waits for required sinks and does not wait indefinitely for optional sinks.",
+    "Documentation clearly states that optional sinks are not guaranteed durable copies when ACK happens before optional commit confirmation."
+  ],
+  "tests": "Add unit tests for required default behavior, explicit optional behavior, omitted optional wait values, per-sink-type defaults, optional timeout, optional failure, required failure, and mixed required plus optional fan-out. Add CLI validation tests for negative waits, excessive waits, unknown sink references, omitted wait values, and default rendering. Add smoke tests with mock sinks and file sinks. Add no-payload-logging assertions for optional failure logs.",
+  "documentation": "Update docs/commit-then-ack.md, docs/architecture.md, docs/configuration.md, docs/sink-framework.md, docs/idempotency.md, docs/operations.md, docs/security.md, and CHANGELOG.md when implemented.",
+  "closeout": "Close only after a release containing optional ACK-gating policy is published. Close-out evidence must include default wait values, tests run, operator warnings, documentation updates, and any follow-up issues for advanced delivery guarantees.",
+  "relationships": {
+    "related": [
+      "backlog:core-routing-fanout-sink",
+      "backlog:fanout-partial-failure-recovery-metrics"
+    ]
+  }
+}

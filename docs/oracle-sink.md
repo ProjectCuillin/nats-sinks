@@ -8,6 +8,29 @@ least-privilege runtime accounts, idempotent writes, and metadata columns that
 help operators retain operational context such as priority, classification,
 labels, timestamps, subjects, and JetStream sequence numbers.
 
+## Certification Status
+
+`OracleSink` is part of the first-party production sink surface and is covered
+by the shared [Sink Certification](sink-certification.md) process. Its
+certification evidence includes:
+
+- reusable helper coverage with a fake Oracle connection pool proving
+  `write_batch(...)` returns only after `commit()`,
+- rollback and commit-failure tests,
+- duplicate-safe `merge` and `insert_ignore` behavior tests,
+- SQL identifier allow-list validation and bind-variable SQL generation tests,
+- JSON, non-JSON text, bytes, empty payload, and encrypted payload envelope
+  mapping tests,
+- priority, classification, labels, mission metadata, and custody metadata
+  mapping tests,
+- live Oracle integration and NATS-to-Oracle e2e scripts behind explicit
+  environment flags and ignored local configuration files.
+
+The certification evidence does not claim exactly-once delivery. Oracle
+certification means the sink follows the nats-sinks at-least-once,
+commit-then-acknowledge contract and provides documented idempotent production
+write modes.
+
 ## Installation
 
 ```bash
@@ -80,14 +103,16 @@ This section lists every Oracle sink field accepted under the top-level
 | `https_proxy` | no | `null` | Proxy hostname or URL understood by Oracle Net. | HTTPS proxy used by TCPS connections in proxy-controlled networks. |
 | `https_proxy_port` | no | `null` | Integer `1` to `65535`. | Proxy port. Requires `https_proxy`. |
 | `table` | no | `NATS_SINK_EVENTS` | Valid Oracle identifier, optionally schema-qualified. | Default target table for messages that do not match a table route. |
-| `table_routes` | no | empty list | List of route objects. | Optional subject-to-table routing rules. Each object contains `subject` and `table`. |
+| `table_routes` | no | empty list | List of route objects. | Optional subject-to-table routing rules. Each object contains `subject`, `table`, and optional route policy overrides. See [Table Route Objects](#table-route-objects). |
 | `mode` | no | `merge` | `merge`, `insert_ignore`, `insert`, `append` | Oracle write mode. See [Write Mode Values](#write-mode-values). |
+| `merge_update_columns` | no | `null` | `null`, an empty list, or a list of mapped Oracle column names. | Controls which non-key columns are updated when `mode` is `merge`. `null` preserves the default of updating every non-key column. An empty list leaves matched rows unchanged. |
 | `auto_create` | no | `false` | `true` or `false`. | Creates the recommended table shape at sink startup when missing. Use for local tests; production should normally use migrations and keep this false. |
 | `payload_mode` | no | `json_or_envelope` | `json_or_envelope`, `json_only`, `text_envelope`, `bytes_envelope` | Controls how message bytes become JSON storage content. See [Payload Modes](#payload-modes). |
 | `payload_column` | no | `null` | Valid Oracle column identifier. | Legacy convenience alias for `columns.payload`. If set, it updates the payload column mapping. |
 | `headers_column` | no | `null` | Valid Oracle column identifier. | Legacy convenience alias for `columns.headers`. If set, it updates the headers column mapping. |
 | `columns` | no | default column mapping object | Object documented in [Column Mapping](#column-mapping). | Maps framework fields to Oracle column names. |
 | `idempotency` | no | stream sequence defaults | Object documented in [Idempotency Configuration](#idempotency-configuration). | Defines the key columns used by idempotent write modes. |
+| `staging` | no | disabled | Object documented in [High-Throughput Staging Mode](#high-throughput-staging-mode). | Optional advanced write path that array-loads rows into a staging table and then performs one set-based merge into the target table. |
 | `pool_min` | no | `1` | Integer greater than or equal to `1`. | Minimum number of connections in the Oracle connection pool. |
 | `pool_max` | no | `4` | Integer greater than or equal to `1`. | Maximum number of connections in the Oracle connection pool. Must be sized for the deployment and database service limits. |
 | `pool_increment` | no | `1` | Integer greater than or equal to `1`. | Number of connections added when the pool grows. |
@@ -98,6 +123,10 @@ Validation rules:
 - configure either `wallet_password` or `wallet_password_env`, not both,
 - wallet password fields require `wallet_location`,
 - `https_proxy_port` requires `https_proxy`,
+- `merge_update_columns` applies only when `mode` is `merge`,
+- `merge_update_columns` must reference configured non-key Oracle columns,
+- `staging.enabled=true` requires `mode` to be `merge` or `insert_ignore`,
+- `staging.enabled=true` requires `staging.table`,
 - Oracle table and column identifiers are allow-list validated before SQL is
   generated,
 - values are always bound with Oracle bind variables, not concatenated into SQL.
@@ -120,6 +149,59 @@ it lets redelivery land on the same operational event row instead of producing
 an extra record. Use `append` only when duplicate rows are acceptable under the
 destination's audit and reconciliation rules.
 
+### Merge Update Controls
+
+By default, `merge` preserves the original `nats-sinks` behavior: when the
+configured idempotency key already exists, Oracle updates every non-key column
+with the newest normalized message content. This is useful when operators want
+redelivery to refresh metadata, custody details, headers, or payload envelopes
+on the existing durable row.
+
+Some mission, audit, and evidentiary workloads prefer stricter record
+immutability. For those cases, set `merge_update_columns` explicitly:
+
+```json
+{
+  "sink": {
+    "type": "oracle",
+    "dsn": "localhost:1521/FREEPDB1",
+    "user": "app_user",
+    "password_env": "ORACLE_PASSWORD",
+    "table": "NATS_SINK_EVENTS",
+    "mode": "merge",
+    "merge_update_columns": ["PAYLOAD_JSON", "METADATA_JSON"]
+  }
+}
+```
+
+This example updates only the payload and metadata JSON columns when a row
+already exists. Every listed value must be a configured Oracle column name and
+must not be part of the idempotency key. nats-sinks validates these identifiers
+before SQL is generated.
+
+To make `merge` insert missing rows and leave existing rows unchanged, use an
+empty list:
+
+```json
+{
+  "sink": {
+    "type": "oracle",
+    "dsn": "localhost:1521/FREEPDB1",
+    "user": "app_user",
+    "password_env": "ORACLE_PASSWORD",
+    "table": "NATS_SINK_EVENTS",
+    "mode": "merge",
+    "merge_update_columns": []
+  }
+}
+```
+
+With an empty update list, a redelivered message that matches the idempotency
+key is treated as safe prior processing. The Oracle transaction must still
+commit before the sink returns success, and the core still ACKs only after
+that success. This setting is useful when the first stored event row is the
+authoritative record and later redeliveries should not alter it.
+
 ### Duplicate And Conflict Metrics
 
 Oracle idempotency should be visible to operators. A redelivery that is safely
@@ -135,6 +217,9 @@ metrics recorder used by the core runner:
 | `oracle_conflicts_total` | Oracle write conflicts observed by the sink, such as `ORA-00001` duplicate-key conflicts. |
 | `oracle_duplicates_total` | Rows identified as duplicate prior processing through idempotent Oracle handling. |
 | `oracle_duplicate_ignored_total` | Duplicate rows safely ignored by `insert_ignore` mode. |
+| `oracle_duplicate_noop_total` | Duplicate rows safely left unchanged by `merge` with `merge_update_columns: []`. |
+| `oracle_merge_rows_total` | Rows committed through Oracle `merge` mode. |
+| `oracle_merge_outcome_unknown_total` | `merge` rows where Oracle did not reliably expose whether the row was inserted or matched. |
 
 When the sink is created by `nats-sink run` and `metrics.snapshot_file` is
 enabled, these counters are written to the same local JSON snapshot as the core
@@ -145,7 +230,10 @@ delivery counters:
   "metrics": {
     "enabled": true,
     "namespace": "nats_sinks",
-    "snapshot_file": ".local/nats-sinks/metrics.json"
+    "snapshot_file": ".local/nats-sinks/metrics.json",
+    "event_freshness_enabled": true,
+    "event_stale_after_seconds": 300,
+    "event_future_skew_tolerance_seconds": 5
   },
   "sink": {
     "type": "oracle",
@@ -170,16 +258,22 @@ Example output:
 KIND     METRIC                           VALUE  DESCRIPTION
 counter  oracle_conflicts_total               1  Oracle write conflicts observed by OracleSink, such as duplicate-key conflicts.
 counter  oracle_duplicate_ignored_total       7  Oracle duplicate rows safely ignored by insert_ignore mode.
-counter  oracle_duplicates_total              7  Oracle rows identified as duplicate prior processing through idempotent handling.
+counter  oracle_duplicate_noop_total          3  Oracle duplicate rows safely left unchanged by merge mode with no update columns.
+counter  oracle_duplicates_total             10  Oracle rows identified as duplicate prior processing through idempotent handling.
+counter  oracle_merge_outcome_unknown_total  64  Oracle merge rows where insert-versus-match outcome is not reliably exposed.
+counter  oracle_merge_rows_total             64  Oracle rows committed through merge mode.
 ```
 
 For `insert_ignore`, nats-sinks counts ignored duplicates when Oracle reports
 that fewer rows were affected than attempted, or when `ORA-00001` is observed
-and treated as safe prior processing. For `insert`, the same `ORA-00001`
-increments `oracle_conflicts_total` and remains a failure. For `merge`, Oracle
-does not expose reliable per-row "inserted versus matched" counts through the
-current batch execution path, so the sink does not guess. This preserves metric
-accuracy and avoids overclaiming duplicate visibility.
+and treated as safe prior processing. For `merge` with
+`merge_update_columns: []`, nats-sinks can count matched rows as no-op
+duplicates when Oracle reports fewer affected rows than attempted. For
+update-enabled `merge`, Oracle does not reliably expose per-row "inserted
+versus matched" counts through the current batch execution path, so the sink
+increments `oracle_merge_outcome_unknown_total` instead of guessing. For
+`insert`, `ORA-00001` increments `oracle_conflicts_total` and remains a
+failure.
 
 These metrics do not include table names, subjects, message IDs,
 classification values, labels, payloads, or Oracle constraint names. They must
@@ -220,6 +314,12 @@ fields, null values, objects, and arrays are rejected before Oracle commit.
 That keeps the idempotency key stable and prevents language-specific string
 representations from becoming durable database keys.
 
+Routes inherit this sink-level idempotency configuration by default. A route
+may override it when a specific subject family or table has its own durable
+key, for example when one table uses JetStream stream sequence and another
+uses producer-supplied message IDs. If multiple routes point to the same table,
+their effective idempotency and merge-update policies must match.
+
 ### Column Mapping
 
 The `columns` object lets operators map nats-sinks fields to an existing Oracle
@@ -248,6 +348,7 @@ separate so downstream controls can reason about each class of data.
 | `headers` | `HEADERS_JSON` | Message headers as JSON. |
 | `metadata` | `METADATA_JSON` | Full generic metadata snapshot. |
 | `mission_metadata` | `MISSION_METADATA_JSON` | Optional validated mission metadata JSON object resolved by the core runtime. Missing mission metadata is stored as JSON `null`. |
+| `security_labels` | `SECURITY_LABELS_JSON` | Optional validated data-centric security label profile resolved by the core runtime. Missing security labels are stored as JSON `null`. |
 
 Example:
 
@@ -278,8 +379,62 @@ Each `table_routes` item has this shape:
 | --- | --- | --- | --- |
 | `subject` | yes | NATS subject pattern using literal tokens, `*`, or final `>`. | Route pattern tested against the message subject. |
 | `table` | yes | Valid Oracle table identifier. | Destination table for matching messages. |
+| `idempotency` | no | Same object shape as [Idempotency Configuration](#idempotency-configuration). | Route-specific idempotency strategy and columns. Omit this field to inherit the sink default. |
+| `merge_update_columns` | no | `null`, an empty list, or a list of mapped Oracle column names. | Route-specific matched-row update policy for `merge` mode. Omit this field to inherit the sink default. |
 
 Routes are evaluated in order, and the first matching route wins.
+
+Per-route overrides are intentionally conservative:
+
+- omitted route fields inherit the sink-level default,
+- route-specific `idempotency.columns` are used for that table's generated
+  `merge` or `insert_ignore` predicate,
+- route-specific `payload_field` extraction is applied before Oracle row
+  mapping for matching messages,
+- `merge_update_columns` applies only when the sink-level `mode` is `merge`,
+- if several routes target the same table, nats-sinks rejects conflicting
+  effective policies at startup.
+
+## Read-Only Lineage Queries
+
+The Oracle sink stores enough metadata for read-only lineage inspection after
+events have been persisted. The `nats-sink query-lineage` command can query a
+configured Oracle event table by exact values in a small allow list:
+
+- `correlation_id`
+- `causation_id`
+- `mission_id`
+- `tasking_id`
+- `track_id`
+- `message_id`
+- `subject`
+
+Mission-oriented fields are read from `MISSION_METADATA_JSON` with Oracle
+`json_value`. Message ID and subject are read from the configured Oracle
+columns. Values are passed as bind variables, result limits are bounded, and
+payload output is omitted by default.
+
+```bash
+nats-sink query-lineage /etc/nats-sinks/oracle.json \
+  --field mission_id \
+  --value MISSION-ALPHA \
+  --limit 25
+```
+
+When `table_routes` are configured, `--table` may name only the default
+`sink.table` or one of the configured route tables. This keeps the helper from
+becoming an arbitrary database query tool:
+
+```bash
+nats-sink query-lineage /etc/nats-sinks/oracle.json \
+  --table NATS_EVENTS_SECRET \
+  --field track_id \
+  --value TRACK-9001 \
+  --limit 20
+```
+
+See [Lineage Query Helpers](lineage-query-helpers.md) for the full design,
+security controls, dry-run examples, and script-friendly JSON output shape.
 
 ## Choosing An Oracle Connection Type
 
@@ -499,6 +654,7 @@ create table nats_sink_events (
     headers_json      json,
     metadata_json     json,
     mission_metadata_json json,
+    security_labels_json json,
     constraint nats_sink_events_pk
         primary key (stream_name, stream_sequence)
 );
@@ -535,9 +691,18 @@ The epoch columns use Unix epoch nanoseconds:
 all message headers, known `Nats-` reserved headers that are present, JetStream
 stream/consumer/sequence values, optional reply subject, the normalized
 `priority`, `classification`, and `labels` fields, optional
-`mission_metadata`, and the timing fields. Missing optional headers such as
-`Nats-Msg-Id` or `Nats-Expected-Stream` remain absent/null and do not cause
-processing failures.
+`mission_metadata`, optional tamper-evident `custody` metadata, and the timing
+fields. Missing optional headers such as `Nats-Msg-Id` or
+`Nats-Expected-Stream` remain absent/null and do not cause processing failures.
+
+When top-level `custody.enabled` is true, Oracle stores the custody object in
+`METADATA_JSON.custody`. The recommended table does not require a dedicated
+custody column, which keeps the table shape compatible while still making the
+evidence queryable through Oracle JSON features. The custody object contains
+payload, metadata, and record hashes computed by the core before
+`OracleSink.write_batch(...)` is called. It is not encryption and not a digital
+signature. Read [Tamper-Evident Custody Metadata](tamper-evident-custody.md)
+for configuration, hash chaining, and privacy guidance.
 
 `mission_metadata_json` stores the optional validated mission metadata object
 resolved by the core runtime from the configured header or defaults. This keeps
@@ -545,6 +710,15 @@ richer operational context in one JSON column instead of adding fixed Oracle
 columns for every possible mission, platform, sensor, track, or lifecycle
 field. See [Mission Metadata](mission-metadata.md) and
 [F2T2EA Event Phase Tagging](use-cases/defence/f2t2ea-event-phase-tagging.md).
+
+`security_labels_json` stores the optional data-centric security label profile
+resolved by the core runtime. This profile is useful when Oracle rows need to
+carry policy context such as releasability, handling caveats, owner,
+originator, policy identifier, and retention category. The profile is metadata
+only; Oracle grants, views, VPD policies, application authorization, and other
+downstream controls still enforce access. See
+[Data-Centric Security Label Profile](security-label-profile.md).
+
 For broader examples that combine Oracle columns, mission metadata, custody,
 classification, labels, and audit-oriented query patterns, see
 [Defence And Mission Support](use-cases/defence/index.md).
@@ -604,6 +778,15 @@ Example metadata document:
     "received_at_epoch_ns": 1778926620000000000,
     "stored_at": "2026-05-16T10:18:00+00:00",
     "stored_at_epoch_ns": 1778926680000000000
+  },
+  "custody": {
+    "schema": "nats_sinks.custody.v1",
+    "algorithm": "sha256",
+    "payload_hash": "hex-encoded-payload-hash",
+    "metadata_hash": "hex-encoded-metadata-hash",
+    "record_hash": "hex-encoded-record-hash",
+    "previous_record_hash": null,
+    "privacy": "hashes_are_not_encryption"
   }
 }
 ```
@@ -630,8 +813,9 @@ organization.
 | `STORED_AT_EPOCH_NS` | `1778926680000000000` |
 | `PAYLOAD_JSON` | JSON object containing `_nats_sinks_encryption` with `algorithm`, `key_id`, `nonce`, `ciphertext`, `tag_length`, `plaintext_sha256`, and `plaintext_size_bytes`. |
 | `HEADERS_JSON` | Headers such as `Nats-Msg-Id`, `Nats-Sinks-Priority`, `Nats-Sinks-Classification`, and `Nats-Sinks-Labels` when present. |
-| `METADATA_JSON` | Full metadata document including `message_metadata.priority`, `message_metadata.classification`, and `message_metadata.labels`. |
+| `METADATA_JSON` | Full metadata document including `message_metadata.priority`, `message_metadata.classification`, `message_metadata.labels`, and optional `custody` evidence. |
 | `MISSION_METADATA_JSON` | Optional validated JSON object such as `{"profile":"mission-event-v1","mission_id":"SYN-MISSION-001","f2t2ea_phase":"track"}` when mission metadata is enabled. |
+| `SECURITY_LABELS_JSON` | Optional validated data-centric security label profile such as `{"profile":"nats-sinks.security-label.v1","classification":"NATO SECRET","releasability":["NATO","FVEY"]}` when security labels are enabled. |
 
 For F2T2EA-style phase tagging, keep phase values metadata-only and do not use
 them to change ACK behavior, idempotency keys, or sink write ordering. The
@@ -867,16 +1051,130 @@ sequenceDiagram
     R->>R: ACK after Oracle success
 ```
 
-For larger Oracle volumes, a future staging-table path may be useful:
+## High-Throughput Staging Mode
 
-1. insert the batch into a temporary or staging table with array DML,
+For larger Oracle volumes, `OracleSink` can use an optional staging-table path:
+
+1. array-load the batch into a configured staging table,
 2. run one set-based `merge` from staging into the target table,
-3. commit once,
-4. ACK after the commit.
+3. optionally delete the staged rows for the batch,
+4. commit once,
+5. let the core runner ACK only after the commit has succeeded.
 
-That can reduce per-row `merge` overhead while keeping idempotency and
-commit-then-acknowledge intact. It should be added as an explicit Oracle write
-mode only after benchmarks and integration tests prove the behavior.
+This mode is disabled by default because it requires an additional database
+object, operational ownership for the staging table, and performance testing in
+the target Oracle service class. It is intended for production systems where
+per-row `merge` overhead is a measured bottleneck and the team is ready to
+manage the staging object through normal change-control processes.
+
+```mermaid
+sequenceDiagram
+    participant R as Runner
+    participant O as OracleSink
+    participant DB as Oracle
+
+    R->>O: write_batch(envelopes)
+    O->>DB: executemany insert into staging table
+    O->>DB: merge target using staging rows for batch_id
+    O->>DB: delete staging rows for batch_id
+    O->>DB: commit
+    DB-->>O: durable success
+    O-->>R: return success
+    R->>R: ACK after Oracle success
+```
+
+Example configuration:
+
+```json
+{
+  "sink": {
+    "type": "oracle",
+    "dsn": "localhost:1521/FREEPDB1",
+    "user": "app_user",
+    "password_env": "ORACLE_PASSWORD",
+    "table": "NATS_SINK_EVENTS",
+    "mode": "merge",
+    "staging": {
+      "enabled": true,
+      "table": "NATS_SINK_EVENTS_STAGE",
+      "batch_id_column": "NATS_SINKS_BATCH_ID",
+      "cleanup": "delete_on_success"
+    },
+    "idempotency": {
+      "strategy": "stream_sequence",
+      "columns": ["STREAM_NAME", "STREAM_SEQUENCE"]
+    }
+  }
+}
+```
+
+Staging options:
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `enabled` | no | `false` | `true` or `false` | Enables the staging-table write path. |
+| `table` | required when enabled | `null` | Valid Oracle identifier, optionally schema-qualified. | Staging table used for array-loaded batch rows. |
+| `batch_id_column` | no | `NATS_SINKS_BATCH_ID` | Valid Oracle column identifier. | Column that scopes staged rows to the active sink batch. |
+| `cleanup` | no | `delete_on_success` | `delete_on_success`, `keep` | Deletes staged rows before commit or keeps them for controlled operator review. |
+
+Only `merge` and `insert_ignore` are accepted with staging enabled. `insert` and
+`append` are rejected during configuration validation because the staging path
+exists to preserve idempotent set-based writes, not to create a second
+non-idempotent append mode.
+
+The recommended staging table shape mirrors the target table columns and adds a
+batch identifier. It intentionally has no primary key because idempotency is
+enforced when the staged rows are merged into the target table.
+
+```sql
+create table NATS_SINK_EVENTS_STAGE (
+    NATS_SINKS_BATCH_ID varchar2(64) not null,
+    stream_name       varchar2(255) not null,
+    stream_sequence   number not null,
+    subject           clob not null,
+    message_id        varchar2(512),
+    priority          clob,
+    classification    clob,
+    labels            clob,
+    received_at       timestamp default systimestamp not null,
+    message_created_at_epoch_ns number(19),
+    jetstream_timestamp_epoch_ns number(19),
+    received_at_epoch_ns number(19) not null,
+    stored_at_epoch_ns number(19) not null,
+    payload_json      json,
+    headers_json      json,
+    metadata_json     json,
+    mission_metadata_json json,
+    security_labels_json json
+);
+
+create index NATS_SINK_EVENTS_STAGE_BID_I
+    on NATS_SINK_EVENTS_STAGE (NATS_SINKS_BATCH_ID);
+```
+
+The index is recommended for production staging tables so cleanup and merge
+source selection stay bounded to the active batch. Create the target and
+staging tables with your normal migration tooling. `auto_create=true` can
+create both objects for local tests, but production deployments should normally
+keep `auto_create=false` and manage schema changes explicitly.
+
+Transaction behavior:
+
+- if the staging insert fails, Oracle rolls back and the core does not ACK,
+- if the merge fails, Oracle rolls back and the core does not ACK,
+- if cleanup fails, Oracle rolls back and the core does not ACK,
+- if commit fails, the sink raises a temporary error and the core does not ACK,
+- if commit succeeds but the process stops before ACK, JetStream may redeliver
+  and the idempotent target merge handles the duplicate.
+
+`cleanup="keep"` is useful only for controlled troubleshooting because staged
+rows remain in the staging table after commit. It can increase storage use and
+must be paired with an operator-owned cleanup process. The default
+`delete_on_success` is safer for long-running services.
+
+Use the Oracle benchmark script to compare normal mode and staging mode in your
+own non-production environment before enabling this path for operational
+traffic.
 
 ## Oracle Benchmark Script
 
@@ -939,6 +1237,11 @@ environments unless those inputs are controlled.
 - `insert`: plain insert. Duplicate key errors are failures.
 - `append`: insert with Oracle append hint. This is not idempotent by default.
 
+`merge_update_columns` refines `merge` behavior without changing the
+commit-then-ACK contract. Leave it unset to update every non-key column, set it
+to selected mapped column names to restrict updates, or set it to `[]` to leave
+matched rows unchanged.
+
 ## Idempotency
 
 Recommended strategy:
@@ -970,9 +1273,33 @@ table writes in one Oracle transaction before returning success.
     "password_env": "ORACLE_PASSWORD",
     "table": "NATS_SINK_EVENTS",
     "table_routes": [
-      {"subject": "orders.created", "table": "ORDER_CREATED_EVENTS"},
-      {"subject": "orders.cancelled", "table": "ORDER_CANCELLED_EVENTS"},
-      {"subject": "payments.>", "table": "PAYMENT_EVENTS"}
+      {
+        "subject": "orders.created",
+        "table": "ORDER_CREATED_EVENTS"
+      },
+      {
+        "subject": "orders.by-id",
+        "table": "ORDER_MESSAGE_ID_EVENTS",
+        "idempotency": {
+          "strategy": "message_id",
+          "columns": ["MESSAGE_ID"]
+        },
+        "merge_update_columns": ["PAYLOAD_JSON", "METADATA_JSON"]
+      },
+      {
+        "subject": "orders.payload-key",
+        "table": "ORDER_PAYLOAD_KEY_EVENTS",
+        "idempotency": {
+          "strategy": "payload_field",
+          "payload_field": "order_id",
+          "columns": ["MESSAGE_ID"]
+        },
+        "merge_update_columns": []
+      },
+      {
+        "subject": "payments.>",
+        "table": "PAYMENT_EVENTS"
+      }
     ],
     "mode": "merge",
     "idempotency": {
@@ -988,27 +1315,33 @@ Routing rules:
 - routes are evaluated in order,
 - the first matching route wins,
 - unmatched subjects use the default `table`,
+- route `idempotency` overrides are optional and inherit the sink default when
+  omitted,
+- route `merge_update_columns` can restrict or disable matched-row updates for
+  that route's table,
 - `*` matches one subject token,
 - `>` matches one or more remaining tokens and must be the final token,
-- all route table names are validated as Oracle identifiers.
+- all route table and column names are validated as Oracle identifiers.
 
 ```mermaid
 flowchart TD
     M[Envelope subject] --> R{Route match?}
     R -->|orders.created| T1[ORDER_CREATED_EVENTS]
-    R -->|orders.cancelled| T2[ORDER_CANCELLED_EVENTS]
-    R -->|payments.>| T3[PAYMENT_EVENTS]
+    R -->|orders.by-id| T2[ORDER_MESSAGE_ID_EVENTS<br/>message_id key]
+    R -->|orders.payload-key| T3[ORDER_PAYLOAD_KEY_EVENTS<br/>payload_field key]
+    R -->|payments.>| T4[PAYMENT_EVENTS]
     R -->|no match| D[NATS_SINK_EVENTS]
     T1 --> C[Single Oracle transaction]
     T2 --> C
     T3 --> C
+    T4 --> C
     D --> C
     C --> ACK[Runner ACK after commit]
 ```
 
 Every routed table must have compatible columns and compatible idempotency
-constraints. If one routed table write fails before commit, the whole batch is
-not ACKed.
+constraints for its effective policy. If one routed table write fails before
+commit, the whole batch is not ACKed.
 
 When `auto_create` is enabled for local development, OracleSink attempts to
 create the default table and each configured route table. Production
@@ -1082,6 +1415,7 @@ create table nats_sink_events (
     headers_json      json,
     metadata_json     json,
     mission_metadata_json json,
+    security_labels_json json,
     constraint nats_sink_events_pk
         primary key (stream_name, stream_sequence)
 );

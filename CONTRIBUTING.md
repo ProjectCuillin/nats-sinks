@@ -44,6 +44,14 @@ Unit tests must be deterministic and must not make network calls. Integration te
 
 ## Branch and Commit Flow
 
+- Do not commit directly to `main`. Work on `release-*`, `feature-*`,
+  `bugfix-*`, or `hotfix-*` branches and merge to `main` only through reviewed
+  pull requests.
+- Push small commits to the work branch as the change develops. Branch pushes
+  are intentionally quiet. When the branch is ready for merge or release
+  validation, open or refresh a draft pull request with
+  `scripts/open-release-pr.sh`, mark it ready, and run
+  `scripts/run-release-validation.sh`.
 - Keep changes small and reviewable.
 - Use GitHub Issues as the live backlog. Create or link a detailed feature
   request before implementing user-visible work, unless the change is a small
@@ -69,3 +77,7 @@ The commit-then-acknowledge invariant is non-negotiable: core owns delivery sema
 
 See [Backlog Management](https://nats-sinks.readthedocs.io/en/latest/backlog-management/)
 for the full issue and close-out workflow.
+
+See
+[Branch-First Development And Release Workflow](https://nats-sinks.readthedocs.io/en/latest/branch-workflow/)
+for branch protection, release pull requests, and tag rules.

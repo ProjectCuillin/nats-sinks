@@ -24,6 +24,36 @@
       "response_max_bytes": 1048576
     }
   },
+  "otlp": {
+    "enabled": false,
+    "endpoint": null,
+    "protocol": "http_json",
+    "timeout_seconds": 5,
+    "max_retries": 0,
+    "retry_backoff_seconds": 0.25,
+    "stale_after_seconds": 60,
+    "max_request_bytes": 1048576,
+    "headers_env": {}
+  },
+  "syslog": {
+    "enabled": false,
+    "transport": "udp",
+    "host": "127.0.0.1",
+    "port": 514,
+    "socket_path": null,
+    "facility": "local0",
+    "severity": "info",
+    "hostname": "-",
+    "app_name": "nats-sinks",
+    "procid": "-",
+    "msgid": "metrics",
+    "structured_data_id": "nats_sinks",
+    "timeout_seconds": 1,
+    "max_retries": 0,
+    "retry_backoff_seconds": 0.25,
+    "stale_after_seconds": 60,
+    "max_message_bytes": 1024
+  },
   "nats_server_monitoring": {
     "enabled": false,
     "base_url": null,

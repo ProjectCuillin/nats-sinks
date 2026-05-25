@@ -1,0 +1,30 @@
+{
+  "id": "oci-streaming-sink",
+  "title": "[Feature]: Add an Oracle Cloud Infrastructure Streaming sink",
+  "area": "Future sink",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "sink-oci", "security", "testing"],
+  "problem": "Some OCI-centered deployments need to bridge selected JetStream events into Oracle Cloud Infrastructure Streaming so downstream OCI services can consume them through a managed stream. nats-sinks currently consumes from NATS JetStream and writes to Oracle Database or files, but it does not provide a first-party OCI Streaming sink.",
+  "proposal": "Research, design, and later implement a first-party Oracle-family OCI Streaming sink using the official OCI Python SDK. The sink should publish normalized nats-sinks envelopes or configured payload projections to OCI Streaming with bounded batch sizes, deterministic partition keys, subject-aware routing options, and explicit idempotency limitations. Because OCI Streaming is itself a stream and not a final database, the design must define what durable success means, how retries behave, and how operators should reason about redelivery and duplicates across two messaging systems.",
+  "users": "OCI platform teams, integration engineers, and operators who need a controlled NATS JetStream to OCI Streaming handoff while preserving commit-then-acknowledge discipline.",
+  "delivery_semantics": "The core runner must continue to own ACK behavior. The OCI Streaming sink must never ACK messages. It may return success only after OCI Streaming has accepted every message in the batch according to the SDK response. Failed message results, rejected records, authentication failures, throttling, and endpoint errors must be translated into framework errors so the core can avoid ACK when the handoff is not durable enough for the configured policy. The sink must document that downstream OCI consumers may still see duplicates and must be idempotent.",
+  "security": "Authentication should prefer OCI workload identity where possible, with API key authentication reserved for controlled local or non-OCI deployments. Stream OCIDs, compartment IDs, and endpoints must be validated and redacted appropriately. Logs must not include payloads, private keys, session tokens, or signed request material. Documentation must include least-privilege IAM policy examples for producing to the configured stream only.",
+  "acceptance": [
+    "A design note defines durable success for OCI Streaming and explains the difference between stream-to-stream handoff and database persistence.",
+    "Functional requirements cover batch publish, partition key selection, payload projection, error translation, subject-aware routing, metadata preservation, and duplicate behavior.",
+    "Non-functional requirements cover bounded batch sizes, SDK timeouts, retry classification, throttling, backpressure, and throughput tuning.",
+    "Security requirements cover OCI authentication modes, least-privilege IAM, secret redaction, TLS verification, and safe logging.",
+    "Tests cover fake SDK success, partial failure, throttling, auth failure, partition key construction, and no ACK on sink failure.",
+    "Documentation describes OCI Streaming setup, limitations, and replay behavior without claiming exactly-once delivery."
+  ],
+  "tests": "Use fake OCI Streaming clients in unit tests. Cover PutMessages request construction, partition key validation, accepted message handling, partial failure classification, throttling as temporary failure, invalid config as configuration failure, and commit-then-ack contract behavior. Live tests must be gated behind ignored local config and must publish only sanitized test messages to a dedicated test stream.",
+  "documentation": "Add a dedicated OCI Streaming sink page when implementation starts. Update docs/sink-framework.md, docs/configuration.md, docs/idempotency.md, docs/security.md, docs/operations.md, docs/testing.md, ROADMAP.md, docs/roadmap.md, and CHANGELOG.md.",
+  "closeout": "Close only after the release containing the OCI Streaming sink is published. Include release tag, durable success definition, supported auth modes, tests run, documentation updated, and known limitations.",
+  "relationships": {
+    "related": [
+      "backlog:sink-certification-contract-and-tests",
+      "backlog:message-authenticity-verification"
+    ]
+  }
+}

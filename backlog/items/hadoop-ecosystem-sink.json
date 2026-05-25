@@ -1,0 +1,23 @@
+{
+  "id": "hadoop-ecosystem-sink",
+  "title": "[Feature]: Evaluate Hadoop ecosystem sinks",
+  "area": "Future sink",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "security", "testing"],
+  "problem": "Oracle GoldenGate Big Data targets include Apache HDFS, HBase, Hive, Flume, Cloudera Hadoop, Cloudera Data Platform, Hortonworks Data Platform, and MapR. nats-sinks does not yet define whether these older and enterprise Hadoop targets should become individual sinks or compatibility profiles.",
+  "proposal": "Research Hadoop ecosystem sink support as a family. The evaluation should split HDFS file/object-style writes, HBase row-key writes, Hive table ingestion, Flume event forwarding, and distribution-specific compatibility. It should decide which targets still have enough user demand and maintained Python integration options to justify implementation.",
+  "users": "Organizations with existing Hadoop estates that need controlled event persistence from NATS JetStream.",
+  "delivery_semantics": "Each selected target must define its own durable commit boundary. HDFS rename-based commits, HBase row writes, Hive table commits, and Flume forwarding have different ACK implications and must not be treated as interchangeable.",
+  "security": "Kerberos, TLS, service principals, HDFS paths, table names, row keys, and payloads are sensitive. Path traversal and unsafe filename generation must be prevented.",
+  "acceptance": [
+    "Research separates HDFS, HBase, Hive, Flume, and distribution-specific support.",
+    "Deprecated or unsupported ecosystems are explicitly marked not planned if appropriate.",
+    "Any accepted connector has a separate implementation issue.",
+    "Unit tests are possible without live Hadoop services.",
+    "Documentation warns about maintenance and operational complexity."
+  ],
+  "tests": "Research-only initially. Future connectors need fake clients, path-safety tests, duplicate handling tests, and gated integration tests.",
+  "documentation": "Add Hadoop ecosystem evaluation notes to sink roadmap documentation.",
+  "closeout": "Close after the evaluation release is published and follow-up feature requests are created."
+}

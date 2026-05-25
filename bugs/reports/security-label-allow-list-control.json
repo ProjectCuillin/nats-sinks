@@ -1,0 +1,26 @@
+{
+  "id": "security-label-allow-list-control",
+  "title": "[Bug]: Security label allow lists accept non-newline control characters",
+  "area": "Security",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": ["security-labels", "input-validation", "bug-hunt"],
+  "summary": "Security label allow-list validation rejects newlines and NUL bytes but still accepts other ASCII control characters such as tab or delete.",
+  "observed": "SecurityLabelProfileConfig accepts allowed_classifications containing tab characters.",
+  "expected": "Security label allow lists should reject every ASCII control character.",
+  "reproduction": "Construct SecurityLabelProfileConfig(allowed_classifications=['NATO\\tSECRET']) and observe validation succeeds.",
+  "failing_test": "Add a unit test that expects control-character-bearing security label allow-list values to fail validation.",
+  "impact": "Unsafe allow-list values can make policy review and matching harder to reason about.",
+  "delivery_semantics": "No delivery behavior changes. The issue is rejected during configuration validation.",
+  "security": "Allow-list values are policy inputs and should fail closed when malformed.",
+  "acceptance": [
+    "Security label allow-list values reject all ASCII control characters.",
+    "Valid allow-list values remain accepted.",
+    "The regression test covers a non-newline control character.",
+    "Release notes describe the policy validation hardening."
+  ],
+  "tests": "Run focused security label config tests and full validation.",
+  "documentation": "Update CHANGELOG.md and test report.",
+  "closeout": "Mark completed after merge with sanitized evidence."
+}

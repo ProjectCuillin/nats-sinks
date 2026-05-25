@@ -1,0 +1,28 @@
+{
+  "id": "snowflake-sink",
+  "title": "[Feature]: Evaluate a Snowflake sink",
+  "area": "Future sink",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "security", "testing"],
+  "problem": "Warehouse sinks are common in streaming connector ecosystems. nats-sinks does not yet provide a Snowflake sink for analytics handoff, curated operational records, or mission reporting stores.",
+  "proposal": "Evaluate a Snowflake sink that can write normalized envelopes through an appropriate Snowflake ingestion path. The research should compare direct SQL batch inserts, staged files, Snowpipe-style loading, and any modern streaming ingestion approach. The design must identify which approach provides the clearest commit-then-acknowledge boundary.",
+  "users": "Analytics teams, reporting teams, and platform engineers that need controlled JetStream to Snowflake handoff.",
+  "delivery_semantics": "The sink must never ACK messages. It may return success only after the selected ingestion path provides a durable and verifiable success boundary. If staged ingestion is asynchronous, the design must decide whether ACK waits for load completion or whether the connector is not suitable for default production use.",
+  "security": "The sink must support secret redaction, least-privilege warehouse roles, TLS verification, bounded file staging, and no payload logging by default. Account identifiers, private keys, and tokens must not appear in logs or issue evidence.",
+  "acceptance": [
+    "Research compares Snowflake ingestion options and identifies the safest commit boundary.",
+    "Functional requirements cover schema mapping, idempotency, metadata preservation, staged-file cleanup, and payload envelope support.",
+    "Non-functional requirements cover batch size, load latency, warehouse cost controls, retry classification, and throughput tuning.",
+    "Security requirements cover authentication, least privilege, redaction, TLS verification, and staging safety.",
+    "Tests cover fake client success, load failure, duplicate behavior, and no ACK on sink failure."
+  ],
+  "tests": "Use fake Snowflake clients for deterministic unit tests. Gate live tests behind ignored local config and never include account names, users, keys, or endpoints in public evidence.",
+  "documentation": "If implemented, add a dedicated Snowflake sink documentation page under the sink documentation tree and update configuration, security, operations, testing, roadmap, and changelog docs.",
+  "closeout": "Close after research decision or released connector. Include selected ingestion method, durability boundary, tests, documentation, and known limitations.",
+  "relationships": {
+    "related": [
+      "backlog:sink-certification-contract-and-tests"
+    ]
+  }
+}

@@ -49,6 +49,19 @@ Unit tests cover:
 - no ACK on sink failure,
 - no payload logging by default.
 
+Ordered-consumer support is currently documentation and backlog only. Future
+ordered-inspection tests should prove that inspection tooling is read-only,
+bounded, redacted by default, and unable to call sink writes. Future durable
+replay-to-sinks tests should stay on the normal commit-then-acknowledge
+contract and prove that replay never ACKs before durable sink success. See
+[Ordered Consumer Evaluation](ordered-consumer-evaluation.md).
+
+Push-consumer support is also documentation and backlog only. Future push-mode
+tests must prove manual ACK behavior, bounded callback intake, no ACK on
+temporary failures, DLQ-before-ACK behavior on permanent failures, flow-control
+and heartbeat handling, graceful shutdown, and unchanged pull-mode behavior.
+See [Push Consumer Evaluation](push-consumer-evaluation.md).
+
 ## Bounded Property-Style Tests
 
 The repository uses deterministic bounded generator tests for security-sensitive
@@ -160,6 +173,124 @@ pytest tests/integration/test_file_sink_e2e.py
 The test creates a unique child directory under `NATS_SINKS_FILE_E2E_DIRECTORY`
 for each run. Keep that directory under `.local/` or another ignored location
 when retaining files.
+
+## Oracle MySQL Sink And Test Container
+
+The repository includes a local Oracle MySQL test database container and a
+container-backed e2e test for the first-party Oracle MySQL sink. The container
+is intentionally separate from the production Oracle Database sink. It provides
+a clean local database backend for transactions, schema validation, duplicate
+handling, routed writes, and throughput work without requiring a long-lived
+developer database.
+
+Run the deterministic asset tests without Docker:
+
+```bash
+python -m pytest tests/unit/test_oracle_mysql_test_container.py -q
+```
+
+Run the optional Docker smoke test when a local Docker daemon is available:
+
+```bash
+python scripts/run-oracle-mysql-container-smoke.py
+```
+
+Expected sanitized output:
+
+```text
+Oracle MySQL container smoke test passed with one verified test record.
+```
+
+Run the Oracle MySQL sink e2e test against a fresh short-lived container:
+
+```bash
+python scripts/run-mysql-sink-e2e.py
+```
+
+Expected sanitized output:
+
+```text
+Oracle MySQL sink container e2e test passed.
+```
+
+That e2e runner builds the same Oracle Linux 9 slim based Oracle MySQL image,
+starts a fresh container with generated credentials, exposes it only on a
+random loopback port, runs `tests/integration/test_mysql_sink.py`, and removes
+the container, Docker volume, and generated secret files by default.
+
+The integration test validates:
+
+- `MySqlSink.start`, `healthcheck`, `ensure_schema`, `write_batch`, and `stop`;
+- idempotent `upsert` with no-op duplicate redelivery;
+- subject-to-table routing;
+- metadata persistence for priority, classification, and labels;
+- non-JSON payload wrapping;
+- empty payload handling;
+- Oracle MySQL duplicate/upsert metrics through the shared metrics recorder.
+
+The smoke test builds the Oracle Linux 9 slim based Oracle MySQL image, starts
+a fresh short-lived container with generated random credentials, waits for
+readiness, creates a test table, inserts and reads one row, and removes the
+container, Docker volume, and generated secret files by default. Use
+`--preserve-artifacts` only for local debugging and clean up preserved files
+under `.local/oracle-mysql-test/` afterward.
+
+See [Oracle MySQL Sink](mysql-sink.md) for sink configuration and
+[Oracle MySQL Test Container](oracle-mysql-test-container.md) for the complete
+container security model, runtime sequence, capability exception, and
+troubleshooting guidance.
+
+## Local WebSocket End-To-End Test
+
+WebSocket transport has two layers of testing:
+
+- unit tests for configuration guardrails, optional header validation,
+  redaction, TLS context construction, and collision-safe harness helpers;
+- an optional live local script that starts a temporary NATS server with
+  JetStream and WebSocket enabled.
+
+The unit tests never bind sockets and never start `nats-server`:
+
+```bash
+pytest tests/unit/test_nats_connection_options.py tests/unit/test_websocket_harness.py
+```
+
+The live script requires the `nats-server` executable on `PATH`:
+
+```bash
+scripts/run-websocket-e2e.sh --message-count 16 --batch-size 8
+```
+
+The script is designed to avoid collisions with developer machines where NATS
+is already running. It checks the default local NATS, monitoring, and WebSocket
+ports and chooses free loopback alternatives when needed. It only terminates
+the temporary `nats-server` process that it started.
+
+Example sanitized output:
+
+```json
+{"monitoring_port": 8222, "nats_port": 4222, "transport": "websocket", "websocket_port": 8080}
+{"commit_then_ack": "verified by JetStreamSinkRunner.process_raw_batch", "files_written": 16, "messages_processed": 16, "messages_published": 16}
+{"status": "passed"}
+```
+
+Use `--message-count` to change the number of synthetic messages and
+`--batch-size` to exercise partial or multiple fetch batches:
+
+```bash
+scripts/run-websocket-e2e.sh --message-count 23 --batch-size 8
+```
+
+Use `--preserve-work-dir` only for local debugging:
+
+```bash
+scripts/run-websocket-e2e.sh --preserve-work-dir
+```
+
+Generated files live under `.local/websocket-e2e` by default and must not be
+committed. The generated NATS config and output files are synthetic and
+loopback-only, but maintainers should still review preserved files before
+copying excerpts into public GitHub issues or release evidence.
 
 ## Synthetic Mission Scenario Harness
 
@@ -370,6 +501,7 @@ available level:
 | Sink | Unit tests | Smoke tests | End-to-end tests |
 | --- | --- | --- | --- |
 | Oracle | SQL, mapping, routing, payload, idempotency, encrypted payload storage, and contract tests. | `nats-sink validate examples/oracle-jetstream/config.json`; live `test-sink` when Oracle env is available. | Live NATS-to-Oracle e2e when `.local` integration env is available. |
+| Oracle MySQL | SQL, mapping, routing, payload, idempotency, TLS configuration, metrics, and contract tests. | `nats-sink validate examples/oracle-mysql-basic/config.json`; `python scripts/run-oracle-mysql-container-smoke.py`. | Local short-lived Oracle MySQL container e2e with `python scripts/run-mysql-sink-e2e.py`. |
 | File | Path mapping, payload, duplicate policy, compression, encryption, healthcheck, filesystem errors, and fuzz-style path safety tests. | `nats-sink validate examples/file-basic/config.json`; `nats-sink test-sink examples/file-basic/config.json`. | Local deterministic runner-to-file e2e in `tests/integration/test_file_sink_e2e.py`, with uncompressed, gzip, and encrypted output. |
 
 If a live external-service test is not run, the latest test report must say so
@@ -386,6 +518,13 @@ The deterministic sink release matrix can be run with:
 ```bash
 scripts/check-sinks.sh
 ```
+
+`scripts/check-sinks.sh` includes the reusable sink certification helpers from
+[Sink Certification](sink-certification.md). Those helpers are not a
+replacement for destination-specific tests; they are the shared baseline that
+proves a sink respects the framework boundary, receives only `NatsEnvelope`
+objects, does not own JetStream ACK behavior, and returns success only after
+the sink-specific durable assertion has passed.
 
 To include live Oracle checks, source the ignored local integration environment
 files first and set:
@@ -508,6 +647,8 @@ network connection. It is useful for validating:
 - TLS connection setup,
 - local CA certificate trust,
 - token or username/password authentication,
+- credentials-file, NKEY seed-file, and TLS client certificate workflows when
+  the target NATS deployment is configured for them,
 - subscribing to a subject,
 - optionally publishing and receiving a test message.
 
@@ -551,6 +692,23 @@ python scripts/nats-live-probe.py \
 
 Only use `--publish` with an explicitly approved test subject. The probe does
 not print payload contents by default.
+
+For client-side authentication workflow certification, use the gated pytest
+module instead of adding live credentials to unit tests:
+
+```bash
+export NATS_SINKS_NATS_AUTH_INTEGRATION=1
+export NATS_SINKS_AUTH_MODE=nkey_seed_file
+export NATS_SINKS_AUTH_URL=tls://nats.example.com:4222
+export NATS_SINKS_AUTH_NKEY_SEED_FILE=/run/secrets/nats/orders-sink.nk
+export NATS_SINKS_AUTH_TLS_CA_FILE=/etc/nats/certs/root-ca.crt
+python -m pytest tests/integration/test_nats_auth_workflows.py -q
+```
+
+Supported modes are `none`, `username_password`, `token`,
+`credentials_file`, `nkey_seed_file`, and `tls_client_certificate`. Keep all
+real endpoints and identity files in ignored local configuration or runtime
+secret mounts.
 
 ## Ordering Tests
 

@@ -1,0 +1,24 @@
+{
+  "id": "pr-label-sync",
+  "title": "[Feature]: Copy managed issue labels onto pull requests",
+  "area": "CI and automation",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": ["release", "completed"],
+  "problem": "The project workflow uses GitHub Issues as the live backlog and pull requests as the review vehicle for release branches, issue branches, feature branches, and bug branches. When labels exist only on the issue, maintainers lose the ability to filter pull requests by the same release, sink, security, documentation, bug, and completed-status labels used in issue views.",
+  "proposal": "Extend the local pull request helper so it copies searchable labels from one or more managed source issues to the pull request by default. The helper should detect issue numbers from branch names and Related issue references, accept explicit issue numbers for unusual branches, provide an opt-out for exceptional maintenance work, and expose a standalone dry-run helper for diagnostics.",
+  "users": "Maintainers managing the release branch workflow, reviewers filtering pull requests, and release engineers validating which issue work is ready to merge.",
+  "delivery_semantics": "This workflow automation must not affect runtime NATS delivery semantics, sink writes, DLQ handling, ACK ordering, or package behavior. It only changes GitHub issue and pull request metadata handling.",
+  "security": "Label synchronization must not copy secrets or free-form private operational details. It should copy GitHub label names only, validate issue and pull request numbers, reject control characters in label names, and keep the official GitHub Issue Priority field on the issue rather than recreating it as a pull request label.",
+  "acceptance": [
+    "Pull requests opened through scripts/open-release-pr.sh copy labels from detected source issues by default.",
+    "The helper supports explicit --issue arguments when a branch covers one or more issues that cannot be derived safely.",
+    "The helper supports --no-copy-issue-labels-to-pr for exceptional maintenance pull requests.",
+    "A standalone sync-pr-labels.py helper supports dry-run diagnostics.",
+    "Unit tests cover source issue detection, de-duplication, invalid label rejection, and shell helper integration.",
+    "Workflow documentation, agent instructions, and CHANGELOG.md explain the behavior."
+  ],
+  "tests": "Run targeted unit tests for pull request label synchronization and the guarded pull request helper. Run scripts/check.sh before release-bound merge.",
+  "documentation": "Update ROBOTS.md, AGENTS.md, docs/backlog-management.md, docs/branch-workflow.md, and CHANGELOG.md.",
+  "closeout": "Close after the release containing the helper behavior has been published. Include the implementation PR, targeted tests, full local validation status, documentation updates, and any limitations."
+}

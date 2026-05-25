@@ -71,6 +71,7 @@ def test_init_prometheus_policy_generates_disabled_policy(tmp_path: Path) -> Non
     data = json.loads(policy.read_text(encoding="utf-8"))
     assert data["enabled"] is False
     assert data["prometheus"]["enabled"] is False
+    assert data["syslog"]["enabled"] is False
     assert data["subjects"][0]["subject"] == "orders.*"
 
 
@@ -86,6 +87,7 @@ def test_validate_and_show_effective_policy(tmp_path: Path) -> None:
     assert "Observability policy is valid." in validate.stdout
     assert show.exit_code == 0
     assert "prometheus_enabled=false" in show.stdout
+    assert "syslog_enabled=false" in show.stdout
 
 
 def test_list_metrics_and_subjects_are_script_friendly(tmp_path: Path) -> None:
@@ -264,6 +266,547 @@ def test_prometheus_http_startup_uses_policy_settings(
     assert result.exit_code == 0
     assert calls == [(str(snapshot), "/mission-metrics", 9200)]
     assert "Serving Prometheus metrics on 127.0.0.1:9200/mission-metrics" in result.stdout
+
+
+def test_otlp_export_disabled_policy_does_not_need_snapshot(tmp_path: Path) -> None:
+    config = _config_file(tmp_path / "config.json")
+    policy = tmp_path / "observability.prometheus.json"
+    runner.invoke(app, ["init-prometheus-policy", str(config), str(policy)])
+
+    result = runner.invoke(app, ["otlp-export", str(tmp_path / "missing.json"), str(policy)])
+
+    assert result.exit_code == 0
+    assert "disabled by observability policy" in result.stdout
+
+
+def test_otlp_export_dry_run_outputs_policy_filtered_json(tmp_path: Path) -> None:
+    snapshot = _snapshot(tmp_path / "metrics.json")
+    policy = tmp_path / "observability.prometheus.json"
+    policy.write_text(
+        json.dumps(
+            {
+                "schema": "nats_sinks.observability.policy.v1",
+                "enabled": True,
+                "namespace": "mission_ops",
+                "allowed_metrics": ["messages_fetched_total"],
+                "allowed_metric_patterns": [],
+                "denied_metrics": [],
+                "denied_metric_patterns": [],
+                "include_observations": False,
+                "include_legacy": False,
+                "subjects": [],
+                "otlp": {
+                    "enabled": True,
+                    "endpoint": "http://127.0.0.1:4318/v1/metrics",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["otlp-export", str(snapshot), str(policy), "--dry-run"])
+
+    assert result.exit_code == 0
+    assert "mission_ops_messages_fetched_total" in result.stdout
+    assert "oracle_duplicates_total" not in result.stdout
+
+
+def test_elastic_export_disabled_policy_does_not_need_snapshot(tmp_path: Path) -> None:
+    config = _config_file(tmp_path / "config.json")
+    policy = tmp_path / "observability.prometheus.json"
+    runner.invoke(app, ["init-prometheus-policy", str(config), str(policy)])
+
+    result = runner.invoke(app, ["elastic-export", str(tmp_path / "missing.json"), str(policy)])
+
+    assert result.exit_code == 0
+    assert "disabled by observability policy" in result.stdout
+
+
+def test_elastic_export_dry_run_outputs_profiled_otlp_json(tmp_path: Path) -> None:
+    snapshot = _snapshot(tmp_path / "metrics.json")
+    policy = tmp_path / "observability.prometheus.json"
+    policy.write_text(
+        json.dumps(
+            {
+                "schema": "nats_sinks.observability.policy.v1",
+                "enabled": True,
+                "namespace": "mission_ops",
+                "allowed_metrics": ["messages_fetched_total"],
+                "allowed_metric_patterns": [],
+                "denied_metrics": [],
+                "denied_metric_patterns": [],
+                "include_observations": False,
+                "include_legacy": False,
+                "subjects": [],
+                "elastic": {
+                    "enabled": True,
+                    "endpoint": "http://127.0.0.1:4318/v1/metrics",
+                    "data_stream_dataset": "nats_sinks.metrics",
+                    "data_stream_namespace": "default",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["elastic-export", str(snapshot), str(policy), "--dry-run"])
+
+    assert result.exit_code == 0
+    assert "mission_ops_messages_fetched_total" in result.stdout
+    assert "oracle_duplicates_total" not in result.stdout
+    assert "data_stream.dataset" in result.stdout
+    assert "nats-sinks.observability.elastic" in result.stdout
+
+
+def test_elastic_export_rejects_stale_snapshot_without_override(tmp_path: Path) -> None:
+    snapshot = tmp_path / "metrics.json"
+    snapshot.write_text(
+        json.dumps(
+            {
+                "schema": "nats_sinks.metrics.snapshot.v1",
+                "namespace": "mission_ops",
+                "generated_at_epoch_seconds": 1.0,
+                "counters": {"messages_fetched_total": 7},
+                "gauges": {},
+                "observations": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    policy = tmp_path / "observability.prometheus.json"
+    policy.write_text(
+        json.dumps(
+            {
+                "schema": "nats_sinks.observability.policy.v1",
+                "enabled": True,
+                "namespace": "mission_ops",
+                "allowed_metrics": ["messages_fetched_total"],
+                "allowed_metric_patterns": [],
+                "denied_metrics": [],
+                "denied_metric_patterns": [],
+                "include_observations": False,
+                "include_legacy": False,
+                "subjects": [],
+                "elastic": {
+                    "enabled": True,
+                    "endpoint": "http://127.0.0.1:4318/v1/metrics",
+                    "stale_after_seconds": 1,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["elastic-export", str(snapshot), str(policy), "--dry-run"])
+
+    assert result.exit_code == 3
+    assert "Metrics snapshot is stale" in result.stderr
+    assert "127.0.0.1" not in result.stderr
+
+
+def test_grafana_alloy_export_disabled_policy_does_not_need_snapshot(tmp_path: Path) -> None:
+    config = _config_file(tmp_path / "config.json")
+    policy = tmp_path / "observability.prometheus.json"
+    runner.invoke(app, ["init-prometheus-policy", str(config), str(policy)])
+
+    result = runner.invoke(
+        app,
+        ["grafana-alloy-export", str(tmp_path / "missing.json"), str(policy)],
+    )
+
+    assert result.exit_code == 0
+    assert "disabled by observability policy" in result.stdout
+
+
+def test_grafana_alloy_export_dry_run_outputs_profiled_otlp_json(tmp_path: Path) -> None:
+    snapshot = _snapshot(tmp_path / "metrics.json")
+    policy = tmp_path / "observability.prometheus.json"
+    policy.write_text(
+        json.dumps(
+            {
+                "schema": "nats_sinks.observability.policy.v1",
+                "enabled": True,
+                "namespace": "mission_ops",
+                "allowed_metrics": ["messages_fetched_total"],
+                "allowed_metric_patterns": [],
+                "denied_metrics": [],
+                "denied_metric_patterns": [],
+                "include_observations": False,
+                "include_legacy": False,
+                "subjects": [],
+                "grafana_alloy": {
+                    "enabled": True,
+                    "endpoint": "http://127.0.0.1:4318/v1/metrics",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["grafana-alloy-export", str(snapshot), str(policy), "--dry-run"])
+
+    assert result.exit_code == 0
+    assert "mission_ops_messages_fetched_total" in result.stdout
+    assert "oracle_duplicates_total" not in result.stdout
+    assert "grafana_alloy" in result.stdout
+    assert "nats-sinks.observability.grafana_alloy" in result.stdout
+
+
+def test_grafana_alloy_config_outputs_river_snippet(tmp_path: Path) -> None:
+    policy = tmp_path / "observability.prometheus.json"
+    policy.write_text(
+        json.dumps(
+            {
+                "schema": "nats_sinks.observability.policy.v1",
+                "enabled": True,
+                "namespace": "mission_ops",
+                "allowed_metrics": ["messages_fetched_total"],
+                "allowed_metric_patterns": [],
+                "denied_metrics": [],
+                "denied_metric_patterns": [],
+                "include_observations": False,
+                "include_legacy": False,
+                "subjects": [],
+                "grafana_alloy": {
+                    "enabled": True,
+                    "endpoint": "http://127.0.0.1:4318/v1/metrics",
+                    "upstream_auth_mode": "basic",
+                    "upstream_auth_username_env": "GRAFANA_CLOUD_OTLP_USERNAME",
+                    "upstream_auth_password_env": "GRAFANA_CLOUD_OTLP_API_KEY",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["grafana-alloy-config", str(policy)])
+
+    assert result.exit_code == 0
+    assert 'otelcol.receiver.otlp "nats_sinks"' in result.stdout
+    assert 'endpoint = "127.0.0.1:4318"' in result.stdout
+    assert 'endpoint = sys.env("GRAFANA_CLOUD_OTLP_ENDPOINT")' in result.stdout
+    assert 'password = sys.env("GRAFANA_CLOUD_OTLP_API_KEY")' in result.stdout
+
+
+def test_grafana_alloy_export_rejects_stale_snapshot_without_override(tmp_path: Path) -> None:
+    snapshot = tmp_path / "metrics.json"
+    snapshot.write_text(
+        json.dumps(
+            {
+                "schema": "nats_sinks.metrics.snapshot.v1",
+                "namespace": "mission_ops",
+                "generated_at_epoch_seconds": 1.0,
+                "counters": {"messages_fetched_total": 7},
+                "gauges": {},
+                "observations": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    policy = tmp_path / "observability.prometheus.json"
+    policy.write_text(
+        json.dumps(
+            {
+                "schema": "nats_sinks.observability.policy.v1",
+                "enabled": True,
+                "namespace": "mission_ops",
+                "allowed_metrics": ["messages_fetched_total"],
+                "allowed_metric_patterns": [],
+                "denied_metrics": [],
+                "denied_metric_patterns": [],
+                "include_observations": False,
+                "include_legacy": False,
+                "subjects": [],
+                "grafana_alloy": {
+                    "enabled": True,
+                    "endpoint": "http://127.0.0.1:4318/v1/metrics",
+                    "stale_after_seconds": 1,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["grafana-alloy-export", str(snapshot), str(policy), "--dry-run"])
+
+    assert result.exit_code == 3
+    assert "Metrics snapshot is stale" in result.stderr
+    assert "127.0.0.1" not in result.stderr
+
+
+def test_splunk_hec_export_disabled_policy_does_not_need_snapshot(tmp_path: Path) -> None:
+    config = _config_file(tmp_path / "config.json")
+    policy = tmp_path / "observability.prometheus.json"
+    runner.invoke(app, ["init-prometheus-policy", str(config), str(policy)])
+
+    result = runner.invoke(app, ["splunk-hec-export", str(tmp_path / "missing.json"), str(policy)])
+
+    assert result.exit_code == 0
+    assert "disabled by observability policy" in result.stdout
+
+
+def test_splunk_hec_export_dry_run_outputs_hec_metric_event(tmp_path: Path) -> None:
+    snapshot = _snapshot(tmp_path / "metrics.json")
+    policy = tmp_path / "observability.prometheus.json"
+    policy.write_text(
+        json.dumps(
+            {
+                "schema": "nats_sinks.observability.policy.v1",
+                "enabled": True,
+                "namespace": "mission_ops",
+                "allowed_metrics": ["messages_fetched_total"],
+                "allowed_metric_patterns": [],
+                "denied_metrics": [],
+                "denied_metric_patterns": [],
+                "include_observations": False,
+                "include_legacy": False,
+                "subjects": [],
+                "splunk_hec": {
+                    "enabled": True,
+                    "endpoint": "https://splunk-hec.example.test/services/collector/event",
+                    "token_env": "SPLUNK_HEC_TOKEN",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["splunk-hec-export", str(snapshot), str(policy), "--dry-run"])
+
+    assert result.exit_code == 0
+    assert '"event":"metric"' in result.stdout
+    assert "metric_name:mission_ops_messages_fetched_total" in result.stdout
+    assert "oracle_duplicates_total" not in result.stdout
+    assert "splunk-hec.example.test" not in result.stdout
+    assert "SPLUNK_HEC_TOKEN" not in result.stdout
+
+
+def test_splunk_hec_export_rejects_stale_snapshot_without_override(tmp_path: Path) -> None:
+    snapshot = tmp_path / "metrics.json"
+    snapshot.write_text(
+        json.dumps(
+            {
+                "schema": "nats_sinks.metrics.snapshot.v1",
+                "namespace": "mission_ops",
+                "generated_at_epoch_seconds": 1.0,
+                "counters": {"messages_fetched_total": 7},
+                "gauges": {},
+                "observations": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    policy = tmp_path / "observability.prometheus.json"
+    policy.write_text(
+        json.dumps(
+            {
+                "schema": "nats_sinks.observability.policy.v1",
+                "enabled": True,
+                "namespace": "mission_ops",
+                "allowed_metrics": ["messages_fetched_total"],
+                "allowed_metric_patterns": [],
+                "denied_metrics": [],
+                "denied_metric_patterns": [],
+                "include_observations": False,
+                "include_legacy": False,
+                "subjects": [],
+                "splunk_hec": {
+                    "enabled": True,
+                    "endpoint": "https://splunk-hec.example.test/services/collector/event",
+                    "token_env": "SPLUNK_HEC_TOKEN",
+                    "stale_after_seconds": 1,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["splunk-hec-export", str(snapshot), str(policy), "--dry-run"])
+
+    assert result.exit_code == 3
+    assert "Metrics snapshot is stale" in result.stderr
+    assert "splunk-hec.example.test" not in result.stderr
+
+
+def test_statsd_disabled_policy_does_not_need_snapshot(tmp_path: Path) -> None:
+    config = _config_file(tmp_path / "config.json")
+    policy = tmp_path / "observability.prometheus.json"
+    runner.invoke(app, ["init-prometheus-policy", str(config), str(policy)])
+
+    result = runner.invoke(app, ["statsd-export", str(tmp_path / "missing.json"), str(policy)])
+
+    assert result.exit_code == 0
+    assert "disabled by observability policy" in result.stdout
+
+
+def test_statsd_export_dry_run_outputs_allowed_lines(tmp_path: Path) -> None:
+    snapshot = _snapshot(tmp_path / "metrics.json")
+    policy = tmp_path / "observability.prometheus.json"
+    policy.write_text(
+        json.dumps(
+            {
+                "schema": "nats_sinks.observability.policy.v1",
+                "enabled": True,
+                "namespace": "mission_ops",
+                "allowed_metrics": ["messages_fetched_total"],
+                "allowed_metric_patterns": [],
+                "denied_metrics": [],
+                "denied_metric_patterns": [],
+                "include_observations": False,
+                "include_legacy": False,
+                "subjects": [],
+                "statsd": {
+                    "enabled": True,
+                    "transport": "udp",
+                    "host": "127.0.0.1",
+                    "port": 8125,
+                    "metric_prefix": "mission.ops",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["statsd-export", str(snapshot), str(policy), "--dry-run"])
+
+    assert result.exit_code == 0
+    assert "mission.ops.messages_fetched_total:7|g" in result.stdout
+    assert "oracle_duplicates_total" not in result.stdout
+
+
+def test_statsd_export_rejects_stale_snapshot_without_override(tmp_path: Path) -> None:
+    snapshot = tmp_path / "metrics.json"
+    snapshot.write_text(
+        json.dumps(
+            {
+                "schema": "nats_sinks.metrics.snapshot.v1",
+                "namespace": "mission_ops",
+                "generated_at_epoch_seconds": 1.0,
+                "counters": {"messages_fetched_total": 7},
+                "gauges": {},
+                "observations": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    policy = tmp_path / "observability.prometheus.json"
+    policy.write_text(
+        json.dumps(
+            {
+                "schema": "nats_sinks.observability.policy.v1",
+                "enabled": True,
+                "namespace": "mission_ops",
+                "allowed_metrics": ["messages_fetched_total"],
+                "allowed_metric_patterns": [],
+                "denied_metrics": [],
+                "denied_metric_patterns": [],
+                "include_observations": False,
+                "include_legacy": False,
+                "subjects": [],
+                "statsd": {
+                    "enabled": True,
+                    "stale_after_seconds": 1,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["statsd-export", str(snapshot), str(policy), "--dry-run"])
+
+    assert result.exit_code == 3
+    assert "Metrics snapshot is stale" in result.stderr
+
+
+def test_syslog_disabled_policy_does_not_need_snapshot(tmp_path: Path) -> None:
+    policy = tmp_path / "observability.prometheus.json"
+    policy.write_text(ObservabilityPolicy().model_dump_json(by_alias=True), encoding="utf-8")
+
+    result = runner.invoke(app, ["syslog-export", str(tmp_path / "missing.json"), str(policy)])
+
+    assert result.exit_code == 0
+    assert "Syslog export disabled by observability policy" in result.stdout
+
+
+def test_syslog_export_dry_run_outputs_allowed_messages(tmp_path: Path) -> None:
+    snapshot = _snapshot(tmp_path / "metrics.json")
+    policy = tmp_path / "observability.prometheus.json"
+    policy.write_text(
+        json.dumps(
+            {
+                "schema": "nats_sinks.observability.policy.v1",
+                "enabled": True,
+                "namespace": "mission_ops",
+                "allowed_metrics": ["messages_fetched_total"],
+                "allowed_metric_patterns": [],
+                "denied_metrics": [],
+                "denied_metric_patterns": [],
+                "include_observations": False,
+                "include_legacy": False,
+                "subjects": [],
+                "syslog": {
+                    "enabled": True,
+                    "transport": "udp",
+                    "host": "127.0.0.1",
+                    "port": 514,
+                    "facility": "local0",
+                    "severity": "info",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["syslog-export", str(snapshot), str(policy), "--dry-run"])
+
+    assert result.exit_code == 0
+    assert 'metric="messages_fetched_total"' in result.stdout
+    assert 'profile="syslog"' in result.stdout
+    assert "oracle_duplicates_total" not in result.stdout
+
+
+def test_syslog_export_rejects_stale_snapshot_without_override(tmp_path: Path) -> None:
+    snapshot = tmp_path / "metrics.json"
+    snapshot.write_text(
+        json.dumps(
+            {
+                "schema": "nats_sinks.metrics.snapshot.v1",
+                "namespace": "mission_ops",
+                "generated_at_epoch_seconds": 1.0,
+                "counters": {"messages_fetched_total": 7},
+                "gauges": {},
+                "observations": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    policy = tmp_path / "observability.prometheus.json"
+    policy.write_text(
+        json.dumps(
+            {
+                "schema": "nats_sinks.observability.policy.v1",
+                "enabled": True,
+                "namespace": "mission_ops",
+                "allowed_metrics": ["messages_fetched_total"],
+                "allowed_metric_patterns": [],
+                "denied_metrics": [],
+                "denied_metric_patterns": [],
+                "include_observations": False,
+                "include_legacy": False,
+                "subjects": [],
+                "syslog": {
+                    "enabled": True,
+                    "stale_after_seconds": 1,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["syslog-export", str(snapshot), str(policy), "--dry-run"])
+
+    assert result.exit_code == 3
+    assert "Metrics snapshot is stale" in result.stderr
 
 
 def test_nats_monitoring_poll_dry_run_outputs_sanitized_snapshot(

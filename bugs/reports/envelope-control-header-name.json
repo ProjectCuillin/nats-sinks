@@ -1,0 +1,26 @@
+{
+  "id": "envelope-control-header-name",
+  "title": "[Bug]: NatsEnvelope preserves control characters in header names",
+  "area": "Core runtime and delivery semantics",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": ["envelope", "metadata", "input-validation", "bug-hunt"],
+  "summary": "NatsEnvelope header normalization currently allows header names containing ASCII control characters.",
+  "observed": "Creating an envelope with a header key containing a control character preserves that key in envelope.headers.",
+  "expected": "Malformed header names containing control characters should be discarded at the envelope boundary.",
+  "reproduction": "Create NatsEnvelope(headers={'Bad\\u0000Header': 'value'}) and observe that the malformed key remains.",
+  "failing_test": "Add a unit test that verifies control-character-bearing header names are removed from normalized envelope headers.",
+  "impact": "Control characters in persisted header metadata can affect logs, terminal output, and downstream inspection tools.",
+  "delivery_semantics": "No ACK behavior changes. The fix only normalizes malformed metadata.",
+  "security": "The fix must avoid echoing unsafe header names or values in logs.",
+  "acceptance": [
+    "Header names containing ASCII control characters are omitted from envelope.headers.",
+    "Header values are not logged during normalization.",
+    "Valid headers continue to be preserved.",
+    "Focused envelope regression tests pass."
+  ],
+  "tests": "Run focused envelope tests and full validation.",
+  "documentation": "Update CHANGELOG.md and test report.",
+  "closeout": "Mark completed after merge with sanitized evidence."
+}

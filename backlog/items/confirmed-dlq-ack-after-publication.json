@@ -1,0 +1,27 @@
+{
+  "id": "confirmed-dlq-ack-after-publication",
+  "title": "[Feature]: Evaluate and add optional confirmed ACK or TERM after successful DLQ publication",
+  "area": "Core runtime and delivery semantics",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["nats", "testing", "observability"],
+  "problem": "Permanent failures are safe only when the original message is acknowledged or terminally acknowledged after the DLQ record has been durably published. The project now supports an optional AckTerm policy after DLQ publication, but it does not yet provide a confirmed acknowledgement path for either normal ACK after DLQ success or any terminal acknowledgement variant that the client can safely confirm.",
+  "proposal": "Design and implement a bounded, disabled-by-default confirmation path for the permanent-failure DLQ branch. The feature should confirm the post-DLQ acknowledgement where the NATS client supports confirmation, clearly document ordinary terminal acknowledgement limitations where confirmation is not available, and preserve the rule that DLQ publication success must happen before the original message is ACKed or terminated.",
+  "users": "Operators who need strong DLQ custody evidence, maintainers improving ACK behavior consistency, and teams that monitor permanent-failure handling through metrics or audit trails.",
+  "delivery_semantics": "The original message must never be ACKed, confirmed, or terminally acknowledged before DLQ publication succeeds. If DLQ publication succeeds but confirmation of the original message acknowledgement fails, redelivery may occur and DLQ idempotency must handle duplicates. If DLQ publication fails, the original message remains unacknowledged.",
+  "security": "DLQ acknowledgement confirmation logs and metrics must not expose payloads, sensitive headers, credentials, or private infrastructure values. Misconfiguration must fail closed because terminal acknowledgement paths can stop redelivery.",
+  "acceptance": [
+    "The feature is optional and disabled by default.",
+    "Confirmation is attempted only after successful DLQ publication.",
+    "DLQ publish failure does not ACK, confirm, or terminate the original message.",
+    "The implementation clearly distinguishes normal ACK confirmation from terminal acknowledgement behavior supported by the client.",
+    "Tests cover DLQ success, DLQ publish failure, confirmation timeout, confirmation failure after DLQ success, and disabled default behavior.",
+    "Documentation explains duplicate DLQ records and original-message redelivery implications."
+  ],
+  "tests": "Add mocked runner tests for permanent failure with DLQ success, DLQ failure, post-DLQ confirmation success, timeout, and failure. Include metrics assertions and run scripts/check.sh.",
+  "documentation": "Update dead-letter queue, commit-then-acknowledge, acknowledgement confirmation, metrics, operations, roadmap, and changelog documentation.",
+  "closeout": "Close after the release containing the confirmed DLQ acknowledgement behavior is published. Include release tag, tests, docs, and limitations.",
+  "relationships": {
+    "related": ["#27", "backlog:optional-ackterm-after-dlq-success"]
+  }
+}

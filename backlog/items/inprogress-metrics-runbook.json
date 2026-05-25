@@ -1,0 +1,26 @@
+{
+  "id": "inprogress-metrics-runbook",
+  "title": "[Feature]: Add InProgress metrics and operator runbook",
+  "area": "Metrics and observability",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["nats", "observability", "documentation", "testing"],
+  "problem": "If InProgress heartbeats are added, operators need to see when they are being sent, whether they fail, and whether they indicate healthy long-running work or a destination that is too slow. Without explicit metrics and runbook guidance, progress signals could hide saturation or be mistaken for successful processing.",
+  "proposal": "Add a low-cardinality InProgress metrics set and operator runbook. Suggested metrics include progress attempts, successes, failures, maximum heartbeat count reached, active heartbeat batches, and elapsed seconds spent sending progress signals. The runbook should explain safe alerting, how to distinguish slow healthy writes from stuck writes, and why InProgress does not replace ACK, NAK, Term, DLQ, or idempotency.",
+  "users": "Operators monitoring long-running sink writes, developers reading metrics snapshots through nats-sink-metrics, and observability maintainers building future exporters.",
+  "delivery_semantics": "Metrics must observe progress signals without changing final acknowledgement behavior. A progress signal means work is ongoing; it must not be counted as a write, ACK, DLQ, or success event.",
+  "security": "Metric names and examples must not include payloads, credentials, message IDs, private server locations, or sensitive subject names. Prometheus sharing must remain disabled by default and controlled by explicit observability allow lists.",
+  "acceptance": [
+    "Metric names are stable, documented, and readable through nats-sink-metrics.",
+    "Metrics distinguish attempts, successes, failures, bounded-count exits, and active heartbeat batches.",
+    "The runbook explains when InProgress indicates healthy long work versus risky slowness.",
+    "Prometheus, shell, and table examples show safe non-sensitive output.",
+    "Tests cover metric registration, snapshot output, metrics CLI rendering, and no payload exposure."
+  ],
+  "tests": "Add unit tests for metric registration, JsonFileMetrics snapshot output, nats-sink-metrics rendering, Prometheus text output, and documentation examples where practical. Run scripts/check.sh.",
+  "documentation": "Update metrics, observability, in-progress evaluation, operations, roadmap, and changelog documentation.",
+  "closeout": "Close after the release containing InProgress metrics and the operator runbook is published. Include release tag, tests, docs, and limitations.",
+  "relationships": {
+    "related": ["#28", "backlog:inprogress-heartbeat-during-sink-writes"]
+  }
+}

@@ -10,6 +10,7 @@ from typing import Any, ClassVar
 import pytest
 
 from nats_sinks.cli import main as cli_main
+from nats_sinks.core import nats_options
 from nats_sinks.core.config import AppConfig
 from nats_sinks.core.consumer import envelope_from_nats_message
 from nats_sinks.core.errors import ValidationError
@@ -91,7 +92,7 @@ def test_nats_options_builds_tls_context_for_tls_seed_urls(
         captured["cafile"] = cafile
         return FakeContext()
 
-    monkeypatch.setattr(cli_main.ssl, "create_default_context", fake_create_default_context)
+    monkeypatch.setattr(nats_options.ssl, "create_default_context", fake_create_default_context)
     config = app_config({"urls": [_url("tls", "nats-a.example.invalid")]})
 
     options = cli_main._nats_options(config)

@@ -118,6 +118,28 @@ def _load_encrypted_payload(value: bytes | str | Mapping[str, Any]) -> Mapping[s
     return envelope
 
 
+def is_encrypted_payload_envelope(value: bytes | str | Mapping[str, Any]) -> bool:
+    """Return whether a value is a nats-sinks encrypted payload envelope.
+
+    Policy checks use this helper to verify that a message body has already
+    passed through core payload encryption before it reaches a sink. The helper
+    intentionally returns `False` for malformed input rather than exposing
+    parser errors or payload content in policy messages.
+    """
+
+    try:
+        envelope = _load_encrypted_payload(value)
+    except SerializationError:
+        return False
+    return (
+        envelope.get("schema") == ENCRYPTED_PAYLOAD_SCHEMA
+        and envelope.get("version") == ENCRYPTED_PAYLOAD_VERSION
+        and isinstance(envelope.get("algorithm"), str)
+        and isinstance(envelope.get("key_id"), str)
+        and isinstance(envelope.get("ciphertext"), str)
+    )
+
+
 class PayloadTransformer(Protocol):
     """Small runtime protocol for objects that transform envelope payloads.
 
@@ -243,6 +265,59 @@ class PayloadEncryptor:
         if expected_digest is not None and expected_digest != hashlib.sha256(plaintext).hexdigest():
             raise SerializationError("encrypted payload plaintext digest check failed")
         return plaintext
+
+
+class PayloadKeyRegistry:
+    """Decrypt encrypted payload envelopes during key-rotation windows.
+
+    The runtime encryptor writes a non-secret `key_id` into every encrypted
+    payload envelope.  Operators can keep old and new decryption keys available
+    to offline verification, replay, migration, or incident-response tooling by
+    registering one `EncryptionConfig` per key identifier.  The registry never
+    changes the encrypted envelope shape and it is not part of ACK decisions.
+
+    Key material is resolved by the normal `EncryptionConfig` path, so callers
+    can use direct test keys, environment variables populated by a deployment
+    platform, or values fetched from a secret manager by their own bootstrap
+    code.  No cloud-provider SDK is imported here; that keeps nats-sinks small
+    and avoids turning every installation into every secret-manager client.
+    """
+
+    def __init__(self, configs: Sequence[EncryptionConfig]) -> None:
+        if not configs:
+            raise ConfigurationError("payload key registry requires at least one key config")
+
+        encryptors: dict[str, PayloadEncryptor] = {}
+        for config in configs:
+            key_id = config.key_id
+            if key_id in encryptors:
+                raise ConfigurationError(f"duplicate payload encryption key_id: {key_id}")
+            encryptors[key_id] = PayloadEncryptor(config)
+        self._encryptors = encryptors
+
+    @property
+    def key_ids(self) -> tuple[str, ...]:
+        """Return registered non-secret key identifiers in deterministic order."""
+
+        return tuple(sorted(self._encryptors))
+
+    def decrypt_payload(self, value: bytes | str | Mapping[str, Any]) -> bytes:
+        """Decrypt an encrypted payload by selecting the matching `key_id`.
+
+        Unknown or malformed key identifiers fail closed with a framework
+        serialization error.  Error messages intentionally mention only the
+        key identifier contract, never key material, environment variables, or
+        backend secret-store locations.
+        """
+
+        encrypted = _load_encrypted_payload(value)
+        key_id = encrypted.get("key_id")
+        if not isinstance(key_id, str) or not key_id:
+            raise SerializationError("encrypted payload key_id is missing or invalid")
+        encryptor = self._encryptors.get(key_id)
+        if encryptor is None:
+            raise SerializationError("encrypted payload key_id is not registered")
+        return encryptor.decrypt_payload({ENCRYPTED_PAYLOAD_KEY: encrypted})
 
 
 class SubjectPayloadEncryptor:

@@ -1,0 +1,25 @@
+{
+  "id": "pr-merge-comment-helper",
+  "title": "[Feature]: Require a sanitized test-evidence comment before local PR merges",
+  "area": "CI and automation",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": ["release", "completed"],
+  "problem": "The local branch workflow can merge pull requests through the GitHub CLI without leaving a short human-readable comment that records the local test evidence used by the maintainer. Silent merges make release review harder because maintainers must reconstruct validation context from chat history or terminal output.",
+  "proposal": "Add a local merge helper that validates and posts a sanitized pull request comment containing test evidence before running gh pr merge. The helper should reject empty comments, require a test-evidence heading by default, validate public text against the repository leak checks, refuse closed or draft pull requests, support dry-run diagnostics, and provide merge, squash, and rebase methods.",
+  "users": "Maintainers, release engineers, reviewers, and future auditors who need a reliable public trace of what was tested before a pull request was merged into a release or feature branch.",
+  "delivery_semantics": "This workflow automation does not change runtime NATS delivery semantics, sink writes, DLQ handling, ACK behavior, encryption, routing, or package behavior. It only strengthens GitHub pull request evidence before merges.",
+  "security": "The helper must not allow secrets, credentials, private endpoints, IP literals, certificates, payload dumps, local wallet paths, or token values in the merge comment. It should use the existing public issue text validator and fixed GitHub CLI argument lists.",
+  "acceptance": [
+    "A local helper posts a sanitized pull request comment before merging.",
+    "The helper refuses empty comments and comments without a test-evidence heading.",
+    "The helper refuses draft or non-open pull requests by default.",
+    "The helper supports dry-run diagnostics without mutating GitHub state.",
+    "The helper supports merge, squash, and rebase merge methods.",
+    "Unit tests prove comment-before-merge ordering and validation failures.",
+    "ROBOTS.md, AGENTS.md, branch workflow documentation, and CHANGELOG.md describe the rule."
+  ],
+  "tests": "Run python -m pytest tests/unit/test_pr_merge_comment.py -q and scripts/check.sh.",
+  "documentation": "Update ROBOTS.md, AGENTS.md, docs/branch-workflow.md, docs/backlog-management.md, docs/test-report.md, and CHANGELOG.md.",
+  "closeout": "Close after the release containing the helper has been published. Include implementation PR, tests, documentation updates, and sanitized close-out evidence."
+}

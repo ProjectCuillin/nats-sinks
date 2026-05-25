@@ -93,3 +93,10 @@ python scripts/nats-live-probe.py \
   --ca-file .local/nats-live/ca.crt \
   --subject example.test.subject
 ```
+
+For credentials-file, NKEY seed-file, and TLS client certificate deployments,
+use the JSON configuration examples in
+[NATS Connections And Authentication](https://nats-sinks.readthedocs.io/en/latest/nats-connections/)
+and the gated integration test documented in
+[Testing](https://nats-sinks.readthedocs.io/en/latest/testing/). Keep identity
+files under ignored local directories or runtime secret mounts.

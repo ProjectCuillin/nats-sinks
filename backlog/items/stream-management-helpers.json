@@ -3,7 +3,7 @@
   "title": "[Feature]: Add optional JetStream stream management helpers",
   "area": "Operations and deployment",
   "priority": "P4 - research or design needed",
-  "target_release": "unscheduled",
+  "target_release": "v0.4.1",
   "labels": ["nats", "deployment"],
   "problem": "nats-sinks focuses on consuming from existing streams, but operators often need guidance or helper commands for stream retention, discard policy, storage type, replicas, and duplicate-window settings. Adding helpers can be useful, but stream administration requires broader permissions and should not be mixed into the runtime worker by default.",
   "proposal": "Design optional stream management helpers or documentation that help users validate or prepare streams for sink workloads. Administrative helpers should be separate from the sink worker, require explicit use, and explain required permissions. Documentation should describe retention, discard, storage, replicas, and duplicate-window considerations.",

@@ -1,0 +1,28 @@
+{
+  "id": "oracle-mysql-dotted-column-mapping",
+  "title": "[Bug]: Oracle MySQL SQL builder accepts table-qualified column mappings",
+  "area": "Oracle MySQL sink",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": ["mysql", "hardening", "testing"],
+  "summary": "The Oracle MySQL SQL builder accepted dotted identifiers in column mapping values.",
+  "observed": "A column mapping could use a schema-qualified or table-qualified shape instead of a single column name.",
+  "expected": "Column mappings must be single Oracle MySQL column identifiers.",
+  "reproduction": "Run the focused Oracle MySQL hardening regression test for dotted column mappings.",
+  "failing_test": "tests/unit/test_bug_hunt_mysql_sink_hardening.py::test_mysql_sql_rejects_dotted_column_mapping",
+  "impact": "Over-qualified column names make generated write SQL harder to reason about and are not part of the supported mapping contract.",
+  "delivery_semantics": "The fix rejects invalid SQL generation before runtime delivery work starts.",
+  "security": "Keeping table identifiers and column identifiers distinct reduces injection and review risk.",
+  "acceptance": [
+    "Oracle MySQL column mappings reject dotted identifiers.",
+    "Table names continue to support table and database.table forms.",
+    "The focused regression test passes."
+  ],
+  "tests": "Run the focused Oracle MySQL hardening regression test and the Oracle MySQL SQL tests.",
+  "documentation": "Document that column mappings are single-column identifiers.",
+  "closeout": "Close only after the release containing the SQL validation fix is published.",
+  "relationships": {
+    "related": ["#101"]
+  }
+}

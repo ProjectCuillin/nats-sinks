@@ -1,0 +1,27 @@
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "oracle-mysql-orders-sink",
+    "subject": "orders.*"
+  },
+  "sink": {
+    "type": "mysql",
+    "host": "127.0.0.1",
+    "port": 3306,
+    "database": "nats_sinks",
+    "user": "app_user",
+    "password_env": "ORACLE_MYSQL_PASSWORD",
+    "table": "NATS_SINK_EVENTS",
+    "mode": "upsert",
+    "upsert_update_columns": [],
+    "auto_create": true,
+    "payload_mode": "json_or_envelope",
+    "table_routes": [
+      {
+        "subject": "orders.priority.*",
+        "table": "NATS_SINK_PRIORITY_EVENTS"
+      }
+    ]
+  }
+}

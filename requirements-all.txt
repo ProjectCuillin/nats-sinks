@@ -5,4 +5,5 @@
 -r requirements.txt
 
 cryptography>=42,<49
+mysql-connector-python>=9,<10
 oracledb>=2.3,<5

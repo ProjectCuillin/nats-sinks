@@ -72,3 +72,46 @@ def validate_subject_pattern(pattern: object) -> str:
         if any(character.isspace() for character in token):
             raise ConfigurationError(f"invalid NATS subject pattern {pattern!r}")
     return pattern
+
+
+def subject_pattern_is_subset(candidate: object, allowed: object) -> bool:
+    """Return whether every subject matched by `candidate` is allowed.
+
+    This helper intentionally implements a small conservative containment check
+    for the NATS wildcard grammar accepted by `validate_subject_pattern`.
+    It is used at configuration boundaries where widening a subject filter
+    would be more dangerous than rejecting a valid but hard-to-prove pattern.
+    """
+
+    try:
+        candidate_pattern = validate_subject_pattern(candidate)
+        allowed_pattern = validate_subject_pattern(allowed)
+    except ConfigurationError:
+        return False
+
+    candidate_tokens = candidate_pattern.split(".")
+    allowed_tokens = allowed_pattern.split(".")
+
+    is_subset = True
+    allowed_tail_matched = False
+    for index, candidate_token in enumerate(candidate_tokens):
+        if index >= len(allowed_tokens):
+            is_subset = False
+            break
+        allowed_token = allowed_tokens[index]
+        if allowed_token == TAIL_WILDCARD:
+            allowed_tail_matched = True
+            break
+        if candidate_token == TAIL_WILDCARD:
+            is_subset = allowed_token == TAIL_WILDCARD
+            break
+        if allowed_token == SINGLE_TOKEN_WILDCARD:
+            continue
+        if candidate_token == SINGLE_TOKEN_WILDCARD:
+            is_subset = False
+            break
+        if candidate_token != allowed_token:
+            is_subset = False
+            break
+
+    return is_subset and (allowed_tail_matched or len(candidate_tokens) == len(allowed_tokens))

@@ -60,6 +60,7 @@ PEM_BLOCK_RE = re.compile(r"-----BEGIN [A-Z0-9 ]+-----")
 AREAS = {
     "Core runtime and delivery semantics",
     "Oracle sink",
+    "Oracle MySQL sink",
     "File sink",
     "Future sink",
     "CLI",
@@ -107,6 +108,7 @@ KNOWN_LABELS = {
     "sink-http": ("c2dfff", "HTTP-specific sink work."),
     "sink-s3": ("d4e8c0", "S3-specific sink work."),
     "sink-oci": ("f7d7bd", "Oracle Cloud Infrastructure Object Storage sink work."),
+    "sink-mysql": ("fef2c0", "Oracle MySQL and MySQL HeatWave sink work."),
     "observability": ("d4c5f9", "Metrics, snapshots, Prometheus, or observability connector work."),
     "nats": ("0e8a16", "NATS connection, JetStream, consumer, ACK, advisory, or stream behavior."),
     "release": ("fbca04", "Packaging, PyPI, GitHub Releases, SBOM, CI, or release automation."),
@@ -121,6 +123,10 @@ KNOWN_LABELS = {
     "completed": (
         "0e8a16",
         "Implementation is complete in development and waiting for release-gated closure.",
+    ),
+    "not-planned": (
+        "eeeeee",
+        "Not planned unless project scope, demand, ownership, or funding changes.",
     ),
     "release-unscheduled": ("ededed", "Work has not yet been assigned to a release tag."),
     "severity-critical": ("b60205", "Critical defect with severe reliability or security impact."),

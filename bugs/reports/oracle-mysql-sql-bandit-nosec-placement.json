@@ -1,0 +1,36 @@
+{
+  "id": "oracle-mysql-sql-bandit-nosec-placement",
+  "title": "[Bug]: Oracle MySQL SQL builder should keep Bandit suppressions on flagged lines",
+  "area": "Oracle MySQL sink",
+  "severity": "low",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": [
+    "mysql",
+    "security",
+    "testing",
+    "issue-101"
+  ],
+  "summary": "The Oracle MySQL SQL builder uses strict identifier allow-listing and bind values, but one reviewed dynamic SQL expression places the Bandit suppression on the assignment line instead of the f-string line Bandit reports.",
+  "observed": "The full repository check failed during the Bandit step with B608 on the Oracle MySQL upsert SQL builder even though the query values are bound and identifiers are validated.",
+  "expected": "Reviewed Bandit suppressions for validated dynamic SQL should be attached to the exact line Bandit evaluates so the security check remains deterministic.",
+  "reproduction": "Run the repository check script after adding the Oracle MySQL SQL builder.",
+  "failing_test": "Add a focused unit test that inspects the Oracle MySQL SQL builder source and requires the upsert f-string line to carry both the Ruff and Bandit review annotations.",
+  "impact": "The defect blocks release validation and could encourage ad hoc suppression changes if it is not documented and tested.",
+  "delivery_semantics": "The defect is limited to static-analysis annotation placement. It does not alter SQL values, sink writes, transaction commits, ACK ordering, retries, or DLQ behavior.",
+  "security": "The fix keeps the existing secure SQL construction model: table and column identifiers are allow-list validated, and row values remain driver bind parameters. The suppression documents a reviewed false positive rather than hiding unvalidated input.",
+  "acceptance": [
+    "The Oracle MySQL upsert SQL f-string line carries the reviewed Bandit B608 suppression.",
+    "A focused regression test protects the annotation placement.",
+    "Bandit passes as part of the full repository check.",
+    "The Oracle MySQL SQL unit tests continue to pass."
+  ],
+  "tests": "Run the focused Oracle MySQL SQL tests, the new annotation regression test, and the full repository check script.",
+  "documentation": "No user-facing documentation changes are required beyond changelog and test-report evidence.",
+  "closeout": "Mark completed after the annotation regression test and full repository check pass with sanitized evidence.",
+  "relationships": {
+    "related": [
+      "#101"
+    ]
+  }
+}

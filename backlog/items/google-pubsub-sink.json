@@ -1,0 +1,23 @@
+{
+  "id": "google-pubsub-sink",
+  "title": "[Feature]: Evaluate a Google Pub/Sub sink",
+  "area": "Future sink",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "security", "testing"],
+  "problem": "Oracle GoldenGate lists Google Pub/Sub as a target-only connection and Google Pub/Sub Kafka compatibility mode in the broader connectivity catalog. nats-sinks does not yet have a Google Pub/Sub sink.",
+  "proposal": "Research a Google Pub/Sub sink that publishes normalized event envelopes with bounded batches, ordering-key options, idempotency metadata, attribute allow-listing, retry controls, and explicit durable acceptance semantics. The work should also decide whether Pub/Sub Kafka compatibility belongs under the Kafka connector certification matrix.",
+  "users": "Google Cloud users delivering JetStream events into Pub/Sub-driven applications, Dataflow, Cloud Functions, or analytics pipelines.",
+  "delivery_semantics": "ACK-gated success requires successful publish futures for every required message. Partial publish failures must prevent ACK for affected events.",
+  "security": "Use workload identity or service-account credentials through secure runtime configuration. Topic names, attributes, payloads, ordering keys, and project identifiers must be redacted.",
+  "acceptance": [
+    "Research documents Pub/Sub publish confirmation and ordering behavior.",
+    "The design handles partial failures and duplicate delivery.",
+    "Configuration validates topic, project, batching, timeout, and ordering fields.",
+    "Unit tests use fakes and make no network calls.",
+    "Documentation covers IAM, quotas, and replay behavior."
+  ],
+  "tests": "Add mocked publisher tests for batching, publish future failures, attributes, ordering keys, and ACK ordering. Gate live tests.",
+  "documentation": "Add Google Pub/Sub sink documentation and update roadmap if implemented.",
+  "closeout": "Close after the research or implementation release is published."
+}

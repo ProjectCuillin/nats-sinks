@@ -3,10 +3,10 @@
   "title": "[Feature]: Evaluate bounded subject-aware observability policies",
   "area": "Metrics and observability",
   "priority": "P4 - research or design needed",
-  "target_release": "unscheduled",
-  "labels": ["observability", "security"],
+  "target_release": "v0.4.1",
+  "labels": ["observability", "security", "completed"],
   "problem": "The current observability policy avoids exporting subjects and other high-cardinality metadata by default. Some future operators may want per-subject insight, but subjects can reveal sensitive operational structure and can create cardinality problems. This needs a deliberate policy model rather than a simple switch.",
-  "proposal": "Evaluate a bounded subject-aware metrics policy that allows explicitly approved subject families, redaction or hashing options if appropriate, cardinality caps, and clear refusal behavior when a policy would export too much detail. The default must remain no subject sharing.",
+  "proposal": "Evaluate a bounded subject-aware metrics policy that allows explicitly approved subject families, redaction or hashing options if appropriate, cardinality caps, and clear refusal behavior when a policy would export too much detail. The evaluation should document the threat model, keep the default as no subject sharing, and split any implementation work into separate feature requests.",
   "users": "Operators who need controlled insight into subject-family behavior, security reviewers, and maintainers responsible for observability connector safety.",
   "delivery_semantics": "Subject-aware metrics must not affect delivery semantics. Metrics suppression or export failure cannot change ACK behavior, sink writes, retries, or DLQ decisions.",
   "security": "Subjects may be sensitive. The design must treat them as controlled metadata, avoid default export, enforce allow lists and bounds, and document the information-sharing risk.",
@@ -14,10 +14,10 @@
     "A threat model for subject-aware metrics is documented.",
     "Policy options are bounded and fail closed.",
     "Default observability behavior remains unchanged.",
-    "Tests cover allow, deny, cardinality cap, and invalid policy behavior if code is added.",
+    "Recommended implementation work is split into separate feature requests.",
     "Documentation explains when not to enable this feature."
   ],
-  "tests": "Add policy unit tests if implementation is included. For design-only work, run documentation checks and scripts/check.sh.",
-  "documentation": "Update docs/observability.md, docs/metrics.md, docs/security.md, ROBOTS.md, AGENTS.md, ROADMAP.md, and CHANGELOG.md.",
-  "closeout": "Close after release publication with either implementation or documented design decision. Include release tag, policy decision, tests, and limitations."
+  "tests": "Run backlog manifest validation, Markdown link checks, focused backlog and documentation tests, and scripts/check.sh after the evaluation documentation and follow-up backlog items are in place.",
+  "documentation": "Update docs/subject-aware-observability-evaluation.md, docs/observability.md, docs/metrics.md, docs/prometheus.md, docs/security.md, ROBOTS.md, AGENTS.md, ROADMAP.md, docs/roadmap.md, and CHANGELOG.md.",
+  "closeout": "Close with documented decision evidence after the evaluation findings are posted and follow-up feature requests are created."
 }

@@ -1,0 +1,27 @@
+{
+  "id": "confirmed-ack-after-sink-success",
+  "title": "[Feature]: Add optional confirmed ACK after durable sink success",
+  "area": "Core runtime and delivery semantics",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["nats", "testing", "observability"],
+  "problem": "The runner currently sends ordinary JetStream ACKs after durable sink success. That preserves commit-then-acknowledge semantics, but operators cannot ask the client to wait for server-side acknowledgement of the ACK itself. In controlled or mission-oriented deployments, confirmed ACK support would provide stronger evidence that the server accepted the acknowledgement while still preserving at-least-once delivery and idempotent duplicate handling.",
+  "proposal": "Add a disabled-by-default delivery option for confirmed ACK after durable sink success. The implementation should use the client acknowledgement confirmation method when available, fall back only through explicit configuration decisions, and keep ordinary ACK as the default. The option must have a bounded timeout, clear error classification, safe logs, and metrics. It must run only after sink.write_batch returns durable success or after the configured permanent-failure DLQ path has completed.",
+  "users": "Operators who need stronger ACK observability, maintainers improving NATS compatibility, and security reviewers who need clear evidence that ACK confirmation does not weaken the durable-write boundary.",
+  "delivery_semantics": "Confirmed ACK must never run before durable sink success. If durable commit succeeds but confirmed ACK times out or fails, the original message may redeliver and the sink must handle the duplicate through idempotency. The feature must not claim exactly-once delivery and must not convert ACK confirmation failure into silent loss.",
+  "security": "Logs and metrics for ACK confirmation failures must not include payloads, secret headers, connection strings, or sensitive subject details beyond existing safe operational context. The timeout must be bounded so a compromised or unavailable server cannot stall shutdown indefinitely.",
+  "acceptance": [
+    "Confirmed ACK is optional and disabled by default.",
+    "Confirmed ACK is executed only after durable sink success.",
+    "Timeouts are configurable, bounded, and validated.",
+    "Failure after durable success is logged safely and counted without claiming message loss.",
+    "Tests cover ordinary ACK default behavior, confirmed ACK success, timeout, failure after commit, and no confirmed ACK before sink success.",
+    "Documentation explains at-least-once redelivery implications and idempotency requirements."
+  ],
+  "tests": "Add mocked JetStream message tests for ACK ordering, confirmed ACK timeout, confirmed ACK failure after commit, disabled default behavior, and graceful shutdown behavior. Run scripts/check.sh and targeted commit-then-ACK contract tests.",
+  "documentation": "Update the acknowledgement confirmation documentation, configuration reference, operations guide, metrics guide, NATS feature gap analysis, roadmap, and changelog.",
+  "closeout": "Close after the release containing optional confirmed ACK support is published. Include release tag, tests, documentation, and limitations.",
+  "relationships": {
+    "related": ["#27"]
+  }
+}

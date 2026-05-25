@@ -12,8 +12,8 @@ where it will write.
 ## Minimal Configuration
 
 The minimal example uses the local file sink because it does not require a
-database or credentials. Oracle uses the same generic runtime sections and adds
-Oracle-specific fields inside the `sink` object.
+database or credentials. Oracle Database and Oracle MySQL use the same generic
+runtime sections and add destination-specific fields inside the `sink` object.
 
 ```json
 {
@@ -46,6 +46,7 @@ Oracle-specific fields inside the `sink` object.
     "token_env": "NATS_TOKEN",
     "tls_ca_file": "/etc/nats/certs/ca.crt",
     "tls_verify": true,
+    "no_echo": false,
     "allow_reconnect": true,
     "connect_timeout_seconds": 2,
     "reconnect_time_wait_seconds": 2,
@@ -54,6 +55,21 @@ Oracle-specific fields inside the `sink` object.
     "max_outstanding_pings": 2,
     "pending_size_bytes": 2097152,
     "drain_timeout_seconds": 30
+  },
+  "consumer_management": {
+    "mode": "create_if_missing",
+    "filter_subjects": [],
+    "deliver_policy": "all",
+    "replay_policy": "instant",
+    "ack_wait_seconds": null,
+    "max_deliver": null,
+    "backoff_seconds": null,
+    "max_ack_pending": null,
+    "max_waiting": null,
+    "headers_only": null,
+    "num_replicas": null,
+    "memory_storage": null,
+    "metadata": {}
   },
   "delivery": {
     "batch_size": 100,
@@ -74,7 +90,8 @@ Oracle-specific fields inside the `sink` object.
     "subject": "orders.dlq",
     "include_payload": true,
     "include_headers": true,
-    "include_error": true
+    "include_error": true,
+    "ack_term_after_publish": false
   },
   "logging": {
     "level": "INFO",
@@ -83,7 +100,20 @@ Oracle-specific fields inside the `sink` object.
   "metrics": {
     "enabled": false,
     "namespace": "nats_sinks",
-    "snapshot_file": null
+    "snapshot_file": null,
+    "event_freshness_enabled": true,
+    "event_stale_after_seconds": 300,
+    "event_future_skew_tolerance_seconds": 5
+  },
+  "advisories": {
+    "enabled": false,
+    "subjects": [
+      "$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES.*.*",
+      "$JS.EVENT.ADVISORY.CONSUMER.MSG_NAKED.*.*",
+      "$JS.EVENT.ADVISORY.CONSUMER.MSG_TERMINATED.*.*"
+    ],
+    "max_payload_bytes": 65536,
+    "log_events": false
   },
   "message_metadata": {
     "priority": {
@@ -107,6 +137,23 @@ Oracle-specific fields inside the `sink` object.
       }
     ]
   },
+  "message_authenticity": {
+    "enabled": false,
+    "unmatched_subject_action": "reject",
+    "signature_header": "Nats-Sinks-Authenticity-Signature",
+    "algorithm_header": "Nats-Sinks-Authenticity-Algorithm",
+    "key_id_header": "Nats-Sinks-Authenticity-Key-Id",
+    "rules": [
+      {
+        "subject": "orders.secure.>",
+        "enabled": true,
+        "algorithm": "hmac-sha256",
+        "key_id": "orders-producer-key-v1",
+        "key_b64_env": "NATS_SINKS_AUTHENTICITY_KEY_B64",
+        "signed_fields": ["subject", "message_id"]
+      }
+    ]
+  },
   "encryption": {
     "enabled": false,
     "algorithm": "aes-256-gcm",
@@ -122,6 +169,52 @@ Oracle-specific fields inside the `sink` object.
         "key_b64_env": "NATS_SINKS_SECURE_PAYLOAD_KEY_B64"
       }
     ]
+  },
+  "custody": {
+    "enabled": false,
+    "algorithm": "sha256",
+    "hash_payload": true,
+    "hash_metadata": true,
+    "include_previous_hash": false,
+    "previous_hash_header": "Nats-Sinks-Previous-Custody-Hash",
+    "key_id": null,
+    "max_hash_input_bytes": 16777216
+  },
+  "size_policy": {
+    "enabled": false,
+    "max_payload_bytes": 16777216,
+    "max_header_count": 128,
+    "max_header_name_bytes": 256,
+    "max_header_value_bytes": 8192,
+    "max_headers_bytes": 65536,
+    "max_label_count": 64,
+    "max_label_bytes": 128,
+    "max_labels_bytes": 4096,
+    "max_mission_metadata_bytes": 8192,
+    "max_standard_metadata_bytes": 262144,
+    "max_normalized_record_bytes": 20971520,
+    "max_batch_messages": 10000
+  },
+  "pre_sink_policy": {
+    "enabled": false,
+    "unmatched_subject_action": "reject",
+    "rules": [
+      {
+        "subject": "orders.secure.>",
+        "require_priority": true,
+        "require_classification": true,
+        "required_labels": ["orders"],
+        "require_mission_metadata": true,
+        "require_encrypted_payload": true,
+        "max_payload_bytes": 1048576,
+        "allowed_mission_metadata_keys": ["profile", "phase", "operation"]
+      }
+    ]
+  },
+  "plugins": {
+    "enabled": false,
+    "allowed_sinks": [],
+    "require_production_ready": true
   },
   "sink": {
     "type": "file",
@@ -156,13 +249,39 @@ The top-level sections are:
 | Section | Required | Purpose |
 | --- | --- | --- |
 | `nats` | yes | NATS server connection, JetStream stream, consumer, subject, authentication, and TLS settings. |
+| `consumer_management` | no | Optional durable pull-consumer creation, binding, and safe drift validation settings. |
 | `delivery` | no | Batching, ACK policy, retry, and temporary failure behavior. Defaults are safe for local and early production deployments. |
 | `dead_letter` | no | Optional DLQ publication for permanently invalid messages. |
 | `logging` | no | Standard Python logging level and payload logging switch. |
 | `metrics` | no | Metrics namespace, enablement flag, and optional local JSON snapshot path. |
+| `advisories` | no | Optional observation-only JetStream advisory subscription settings. Disabled by default and isolated from source-message ACK behavior. |
 | `message_metadata` | no | Optional priority, classification, and labels extraction defaults applied to every message before sink delivery. |
+| `message_authenticity` | no | Optional fail-closed message-level authenticity verification before payload encryption and sink delivery. Disabled by default. |
+| `custody` | no | Optional tamper-evident payload and metadata hashes computed by the core before sink delivery. Disabled by default. |
 | `encryption` | no | Optional core payload encryption before messages are passed to any sink. |
+| `size_policy` | no | Optional destination-neutral payload, header, metadata, label, record, and batch-size bounds evaluated before any sink write. Disabled by default. |
+| `pre_sink_policy` | no | Optional fail-closed validation gate evaluated after normalization and core payload transformation, but before any sink write. |
+| `plugins` | no | Optional allow-listed discovery for externally installed sink connectors. Disabled by default. Built-in Oracle, file, and spool sinks do not need this section. |
 | `sink` | yes | Destination-specific sink configuration. `sink.type` chooses the sink implementation. |
+
+The only supported `delivery.ack_policy` value is `after_sink_commit`, which
+means the runner ACKs only after durable sink success or after successful DLQ
+publication for permanent failures. `AckNext` is intentionally not planned for
+production sink processing because it combines acknowledgement and fetching.
+`AckTerm` is available only through the explicit
+`dead_letter.ack_term_after_publish` option and only after DLQ publication
+succeeds.
+
+Confirmed ACK, sometimes called `AckSync` or double ACK in client APIs, has
+been evaluated but is not yet a runtime configuration option. Any future option
+will be disabled by default and will run only after durable sink success. See
+[Acknowledgement Confirmation Evaluation](acknowledgement-confirmation.md) for
+the current design direction and limitations.
+
+JetStream `InProgress` handling has also been evaluated but is not yet a
+runtime configuration option. Any future option will be disabled by default,
+bounded, advisory only, and tied to verifiable consumer `AckWait` or `BackOff`
+timing. See [InProgress Evaluation](in-progress-evaluation.md).
 
 ```mermaid
 flowchart TD
@@ -198,8 +317,8 @@ classification, and labels without changing producer payloads.
 
 | Field | Required | Default | Valid values | Description |
 | --- | --- | --- | --- | --- |
-| `url` | no | `nats://localhost:4222` | URL using `nats`, `tls`, `ws`, or `wss`. | Single server URL passed to `nats-py` when `urls` is not set. Use `tls://` or TLS certificate fields for encrypted production connections. Unsupported schemes fail validation. |
-| `urls` | no | `[]` | Non-empty list of URLs using `nats`, `tls`, `ws`, or `wss`. | Optional seed server list for clustered deployments. When set, it is passed to `nats-py` as `servers` and takes precedence over `url`. If any seed URL uses `tls://`, the CLI builds a TLS context. |
+| `url` | no | `nats://localhost:4222` | URL using `nats`, `tls`, `ws`, or `wss`. | Single server URL passed to `nats-py` when `urls` is not set. Use `tls://` for encrypted TCP connections. Use `wss://` for approved WebSocket deployments and keep certificate verification enabled. `ws://` is intended only for local labs or explicitly accepted controlled networks. Unsupported schemes and credentials embedded in URLs fail validation. |
+| `urls` | no | `[]` | Non-empty list of URLs using `nats`, `tls`, `ws`, or `wss`. | Optional seed server list for clustered deployments. When set, it is passed to `nats-py` as `servers` and takes precedence over `url`. If any seed URL uses `tls://` or `wss://`, or if TLS certificate files are configured, the shared NATS option builder creates a TLS context. WebSocket seed lists must not mix `ws` or `wss` URLs with `nats` or `tls` URLs. |
 | `stream` | yes | none | Non-empty JetStream stream name. | Stream that owns the messages consumed by the sink. |
 | `consumer` | yes | none | Consumer/durable name accepted by NATS. | Durable consumer name when `durable` is true. It is also used in logging and metrics context. |
 | `subject` | yes | none | NATS subject or wildcard subject, for example `orders.*` or `orders.>`. | Subject used for pull subscription binding. It should be covered by the configured stream subjects. |
@@ -210,12 +329,15 @@ classification, and labels without changing producer payloads.
 | `password_env` | no | `null` | Environment variable name. | Environment variable that contains the NATS password. Mutually exclusive with `password`. |
 | `token` | no | `null` | Token string. | Direct NATS token. Use only for disposable local tests; prefer `token_env` for production. |
 | `token_env` | no | `null` | Environment variable name. | Environment variable that contains the NATS token. Mutually exclusive with `token`. |
-| `creds_file` | no | `null` | Local file path. | Path to a NATS credentials file consumed by `nats-py` as `user_credentials`. |
-| `nkey_seed_file` | no | `null` | Local file path. | Path to an NKEY seed file consumed by `nats-py` as `nkeys_seed`. |
-| `tls_ca_file` | no | `null` | Local file path. | CA certificate file used to trust a private or self-signed NATS server certificate. |
-| `tls_cert_file` | no | `null` | Local file path. | Optional client certificate file for mutual TLS transport. |
-| `tls_key_file` | no | `null` | Local file path. | Optional client private key file. Requires `tls_cert_file` when set. |
+| `creds_file` | no | `null` | Local file path without surrounding whitespace or control characters. | Path to a NATS credentials file consumed by `nats-py` as `user_credentials`. Use for credentials-file and decentralized JWT user workflows. The path is redacted in effective configuration output. |
+| `nkey_seed_file` | no | `null` | Local file path without surrounding whitespace or control characters. | Path to an NKEY seed file consumed by `nats-py` as `nkeys_seed`. Use for NKEY challenge authentication. The path is redacted in effective configuration output. |
+| `tls_ca_file` | no | `null` | Local file path without surrounding whitespace or control characters. | CA certificate file used to trust a private or self-signed NATS server certificate. The CA path is not treated as secret, but the file should still come from a trusted deployment source. |
+| `tls_cert_file` | no | `null` | Local file path without surrounding whitespace or control characters. | Optional client certificate file for mutual TLS transport. The path is redacted because it identifies the client. |
+| `tls_key_file` | no | `null` | Local file path without surrounding whitespace or control characters. | Optional client private key file. Requires `tls_cert_file` when set and is redacted in effective configuration output. |
 | `tls_verify` | no | `true` | `true` or `false`. | Enables certificate verification and hostname checking. Keep enabled in production. |
+| `websocket_headers` | no | `{}` | Object with HTTP header names and non-sensitive string values. | Optional WebSocket handshake headers for approved proxy routing hints. Values are bounded, control characters are rejected, protocol-owned headers are rejected, and sensitive header names such as `Authorization` must use `websocket_headers_env` instead. Only valid with `ws://` or `wss://` transport. |
+| `websocket_headers_env` | no | `{}` | Object with HTTP header names and environment variable names. | Optional WebSocket handshake headers whose values are read from environment variables at connection time. Use this for sensitive proxy or gateway material. The JSON config and redacted effective config show only redacted values, not resolved secrets. Only valid with `ws://` or `wss://` transport. |
+| `no_echo` | no | `false` | `true` or `false`. | Passes `no_echo` to `nats-py`, asking the NATS server not to echo messages published on this connection back to subscriptions on the same connection. Normal sink workers should usually leave this disabled because JetStream pull delivery and DLQ publication do not require same-connection echo suppression. |
 | `allow_reconnect` | no | `true` | `true` or `false`. | Enables `nats-py` automatic reconnect behavior after connection loss. Production deployments should normally keep this enabled. |
 | `connect_timeout_seconds` | no | `2` | Integer `1` to `300`. | Initial NATS connection timeout passed as `connect_timeout`. |
 | `reconnect_time_wait_seconds` | no | `2` | Integer `0` to `3600`. | Delay between reconnect attempts passed as `reconnect_time_wait`. |
@@ -233,8 +355,20 @@ Validation rules:
   source,
 - token authentication, username/password authentication, `creds_file`, and
   `nkey_seed_file` are mutually exclusive authentication modes,
+- identity and TLS file path fields are validated for empty values,
+  surrounding whitespace, and control characters; file existence is checked
+  later by `ssl` or `nats-py` when the live connection is opened so runtime
+  secret mounts remain supported,
 - `url` and every `urls` entry must use one of the supported NATS client
   schemes: `nats`, `tls`, `ws`, or `wss`,
+- WebSocket URL lists must be all WebSocket (`ws`/`wss`) or all non-WebSocket
+  (`nats`/`tls`); mixed transport lists fail validation before connection
+  setup,
+- WebSocket headers are allowed only with `ws://` or `wss://` and are validated
+  through bounded allow-list rules,
+- WebSocket URLs must not contain credentials; use `password_env`, `token_env`,
+  `creds_file`, `nkey_seed_file`, or approved header environment variables
+  instead,
 - `tls_key_file` requires `tls_cert_file`,
 - bcrypted NATS passwords are a server-side storage detail; the client still
   sends the clear-text password from `password` or `password_env`.
@@ -254,6 +388,13 @@ If an embedding application passes its own `nats-py` callbacks through
 `nats_options`, the runner wraps them so the application callback still runs
 after metrics have been recorded.
 
+Headers-only JetStream delivery is not yet a supported configuration switch in
+nats-sinks. The current runtime can process empty payload bytes, but it does
+not yet distinguish a producer-empty payload from a body omitted by a
+headers-only consumer. See
+[Headers-Only Delivery Evaluation](headers-only-delivery.md) for the design
+decision and follow-up backlog items.
+
 The `nats` section is also the source of truth for least-privilege NATS
 authorization planning. `nats.stream`, `nats.consumer`, `nats.subject`, and
 `dead_letter.subject` map directly to the permission placeholders described in
@@ -263,11 +404,160 @@ design: a worker can authenticate successfully and still be denied if the NATS
 server permission map does not allow the required JetStream API, inbox, ACK, or
 DLQ subjects.
 
+### `consumer_management`
+
+The `consumer_management` section controls how the runner prepares the durable
+JetStream pull consumer before fetching messages. This is startup behavior
+only. It does not change the commit-then-acknowledge rule and it does not give
+sinks access to NATS acknowledgement methods.
+
+The default mode is `create_if_missing`, which preserves the historical
+developer experience where a missing durable consumer can be created for the
+configured stream and subject. The important change is that this behavior is
+now explicit and the runner validates compatible existing consumers before it
+starts fetching. If an existing consumer has unsafe drift, startup fails closed
+with a readable configuration error.
+
+```mermaid
+sequenceDiagram
+    participant Runner as nats-sinks runner
+    participant JS as JetStream management API
+    participant Pull as Pull consumer
+    participant Sink as Sink
+
+    Runner->>JS: consumer_info(stream, durable)
+    alt missing and mode is create_if_missing or reconcile
+        Runner->>JS: add_consumer(expected durable pull config)
+    else missing and mode is bind_only
+        JS-->>Runner: ConfigurationError
+    else existing
+        Runner->>Runner: validate durable, filter, ACK policy, pull mode
+    end
+    Runner->>Pull: pull_subscribe(...)
+    Pull-->>Runner: messages
+    Runner->>Sink: write_batch(...)
+    Sink-->>Runner: durable success
+    Runner->>Pull: ACK last
+```
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `mode` | no | `create_if_missing` | `bind_only`, `create_if_missing`, or `reconcile`. | `bind_only` requires the durable consumer to exist and match the configured delivery contract. `create_if_missing` creates it when absent and validates it when present. `reconcile` creates it when absent and asks JetStream to update a compatible existing consumer to the configured values. |
+| `filter_subjects` | no | `[]` | List of up to `64` valid NATS subject filters. | Optional plural JetStream `FilterSubjects` list. When omitted, the runner uses `nats.subject` as the single `FilterSubject`. Each configured filter must be contained by `nats.subject` so a local configuration mistake cannot widen the worker's intended subject family. |
+| `deliver_policy` | no | `all` | `all`, `last`, `new`, or `last_per_subject`. | Desired consumer deliver policy for managed consumers. Sequence-based and time-based policies are intentionally not exposed yet because they require extra replay controls. |
+| `replay_policy` | no | `instant` | `instant` or `original`. | Desired replay policy. Most sink workers should use `instant`; `original` can slow replay to the original publish cadence. |
+| `ack_wait_seconds` | no | `null` | Number greater than `0` and at most `86400`, or `null`. | Optional server-side ACK wait expectation. When set, incompatible existing values fail startup. |
+| `max_deliver` | no | `null` | Integer `1` to `1000000`, or `null`. | Optional server-side maximum delivery count. Use with DLQ/advisory planning so poison messages do not cycle forever. |
+| `backoff_seconds` | no | `null` | List of positive numbers, each at most `604800`, or `null`. | Optional server-side JetStream `BackOff` sequence. When set, `max_deliver` is required, the list length must be less than or equal to `max_deliver`, and `ack_wait_seconds` must remain `null` because JetStream BackOff overrides AckWait. |
+| `max_ack_pending` | no | `null` | Integer `1` to `1000000`, or `null`. | Optional server-side outstanding ACK limit. This complements, but does not replace, `delivery.batch_size`. |
+| `max_waiting` | no | `null` | Integer `1` to `1000000`, or `null`. | Optional pull-request wait limit on the server-side consumer. |
+| `headers_only` | no | `null` | `true`, `false`, or `null`. | Optional JetStream headers-only delivery setting. The server-side consumer policy is supported here; payload-presence metadata and sink/DLQ certification for metadata-only workflows remain tracked separately. |
+| `num_replicas` | no | `null` | Integer `0` to `5`, or `null`. | Optional consumer-state replica count. `0` means inherit from the stream when sent to JetStream. `null` leaves the field unmanaged by nats-sinks. |
+| `memory_storage` | no | `null` | `true`, `false`, or `null`. | Optional JetStream `MemoryStorage` flag for consumer state. Use cautiously for durable sink workers because consumer state participates in redelivery behavior. |
+| `metadata` | no | `{}` | Object with up to `32` safe string keys and values. | Optional JetStream consumer metadata. Keys and values are bounded, values reject control characters, and secret-looking keys are rejected. Do not place credentials, payloads, private hostnames, or sensitive operational details in consumer metadata. |
+
+Examples:
+
+```json
+{
+  "consumer_management": {
+    "mode": "bind_only"
+  }
+}
+```
+
+Use `bind_only` when an operations team or infrastructure pipeline creates the
+stream and durable consumer before the sink worker starts. This is the
+preferred least-privilege production model because the runtime NATS account
+does not need consumer creation permissions.
+
+```json
+{
+  "consumer_management": {
+    "mode": "create_if_missing",
+    "max_deliver": 10,
+    "backoff_seconds": [5, 30, 300],
+    "max_ack_pending": 500
+  }
+}
+```
+
+Use `create_if_missing` for development environments, controlled test systems,
+or platform teams that intentionally allow the worker to create its own durable
+consumer. If a consumer already exists but has a different filter subject,
+non-explicit ACK policy, push `deliver_subject`, or configured delivery drift,
+startup fails before any message is fetched.
+
+The `backoff_seconds` list is a server-side redelivery schedule for ACK timeout
+redeliveries. It is separate from `delivery.retry_backoff_*`, which controls
+client-side delayed NAK behavior after a retryable sink failure. JetStream
+BackOff overrides `AckWait`, so the configuration rejects both fields together
+to keep the operational meaning clear.
+
+```json
+{
+  "nats": {
+    "subject": "orders.>"
+  },
+  "consumer_management": {
+    "filter_subjects": ["orders.created", "orders.updated"],
+    "max_deliver": 8,
+    "backoff_seconds": [2, 10, 60],
+    "num_replicas": 3,
+    "memory_storage": false,
+    "metadata": {
+      "component": "nats-sinks",
+      "purpose": "orders-durable-sink"
+    }
+  }
+}
+```
+
+Use `filter_subjects` when one durable pull consumer should receive several
+explicit source subject families from the same stream. Every filter must stay
+within `nats.subject`. For example, `orders.created` and `orders.updated` are
+allowed under `orders.>`, but `orders.>` is not allowed under
+`orders.created`. This conservative containment check avoids accidental access
+expansion at the sink-worker boundary.
+
+```json
+{
+  "consumer_management": {
+    "mode": "reconcile",
+    "deliver_policy": "all",
+    "replay_policy": "instant",
+    "max_ack_pending": 1000
+  }
+}
+```
+
+Use `reconcile` only with an account that is allowed to update consumer
+configuration. The runner first verifies that the existing durable consumer is
+compatible with pull-based, explicit-ACK sink processing, then submits the
+configured durable pull-consumer settings through JetStream. If JetStream
+rejects the update, startup fails and no source messages are processed.
+
+Permission guidance:
+
+- `bind_only` needs runtime pull and ACK permissions for the configured
+  consumer, but does not require consumer creation permissions.
+- `create_if_missing` and `reconcile` require JetStream consumer-management
+  permissions in addition to runtime pull and ACK permissions.
+- Use separate administrative and runtime NATS accounts when possible.
+- Never broaden runtime permissions just to avoid provisioning consumers in
+  infrastructure.
+
 ### `delivery`
 
 The `delivery` section controls how the core runner fetches, writes, retries,
 and ACKs messages. It is destination-neutral: Oracle, file, and future sinks all
 receive batches according to these settings.
+
+Current releases use pull consumers only. Push-consumer support has been
+evaluated for a future explicit runner mode, but it is not a configuration
+option yet because it needs separate manual-ACK, pending-limit, flow-control,
+heartbeat, shutdown, and certification guardrails. See
+[Push Consumer Evaluation](push-consumer-evaluation.md).
 
 | Field | Required | Default | Valid values | Description |
 | --- | --- | --- | --- | --- |
@@ -369,6 +659,7 @@ ACKed only after DLQ publication succeeds.
 | `include_payload` | no | `true` | `true` or `false`. | Includes the original message body in the DLQ payload. Disable when payload privacy is more important than DLQ replay convenience. |
 | `include_headers` | no | `true` | `true` or `false`. | Includes original message headers in the DLQ payload. Disable if headers may contain sensitive values. |
 | `include_error` | no | `true` | `true` or `false`. | Includes framework error type and message in the DLQ payload. |
+| `ack_term_after_publish` | no | `false` | `true` or `false`. | When true, sends JetStream `AckTerm` after DLQ publication succeeds instead of normal ACK. This is disabled by default, applies only to permanent failures with successful DLQ publication, and must not be used to signal successful sink writes. |
 
 ### `logging`
 
@@ -400,6 +691,9 @@ failure rates, so store it in an operator-controlled path.
 | `enabled` | no | `false` | `true` or `false`. | Enables metrics when a snapshot file is configured or a concrete recorder/exporter is supplied by deployment code. |
 | `namespace` | no | `nats_sinks` | Letters, digits, underscores, and colons. Must not start with a digit. | Prefix used by metrics integrations and documentation. Exporters should combine this namespace with emitted suffixes, for example `nats_sinks_messages_fetched_total`. |
 | `snapshot_file` | no | `null` | Local filesystem path without control characters. | Optional JSON snapshot file written by `nats-sink run` when metrics are enabled. The `nats-sink-metrics` CLI reads this file for table, JSON, JSONL, shell, names, and Prometheus text output. |
+| `event_freshness_enabled` | no | `true` | `true` or `false`. | Enables aggregate event freshness observations after sink durable success and before ACK. The metrics are observational only and never reject or ACK messages. |
+| `event_stale_after_seconds` | no | `300` | `null` or number from `0` to `31536000`. | Threshold used to increment stale-event counters at receive time and store time. Set to `null` to observe ages without counting stale events. |
+| `event_future_skew_tolerance_seconds` | no | `5` | Number from `0` to `86400`. | Allowed future timestamp skew before `event_creation_timestamp_future_total` is incremented. Positive skew is still observed in `event_source_clock_skew_seconds`. |
 
 Preferred metric suffixes are documented in
 [Metrics](metrics.md) and summarized in [Operations](operations.md#metrics).
@@ -407,14 +701,21 @@ The runner also emits a small set of legacy aliases so existing local
 dashboards can migrate gradually.
 
 External sharing is configured separately through an observability policy, not
-inside the sink runtime config. Use [Observability](observability.md) and
-[Prometheus Integration](prometheus.md) when you want to publish only approved
-metric names to node_exporter's textfile collector or to the optional native
-Prometheus HTTP endpoint. The default generated policy keeps all Prometheus
-sharing disabled. The same observability policy also controls the optional NATS
-server monitoring connector for selected `/healthz`, `/jsz`, and related
-endpoint fields. That connector is separate from `nats-sink run` and must be
-enabled explicitly through `nats_server_monitoring`.
+inside the sink runtime config. Use [Observability](observability.md) for the
+policy model, then use the connector-specific sub-pages when you want to
+publish only approved metric names:
+[Prometheus Integration](prometheus.md),
+[OpenTelemetry OTLP Integration](otlp.md),
+[Elastic Observability Profile](elastic-observability.md),
+[Grafana Alloy Profile](grafana-alloy.md),
+[Splunk HEC Integration](splunk-hec.md),
+[StatsD Integration](statsd.md), and
+[Syslog Bridge](syslog.md). The default generated policy keeps all Prometheus,
+OTLP, Elastic, Grafana Alloy, Splunk HEC, StatsD, syslog, and NATS server
+monitoring sharing disabled. The same observability policy also controls the
+optional NATS server monitoring connector for selected `/healthz`, `/jsz`, and
+related endpoint fields. That connector is separate from `nats-sink run` and
+must be enabled explicitly through `nats_server_monitoring`.
 
 Example:
 
@@ -423,7 +724,10 @@ Example:
   "metrics": {
     "enabled": true,
     "namespace": "nats_sinks",
-    "snapshot_file": ".local/nats-sinks/metrics.json"
+    "snapshot_file": ".local/nats-sinks/metrics.json",
+    "event_freshness_enabled": true,
+    "event_stale_after_seconds": 300,
+    "event_future_skew_tolerance_seconds": 5
   }
 }
 ```
@@ -434,6 +738,86 @@ Inspect the snapshot:
 nats-sink-metrics show .local/nats-sinks/metrics.json --format table
 nats-sink-metrics get .local/nats-sinks/metrics.json messages_failed_total --default 0
 ```
+
+### `advisories`
+
+The `advisories` section enables optional observation of selected JetStream
+server advisories. JetStream publishes advisories as normal NATS messages below
+`$JS.EVENT.ADVISORY.>`. The official
+[NATS JetStream monitoring documentation](https://docs.nats.io/running-a-nats-service/nats_admin/monitoring/monitoring_jetstream#advisories)
+lists these advisories as operational events covering API interactions, stream
+and consumer actions, maximum-delivery signals, NAKs, terminal
+acknowledgements, and clustered leadership or quorum changes.
+
+This feature is disabled by default. When enabled, the runner creates separate
+Core NATS subscriptions for the configured advisory subjects. Advisory messages
+are parsed only to classify them into fixed, low-cardinality metric counters.
+The runner does not store advisory payloads, does not export stream or consumer
+names as metric labels, does not write advisories to a sink, and does not use
+advisories to decide whether a source message should be ACKed.
+
+```mermaid
+sequenceDiagram
+    participant NATS as NATS JetStream Server
+    participant Adv as Advisory Observer
+    participant Metrics as MetricsRecorder
+    participant Runner as Sink Runner
+    participant Sink as Destination Sink
+
+    NATS-->>Adv: $JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES...
+    Adv->>Adv: validate subject and bounded JSON payload
+    Adv->>Metrics: increment aggregate advisory counter
+    Runner->>Sink: normal message batch
+    Sink-->>Runner: durable success
+    Runner-->>NATS: ACK original message after sink success
+```
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `enabled` | no | `false` | `true` or `false`. | Enables the observation-only advisory subscriber. Keep disabled unless the NATS account has explicit advisory-read permissions and operators need the counters. |
+| `subjects` | no | Supported advisory subjects. | List of NATS subject patterns starting with `$JS.EVENT.ADVISORY.`. Up to 32 entries. | Advisory subjects to subscribe to. Duplicate subjects, non-advisory subjects, padded strings, control characters, and invalid wildcard patterns fail validation. |
+| `max_payload_bytes` | no | `65536` | Integer `0` to `1048576`. | Maximum advisory JSON payload size accepted by the observer before it increments the parse-error counter. |
+| `log_events` | no | `false` | `true` or `false`. | Emits sanitized one-line advisory-kind logs. Payload bodies, stream names, consumer names, and sequence numbers are still not logged by this observer. |
+
+The built-in default subject list covers:
+
+- `$JS.EVENT.ADVISORY.API`
+- `$JS.EVENT.ADVISORY.API.>`
+- `$JS.EVENT.ADVISORY.STREAM.CREATED.*`
+- `$JS.EVENT.ADVISORY.STREAM.DELETED.*`
+- `$JS.EVENT.ADVISORY.STREAM.MODIFIED.*`
+- `$JS.EVENT.ADVISORY.STREAM.LEADER_ELECTED.*`
+- `$JS.EVENT.ADVISORY.STREAM.QUORUM_LOST.*`
+- `$JS.EVENT.ADVISORY.CONSUMER.CREATED.*.*`
+- `$JS.EVENT.ADVISORY.CONSUMER.DELETED.*.*`
+- `$JS.EVENT.ADVISORY.CONSUMER.MODIFIED.*.*`
+- `$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES.*.*`
+- `$JS.EVENT.ADVISORY.CONSUMER.MSG_NAKED.*.*`
+- `$JS.EVENT.ADVISORY.CONSUMER.MSG_TERMINATED.*.*`
+- `$JS.EVENT.ADVISORY.CONSUMER.LEADER_ELECTED.*.*`
+- `$JS.EVENT.ADVISORY.CONSUMER.QUORUM_LOST.*.*`
+
+Example:
+
+```json
+{
+  "advisories": {
+    "enabled": true,
+    "subjects": [
+      "$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES.*.*",
+      "$JS.EVENT.ADVISORY.CONSUMER.MSG_TERMINATED.*.*"
+    ],
+    "max_payload_bytes": 32768,
+    "log_events": false
+  }
+}
+```
+
+Required NATS permissions are separate from the normal sink permissions. The
+runtime account needs subscribe rights for the configured advisory subjects
+only. It does not need JetStream management rights merely to observe
+advisories. See [NATS Least-Privilege Permissions](nats-permissions.md) for a
+permission template.
 
 ### `message_metadata`
 
@@ -642,6 +1026,165 @@ See [Mission Metadata](mission-metadata.md) for the full storage contract and
 [F2T2EA Event Phase Tagging](use-cases/defence/f2t2ea-event-phase-tagging.md)
 for a defence-oriented use-case blueprint built on the generic feature.
 
+### `security_labels`
+
+The `security_labels` section is disabled by default. Enable it when messages
+need a structured data-centric security label profile next to the normal
+`priority`, `classification`, and `labels` fields. The profile is useful for
+policy context such as releasability, handling caveats, owner, originator,
+policy identifier, and retention category.
+
+The profile is metadata only. It can inform routing, retention, audit, and
+downstream authorization policy, but it does not enforce authorization by
+itself.
+
+```json
+{
+  "security_labels": {
+    "enabled": true,
+    "header": "Nats-Sinks-Security-Labels",
+    "max_bytes": 8192,
+    "allowed_priorities": ["routine", "priority", "immediate", "flash"],
+    "allowed_classifications": [
+      "NATO UNCLASSIFIED",
+      "NATO RESTRICTED",
+      "NATO CONFIDENTIAL",
+      "NATO SECRET"
+    ],
+    "allowed_releasability": ["NATO", "FVEY", "EU"],
+    "allowed_handling_caveats": ["MISSION", "TRAINING", "EXERCISE"],
+    "allowed_retention_categories": ["mission-log-30d", "mission-log-1y"],
+    "default": {
+      "profile": "nats-sinks.security-label.v1",
+      "classification": "NATO RESTRICTED",
+      "releasability": ["NATO"],
+      "handling_caveats": ["MISSION"],
+      "owner": "example-owner",
+      "originator": "example-originator",
+      "policy_id": "example-policy",
+      "retention_category": "mission-log-30d"
+    },
+    "rules": [
+      {
+        "subject": "mission.sensor.>",
+        "profile": {
+          "profile": "nats-sinks.security-label.v1",
+          "classification": "NATO SECRET",
+          "releasability": ["NATO", "FVEY"],
+          "handling_caveats": ["MISSION"],
+          "owner": "example-sensor-domain",
+          "originator": "example-originator",
+          "policy_id": "example-mission-policy",
+          "retention_category": "mission-log-1y"
+        }
+      }
+    ]
+  }
+}
+```
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `enabled` | no | `false` | `true` or `false`. | Enables parsing, validation, and sink delivery of the data-centric security label profile. |
+| `header` | no | `Nats-Sinks-Security-Labels` | Non-empty header name without control characters. | Header containing a JSON profile supplied by a publisher. |
+| `max_bytes` | no | `8192` | Integer from `1` to `262144`. | Maximum canonical JSON size for one profile. |
+| `allowed_priorities` | no | `[]` | List of non-empty strings. | Optional fail-closed vocabulary for profile `priority`. |
+| `allowed_classifications` | no | `[]` | List of non-empty strings. | Optional fail-closed vocabulary for profile `classification`. |
+| `allowed_releasability` | no | `[]` | List of non-empty strings. | Optional fail-closed vocabulary for every `releasability` value. |
+| `allowed_handling_caveats` | no | `[]` | List of non-empty strings. | Optional fail-closed vocabulary for every `handling_caveats` value. |
+| `allowed_retention_categories` | no | `[]` | List of non-empty strings. | Optional fail-closed vocabulary for `retention_category`. |
+| `default` | no | `null` | JSON object or `null`. | Global default profile used when the header is absent and no subject rule matches. |
+| `rules` | no | `[]` | List of subject-rule objects. | Ordered subject-specific defaults evaluated before the global default. |
+
+Rule fields:
+
+| Rule field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `subject` | yes | none | NATS subject pattern. | Subject pattern matched against `NatsEnvelope.subject`. |
+| `profile` | yes | none | JSON object or `null`. | Default profile for matching subjects. `null` explicitly clears the global default. |
+
+Valid profile root fields are `profile`, `priority`, `classification`,
+`labels`, `releasability`, `handling_caveats`, `owner`, `originator`,
+`policy_id`, `retention_category`, and `extensions`. Unknown root fields are
+rejected. Missing `priority`, `classification`, and `labels` values are filled
+from the already-normalized message metadata values.
+
+See [Data-Centric Security Label Profile](security-label-profile.md) for the
+complete profile shape, storage examples, Mermaid diagrams, and security notes.
+
+### `message_authenticity`
+
+The `message_authenticity` section verifies producer-level message signatures
+before payload encryption, size policy checks, pre-sink policy checks, custody
+metadata, and destination writes. It is disabled by default because it requires
+publisher cooperation: producers must sign the canonical nats-sinks
+authenticity document and publish the algorithm, key identifier, and signature
+as NATS headers.
+
+Use this feature when broker authentication and TLS are not enough by
+themselves. NATS authentication tells the server which client connected.
+Message authenticity tells the sink runtime whether a particular message body
+and selected metadata fields were signed with an approved key.
+
+```json
+{
+  "message_authenticity": {
+    "enabled": true,
+    "unmatched_subject_action": "reject",
+    "signature_header": "Nats-Sinks-Authenticity-Signature",
+    "algorithm_header": "Nats-Sinks-Authenticity-Algorithm",
+    "key_id_header": "Nats-Sinks-Authenticity-Key-Id",
+    "rules": [
+      {
+        "subject": "mission.sensor.>",
+        "enabled": true,
+        "algorithm": "hmac-sha256",
+        "key_id": "sensor-producer-key-v1",
+        "key_b64_env": "NATS_SINKS_AUTHENTICITY_KEY_B64",
+        "signed_fields": ["subject", "message_id", "classification", "labels"]
+      }
+    ]
+  }
+}
+```
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `enabled` | no | `false` | `true` or `false`. | Enables message-level signature verification before sink delivery. |
+| `unmatched_subject_action` | no | `reject` | `reject` or `allow`. | Controls messages whose subject matches no authenticity rule. `reject` is the secure default. |
+| `signature_header` | no | `Nats-Sinks-Authenticity-Signature` | Non-empty header name without control characters. | Header containing the base64 signature. |
+| `algorithm_header` | no | `Nats-Sinks-Authenticity-Algorithm` | Non-empty header name without control characters. | Header containing `hmac-sha256` or `ed25519`. |
+| `key_id_header` | no | `Nats-Sinks-Authenticity-Key-Id` | Non-empty header name without control characters. | Header containing the configured non-secret key identifier. |
+| `rules` | no | `[]` | List of subject-rule objects. | Ordered subject-specific verification rules. First matching rule wins. |
+
+Rule fields:
+
+| Rule field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `subject` | yes | none | NATS subject pattern. | Pattern matched against `NatsEnvelope.subject`. |
+| `enabled` | no | `true` | `true` or `false`. | Enables verification for the matching subject, or explicitly exempts the subject when `false`. |
+| `algorithm` | no | `hmac-sha256` | `hmac-sha256` or `ed25519`. | Verification algorithm required by matching messages. |
+| `key_id` | yes when enabled | none | Non-empty string up to 128 characters. | Non-secret key identifier that must match the message header. |
+| `key_b64` | no | `null` | Base64 verification key material. | Direct HMAC shared key or Ed25519 public key. Redacted by CLI output. Prefer `key_b64_env` for production HMAC keys. |
+| `key_b64_env` | no | `null` | Environment variable name. | Environment variable containing base64 verification key material. Mutually exclusive with `key_b64`. |
+| `signed_fields` | no | `["subject", "message_id"]` | Allow-listed fields: `subject`, `message_id`, `priority`, `classification`, `labels`, `mission_metadata`, `security_labels`. | Normalized metadata fields included in the canonical signed document. The payload SHA-256 is always included. |
+
+Key material requirements:
+
+| Algorithm | Key material expected by nats-sinks | Recommended use |
+| --- | --- | --- |
+| `hmac-sha256` | Base64 shared secret, 32 to 1024 decoded bytes. | Symmetric producer and consumer trust domains where a shared secret can be managed safely. |
+| `ed25519` | Base64 Ed25519 public key, exactly 32 decoded bytes. | Asymmetric producer signing where sinks only need public verification keys. Requires the optional crypto extra. |
+
+Verification failure is a permanent pre-sink failure. With DLQ enabled, the
+original message is published to DLQ and ACKed only after DLQ publication
+succeeds. If DLQ publication fails, the original message is not ACKed and
+remains eligible for redelivery. If DLQ is disabled, rejected messages are left
+unacked.
+
+See [Message Authenticity](message-authenticity.md) for the canonical signed
+content, producer examples, Mermaid sequence diagrams, and security guidance.
+
 ### `encryption`
 
 The `encryption` section is a generic core runtime feature. When enabled, the
@@ -728,6 +1271,14 @@ Subject rules use NATS wildcard syntax. `*` matches exactly one token and `>`
 matches one or more remaining tokens only when it is the final token. Rule order
 is significant and the first matching rule wins.
 
+For key rotation, change the active `key_id` and key source for new messages,
+then keep previous key material available to authorized decryption tooling for
+the full replay and retention window. The runtime encrypts with the configured
+active key only; operational tools can use the public `PayloadKeyRegistry`
+helper to decrypt records written across multiple key generations. See
+[Payload Encryption](payload-encryption.md) for the full rotation pattern and
+secret-manager bootstrap guidance.
+
 | Rule field | Required | Default | Valid values | Description |
 | --- | --- | --- | --- | --- |
 | `subject` | yes | none | NATS subject pattern, for example `orders.*` or `secure.>`. | Pattern matched against the normalized envelope subject. |
@@ -752,6 +1303,189 @@ not contain the plaintext message body. See [Payload Encryption](payload-encrypt
 for the full envelope shape, examples, testing guidance, and operational
 security notes.
 
+### `custody`
+
+The `custody` section enables optional tamper-evident evidence computed by the
+core before sink delivery. It is disabled by default because hashes can still
+reveal repeated payloads or repeated metadata patterns. When enabled, the runner
+computes a custody object, attaches it to `NatsEnvelope`, and every production
+sink persists it next to the durable record.
+
+Custody metadata is a pre-sink operation. If the core cannot compute it because
+the configured algorithm is invalid, a previous hash is malformed, or the
+canonical hash input exceeds the configured size limit, the sink is not called.
+The failure is treated as a permanent validation failure and follows the
+DLQ-before-ACK path when DLQ is enabled.
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `enabled` | no | `false` | `true` or `false`. | Enables custody metadata computation before sink writes. |
+| `algorithm` | no | `sha256` | `sha256`, `sha512`. | Hash algorithm used for payload, metadata, and record hashes. |
+| `hash_payload` | no | `true` | `true` or `false`. | Hashes the normalized payload storage value. |
+| `hash_metadata` | no | `true` | `true` or `false`. | Hashes stable generic metadata. Sink-local storage timestamps are excluded. |
+| `include_previous_hash` | no | `false` | `true` or `false`. | Reads an optional previous-record hash from the configured header. |
+| `previous_hash_header` | no | `Nats-Sinks-Previous-Custody-Hash` | Header name without control characters. | Header used for optional hash chaining. Missing values are accepted; malformed values fail closed. |
+| `key_id` | no | `null` | Non-secret text up to 128 characters. | Optional policy or future key-version identifier. Do not store key material here. |
+| `max_hash_input_bytes` | no | `16777216` | Integer `1024` to `1073741824`. | Maximum canonical JSON byte length accepted for each hash input. |
+
+Example:
+
+```json
+{
+  "custody": {
+    "enabled": true,
+    "algorithm": "sha256",
+    "hash_payload": true,
+    "hash_metadata": true,
+    "key_id": "custody-policy-v1"
+  }
+}
+```
+
+The persisted object includes fields such as `payload_hash`, `metadata_hash`,
+`record_hash`, and `previous_record_hash`. Hashes are not encryption and are
+not digital signatures. For the full model, examples, privacy guidance, and
+sink storage behavior, read
+[Tamper-Evident Custody Metadata](tamper-evident-custody.md).
+
+### `size_policy`
+
+The `size_policy` section is an optional core runtime gate for message and
+metadata size limits. It is disabled by default to preserve compatibility with
+existing deployments, but when enabled it runs before `sink.write_batch(...)`
+for every configured sink. Oracle, file, and future sinks therefore receive
+only messages that passed the same destination-neutral size policy.
+
+The policy is evaluated after message normalization and optional payload
+encryption, so `max_payload_bytes` refers to the sink-bound payload bytes. If
+encryption is enabled, the encrypted payload envelope is measured. The policy
+also measures normalized headers, labels, mission metadata, the standard
+nats-sinks metadata document, an approximate normalized record size, and the
+accepted batch size.
+
+A violation is a permanent validation failure. If DLQ is enabled, the rejected
+message is published to DLQ and the original JetStream message is ACKed or
+terminally acknowledged only after DLQ publication succeeds. If DLQ
+publication fails, the original message is not ACKed. Error text includes
+sanitized reason codes and sizes, but not payloads, header values, labels,
+mission metadata values, credentials, private endpoints, table names, or file
+paths.
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `enabled` | no | `false` | `true` or `false`. | Enables the core size policy. |
+| `max_payload_bytes` | no | `16777216` | Integer `0` to `1073741824`. | Maximum sink-bound payload bytes after core payload transformation. |
+| `max_header_count` | no | `128` | Integer `0` to `1000000`. | Maximum number of normalized headers. |
+| `max_header_name_bytes` | no | `256` | Integer `1` to `65536`. | Maximum UTF-8 byte length of a single header name. |
+| `max_header_value_bytes` | no | `8192` | Integer `0` to `1073741824`. | Maximum UTF-8 byte length of a single header value. |
+| `max_headers_bytes` | no | `65536` | Integer `0` to `1073741824`. | Maximum combined UTF-8 bytes across normalized header names and values. |
+| `max_label_count` | no | `64` | Integer `0` to `1000000`. | Maximum number of normalized labels. |
+| `max_label_bytes` | no | `128` | Integer `1` to `65536`. | Maximum UTF-8 byte length of a single normalized label. |
+| `max_labels_bytes` | no | `4096` | Integer `0` to `1073741824`. | Maximum combined UTF-8 bytes across normalized labels. |
+| `max_mission_metadata_bytes` | no | `8192` | Integer `0` to `1073741824`. | Maximum compact JSON size of the validated mission metadata object. |
+| `max_standard_metadata_bytes` | no | `262144` | Integer `0` to `1073741824`. | Maximum compact JSON size of the standard nats-sinks metadata document generated for destination storage. |
+| `max_normalized_record_bytes` | no | `20971520` | Integer `0` to `1073741824`. | Maximum approximate sink-bound record size, calculated as payload bytes plus standard metadata JSON bytes. |
+| `max_batch_messages` | no | `10000` | Integer `1` to `1000000`. | Maximum number of messages accepted in one post-normalization batch. This should normally be greater than or equal to `delivery.batch_size`. |
+
+Example: enable strict but still practical limits for operational events:
+
+```json
+{
+  "size_policy": {
+    "enabled": true,
+    "max_payload_bytes": 1048576,
+    "max_header_count": 32,
+    "max_header_value_bytes": 2048,
+    "max_headers_bytes": 16384,
+    "max_label_count": 12,
+    "max_label_bytes": 64,
+    "max_mission_metadata_bytes": 4096,
+    "max_standard_metadata_bytes": 65536,
+    "max_normalized_record_bytes": 1179648,
+    "max_batch_messages": 256
+  }
+}
+```
+
+For operational tuning guidance, see [Message Sizing](message-sizing.md).
+
+### `pre_sink_policy`
+
+The `pre_sink_policy` section is an optional core runtime gate. It is disabled
+by default because not every deployment needs a policy layer. When enabled, it
+runs after the runner has normalized the message, resolved priority,
+classification, labels, mission metadata, and optional payload encryption, but
+before `sink.write_batch(...)` is called.
+
+This means the rule is sink-neutral: the same policy protects Oracle, file, and
+future sinks. A rejected message never reaches a sink. Policy rejection is a
+permanent validation failure. If DLQ is enabled, the rejected message is
+published to DLQ and the original JetStream message is ACKed or terminally
+acknowledged only after DLQ publication succeeds. If DLQ publication fails, the
+original message is not ACKed.
+
+The policy engine intentionally does not support Python code, dynamic imports,
+regular expressions, templates, or a general expression language. Supported
+checks are explicit allow-listed fields that are easy to review:
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `enabled` | no | `false` | `true` or `false`. | Enables the pre-sink policy gate. When true, at least one rule is required. |
+| `unmatched_subject_action` | no | `reject` | `reject` or `allow`. | What happens when the gate is enabled and no rule matches a message subject. The secure default rejects unmatched subjects. |
+| `rules` | no | `[]` | List of rule objects. | Subject-scoped checks. All matching rules apply, so a global rule and a subject-specific rule can both constrain the same message. |
+
+Rule fields:
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `subject` | no | `>` | NATS subject pattern such as `orders.*` or `orders.secure.>`. | Subjects matched by this rule. |
+| `require_priority` | no | `false` | `true` or `false`. | Requires `NatsEnvelope.priority` to be present after `message_metadata` resolution. |
+| `require_classification` | no | `false` | `true` or `false`. | Requires `NatsEnvelope.classification` to be present. |
+| `required_labels` | no | `[]` | String with semicolon-separated labels or a JSON array of strings. | Requires all listed labels to be present in `NatsEnvelope.labels`. |
+| `require_mission_metadata` | no | `false` | `true` or `false`. | Requires a validated mission metadata object. |
+| `require_encrypted_payload` | no | `false` | `true` or `false`. | Requires the payload delivered to the sink to be the standard nats-sinks encrypted payload envelope. |
+| `max_payload_bytes` | no | `null` | Integer `0` to `1073741824`. | Rejects messages whose current sink-bound payload bytes exceed this size. If encryption is enabled, this checks encrypted envelope size. |
+| `allowed_mission_metadata_keys` | no | `null` | JSON array of safe root key names. | If set, every root key in mission metadata must be in this allow list. An empty list means no mission metadata keys are allowed. Secret-looking key names are rejected in configuration. |
+
+Example: require classification and encrypted payloads for secure operational
+events, while still allowing routine order events through a less restrictive
+rule:
+
+```json
+{
+  "pre_sink_policy": {
+    "enabled": true,
+    "rules": [
+      {
+        "subject": "orders.secure.>",
+        "require_priority": true,
+        "require_classification": true,
+        "required_labels": ["orders", "audit"],
+        "require_mission_metadata": true,
+        "require_encrypted_payload": true,
+        "allowed_mission_metadata_keys": ["profile", "phase", "operation"]
+      },
+      {
+        "subject": "orders.routine.*",
+        "require_classification": true,
+        "max_payload_bytes": 1048576
+      }
+    ]
+  }
+}
+```
+
+The gate emits policy metrics when enabled:
+
+- `policy_messages_passed_total`,
+- `policy_messages_rejected_total`,
+- `policy_batches_passed_total`,
+- `policy_batches_rejected_total`,
+- `policy_evaluation_errors_total`.
+
+Read [Metrics](metrics.md) for CLI examples and
+[Dead Letter Queues](dead-letter-queues.md) for the ACK-after-DLQ rule.
+
 ### `sink`
 
 The `sink` section selects the destination and carries all destination-specific
@@ -760,12 +1494,55 @@ remaining fields to the selected sink validator.
 
 | Field | Required | Default | Valid values | Description |
 | --- | --- | --- | --- | --- |
-| `type` | yes | none | `file` or `oracle` in the current release. | Selects the production sink implementation. Future sinks should add new values without changing the generic core sections. |
+| `type` | yes | none | `file`, `oracle`, `mysql`, or `spool` in the current release. | Selects the production sink implementation. Future sinks should add new values without changing the generic core sections. |
 
 All other fields under `sink` are sink-specific:
 
 - `file` fields are documented in [File Sink](file-sink.md),
-- `oracle` fields are documented in [Oracle Sink](oracle-sink.md).
+- `oracle` fields are documented in [Oracle Sink](oracle-sink.md),
+- `mysql` fields are documented in [Oracle MySQL Sink](mysql-sink.md),
+- `spool` fields are documented in [Edge Spool Sink](spool-sink.md).
+
+### `plugins`
+
+The `plugins` section controls optional discovery for externally installed sink
+connectors. It is disabled by default because Python plugin loading is a
+code-execution and supply-chain trust boundary. You do not need this section
+for the built-in Oracle Database sink, built-in Oracle MySQL sink, built-in
+FileSink, or built-in SpoolSink.
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `enabled` | no | `false` | `true` or `false`. | Enables optional entry-point discovery for externally installed connectors. Keep this `false` unless an operator has reviewed and installed a trusted connector package. |
+| `allowed_sinks` | no | `[]` | List of connector names matching `^[a-z][a-z0-9_-]{0,63}$`. | Explicit allow-list of external connector names that may be loaded. The runner never loads every installed connector automatically. When `enabled` is `true`, at least one name is required. |
+| `require_production_ready` | no | `true` | `true` or `false`. | Requires discovered external connectors to declare `production_ready=true` in their `SinkConnector` descriptor. Keep this enabled for real deployments. |
+
+Example:
+
+```json
+{
+  "plugins": {
+    "enabled": true,
+    "allowed_sinks": ["acme_archive"],
+    "require_production_ready": true
+  },
+  "sink": {
+    "type": "acme_archive",
+    "directory": "/var/lib/nats-sinks/acme-archive"
+  }
+}
+```
+
+That example loads only the `acme_archive` connector from the Python entry-point
+group `nats_sinks.sinks`, and only if the package returns a valid
+`SinkConnector` descriptor with the same name. The JSON configuration does not
+contain a module path or class path. This is intentional: runtime configuration
+must not be able to choose arbitrary imports.
+
+First-party future Oracle-family sinks, such as OCI Object Storage,
+Oracle Berkeley DB, Oracle NoSQL Database, and OCI Streaming, are
+expected to be added as built-in connectors in this repository unless project
+governance changes that decision. They should not require `plugins.enabled`.
 
 ## Delivery Settings
 
@@ -811,15 +1588,27 @@ secret-handling guidance, and examples. The current production sinks are:
 
 - `"type": "oracle"` for Oracle Database. Detailed Oracle connection options,
   Autonomous Database wallet settings, table routing, payload modes, and column
-  mappings live in [Oracle Sink](oracle-sink.md).
+  mappings live in [Oracle Sink](oracle-sink.md). Oracle-specific write
+  controls such as `mode`, `idempotency`, `staging`, and
+  `merge_update_columns` are intentionally documented there rather than in the
+  generic configuration page. Route-specific Oracle idempotency overrides are
+  also documented on the Oracle page because they depend on Oracle table
+  design and constraints.
+- `"type": "mysql"` for Oracle MySQL. Detailed Oracle MySQL connection
+  options, TLS certificate handling, table routing, payload modes, column
+  mappings, idempotent `upsert` and `insert_ignore` modes, and the local
+  container-backed e2e test live in [Oracle MySQL Sink](mysql-sink.md).
 - `"type": "file"` for local JSON file output. File durability, duplicate
-  policies, deterministic file names, optional gzip compression, and filesystem safety live in
-  [File Sink](file-sink.md).
+  policies, deterministic file names, optional gzip compression, and filesystem
+  safety live in [File Sink](file-sink.md).
+- `"type": "spool"` for encrypted local edge custody. Spool durability,
+  record-level encryption, bounded capacity, deterministic duplicate handling,
+  priority-aware replay, and cleanup policy live in [Edge Spool Sink](spool-sink.md).
 
 This separation is part of the compatibility contract. Adding a future
-`postgres`, `http`, or `s3` sink should add new sink-specific fields under
-`"sink"` without requiring existing Oracle or file users to change the rest of
-their configuration.
+`http`, `s3`, or another database sink should add new sink-specific fields
+under `"sink"` without requiring existing Oracle Database, Oracle MySQL, file,
+or spool users to change the rest of their configuration.
 
 ## Payload Storage Modes
 
@@ -871,11 +1660,17 @@ Supported environment overrides:
 - `NATS_SINKS_NATS_STREAM`
 - `NATS_SINKS_NATS_CONSUMER`
 - `NATS_SINKS_NATS_SUBJECT`
+- `NATS_SINKS_NATS_NO_ECHO`
+- `NATS_SINKS_CONSUMER_MANAGEMENT_MODE`
 - `NATS_SINKS_LOG_LEVEL`
 - `NATS_SINKS_ENCRYPTION_ENABLED`
 - `NATS_SINKS_ENCRYPTION_ALGORITHM`
 - `NATS_SINKS_ENCRYPTION_KEY_ID`
 - `NATS_SINKS_ENCRYPTION_KEY_B64_ENV`
+- `NATS_SINKS_MESSAGE_AUTHENTICITY_ENABLED`
+- `NATS_SINKS_MESSAGE_AUTHENTICITY_SIGNATURE_HEADER`
+- `NATS_SINKS_MESSAGE_AUTHENTICITY_ALGORITHM_HEADER`
+- `NATS_SINKS_MESSAGE_AUTHENTICITY_KEY_ID_HEADER`
 - `NATS_SINKS_PRIORITY_HEADER`
 - `NATS_SINKS_PRIORITY_DEFAULT`
 - `NATS_SINKS_CLASSIFICATION_HEADER`
@@ -884,6 +1679,10 @@ Supported environment overrides:
 - `NATS_SINKS_LABELS_DEFAULT`
 - `NATS_SINKS_MISSION_METADATA_ENABLED`
 - `NATS_SINKS_MISSION_METADATA_HEADER`
+- `NATS_SINKS_CUSTODY_ENABLED`
+- `NATS_SINKS_CUSTODY_ALGORITHM`
+- `NATS_SINKS_CUSTODY_KEY_ID`
+- `NATS_SINKS_ADVISORIES_ENABLED`
 - `NATS_SINKS_SINK_TYPE`
 
 Destination passwords should normally be supplied through environment variables

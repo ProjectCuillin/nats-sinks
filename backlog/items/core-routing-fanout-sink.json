@@ -1,0 +1,34 @@
+{
+  "id": "core-routing-fanout-sink",
+  "title": "[Feature]: Add generic routing and fan-out sink orchestration",
+  "area": "Core runtime and delivery semantics",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "unscheduled",
+  "labels": ["nats", "sink-new", "testing"],
+  "problem": "The current runner delivers each batch to one configured sink. Oracle can route subjects to different tables inside one Oracle sink, but the core cannot route one normalized NATS message to one or more independent sink instances such as two Oracle backends, two Oracle tables represented by different sink instances, an Oracle sink plus a file sink, or multiple file destinations. Operators need this for audit copies, operational archive copies, separated custody stores, and mission-support deployments where different durable systems must receive the same event stream without each deployment inventing custom workers.",
+  "proposal": "Introduce a generic routing and fan-out sink orchestration layer in the core sink framework. The new capability should support named child sinks, route evaluation against normalized envelopes, one-to-one routing, one-to-many fan-out, and explicit route behavior when no route matches. The default mode must require every selected child sink to succeed before the fan-out sink returns success. Route processing should preserve batch boundaries where practical, but may partition a batch per child sink when only a subset of messages matches a child. The implementation should keep existing single-sink configuration working so current Oracle and file deployments do not need a breaking release. Documentation and tests must include this representative JSON configuration pattern: {\"sink\":{\"type\":\"fanout\",\"route_match_mode\":\"all\",\"sinks\":{\"oracle_secret\":{\"type\":\"oracle\",\"dsn\":\"oracle-primary-service\",\"user\":\"app_user\",\"password_env\":\"ORACLE_PRIMARY_PASSWORD\",\"table\":\"SECRET_EVENTS\"},\"file_audit\":{\"type\":\"file\",\"directory\":\"var/lib/nats-sinks/audit\"},\"oracle_unclass\":{\"type\":\"oracle\",\"dsn\":\"oracle-unclass-service\",\"user\":\"app_user\",\"password_env\":\"ORACLE_UNCLASS_PASSWORD\",\"table\":\"UNCLASS_EVENTS\"}},\"routes\":[{\"name\":\"secret-sensor-audit\",\"match\":{\"subject\":\"nl.mod.clas.>\",\"priority\":[\"urgent\"],\"classification\":[\"NATO SECRET\"],\"labels_all\":[\"sensor\",\"audit\"]},\"targets\":[{\"sink\":\"oracle_secret\",\"required\":true},{\"sink\":\"file_audit\",\"required\":false,\"minimum_wait_ms\":500}]},{\"name\":\"unclass-sensor-oracle\",\"match\":{\"subject\":\"nl.mod.clas.>\",\"priority\":[\"urgent\"],\"classification\":[\"NATO UNCLASS\"],\"labels_all\":[\"sensor\",\"audit\"]},\"targets\":[{\"sink\":\"oracle_unclass\",\"required\":true}]}]}}.",
+  "users": "Operators and developers who need one JetStream consumer process to write the same message family to multiple durable destinations, including multiple Oracle Database targets, multiple Oracle tables represented by separate sink instances, file archives, and future sink types.",
+  "delivery_semantics": "The core runner must still ACK only after the configured fan-out sink returns success. In the default mode, fan-out success means all required selected child sinks have completed their durable write and returned success. The feature must explicitly document that this is not an atomic distributed transaction across sinks. If one child sink commits and another required child sink fails before ACK, the fan-out sink raises, JetStream redelivery remains possible, and each child sink must rely on idempotency to make duplicate delivery safe.",
+  "security": "Route names, sink names, subjects, labels, classifications, file paths, and Oracle identifiers must be validated with allow lists and bounded lengths. The effective configuration output must redact all child sink secrets. Logs and metrics must not include payloads by default and must not expose sensitive route or subject structure unless explicitly enabled by policy.",
+  "acceptance": [
+    "A generic fan-out sink or equivalent core orchestration layer can route one message to multiple selected child sinks.",
+    "Existing single-sink Oracle and file configurations remain backward compatible.",
+    "The default fan-out mode requires every selected child sink to durably succeed before the runner may ACK.",
+    "The fan-out documentation includes the NATO SECRET mixed Oracle plus file route and the NATO UNCLASS Oracle-only route shown in the issue proposal.",
+    "nats-sink validate can validate the full multi-sink fan-out configuration, including route targets, named sink references, match operators, and required or optional ACK-gating fields.",
+    "Unit tests prove no ACK happens when any required child sink fails after another child sink has succeeded.",
+    "Documentation explains that fan-out is at-least-once and idempotent, not atomic exactly-once across destinations."
+  ],
+  "tests": "Add focused unit tests for route selection, one-to-one routing, one-to-many fan-out, required child success, required child failure, no-route behavior, and backward-compatible single-sink loading. Add CLI validation tests for the representative NATO SECRET and NATO UNCLASS fan-out configuration, invalid sink references, invalid optional wait values, missing sink definitions, duplicate route names, malformed match sets, and unsafe secret-bearing output. Add smoke tests using file sinks and mock sinks. Add Oracle-oriented contract tests with mocks and document optional live end-to-end coverage.",
+  "documentation": "Update README, docs/architecture.md, docs/sink-framework.md, docs/configuration.md, docs/file-sink.md, docs/oracle-sink.md, docs/idempotency.md, docs/operations.md, and CHANGELOG.md when implemented.",
+  "closeout": "Close only after a release containing the generic fan-out capability is published. Close-out evidence must include the release tag, implemented config schema, tests run, documentation updated, compatibility notes, and any follow-up issues for advanced routing behavior.",
+  "relationships": {
+    "related": [
+      "backlog:routing-match-policy-subject-metadata-labels",
+      "backlog:optional-sink-ack-gate-wait-policy",
+      "backlog:multi-sink-instance-configuration",
+      "backlog:fanout-partial-failure-recovery-metrics",
+      "backlog:fanout-sink-certification-tests"
+    ]
+  }
+}

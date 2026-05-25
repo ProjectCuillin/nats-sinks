@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import tempfile
 from collections.abc import Iterable
 from contextlib import suppress
@@ -23,7 +24,7 @@ from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlsplit
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from nats_sinks.core.config import AppConfig, load_json
 from nats_sinks.core.errors import ConfigurationError
@@ -32,8 +33,21 @@ from nats_sinks.core.subjects import validate_subject_pattern
 
 OBSERVABILITY_POLICY_SCHEMA = "nats_sinks.observability.policy.v1"
 PROMETHEUS_HTTP_PATH_MAX_LENGTH = 128
+OTLP_ENDPOINT_MAX_LENGTH = 512
+OTLP_HEADER_NAME_MAX_LENGTH = 128
+OTLP_HEADER_ENV_MAX_LENGTH = 128
 NATS_MONITORING_ENDPOINT_MAX_LENGTH = 128
 NATS_MONITORING_FIELD_MAX_LENGTH = 256
+STATSD_MAX_DATAGRAM_BYTES = 65_507
+STATSD_METRIC_PREFIX_MAX_LENGTH = 128
+STATSD_SOCKET_PATH_MAX_LENGTH = 512
+SYSLOG_MAX_MESSAGE_BYTES = 8_192
+SYSLOG_HOSTNAME_MAX_LENGTH = 255
+SYSLOG_APP_NAME_MAX_LENGTH = 48
+SYSLOG_PROCID_MAX_LENGTH = 128
+SYSLOG_MSGID_MAX_LENGTH = 32
+SYSLOG_STRUCTURED_DATA_ID_MAX_LENGTH = 32
+SYSLOG_SOCKET_PATH_MAX_LENGTH = 512
 NATS_MONITORING_ALLOWED_ENDPOINTS = {
     "/varz",
     "/connz",
@@ -44,6 +58,106 @@ NATS_MONITORING_ALLOWED_ENDPOINTS = {
     "/jsz",
     "/healthz",
 }
+HTTP_HEADER_NAME_RE = re.compile(r"^[A-Za-z0-9!#$%&'*+.^_`|~-]+$")
+ENVIRONMENT_VARIABLE_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+ELASTIC_DATA_STREAM_COMPONENT_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$")
+GRAFANA_ALLOY_COMPONENT_LABEL_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
+SPLUNK_HEC_INDEX_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_-]{0,127}$")
+SPLUNK_HEC_METADATA_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.:-]{0,127}$")
+STATSD_METRIC_PREFIX_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.-]{0,127}$")
+SYSLOG_PRINTABLE_RE = re.compile(r"^[!-~]+$")
+SYSLOG_STRUCTURED_DATA_ID_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,32}$")
+
+
+def _validate_otlp_http_endpoint(value: str | None, *, field_name: str) -> str | None:
+    """Validate an OTLP/HTTP endpoint without accepting embedded secrets."""
+
+    if value is None:
+        return None
+    rendered = value.strip()
+    if not rendered:
+        raise ValueError(f"{field_name} must not be empty")
+    if len(rendered) > OTLP_ENDPOINT_MAX_LENGTH:
+        raise ValueError(f"{field_name} must be at most {OTLP_ENDPOINT_MAX_LENGTH} characters")
+    if any(character in rendered for character in "\x00\n\r\t "):
+        raise ValueError(f"{field_name} must not contain whitespace or control characters")
+
+    parsed = urlsplit(rendered)
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError(f"{field_name} must use http or https")
+    if not parsed.netloc:
+        raise ValueError(f"{field_name} must include a host")
+    if parsed.username is not None or parsed.password is not None:
+        raise ValueError(f"{field_name} must not contain credentials")
+    if parsed.query or parsed.fragment:
+        raise ValueError(f"{field_name} must not include query strings or fragments")
+    if not parsed.path.startswith("/"):
+        raise ValueError(f"{field_name} must include an HTTP path")
+
+    host = parsed.hostname or ""
+    if parsed.scheme == "http" and host.lower() not in {"localhost", "127.0.0.1", "::1"}:
+        raise ValueError(f"{field_name} may use plain http only for loopback collectors")
+    return rendered
+
+
+def _validate_http_headers_env(value: dict[str, str], *, field_name: str) -> dict[str, str]:
+    """Validate HTTP header names and environment-variable sources."""
+
+    rendered: dict[str, str] = {}
+    seen_lower: set[str] = set()
+    for header_name, env_name in value.items():
+        header = header_name.strip()
+        source = env_name.strip()
+        if not header:
+            raise ValueError(f"{field_name} header names must not be empty")
+        if len(header) > OTLP_HEADER_NAME_MAX_LENGTH:
+            raise ValueError(f"{field_name} header names are too long")
+        if not HTTP_HEADER_NAME_RE.fullmatch(header):
+            raise ValueError(f"{field_name} header names are not valid HTTP field names")
+        lowered = header.lower()
+        if lowered in seen_lower:
+            raise ValueError(f"{field_name} header names must be unique ignoring case")
+        seen_lower.add(lowered)
+
+        if not source:
+            raise ValueError(f"{field_name} values must not be empty")
+        if len(source) > OTLP_HEADER_ENV_MAX_LENGTH:
+            raise ValueError(f"{field_name} environment variable names are too long")
+        if not ENVIRONMENT_VARIABLE_NAME_RE.fullmatch(source):
+            raise ValueError(f"{field_name} values must be environment variable names")
+        rendered[header] = source
+    return rendered
+
+
+def _validate_elastic_data_stream_component(value: str, *, field_name: str) -> str:
+    """Validate Elastic data stream routing components as bounded names."""
+
+    rendered = value.strip()
+    if not rendered:
+        raise ValueError(f"{field_name} must not be empty")
+    if not ELASTIC_DATA_STREAM_COMPONENT_RE.fullmatch(rendered):
+        raise ValueError(
+            f"{field_name} may contain only letters, digits, underscores, dots, and hyphens, "
+            "and must start with a letter, digit, or underscore"
+        )
+    if rendered in {".", ".."}:
+        raise ValueError(f"{field_name} must not be a relative path marker")
+    return rendered
+
+
+def _validate_syslog_printable_field(value: str, *, field_name: str, max_length: int) -> str:
+    """Validate one RFC 5424 header field or the nil marker."""
+
+    rendered = value.strip()
+    if not rendered:
+        raise ValueError(f"{field_name} must not be empty")
+    if len(rendered) > max_length:
+        raise ValueError(f"{field_name} must be at most {max_length} characters")
+    if rendered == "-":
+        return rendered
+    if not SYSLOG_PRINTABLE_RE.fullmatch(rendered):
+        raise ValueError(f"{field_name} must contain only printable ASCII without spaces")
+    return rendered
 
 
 class ObservabilitySubjectPolicy(BaseModel):
@@ -164,6 +278,591 @@ class PrometheusTextfilePolicy(BaseModel):
         if Path(rendered).name in {"", ".", ".."}:
             raise ValueError("prometheus.output_file must name a file")
         return rendered
+
+
+class OtlpMetricsPolicy(BaseModel):
+    """OpenTelemetry OTLP metrics connector settings.
+
+    The connector is disabled by default and belongs to the observability plane,
+    not the message delivery plane.  It reads only a local nats-sinks metrics
+    snapshot, applies the shared observability allow/deny policy, and sends a
+    bounded OTLP/HTTP JSON request to an explicitly configured collector
+    endpoint.  Header values are loaded from environment variables so bearer
+    tokens and other collector credentials are never stored in policy JSON.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    endpoint: str | None = None
+    protocol: Literal["http_json"] = "http_json"
+    timeout_seconds: float = Field(default=5.0, gt=0, le=60)
+    max_retries: int = Field(default=0, ge=0, le=10)
+    retry_backoff_seconds: float = Field(default=0.25, ge=0, le=60)
+    stale_after_seconds: float | None = Field(default=None, gt=0, le=86_400)
+    max_request_bytes: int = Field(default=1_048_576, ge=1024, le=10_485_760)
+    headers_env: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("endpoint")
+    @classmethod
+    def validate_endpoint(cls, value: str | None) -> str | None:
+        """Validate an OTLP/HTTP endpoint without accepting embedded secrets."""
+
+        return _validate_otlp_http_endpoint(value, field_name="otlp.endpoint")
+
+    @field_validator("headers_env")
+    @classmethod
+    def validate_headers_env(cls, value: dict[str, str]) -> dict[str, str]:
+        """Validate collector header names and their environment-variable sources."""
+
+        return _validate_http_headers_env(value, field_name="otlp.headers_env")
+
+    @model_validator(mode="after")
+    def validate_enabled_endpoint(self) -> OtlpMetricsPolicy:
+        """Require an explicit endpoint only when OTLP export is enabled."""
+
+        if self.enabled and self.endpoint is None:
+            raise ValueError("otlp.endpoint is required when otlp.enabled is true")
+        return self
+
+
+class ElasticObservabilityPolicy(BaseModel):
+    """Elastic Observability profile over the shared OTLP connector.
+
+    The first Elastic implementation intentionally sends policy-approved
+    metrics to an explicitly configured OTLP Collector or Elastic-managed OTLP
+    endpoint shape.  It does not write directly to Elasticsearch indices, does
+    not use the Bulk API, and does not add labels derived from subjects,
+    payloads, message IDs, file paths, table names, or mission metadata values.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    ingestion_path: Literal["otlp_collector"] = "otlp_collector"
+    endpoint: str | None = None
+    timeout_seconds: float = Field(default=5.0, gt=0, le=60)
+    max_retries: int = Field(default=0, ge=0, le=10)
+    retry_backoff_seconds: float = Field(default=0.25, ge=0, le=60)
+    stale_after_seconds: float | None = Field(default=None, gt=0, le=86_400)
+    max_request_bytes: int = Field(default=1_048_576, ge=1024, le=10_485_760)
+    headers_env: dict[str, str] = Field(default_factory=dict)
+    data_stream_dataset: str = "nats_sinks.metrics"
+    data_stream_namespace: str = "default"
+
+    @field_validator("endpoint")
+    @classmethod
+    def validate_endpoint(cls, value: str | None) -> str | None:
+        """Validate the Elastic profile OTLP endpoint."""
+
+        return _validate_otlp_http_endpoint(value, field_name="elastic.endpoint")
+
+    @field_validator("headers_env")
+    @classmethod
+    def validate_headers_env(cls, value: dict[str, str]) -> dict[str, str]:
+        """Validate Elastic profile header names and env-var sources."""
+
+        return _validate_http_headers_env(value, field_name="elastic.headers_env")
+
+    @field_validator("data_stream_dataset")
+    @classmethod
+    def validate_data_stream_dataset(cls, value: str) -> str:
+        """Validate the low-cardinality Elastic data stream dataset hint."""
+
+        return _validate_elastic_data_stream_component(
+            value,
+            field_name="elastic.data_stream_dataset",
+        )
+
+    @field_validator("data_stream_namespace")
+    @classmethod
+    def validate_data_stream_namespace(cls, value: str) -> str:
+        """Validate the low-cardinality Elastic data stream namespace hint."""
+
+        return _validate_elastic_data_stream_component(
+            value,
+            field_name="elastic.data_stream_namespace",
+        )
+
+    @model_validator(mode="after")
+    def validate_enabled_endpoint(self) -> ElasticObservabilityPolicy:
+        """Require an explicit endpoint only when Elastic export is enabled."""
+
+        if self.enabled and self.endpoint is None:
+            raise ValueError("elastic.endpoint is required when elastic.enabled is true")
+        return self
+
+
+class GrafanaAlloyObservabilityPolicy(BaseModel):
+    """Grafana Alloy profile over the shared OTLP connector.
+
+    The profile sends policy-approved metrics to a local or nearby Alloy
+    `otelcol.receiver.otlp` HTTP endpoint.  Alloy is then responsible for
+    batching, queueing, authentication, and forwarding into Grafana Cloud,
+    Mimir, or another OTLP-compatible destination.  The nats-sinks side remains
+    intentionally small and delivery-independent.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    handoff_mode: Literal["otlp_http"] = "otlp_http"
+    endpoint: str | None = None
+    timeout_seconds: float = Field(default=5.0, gt=0, le=60)
+    max_retries: int = Field(default=0, ge=0, le=10)
+    retry_backoff_seconds: float = Field(default=0.25, ge=0, le=60)
+    stale_after_seconds: float | None = Field(default=None, gt=0, le=86_400)
+    max_request_bytes: int = Field(default=1_048_576, ge=1024, le=10_485_760)
+    headers_env: dict[str, str] = Field(default_factory=dict)
+    receiver_label: str = "nats_sinks"
+    batch_label: str = "nats_sinks_batch"
+    exporter_label: str = "grafana_cloud"
+    auth_label: str = "grafana_cloud_auth"
+    upstream_endpoint_env: str = "GRAFANA_CLOUD_OTLP_ENDPOINT"
+    upstream_auth_mode: Literal["none", "basic"] = "none"
+    upstream_auth_username_env: str | None = None
+    upstream_auth_password_env: str | None = None
+
+    @field_validator("endpoint")
+    @classmethod
+    def validate_endpoint(cls, value: str | None) -> str | None:
+        """Validate the local Alloy OTLP/HTTP receiver endpoint."""
+
+        rendered = _validate_otlp_http_endpoint(value, field_name="grafana_alloy.endpoint")
+        if rendered is None:
+            return None
+        parsed = urlsplit(rendered)
+        if parsed.path != "/v1/metrics":
+            raise ValueError("grafana_alloy.endpoint must use the OTLP metrics path /v1/metrics")
+        return rendered
+
+    @field_validator("headers_env")
+    @classmethod
+    def validate_headers_env(cls, value: dict[str, str]) -> dict[str, str]:
+        """Validate optional local Alloy receiver header env-var sources."""
+
+        return _validate_http_headers_env(value, field_name="grafana_alloy.headers_env")
+
+    @field_validator("receiver_label", "batch_label", "exporter_label", "auth_label")
+    @classmethod
+    def validate_component_label(cls, value: str) -> str:
+        """Validate Alloy component labels as small explicit identifiers."""
+
+        rendered = value.strip()
+        if not GRAFANA_ALLOY_COMPONENT_LABEL_RE.fullmatch(rendered):
+            raise ValueError(
+                "grafana_alloy component labels must start with a letter or underscore "
+                "and contain only letters, digits, and underscores"
+            )
+        return rendered
+
+    @field_validator(
+        "upstream_endpoint_env", "upstream_auth_username_env", "upstream_auth_password_env"
+    )
+    @classmethod
+    def validate_upstream_env(cls, value: str | None) -> str | None:
+        """Validate upstream Alloy secret references as environment names only."""
+
+        if value is None:
+            return None
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("grafana_alloy upstream environment names must not be empty")
+        if len(rendered) > OTLP_HEADER_ENV_MAX_LENGTH:
+            raise ValueError("grafana_alloy upstream environment names are too long")
+        if not ENVIRONMENT_VARIABLE_NAME_RE.fullmatch(rendered):
+            raise ValueError("grafana_alloy upstream references must be environment variable names")
+        return rendered
+
+    @model_validator(mode="after")
+    def validate_enabled_endpoint_and_auth(self) -> GrafanaAlloyObservabilityPolicy:
+        """Require explicit local handoff and complete upstream auth settings."""
+
+        if self.enabled and self.endpoint is None:
+            raise ValueError(
+                "grafana_alloy.endpoint is required when grafana_alloy.enabled is true"
+            )
+        if self.upstream_auth_mode == "basic":
+            if self.upstream_auth_username_env is None or self.upstream_auth_password_env is None:
+                raise ValueError(
+                    "grafana_alloy basic upstream auth requires "
+                    "upstream_auth_username_env and upstream_auth_password_env"
+                )
+        return self
+
+
+class SplunkHecObservabilityPolicy(BaseModel):
+    """Splunk HTTP Event Collector observability connector settings.
+
+    The connector sends one bounded HEC metric event containing only
+    policy-approved aggregate metrics.  It never sends message payloads,
+    subjects, classification labels, mission metadata, message IDs, file paths,
+    table names, or endpoint details.  HEC tokens are referenced by environment
+    variable name so secrets stay outside policy files and CLI arguments.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    endpoint: str | None = None
+    token_env: str | None = None
+    timeout_seconds: float = Field(default=5.0, gt=0, le=60)
+    max_retries: int = Field(default=0, ge=0, le=10)
+    retry_backoff_seconds: float = Field(default=0.25, ge=0, le=60)
+    stale_after_seconds: float | None = Field(default=None, gt=0, le=86_400)
+    max_request_bytes: int = Field(default=1_048_576, ge=1024, le=10_485_760)
+    verify_tls: Literal[True] = True
+    headers_env: dict[str, str] = Field(default_factory=dict)
+    source: str = "nats-sinks"
+    sourcetype: str = "nats_sinks:metrics"
+    host: str = "nats-sinks"
+    index: str | None = None
+
+    @field_validator("endpoint")
+    @classmethod
+    def validate_endpoint(cls, value: str | None) -> str | None:
+        """Validate the Splunk HEC event endpoint without embedded secrets."""
+
+        rendered = _validate_otlp_http_endpoint(value, field_name="splunk_hec.endpoint")
+        if rendered is None:
+            return None
+        parsed = urlsplit(rendered)
+        if parsed.path != "/services/collector/event":
+            raise ValueError(
+                "splunk_hec.endpoint must use the HEC JSON event path /services/collector/event"
+            )
+        return rendered
+
+    @field_validator("token_env")
+    @classmethod
+    def validate_token_env(cls, value: str | None) -> str | None:
+        """Validate the HEC token reference as an environment variable name."""
+
+        if value is None:
+            return None
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("splunk_hec.token_env must not be empty")
+        if len(rendered) > OTLP_HEADER_ENV_MAX_LENGTH:
+            raise ValueError("splunk_hec.token_env is too long")
+        if not ENVIRONMENT_VARIABLE_NAME_RE.fullmatch(rendered):
+            raise ValueError("splunk_hec.token_env must be an environment variable name")
+        return rendered
+
+    @field_validator("headers_env")
+    @classmethod
+    def validate_headers_env(cls, value: dict[str, str]) -> dict[str, str]:
+        """Validate optional additional HEC header env-var sources."""
+
+        rendered = _validate_http_headers_env(value, field_name="splunk_hec.headers_env")
+        if any(header.lower() == "authorization" for header in rendered):
+            raise ValueError("splunk_hec.headers_env must not override Authorization")
+        if any(header.lower() == "content-type" for header in rendered):
+            raise ValueError("splunk_hec.headers_env must not override Content-Type")
+        return rendered
+
+    @field_validator("source", "sourcetype", "host")
+    @classmethod
+    def validate_metadata_component(cls, value: str) -> str:
+        """Validate small low-cardinality HEC metadata components."""
+
+        rendered = value.strip()
+        if not SPLUNK_HEC_METADATA_RE.fullmatch(rendered):
+            raise ValueError(
+                "splunk_hec metadata values must start with a letter, digit, or underscore "
+                "and contain only letters, digits, underscores, dots, colons, and hyphens"
+            )
+        return rendered
+
+    @field_validator("index")
+    @classmethod
+    def validate_index(cls, value: str | None) -> str | None:
+        """Validate optional Splunk index routing as a small explicit name."""
+
+        if value is None:
+            return None
+        rendered = value.strip()
+        if not SPLUNK_HEC_INDEX_RE.fullmatch(rendered):
+            raise ValueError(
+                "splunk_hec.index must start with a letter, digit, or underscore "
+                "and contain only letters, digits, underscores, and hyphens"
+            )
+        return rendered
+
+    @model_validator(mode="after")
+    def validate_enabled_endpoint_and_token(self) -> SplunkHecObservabilityPolicy:
+        """Require explicit endpoint and token reference when HEC export is enabled."""
+
+        if self.enabled and self.endpoint is None:
+            raise ValueError("splunk_hec.endpoint is required when splunk_hec.enabled is true")
+        if self.enabled and self.token_env is None:
+            raise ValueError("splunk_hec.token_env is required when splunk_hec.enabled is true")
+        return self
+
+
+class StatsdObservabilityPolicy(BaseModel):
+    """StatsD observability connector settings.
+
+    The connector emits one datagram per policy-approved aggregate metric.  It
+    is intentionally best-effort and observational: UDP and Unix datagram
+    delivery can be lossy, and failures must never affect JetStream delivery or
+    sink write behavior.  Metric names are generated from internal metric names
+    and an optional static prefix only; subjects, payload values, classification
+    values, labels, mission metadata, and destination details are not exported.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    transport: Literal["udp", "unixgram"] = "udp"
+    host: str = "127.0.0.1"
+    port: int = Field(default=8125, ge=1, le=65_535)
+    socket_path: str | None = None
+    metric_prefix: str | None = None
+    timeout_seconds: float = Field(default=1.0, gt=0, le=60)
+    max_retries: int = Field(default=0, ge=0, le=10)
+    retry_backoff_seconds: float = Field(default=0.25, ge=0, le=60)
+    stale_after_seconds: float | None = Field(default=None, gt=0, le=86_400)
+    max_datagram_bytes: int = Field(default=1432, ge=128, le=STATSD_MAX_DATAGRAM_BYTES)
+
+    @field_validator("host")
+    @classmethod
+    def validate_host(cls, value: str) -> str:
+        """Validate the UDP target host without accepting path-like text."""
+
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("statsd.host must not be empty")
+        if any(character in rendered for character in "\x00\n\r\t /"):
+            raise ValueError(
+                "statsd.host must not contain whitespace, slashes, or control characters"
+            )
+        return rendered
+
+    @field_validator("socket_path")
+    @classmethod
+    def validate_socket_path(cls, value: str | None) -> str | None:
+        """Validate the optional Unix datagram socket path."""
+
+        if value is None:
+            return None
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("statsd.socket_path must not be empty")
+        if len(rendered) > STATSD_SOCKET_PATH_MAX_LENGTH:
+            raise ValueError(
+                f"statsd.socket_path must be at most {STATSD_SOCKET_PATH_MAX_LENGTH} characters"
+            )
+        if any(character in rendered for character in "\x00\n\r"):
+            raise ValueError("statsd.socket_path must not contain control characters")
+        if Path(rendered).name in {"", ".", ".."}:
+            raise ValueError("statsd.socket_path must name a socket path")
+        return rendered
+
+    @field_validator("metric_prefix")
+    @classmethod
+    def validate_metric_prefix(cls, value: str | None) -> str | None:
+        """Validate an optional static StatsD metric prefix."""
+
+        if value is None:
+            return None
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("statsd.metric_prefix must not be empty")
+        if len(rendered) > STATSD_METRIC_PREFIX_MAX_LENGTH:
+            raise ValueError(
+                f"statsd.metric_prefix must be at most {STATSD_METRIC_PREFIX_MAX_LENGTH} characters"
+            )
+        if not STATSD_METRIC_PREFIX_RE.fullmatch(rendered):
+            raise ValueError(
+                "statsd.metric_prefix must start with a letter or underscore and contain only "
+                "letters, digits, underscores, dots, and hyphens"
+            )
+        return rendered.strip(".")
+
+    @model_validator(mode="after")
+    def validate_transport_settings(self) -> StatsdObservabilityPolicy:
+        """Require transport-specific settings only when StatsD is enabled."""
+
+        if not self.enabled:
+            return self
+        if self.transport == "unixgram" and self.socket_path is None:
+            raise ValueError("statsd.socket_path is required when statsd.transport is unixgram")
+        return self
+
+
+class SyslogObservabilityPolicy(BaseModel):
+    """Syslog observability bridge settings.
+
+    The bridge emits one RFC 5424-style structured syslog message per
+    policy-approved aggregate metric.  It is intentionally best-effort and
+    observational: datagram transports can be lossy, receivers can drop data,
+    and failures must never affect JetStream delivery or sink writes.  The
+    message body is empty and all approved values live in bounded structured
+    data parameters.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    transport: Literal["udp", "unixgram"] = "udp"
+    host: str = "127.0.0.1"
+    port: int = Field(default=514, ge=1, le=65_535)
+    socket_path: str | None = None
+    facility: Literal[
+        "kern",
+        "user",
+        "mail",
+        "daemon",
+        "auth",
+        "syslog",
+        "lpr",
+        "news",
+        "uucp",
+        "cron",
+        "authpriv",
+        "ftp",
+        "ntp",
+        "audit",
+        "alert",
+        "clock",
+        "local0",
+        "local1",
+        "local2",
+        "local3",
+        "local4",
+        "local5",
+        "local6",
+        "local7",
+    ] = "local0"
+    severity: Literal[
+        "emergency",
+        "alert",
+        "critical",
+        "error",
+        "warning",
+        "notice",
+        "info",
+        "debug",
+    ] = "info"
+    hostname: str = "-"
+    app_name: str = "nats-sinks"
+    procid: str = "-"
+    msgid: str = "metrics"
+    structured_data_id: str = "nats_sinks"
+    timeout_seconds: float = Field(default=1.0, gt=0, le=60)
+    max_retries: int = Field(default=0, ge=0, le=10)
+    retry_backoff_seconds: float = Field(default=0.25, ge=0, le=60)
+    stale_after_seconds: float | None = Field(default=None, gt=0, le=86_400)
+    max_message_bytes: int = Field(default=1024, ge=128, le=SYSLOG_MAX_MESSAGE_BYTES)
+
+    @field_validator("host")
+    @classmethod
+    def validate_host(cls, value: str) -> str:
+        """Validate the UDP target host without accepting path-like text."""
+
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("syslog.host must not be empty")
+        if any(character in rendered for character in "\x00\n\r\t /"):
+            raise ValueError(
+                "syslog.host must not contain whitespace, slashes, or control characters"
+            )
+        return rendered
+
+    @field_validator("socket_path")
+    @classmethod
+    def validate_socket_path(cls, value: str | None) -> str | None:
+        """Validate the optional Unix datagram socket path."""
+
+        if value is None:
+            return None
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("syslog.socket_path must not be empty")
+        if len(rendered) > SYSLOG_SOCKET_PATH_MAX_LENGTH:
+            raise ValueError(
+                f"syslog.socket_path must be at most {SYSLOG_SOCKET_PATH_MAX_LENGTH} characters"
+            )
+        if any(character in rendered for character in "\x00\n\r"):
+            raise ValueError("syslog.socket_path must not contain control characters")
+        if Path(rendered).name in {"", ".", ".."}:
+            raise ValueError("syslog.socket_path must name a socket path")
+        return rendered
+
+    @field_validator("hostname")
+    @classmethod
+    def validate_hostname(cls, value: str) -> str:
+        """Validate the RFC 5424 hostname field without using local host lookup."""
+
+        return _validate_syslog_printable_field(
+            value,
+            field_name="syslog.hostname",
+            max_length=SYSLOG_HOSTNAME_MAX_LENGTH,
+        )
+
+    @field_validator("app_name")
+    @classmethod
+    def validate_app_name(cls, value: str) -> str:
+        """Validate the RFC 5424 application name field."""
+
+        return _validate_syslog_printable_field(
+            value,
+            field_name="syslog.app_name",
+            max_length=SYSLOG_APP_NAME_MAX_LENGTH,
+        )
+
+    @field_validator("procid")
+    @classmethod
+    def validate_procid(cls, value: str) -> str:
+        """Validate the RFC 5424 process identifier field."""
+
+        return _validate_syslog_printable_field(
+            value,
+            field_name="syslog.procid",
+            max_length=SYSLOG_PROCID_MAX_LENGTH,
+        )
+
+    @field_validator("msgid")
+    @classmethod
+    def validate_msgid(cls, value: str) -> str:
+        """Validate the RFC 5424 message identifier field."""
+
+        return _validate_syslog_printable_field(
+            value,
+            field_name="syslog.msgid",
+            max_length=SYSLOG_MSGID_MAX_LENGTH,
+        )
+
+    @field_validator("structured_data_id")
+    @classmethod
+    def validate_structured_data_id(cls, value: str) -> str:
+        """Validate the bounded structured-data identifier used for metrics."""
+
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("syslog.structured_data_id must not be empty")
+        if len(rendered) > SYSLOG_STRUCTURED_DATA_ID_MAX_LENGTH:
+            raise ValueError(
+                "syslog.structured_data_id must be at most "
+                f"{SYSLOG_STRUCTURED_DATA_ID_MAX_LENGTH} characters"
+            )
+        if not SYSLOG_STRUCTURED_DATA_ID_RE.fullmatch(rendered):
+            raise ValueError(
+                "syslog.structured_data_id may contain only letters, digits, underscores, "
+                "dots, colons, and hyphens"
+            )
+        return rendered
+
+    @model_validator(mode="after")
+    def validate_transport_settings(self) -> SyslogObservabilityPolicy:
+        """Require transport-specific settings only when syslog is enabled."""
+
+        if not self.enabled:
+            return self
+        if self.transport == "unixgram" and self.socket_path is None:
+            raise ValueError("syslog.socket_path is required when syslog.transport is unixgram")
+        return self
 
 
 class NatsServerMonitoringPolicy(BaseModel):
@@ -319,6 +1018,14 @@ class ObservabilityPolicy(BaseModel):
     include_legacy: bool = False
     subjects: list[ObservabilitySubjectPolicy] = Field(default_factory=list)
     prometheus: PrometheusTextfilePolicy = Field(default_factory=PrometheusTextfilePolicy)
+    otlp: OtlpMetricsPolicy = Field(default_factory=OtlpMetricsPolicy)
+    elastic: ElasticObservabilityPolicy = Field(default_factory=ElasticObservabilityPolicy)
+    grafana_alloy: GrafanaAlloyObservabilityPolicy = Field(
+        default_factory=GrafanaAlloyObservabilityPolicy
+    )
+    splunk_hec: SplunkHecObservabilityPolicy = Field(default_factory=SplunkHecObservabilityPolicy)
+    statsd: StatsdObservabilityPolicy = Field(default_factory=StatsdObservabilityPolicy)
+    syslog: SyslogObservabilityPolicy = Field(default_factory=SyslogObservabilityPolicy)
     nats_server_monitoring: NatsServerMonitoringPolicy = Field(
         default_factory=NatsServerMonitoringPolicy
     )
@@ -389,6 +1096,7 @@ def subjects_from_app_config(config: AppConfig) -> list[str]:
     subjects.extend(rule.subject for rule in config.encryption.rules)
     subjects.extend(rule.subject for rule in config.message_metadata.rules)
     subjects.extend(rule.subject for rule in config.mission_metadata.rules)
+    subjects.extend(rule.subject for rule in config.security_labels.rules)
     subjects.extend(_raw_sink_subjects(config))
     return _unique_preserve_order(validate_subject_pattern(subject) for subject in subjects)
 

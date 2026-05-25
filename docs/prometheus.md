@@ -154,6 +154,13 @@ The `subjects` section helps operators review which subject patterns the sink
 configuration knows about. Current Prometheus output does not include subject
 labels by default.
 
+Subject-aware Prometheus export has been evaluated as future work, but it is
+not enabled today. Do not add raw NATS subjects as Prometheus labels through
+local patches or ad hoc exporters. A future implementation needs explicit
+subject-family allow rules, stable low-cardinality labels, cardinality caps,
+and tests proving delivery behavior is unchanged. See
+[Subject-Aware Observability Evaluation](subject-aware-observability-evaluation.md).
+
 ## Enable A Minimal Export
 
 Edit `/etc/nats-sinks/observability.prometheus.json` and enable only the
@@ -203,6 +210,38 @@ This exports core counters, the last successful sink timestamp, and NATS
 connection-event counters. It does not export timings, legacy aliases, subject
 names, message IDs, table names, file paths, classification values, labels, or
 payload contents.
+
+## Export Freshness Metrics
+
+Freshness metrics can show delayed feeds, stale replay, missing publisher
+timestamps, malformed `Nats-Time-Stamp` headers, and positive source clock skew.
+They are aggregate metrics only; the Prometheus connector does not add subject,
+source, sensor, sink, table, priority, classification, or label dimensions.
+
+Enable the freshness counters and observations only when that timing evidence is
+approved for the deployment:
+
+```json
+{
+  "allowed_metric_patterns": [
+    "event_*",
+    "events_*"
+  ],
+  "include_observations": true
+}
+```
+
+Example Prometheus text:
+
+```text
+# HELP nats_sinks_events_stale_at_receive_total Events older than the configured stale threshold at runner receive time.
+# TYPE nats_sinks_events_stale_at_receive_total counter
+nats_sinks_events_stale_at_receive_total 3
+# HELP nats_sinks_event_age_at_receive_seconds Observed event age in seconds when the runner received the message.
+# TYPE nats_sinks_event_age_at_receive_seconds summary
+nats_sinks_event_age_at_receive_seconds_count 256
+nats_sinks_event_age_at_receive_seconds_max 12.428
+```
 
 ## Enable The Native HTTP Endpoint
 
@@ -638,6 +677,8 @@ Before enabling Prometheus export, confirm:
   selected NATS monitoring numeric values are approved for sharing,
 - the allow list contains only metrics approved for the deployment,
 - `include_observations` is enabled only if timing values are safe to share,
+- freshness metrics are enabled only when event-age and clock-skew timing is
+  approved for the deployment,
 - subject labels are not exported,
 - textfile directory permissions allow the observability service to write and
   node_exporter to read,

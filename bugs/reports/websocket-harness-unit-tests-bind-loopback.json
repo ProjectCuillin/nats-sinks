@@ -1,0 +1,35 @@
+{
+  "id": "websocket-harness-unit-tests-bind-loopback",
+  "title": "[Bug]: WebSocket harness unit tests must not bind loopback sockets",
+  "area": "Testing",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": [
+    "websocket",
+    "testing"
+  ],
+  "summary": "The initial WebSocket harness unit tests attempted to bind loopback sockets directly. In restricted test environments this fails with PermissionError and also violates the project rule that unit tests must not require network access.",
+  "observed": "A focused unit-test run failed before reaching the WebSocket harness assertions because the test helper attempted to bind a loopback socket and the execution environment denied socket creation.",
+  "expected": "Unit tests should exercise port-selection behavior deterministically without opening network sockets. Live socket binding belongs in the optional WebSocket integration script, not in the unit test suite.",
+  "reproduction": "Run the WebSocket harness unit tests in an environment where unit tests are not allowed to bind loopback sockets. The failure occurs before any NATS server is started.",
+  "failing_test": "The failing behavior was observed in tests/unit/test_websocket_harness.py before the regression tests were changed to monkeypatch the port probe helpers.",
+  "impact": "The defect could make the normal unit test suite fail in locked-down CI or developer sandboxes even though the product code is working. That would reduce release confidence and conflict with the no-network-unit-tests policy.",
+  "delivery_semantics": "The defect is limited to test isolation. It does not alter commit-then-acknowledge processing, sink durability, DLQ behavior, or idempotency.",
+  "security": "The fix keeps unit tests fully local and deterministic. The live WebSocket e2e script remains explicit, opt-in, loopback-only, and secret-free.",
+  "acceptance": [
+    "WebSocket harness unit tests do not create, bind, listen on, or connect to sockets.",
+    "Port-selection behavior is tested through monkeypatched probe helpers.",
+    "The optional live WebSocket e2e script remains the only new path that starts a local NATS server.",
+    "The focused WebSocket configuration and harness tests pass.",
+    "Documentation clearly separates unit-test behavior from optional live WebSocket certification."
+  ],
+  "tests": "Run python -m pytest tests/unit/test_websocket_harness.py tests/unit/test_nats_connection_options.py tests/unit/test_config.py and ruff check on the changed source, test, and script files.",
+  "documentation": "Update WebSocket testing documentation so maintainers understand that unit tests mock port probing and the live script performs the actual loopback server test when nats-server is installed.",
+  "closeout": "Close after the release containing the isolated WebSocket harness tests is published. Include sanitized test evidence and note that no secrets or real infrastructure addresses were used.",
+  "relationships": {
+    "related": [
+      "backlog:websocket-integration-certification-harness"
+    ]
+  }
+}

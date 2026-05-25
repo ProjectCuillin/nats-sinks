@@ -1,0 +1,26 @@
+{
+  "schema": "nats_sinks.normalized_metadata.v1",
+  "subject": "mission.sensor.synthetic",
+  "stream": "SYNTHETIC_EVENTS",
+  "consumer": "review-worker",
+  "stream_sequence": 42,
+  "consumer_sequence": 7,
+  "message_id": "synthetic-message-00042",
+  "published_epoch_ns": 1770000000000000000,
+  "received_epoch_ns": 1770000001000000000,
+  "stored_epoch_ns": 1770000004000000000,
+  "priority": "high",
+  "classification": "NATO SECRET",
+  "labels": "review-candidate;mission-test",
+  "labels_list": ["review-candidate", "mission-test"],
+  "mission_metadata": {
+    "schema": "nats_sinks.use_case.mission_metadata.v1",
+    "profile": "cross-domain-handoff-preparation",
+    "profile_version": 1,
+    "handoff": {
+      "candidate_domain": "synthetic-review-domain",
+      "release_required": true,
+      "review_reason": "audit-export"
+    }
+  }
+}

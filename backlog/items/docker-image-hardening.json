@@ -1,0 +1,25 @@
+{
+  "id": "docker-image-hardening",
+  "title": "[Feature]: Harden the nats-sinks production container image",
+  "area": "Operations and deployment",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": ["deployment", "security", "release"],
+  "problem": "Issue #12 adds a local Docker image and NATS Compose test stack for developer smoke testing, but production operators still need a hardened, reviewable container image before using nats-sinks as a long-lived containerized service in controlled or mission-oriented environments.",
+  "proposal": "Harden the container image as a production deployment artifact while preserving the existing local testing image workflow. Evaluate pinned base image digests, minimal runtime packages, non-root execution, read-only filesystem compatibility, explicit writable mounts, restrictive Linux capabilities, vulnerability scanning, SBOM attachment, provenance, signing, image labels, and clear separation between local testing and production deployment guidance.",
+  "users": "Operators, platform teams, maintainers, and security reviewers who need a containerized nats-sinks deployment with explicit runtime boundaries and auditable supply-chain evidence.",
+  "delivery_semantics": "Image hardening must not change commit-then-acknowledge semantics. The image must continue to run the same `nats-sink` CLI, and any healthcheck or readiness behavior must not ACK messages, publish DLQ records, or perform destination writes as a side effect.",
+  "security": "The hardened image must not include credentials, wallets, private keys, certificates, environment-specific configuration, test output, or build-time secrets. It should use least privilege, support explicit runtime mounts, document read-only filesystem behavior, and integrate with existing SBOM and release-evidence workflows without leaking sensitive deployment details.",
+  "acceptance": [
+    "The production container hardening requirements are documented separately from the local Docker smoke-test workflow.",
+    "The image runs as a non-root user and documents all writable paths.",
+    "The image can be tested with read-only root filesystem settings or documents every required exception.",
+    "The image build includes OCI labels, SBOM evidence, and checksum or provenance guidance appropriate for release artifacts.",
+    "Vulnerability and dependency scanning expectations are documented for maintainers and operators.",
+    "The local Docker smoke test continues to pass after hardening changes.",
+    "Documentation clearly states what is supported for local testing, what is suitable for production, and what remains operator-specific."
+  ],
+  "tests": "Add deterministic unit tests that inspect Dockerfile hardening invariants. Run unit tests, packaging checks, docs build, the Docker local smoke test when Docker is available, and any configured vulnerability or SBOM generation checks. Do not require live external registries in unit tests.",
+  "documentation": "Update docs/docker.md, docs/security.md, docs/operations.md, docs/kubernetes.md, docs/sbom.md, README.md, ROADMAP.md, and CHANGELOG.md with production hardening guidance and limitations.",
+  "closeout": "Close only after the hardened image work is merged into the release branch and the release that contains it has been published."
+}

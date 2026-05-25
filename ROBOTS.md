@@ -28,6 +28,55 @@ This repository is safety-sensitive infrastructure code. Follow these rules:
 - Treat malformed payloads, invalid commands, invalid configuration, network failures, database failures, and DLQ failures as first-class production paths.
 - Add deterministic unhappy-path and fuzz-style tests for validators, parsers, normalizers, and delivery decisions.
 - Prefer small, reviewable changes.
+- Never commit ordinary work directly to `main`. Use the hierarchical branch
+  model: `release-vX.Y.Z` from `main`, issue or feature branches from the
+  release branch, and bug branches from the active issue or feature branch
+  when defects are found during development.
+- Merge bug branches back into their issue or feature branch after the failing
+  test, fix, and sanitized evidence are complete. Merge issue or feature
+  branches back into the release branch after implementation evidence,
+  documentation, changelog updates, and local checks are complete. Merge the
+  release branch into `main` only when the maintainer explicitly decides to
+  release.
+- Keep ordinary branch pushes quiet. Do not start GitHub Actions after every
+  small branch commit. Use `scripts/open-release-pr.sh --base <target-branch>`
+  to create or refresh a draft pull request against the correct hierarchy
+  target, then run `scripts/run-release-validation.sh` only when the branch is
+  ready for merge or release validation.
+- For issue, feature, and bug pull requests raised by this workflow,
+  `scripts/open-release-pr.sh --ready` auto-approves ready non-main PRs by
+  default. Use `--no-auto-approve-non-main` only when manual inspection is
+  needed before approval. The helper must refuse any pull request whose base
+  branch is `main`, should verify the expected PR author when possible, and
+  must never replace tests, evidence, documentation updates, or release
+  approval. Release pull requests into `main` remain manual.
+- Pull requests should carry the same searchable labels as their managed
+  source issues. Use `scripts/open-release-pr.sh --issue <number>` when the
+  branch name or a dedicated `Related #123` PR body line does not make the
+  source issue obvious. The helper copies issue labels onto the PR by default,
+  removes stale project-managed labels while preserving manual labels, and
+  supports `--no-copy-issue-labels-to-pr` only for exceptional maintenance
+  work. Do not recreate the GitHub Issue `Priority` field as a pull request
+  label; priority remains managed on the issue itself.
+- Never merge a pull request silently. Before every PR merge, post a short
+  sanitized comment that summarizes the test results or validation evidence.
+  Use `python scripts/merge-pr-with-comment.py --pr <number> --comment-file
+  <file>` for local merges so the comment is posted before `gh pr merge`
+  runs. Do not include secrets, private endpoints, payloads, local paths, or
+  token values in merge comments.
+- The `Branch Pull Request` workflow is manual and token-gated. Do not
+  re-enable push-triggered pull request creation unless the maintainer
+  explicitly changes the release policy.
+- Release tags must point at commits already merged into `main`; do not tag
+  unmerged work branches.
+- Keep `main` protected through GitHub branch protection. Require pull
+  requests, release pull request governance, dependency review, resolved
+  conversations, no force pushes, and no branch deletion. This repository is a
+  solo-maintainer repository, so do not require a second approving review or
+  CODEOWNER review for `main`: GitHub blocks self-approval and that setting
+  deadlocks releases. Use
+  `scripts/apply-branch-protection.sh` when the repository policy needs to be
+  applied or repaired.
 - Treat GitHub Issues as the live backlog and `CHANGELOG.md` as the shipped
   history. User-visible feature work should have a detailed GitHub feature
   request before implementation unless the change is a small typo or
@@ -74,6 +123,11 @@ This repository is safety-sensitive infrastructure code. Follow these rules:
   the work, apply the concrete release label, and post a sanitized `started`
   lifecycle comment. The comment must include `Planned Work`, `Test Plan`, and
   `Documentation And Release Notes` sections.
+- Before editing code for a managed issue, create or switch to the issue branch
+  from the active release branch. If a bug is discovered inside that feature
+  branch, create a separate bug report, branch from the feature branch, add the
+  failing test first, and merge the bug branch back into the feature branch
+  after verification.
 - When implementation is complete locally, post a sanitized `completed` or
   `closeout` lifecycle comment. The comment must include `Completed Work`,
   `Acceptance Criteria`, `Test Plan Evidence`, and `Close-Out Evidence`
@@ -222,6 +276,12 @@ code:
 - Prefer `encryption.key_b64_env` for payload encryption key material. Direct
   `encryption.key_b64` values are for disposable local tests only and must be
   redacted from output.
+- When payload encryption key rotation is touched, preserve the encrypted
+  payload envelope schema, keep `key_id` non-secret but operationally bland,
+  and test old-key plus new-key decryption through `PayloadKeyRegistry`.
+- Do not add cloud secret-manager SDKs to the core package for encryption
+  unless the dependency is isolated behind a deliberate optional extra and a
+  documented provider-specific connector.
 - When adding or changing `encryption.rules`, document whether rules inherit
   global key material, override key material, or disable encryption for matching
   subjects. Rule order is security-sensitive and must be clear in examples.
@@ -238,6 +298,18 @@ code:
   only when the corresponding header is absent. Test first-match-wins behavior,
   unmatched fallback, explicit null defaults, and empty headers whenever rules
   change.
+- NATS authentication option construction belongs in
+  `nats_sinks.core.nats_options`. Do not add separate CLI-only, runner-only, or
+  test-only paths for resolving passwords, tokens, credentials files, NKEY seed
+  files, TLS contexts, WebSocket headers, or reconnect settings.
+- Treat NATS credentials files, NKEY seed files, TLS private keys, and client
+  certificate paths as sensitive identity material. Redact them from
+  `show-effective-config`, logs, issue comments, test reports, and examples;
+  use safe placeholder paths in public documentation.
+- Keep live NATS authentication workflow tests explicitly environment-gated.
+  Unit tests may verify option construction and redaction, but they must not
+  require real credentials, private endpoints, seed files, certificate files, or
+  a live NATS server.
 - Redact secrets in CLI output, logs, exceptions, reports, and test snapshots.
 - Do not dump complete process environments, complete connection strings, or
   raw headers that may contain credentials.
@@ -261,6 +333,11 @@ code:
   paths, priority values, classification values, labels, payload fields,
   usernames, and host-specific secrets require explicit design review before
   they can be exported anywhere.
+- Subject-aware observability must stay disabled by default until a reviewed
+  policy model, bounded subject-family aggregation, and certification tests are
+  in place. Prefer stable operator-approved family labels over raw subject
+  labels, enforce cardinality caps, and remember that hashing a subject is not
+  the same as making it non-sensitive.
 - Keep example credentials obviously fake and clearly marked for local
   development only.
 - When adding config fields, document defaults, accepted values, security
@@ -541,6 +618,30 @@ Production operations depend on useful, safe signals:
   checked, UTF-8 checked, and free of payloads, secrets, credentials,
   certificate material, private key material, and sensitive operational content.
 
+## Sink Connector Framework
+
+- Treat every new destination as a sink connector with a documented durable
+  success boundary, idempotency model, security model, and certification plan.
+- Oracle Database and FileSink are first-party built-in connectors. Future
+  Oracle-family sinks, such as OCI Object Storage, Oracle MySQL,
+  Oracle Berkeley DB, Oracle NoSQL Database, and OCI Streaming, should also be
+  first-party connectors in this repository unless governance explicitly
+  changes that posture.
+- External connector discovery is a code-execution and supply-chain boundary.
+  Keep it disabled by default, require `plugins.allowed_sinks`, and never allow
+  JSON configuration to specify arbitrary module paths, class paths, or dynamic
+  imports.
+- External connectors must expose a `SinkConnector` descriptor, match the
+  allow-listed entry-point name, declare compatibility metadata, and pass
+  certification tests before production recommendation.
+- Do not mark a connector production-ready merely because it implements the
+  Python protocol. Require tests for ACK-after-durable-success, no ACK on
+  failure, duplicate redelivery, secret redaction, no payload logging by
+  default, and destination-specific commit behavior.
+- Palantir Foundry, Palantir Gotham, and other third-party platform connectors
+  require local fake clients or contract harnesses before live certification is
+  attempted. Never imply live certification from public documentation alone.
+
 ## Data And Idempotency
 
 At-least-once delivery means duplicate processing is normal:
@@ -696,6 +797,12 @@ JetStream, Oracle, Python packaging, or sink connectors:
   been explicitly designed, implemented, and tested. Never imply that
   nats-sinks performs targeting, fire-control, weapons release,
   rules-of-engagement evaluation, or autonomous decision-making.
+- Treat cross-domain handoff package material as review evidence only. Never
+  claim that a package, file sink output, or documentation blueprint is a
+  cross-domain guard, release authority, data diode, sanitizer, transfer
+  approval, or certification boundary. Package examples must use sanitized
+  identifiers, bounded manifests, validated relative paths, explicit hashes,
+  and no secrets.
 - Update README, docs pages, examples, and CLI help together when public
   behavior changes.
 - Keep the documentation set in a release-ready state. Do not leave new

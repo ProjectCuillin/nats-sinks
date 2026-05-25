@@ -1,0 +1,371 @@
+#!/usr/bin/env python
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
+# SPDX-License-Identifier: Apache-2.0
+
+"""Copy managed GitHub issue labels onto a pull request.
+
+The repository workflow keeps feature, bug, and release planning metadata on
+GitHub Issues. Pull requests should carry the same searchable labels so
+maintainers can filter work consistently while it moves through branch review.
+This helper reads one or more source issues, collects their labels, and applies
+those labels to the pull request with `gh issue edit --add-label`. GitHub pull
+requests are issue records for label purposes, and the issue-oriented command
+avoids unrelated pull request GraphQL fields that are not needed for label
+management.
+
+The helper intentionally copies labels only. GitHub Issue fields, such as the
+official Priority field, are not pull request labels and remain managed by the
+issue-planning sync scripts.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import shutil
+import subprocess
+import sys
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
+
+ISSUE_REFERENCE_RE = re.compile(r"(?<![\w/])#(?P<number>[1-9][0-9]{0,8})(?![\w-])")
+RELATED_LINE_RE = re.compile(r"(?im)^\s*related(?:\s+to)?\s*:?\s+(?P<refs>.+)$")
+BRANCH_ISSUE_RE = re.compile(
+    r"^(?:issue|feature|bug|bugfix|hotfix)-(?P<number>[1-9][0-9]{0,8})(?:-|$)"
+)
+FENCED_CODE_RE = re.compile(r"```.*?```", re.DOTALL)
+INLINE_CODE_RE = re.compile(r"`[^`\n]*`")
+ASCII_CONTROL_MAX = 31
+ASCII_DELETE = 127
+MAX_GITHUB_NUMBER = 999_999_999
+MANAGED_LABEL_NAMES = frozenset(
+    {
+        "backlog",
+        "bug",
+        "completed",
+        "deployment",
+        "documentation",
+        "enhancement",
+        "file",
+        "nats",
+        "not-planned",
+        "observability",
+        "oracle",
+        "release",
+        "release-unscheduled",
+        "security",
+        "testing",
+    }
+)
+MANAGED_LABEL_PREFIXES = ("release-v", "severity-", "sink-")
+
+
+@dataclass(frozen=True)
+class PullRequestContext:
+    """Small PR shape required for source issue detection."""
+
+    number: int
+    head_ref_name: str
+    body: str
+    labels: tuple[str, ...] = ()
+
+
+class PullRequestLabelSyncError(RuntimeError):
+    """Raised when pull request label sync cannot continue safely."""
+
+
+def _run_gh(args: Sequence[str], *, capture_json: bool = False) -> object:
+    """Run GitHub CLI with a fixed executable and argument list."""
+
+    gh_executable = shutil.which("gh")
+    if gh_executable is None:
+        raise PullRequestLabelSyncError("GitHub CLI is required.")
+    try:
+        completed = subprocess.run(  # noqa: S603 - fixed executable with argument list.
+            [gh_executable, *args],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise PullRequestLabelSyncError(exc.stderr.strip() or str(exc)) from exc
+    if capture_json:
+        return _decode_json_output(completed.stdout)
+    if completed.stdout:
+        sys.stdout.write(completed.stdout)
+    return None
+
+
+def _contains_ascii_control(value: str) -> bool:
+    """Return true when a GitHub label is unsafe for terminal output."""
+
+    return any(
+        ord(character) <= ASCII_CONTROL_MAX or ord(character) == ASCII_DELETE for character in value
+    )
+
+
+def _decode_json_output(value: str) -> object:
+    """Decode a small GitHub CLI JSON response with controlled errors."""
+
+    try:
+        return json.loads(value or "{}")
+    except json.JSONDecodeError as exc:
+        raise PullRequestLabelSyncError("GitHub CLI returned malformed JSON.") from exc
+
+
+def _validate_number(value: int, *, field: str) -> int:
+    """Validate GitHub issue and pull request numbers before API use."""
+
+    if value <= 0 or value > MAX_GITHUB_NUMBER:
+        raise PullRequestLabelSyncError(f"{field} must be between 1 and 999999999.")
+    return value
+
+
+def _coerce_number(value: object, *, field: str) -> int:
+    """Coerce GitHub JSON number fields without accepting ambiguous values."""
+
+    if isinstance(value, bool):
+        raise PullRequestLabelSyncError(f"{field} must be a number.")
+    if isinstance(value, int):
+        return _validate_number(value, field=field)
+    if isinstance(value, str) and value.isdecimal():
+        return _validate_number(int(value), field=field)
+    raise PullRequestLabelSyncError(f"{field} must be a number.")
+
+
+def _strip_markdown_code(text: str) -> str:
+    """Remove Markdown code blocks before scanning for issue references."""
+
+    without_fenced_blocks = FENCED_CODE_RE.sub("", text)
+    return INLINE_CODE_RE.sub("", without_fenced_blocks)
+
+
+def _body_related_issue_numbers(body: str) -> tuple[int, ...]:
+    """Return issue numbers from explicit Related lines in PR body text."""
+
+    issue_numbers: list[int] = []
+    searchable_body = _strip_markdown_code(body)
+    for line_match in RELATED_LINE_RE.finditer(searchable_body):
+        for issue_match in ISSUE_REFERENCE_RE.finditer(line_match.group("refs")):
+            issue_numbers.append(int(issue_match.group("number")))
+    return tuple(dict.fromkeys(issue_numbers))
+
+
+def _label_names(raw_labels: object) -> tuple[str, ...]:
+    """Extract validated label names from a GitHub JSON payload."""
+
+    if not isinstance(raw_labels, list):
+        raise PullRequestLabelSyncError("GitHub label payload must be a list.")
+    labels: list[str] = []
+    for raw_label in raw_labels:
+        if not isinstance(raw_label, dict) or not isinstance(raw_label.get("name"), str):
+            raise PullRequestLabelSyncError("GitHub label payload contains an invalid label.")
+        label = raw_label["name"].strip()
+        if not label:
+            continue
+        if _contains_ascii_control(label):
+            raise PullRequestLabelSyncError(
+                "GitHub label names must not contain control characters."
+            )
+        labels.append(label)
+    return tuple(dict.fromkeys(labels))
+
+
+def _is_managed_label(label: str) -> bool:
+    """Return true when a label is owned by project automation."""
+
+    if label in MANAGED_LABEL_NAMES:
+        return True
+    return any(label.startswith(prefix) for prefix in MANAGED_LABEL_PREFIXES)
+
+
+def load_pull_request(repo: str, pr_number: int) -> PullRequestContext:
+    """Load the PR body and source branch for automatic issue detection."""
+
+    _validate_number(pr_number, field="pull request number")
+    raw = _run_gh(
+        [
+            "pr",
+            "view",
+            str(pr_number),
+            "--repo",
+            repo,
+            "--json",
+            "number,headRefName,body,labels",
+        ],
+        capture_json=True,
+    )
+    if not isinstance(raw, dict):
+        raise PullRequestLabelSyncError("Unexpected GitHub PR payload.")
+    return PullRequestContext(
+        number=_coerce_number(raw.get("number"), field="pull request number"),
+        head_ref_name=str(raw.get("headRefName") or ""),
+        body=str(raw.get("body") or ""),
+        labels=_label_names(raw.get("labels", [])),
+    )
+
+
+def detect_source_issues(
+    context: PullRequestContext,
+    explicit_issues: Iterable[int],
+) -> tuple[int, ...]:
+    """Return explicit, branch-derived, and body-derived source issue numbers."""
+
+    issues: list[int] = []
+    for issue in explicit_issues:
+        issues.append(_validate_number(issue, field="issue number"))
+
+    branch_match = BRANCH_ISSUE_RE.search(context.head_ref_name)
+    if branch_match is not None:
+        issues.append(int(branch_match.group("number")))
+
+    issues.extend(_body_related_issue_numbers(context.body))
+
+    return tuple(dict.fromkeys(issues))
+
+
+def load_issue_labels(repo: str, issue_number: int) -> tuple[str, ...]:
+    """Return all labels currently attached to one source issue."""
+
+    _validate_number(issue_number, field="issue number")
+    raw = _run_gh(
+        [
+            "issue",
+            "view",
+            str(issue_number),
+            "--repo",
+            repo,
+            "--json",
+            "labels",
+        ],
+        capture_json=True,
+    )
+    if not isinstance(raw, dict):
+        raise PullRequestLabelSyncError("Unexpected GitHub issue payload.")
+    return _label_names(raw.get("labels", []))
+
+
+def apply_pr_labels(
+    repo: str,
+    pr_number: int,
+    labels: Iterable[str],
+    *,
+    current_labels: Iterable[str] = (),
+    dry_run: bool = False,
+    remove_stale: bool = True,
+) -> tuple[str, ...]:
+    """Synchronize managed labels on the PR."""
+
+    unique_labels = tuple(dict.fromkeys(label for label in labels if label))
+    current = tuple(dict.fromkeys(label for label in current_labels if label))
+    labels_to_add = tuple(label for label in unique_labels if label not in current)
+    labels_to_remove = (
+        tuple(label for label in current if label not in unique_labels and _is_managed_label(label))
+        if remove_stale
+        else ()
+    )
+    if not unique_labels and not labels_to_remove:
+        return ()
+    if dry_run:
+        if labels_to_add:
+            sys.stdout.write(f"would add PR labels: {', '.join(labels_to_add)}\n")
+        if labels_to_remove:
+            sys.stdout.write(f"would remove stale PR labels: {', '.join(labels_to_remove)}\n")
+        return unique_labels
+
+    validated_pr = str(_validate_number(pr_number, field="pull request number"))
+    if labels_to_add:
+        add_args = ["issue", "edit", validated_pr, "--repo", repo]
+        for label in labels_to_add:
+            add_args.extend(["--add-label", label])
+        _run_gh(add_args)
+    if labels_to_remove:
+        remove_args = ["issue", "edit", validated_pr, "--repo", repo]
+        for label in labels_to_remove:
+            remove_args.extend(["--remove-label", label])
+        _run_gh(remove_args)
+    return unique_labels
+
+
+def sync_pr_labels(
+    *,
+    repo: str,
+    pr_number: int,
+    explicit_issues: Iterable[int] = (),
+    dry_run: bool = False,
+    remove_stale: bool = True,
+) -> tuple[str, ...]:
+    """Copy labels from detected source issues to a pull request."""
+
+    context = load_pull_request(repo, pr_number)
+    issue_numbers = detect_source_issues(context, explicit_issues)
+    if not issue_numbers:
+        sys.stdout.write("No source issue references found; no PR labels copied.\n")
+        return ()
+
+    labels: list[str] = []
+    for issue_number in issue_numbers:
+        labels.extend(load_issue_labels(repo, issue_number))
+    copied = apply_pr_labels(
+        repo,
+        context.number,
+        labels,
+        current_labels=context.labels,
+        dry_run=dry_run,
+        remove_stale=remove_stale,
+    )
+    if copied:
+        verb = "Would copy" if dry_run else "Copied"
+        sys.stdout.write(
+            f"{verb} {len(copied)} label(s) from issue(s) "
+            f"{', '.join(f'#{issue}' for issue in issue_numbers)} to PR #{context.number}.\n"
+        )
+    return copied
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """Build the command-line parser."""
+
+    parser = argparse.ArgumentParser(description="Copy GitHub issue labels to a pull request.")
+    parser.add_argument("--repo", default="ProjectCuillin/nats-sinks")
+    parser.add_argument("--pr", type=int, required=True, help="Pull request number.")
+    parser.add_argument(
+        "--issue",
+        type=int,
+        action="append",
+        default=[],
+        help=(
+            "Source issue number. May be repeated. If omitted, the branch and PR body are scanned."
+        ),
+    )
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--no-remove-stale",
+        action="store_true",
+        help="Do not remove stale project-managed labels from the pull request.",
+    )
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """CLI entry point."""
+
+    args = build_parser().parse_args(argv)
+    try:
+        sync_pr_labels(
+            repo=args.repo,
+            pr_number=args.pr,
+            explicit_issues=args.issue,
+            dry_run=args.dry_run,
+            remove_stale=not args.no_remove_stale,
+        )
+    except PullRequestLabelSyncError as exc:
+        sys.stderr.write(f"{exc}\n")
+        return 1
+    return 0
+
+
+if __name__ == "__main__":  # pragma: no cover - exercised through tests and CLI use.
+    raise SystemExit(main())

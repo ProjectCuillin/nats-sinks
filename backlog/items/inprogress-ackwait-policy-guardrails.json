@@ -1,0 +1,27 @@
+{
+  "id": "inprogress-ackwait-policy-guardrails",
+  "title": "[Feature]: Add AckWait and BackOff guardrails for InProgress support",
+  "area": "Core runtime and delivery semantics",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["nats", "security", "testing"],
+  "problem": "InProgress extends the server-side acknowledgement timer by the consumer AckWait duration, but nats-sinks does not currently own or inspect the full consumer policy. Without guardrails, an operator could configure a heartbeat interval that is too long, incompatible with BackOff behavior, or unsafe for the existing durable consumer.",
+  "proposal": "Add startup validation and documentation that ties InProgress configuration to consumer AckWait and BackOff policy. The first production implementation should fail closed when InProgress is enabled but the runner cannot determine a safe interval, cannot verify the durable consumer policy, or detects that the configured interval is not meaningfully shorter than the effective AckWait window. This work should align with the broader JetStream consumer policy configuration backlog item.",
+  "users": "Operators using externally managed consumers, maintainers adding future consumer reconciliation, and reviewers who need deterministic timing behavior before long-running write heartbeats are enabled.",
+  "delivery_semantics": "Guardrails must preserve commit-then-acknowledge by preventing InProgress from becoming a best-effort guess. If safe policy cannot be verified, the runner should refuse to start with InProgress enabled rather than process messages with unclear redelivery timing.",
+  "security": "Configuration errors must be clear but must not reveal private server locations, credentials, payloads, or sensitive subject naming. The validation logic should use allow-listed fields and avoid broad NATS management permissions unless explicitly configured.",
+  "acceptance": [
+    "Startup validation fails closed when InProgress is enabled without a verifiable safe timing policy.",
+    "The configured heartbeat interval must be lower than the effective AckWait window.",
+    "BackOff interactions are documented and either validated or rejected until supported.",
+    "The design separates bind-only runtime mode from optional administrative consumer inspection.",
+    "Tests cover missing consumer policy, unsafe interval, BackOff interaction, safe policy, and redacted errors."
+  ],
+  "tests": "Add unit tests with mocked JetStream consumer info responses and configuration validation tests for safe and unsafe timing combinations. Run scripts/check.sh.",
+  "documentation": "Update in-progress evaluation, JetStream topology, configuration, operations, NATS permissions, roadmap, and changelog documentation.",
+  "closeout": "Close after the release containing InProgress AckWait and BackOff guardrails is published. Include release tag, tests, docs, and limitations.",
+  "relationships": {
+    "related": ["#28", "backlog:jetstream-consumer-policy-configuration"],
+    "blocks": ["backlog:inprogress-heartbeat-during-sink-writes"]
+  }
+}

@@ -30,6 +30,25 @@ sequenceDiagram
     Audit->>Store: inspect custody record
 ```
 
+## Lineage Inspection
+
+After custody records are persisted, operators may need to inspect related
+events by mission, correlation, causation, tasking, or track identifier. The
+Oracle lineage helper supports this without changing sink behavior:
+
+```bash
+nats-sink query-lineage /etc/nats-sinks/oracle.json \
+  --field track_id \
+  --value TRACK-9001 \
+  --limit 25
+```
+
+The helper is read-only, bounded, and redacted by default. It prints core row
+identity, handling metadata, timing fields, and mission metadata key names, but
+omits payload values unless `--include-payload` is explicitly supplied. See
+[Lineage Query Helpers](../../lineage-query-helpers.md) for the complete
+security model and Oracle-specific SQL pattern.
+
 ## What To Preserve
 
 A custody record should preserve enough context to prove what was handled,
@@ -40,6 +59,9 @@ where it came from, and how it moved through the sink:
 - stream and consumer sequence numbers when available;
 - message ID when the publisher supplied one;
 - creation, receive, and store timestamps when available;
+- aggregate freshness metrics that show event age at receive and store time,
+  stale-event counts, and positive source clock skew without exposing subject or
+  sensor labels;
 - priority, classification, and labels;
 - validated `mission_metadata`;
 - payload or encrypted payload envelope;
@@ -131,3 +153,5 @@ as normal top-level and metadata fields:
 - Keep examples synthetic in documentation and GitHub Issues.
 - Treat custody metadata as sensitive when it reveals mission tempo, platform
   behavior, or sensor coverage.
+- Allow freshness metrics only after reviewing whether event-age and source
+  clock-skew timing can be shared with the intended observability system.

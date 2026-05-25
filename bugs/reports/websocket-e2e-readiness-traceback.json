@@ -1,0 +1,35 @@
+{
+  "id": "websocket-e2e-readiness-traceback",
+  "title": "[Bug]: WebSocket e2e script should suppress transient readiness tracebacks",
+  "area": "Testing",
+  "severity": "low",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": [
+    "websocket",
+    "testing"
+  ],
+  "summary": "The optional WebSocket e2e script can print a transient nats-py connection-refused traceback while the temporary local NATS server is still starting, even though the script later passes.",
+  "observed": "A local WebSocket e2e run eventually published, consumed, wrote, and acknowledged all synthetic messages, but the console included an early transient connection-refused traceback from the client readiness loop.",
+  "expected": "The script should wait for the temporary WebSocket listener to accept loopback TCP connections before invoking nats-py, so successful runs produce clean sanitized output suitable for release evidence.",
+  "reproduction": "Run scripts/run-websocket-e2e.sh against a machine where the temporary NATS process needs a short startup window before the WebSocket listener is ready.",
+  "failing_test": "The defect is covered by adding a focused readiness helper test that proves transient connection failures can be retried without surfacing nats-py tracebacks during normal startup.",
+  "impact": "The runtime behavior is correct, but noisy test evidence can confuse maintainers and make release notes or issue comments harder to review.",
+  "delivery_semantics": "The defect is limited to optional test-script readiness behavior. It does not change sink writes, DLQ behavior, idempotency, or the commit-then-ACK invariant.",
+  "security": "The fix keeps output sanitized and avoids printing stack traces that could expose local paths in public release evidence.",
+  "acceptance": [
+    "The WebSocket e2e script waits for the local WebSocket TCP listener before calling nats-py.",
+    "Successful WebSocket e2e runs emit only sanitized JSON status lines.",
+    "A focused unit test covers the readiness helper behavior without opening real network sockets.",
+    "The live WebSocket e2e script passes when nats-server is available locally.",
+    "Documentation remains accurate for the clean output shape."
+  ],
+  "tests": "Run python -m pytest tests/unit/test_websocket_harness.py tests/unit/test_nats_connection_options.py tests/unit/test_config.py and the optional scripts/run-websocket-e2e.sh when nats-server is available.",
+  "documentation": "No user-facing command changes are required. Existing WebSocket testing documentation should continue to show clean sanitized JSON output.",
+  "closeout": "Close after the release containing the cleaned WebSocket e2e readiness behavior is published. Include sanitized passing live-script output.",
+  "relationships": {
+    "related": [
+      "backlog:websocket-integration-certification-harness"
+    ]
+  }
+}

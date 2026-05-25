@@ -14,9 +14,11 @@ The project repository is [ProjectCuillin/nats-sinks](https://github.com/Project
 NATS is a lightweight messaging system used to move events between services.
 JetStream is the persistence layer in NATS: it stores messages in streams and
 delivers them to consumers. A sink is a consumer whose main job is to copy those
-messages into another durable system, such as a database.
+messages into another durable system, such as Oracle Database, Oracle
+Autonomous Database on Oracle Cloud Infrastructure (OCI), or another approved
+storage backend.
 
-`nats-sinks` is a Python package for building outbound NATS JetStream sink consumers. It provides a reusable runtime that owns JetStream delivery semantics and delegates destination writes to sink implementations. The current production sinks are Oracle Database and local files.
+`nats-sinks` is a Python package for building outbound NATS JetStream sink consumers. It provides a reusable runtime that owns JetStream delivery semantics and delegates destination writes to sink implementations. The current production sinks are Oracle Database, including OCI-hosted Oracle Autonomous Database deployments, Oracle MySQL, and local files.
 
 The project is intentionally suitable for mission-oriented environments such as
 defence logistics, operational reporting, secure platform telemetry, and
@@ -58,8 +60,21 @@ used immediately:
   subject-specific rules shared by every sink. These fields are useful for
   separating routine traffic from urgent, restricted, coalition, exercise, or
   audit-relevant event streams without changing sink code.
+- Optional data-centric security label profiles for structured releasability,
+  handling caveats, owner, originator, policy identifier, and retention
+  category metadata. Oracle stores the profile in `SECURITY_LABELS_JSON`, the
+  file sink writes it as `security_labels`, and future sinks can use the same
+  core-normalized profile.
+- Optional message-level authenticity verification before any sink write, with
+  subject-specific HMAC-SHA256 or Ed25519 signature rules, sanitized rejection
+  reasons, and DLQ-before-ACK behavior for messages that fail verification.
+  This complements NATS authentication and TLS by proving the message body and
+  selected metadata were signed by an approved producer. See
+  [Message Authenticity](https://nats-sinks.readthedocs.io/en/latest/message-authenticity/).
 - `nats-sink`, the CLI for validating JSON configuration, showing redacted
-  effective config, testing sinks, and running sink processes.
+  effective config, testing sinks, running sink processes, and performing
+  bounded read-only Oracle lineage queries by allow-listed mission metadata or
+  message identity fields.
 - `nats-sink-metrics`, a separate CLI for reading a local JSON metrics snapshot
   and rendering status as tables, JSON, JSONL, shell variables, metric names,
   or Prometheus text output.
@@ -67,30 +82,79 @@ used immediately:
   sharing policies, validating what may be exported, and producing
   policy-filtered Prometheus textfile output for node_exporter or an optional
   native Prometheus HTTP scrape endpoint. It also provides a disabled-by-default
-  NATS server monitoring connector for explicitly approved `/healthz`, `/jsz`,
-  and related endpoint fields.
+  OpenTelemetry OTLP metrics connector, Elastic Observability and Grafana Alloy
+  profiles over the shared OTLP core, a disabled-by-default Splunk HEC
+  connector for approved aggregate metrics, a disabled-by-default StatsD
+  connector for best-effort datagram export, a disabled-by-default syslog
+  bridge for bounded RFC 5424-style messages, and a disabled-by-default NATS
+  server monitoring connector for explicitly approved `/healthz`, `/jsz`, and
+  related endpoint fields.
 - Optional core payload encryption for AES-256-GCM and AES-256-CCM before
   envelopes are delivered to Oracle, file, or future sinks.
+- Optional tamper-evident custody metadata with deterministic payload,
+  metadata, and record hashes computed before sink delivery.
+- Optional pre-sink policy enforcement that runs after message normalization,
+  metadata defaults, mission metadata validation, and payload encryption, but
+  before any destination write. The policy gate can require priority,
+  classification, labels, mission metadata, encrypted payloads, and payload
+  size limits by subject. Rejected messages never reach a sink and follow the
+  DLQ-before-ACK rule when DLQ is configured.
+- Optional core size policy enforcement that can bound sink-bound payload
+  bytes, normalized headers, labels, mission metadata, standard metadata,
+  approximate record size, and accepted batch size before any sink write.
 - `nats_sinks.oracle.OracleSink`, the production Oracle Database sink with
   connection pooling, Oracle Autonomous Database connection options, `merge`
-  and `insert_ignore` idempotent modes, subject-to-table routing, metadata
-  persistence, payload normalization, and explicit transaction commit before
-  ACK.
+  and `insert_ignore` idempotent modes, optional high-throughput staging-table
+  merge mode, subject-to-table routing, metadata persistence, payload
+  normalization, and explicit transaction commit before ACK.
+- `nats_sinks.mysql.MySqlSink`, the production Oracle MySQL sink with
+  connection pooling, TLS CA support, `upsert` and `insert_ignore` idempotent
+  modes, subject-to-table routing, metadata persistence, payload
+  normalization, and explicit transaction commit before ACK.
 - `nats_sinks.file.FileSink`, the production local file sink with deterministic
   filenames, atomic temporary-file placement, optional `fsync`, duplicate
   handling, optional Python standard-library gzip compression, metadata
   persistence, and the same payload normalization contract used by Oracle.
+- `nats_sinks.spool.SpoolSink`, the production-oriented encrypted edge spool
+  sink for disconnected operation, bounded local custody, deterministic
+  idempotency, priority-aware replay, and explicit replay into a final
+  destination sink when connectivity returns.
+- A safe sink connector framework with first-party Oracle Database,
+  Oracle MySQL, file, and spool
+  connectors, stable `SinkConnector` metadata, explicit `SinkRegistry` resolution, and
+  disabled-by-default allow-listed entry-point discovery for reviewed external
+  connectors.
 - Basic metrics counters and timing observations for fetched, prepared,
-  written, ACKed, NAKed, failed, DLQ, sink write, ACK error, and active batch
-  behavior. The built-in runtime can write a local JSON snapshot when
-  configured, and embedded applications can still supply their own metrics
+  written, ACKed, NAKed, failed, DLQ, sink write, ACK error, active batch, and
+  event freshness behavior. Freshness metrics cover event age at receive and
+  store time, stale-event counts, missing or malformed creation timestamps, and
+  positive source clock skew. The built-in runtime can write a local JSON
+  snapshot when configured, and embedded applications can still supply their own metrics
   recorder or exporter. External observability sharing is controlled by a
   separate policy and is disabled by default, whether operators choose the
-  recommended textfile connector or the optional native HTTP endpoint.
+  recommended Prometheus textfile connector, the optional native HTTP
+  endpoint, the OTLP connector, or NATS server monitoring.
+- Optional JetStream advisory observation for selected
+  `$JS.EVENT.ADVISORY...` subjects. Advisory support is disabled by default,
+  produces aggregate metrics only, and never changes sink writes, retries,
+  DLQ decisions, or JetStream ACK behavior.
+- Explicit durable pull-consumer management with `bind_only`,
+  `create_if_missing`, and `reconcile` modes so operators can choose whether
+  the worker only binds to a pre-created consumer, creates a missing consumer,
+  or reconciles compatible delivery settings before fetching messages.
+- Richer durable consumer policy configuration for pull consumers, including
+  plural filter subjects, server-side BackOff sequences, MaxDeliver,
+  MaxAckPending, MaxWaiting, headers-only state, consumer replicas,
+  memory-storage selection, and bounded low-sensitivity consumer metadata.
 - NATS reconnect tuning for clustered or controlled-network deployments,
   including multiple seed URLs, reconnect wait, maximum reconnect attempts,
   ping behavior, pending buffer size, drain timeout, and connection event
   metrics.
+- WebSocket NATS transport guardrails for approved `ws://` local labs and
+  `wss://` deployments, including mixed transport rejection, credential-free
+  URLs, local CA TLS handling, validated optional WebSocket headers, and a
+  collision-safe local certification harness. See
+  [WebSocket Connection Evaluation](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/websocket-connection-evaluation.md).
 - Exponential retry backoff with optional jitter for retryable failures, so
   temporary destination outages can slow down without weakening the
   commit-then-acknowledge invariant.
@@ -116,6 +180,20 @@ used immediately:
   references, mounted trust material, restrictive security contexts, resource
   limits, graceful termination, and optional Prometheus observability sidecars.
   See [Kubernetes Deployment](https://nats-sinks.readthedocs.io/en/latest/kubernetes/).
+- A local Oracle Linux 9 slim based Docker image and JSON Compose stack for
+  developer smoke testing with a temporary NATS JetStream service and the file
+  sink. See
+  [Local Docker Stack](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/docker.md).
+- A local Oracle MySQL test database container for Oracle MySQL sink
+  development and e2e testing, based on Oracle Linux 9 slim and Oracle MySQL 9.7.0 LTS, with
+  random per-run credentials, loopback-only exposure, cleanup by default, and
+  deterministic asset tests. See
+  [Oracle MySQL Test Container](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/oracle-mysql-test-container.md).
+- A production container hardening baseline for the Oracle Linux slim image,
+  including non-root UID/GID `10001`, read-only-root-compatible runtime
+  guidance, OCI image labels, writable-path documentation, SBOM and
+  vulnerability-scanning expectations, and careful accreditation caveats. See
+  [Production Container Hardening](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/container-hardening.md).
 - Mission-support operational examples that show complete patterns for
   restricted event storage, disconnected file handoff, DLQ triage and replay
   preparation, and destination outage recovery. See
@@ -124,6 +202,10 @@ used immediately:
   Oracle `MISSION_METADATA_JSON`, file-sink output records, and future sinks
   without adding fixed columns for every use case. See
   [Mission Metadata](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/mission-metadata.md).
+- A data-centric security label profile for structured policy metadata such as
+  releasability, handling caveats, owner, originator, policy ID, and retention
+  category. See
+  [Data-Centric Security Label Profile](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/security-label-profile.md).
 - F2T2EA event phase tagging guidance built on mission metadata as
   metadata-only context, with explicit non-goals around targeting,
   fire-control, weapons-release, and autonomous decision behavior. See
@@ -132,11 +214,13 @@ used immediately:
 Production sink modules shipped today:
 
 - `nats_sinks.oracle`
+- `nats_sinks.mysql`
 - `nats_sinks.file`
+- `nats_sinks.spool`
 
 ## Status
 
-The current release is `0.4.0`.
+The current release is `0.4.1`.
 
 Included today:
 
@@ -145,9 +229,19 @@ Included today:
 - Immutable `NatsEnvelope` abstraction.
 - Explicit sink protocol and safe sink registry.
 - Oracle sink with idempotent production modes.
+- Oracle MySQL sink with idempotent production modes and container-backed e2e
+  testing.
 - File sink with atomic local JSON file writes and deterministic duplicate
   handling.
+- Edge spool sink with encrypted local records and replay into a final sink.
 - Optional AES-256-GCM and AES-256-CCM payload encryption in the core runner.
+- Multi-key payload decryption helper for controlled key-rotation, replay, and
+  verification workflows.
+- Optional message authenticity verification for signed messages before
+  payload encryption, policy checks, custody metadata, priority lanes, or sink
+  writes.
+- Optional tamper-evident custody metadata for deterministic verification
+  evidence. Custody hashes are not encryption or digital signatures.
 - JSON configuration and redacted effective-config output.
 - CLI command named `nats-sink`.
 - Metrics inspection command named `nats-sink-metrics`.
@@ -155,6 +249,8 @@ Included today:
 - Synthetic mission scenario harness for core and file-sink smoke testing.
 - Generic mission metadata support with validated JSON context for Oracle,
   file sink, and future sinks.
+- Optional pre-sink policy enforcement for fail-closed, destination-neutral
+  checks before Oracle, file, or future sink writes.
 - F2T2EA phase-tagging documentation as a use-case blueprint on top of mission
   metadata, not runtime workflow automation.
 - Unit tests for ACK ordering, DLQ ordering, config loading, SQL generation, and Oracle mapping.
@@ -174,11 +270,16 @@ flowchart LR
     Stream --> Consumer[Durable pull consumer]
     Consumer --> Runner[nats-sinks core runner]
     Runner --> Envelope[NatsEnvelope batch]
-    Envelope --> Crypto{payload encryption enabled?}
+    Envelope --> Auth{authenticity required?}
+    Auth -->|passes or disabled| Crypto{payload encryption enabled?}
+    Auth -. permanent rejection .-> DLQ
     Crypto -->|yes| Encrypted[Encrypted payload envelope]
     Crypto -->|no| Plain[Original payload bytes]
-    Encrypted --> Sink[sink.write_batch]
-    Plain --> Sink
+    Encrypted --> Policy{pre-sink policy enabled?}
+    Plain --> Policy
+    Policy -->|passes| Custody{custody metadata enabled?}
+    Policy -. permanent rejection .-> DLQ
+    Custody --> Sink[sink.write_batch]
     Sink --> Commit[Durable destination commit]
     Commit --> Ack[JetStream ACK]
 
@@ -282,6 +383,7 @@ contains destination-specific fields documented on each sink page.
     "consumer": "file-orders-sink",
     "subject": "orders.*",
     "durable": true,
+    "no_echo": false,
     "allow_reconnect": true,
     "reconnect_time_wait_seconds": 2,
     "max_reconnect_attempts": 60
@@ -304,7 +406,8 @@ contains destination-specific fields documented on each sink page.
     "subject": "orders.dlq",
     "include_payload": true,
     "include_headers": true,
-    "include_error": true
+    "include_error": true,
+    "ack_term_after_publish": false
   },
   "logging": {
     "level": "INFO",
@@ -313,7 +416,10 @@ contains destination-specific fields documented on each sink page.
   "metrics": {
     "enabled": false,
     "namespace": "nats_sinks",
-    "snapshot_file": null
+    "snapshot_file": null,
+    "event_freshness_enabled": true,
+    "event_stale_after_seconds": 300,
+    "event_future_skew_tolerance_seconds": 5
   },
   "message_metadata": {
     "priority": {
@@ -354,7 +460,10 @@ snapshot path:
   "metrics": {
     "enabled": true,
     "namespace": "nats_sinks",
-    "snapshot_file": ".local/nats-sinks/metrics.json"
+    "snapshot_file": ".local/nats-sinks/metrics.json",
+    "event_freshness_enabled": true,
+    "event_stale_after_seconds": 300,
+    "event_future_skew_tolerance_seconds": 5
   }
 }
 ```
@@ -365,17 +474,40 @@ Inspect the snapshot from another terminal:
 nats-sink-metrics show .local/nats-sinks/metrics.json --format table
 nats-sink-metrics show .local/nats-sinks/metrics.json --format shell --kind counter
 nats-sink-metrics show .local/nats-sinks/metrics.json --metric "oracle_*"
+nats-sink-metrics show .local/nats-sinks/metrics.json --metric "mysql_*"
+nats-sink-metrics show .local/nats-sinks/metrics.json --metric "event_*" --metric "events_*"
 nats-sink-metrics get .local/nats-sinks/metrics.json messages_failed_total --default 0
 ```
 
 The metrics CLI is documented in
 [Metrics](https://nats-sinks.readthedocs.io/en/latest/metrics/).
-Policy-controlled Prometheus export is documented in
-[Observability](https://nats-sinks.readthedocs.io/en/latest/observability/) and
-[Prometheus Integration](https://nats-sinks.readthedocs.io/en/latest/prometheus/).
+Policy-controlled Prometheus and OpenTelemetry export are part of the
+observability documentation, including the Elastic Observability and Grafana
+Alloy profiles, Splunk HEC connector, StatsD connector, and syslog bridge.
+Start with
+[Observability](https://nats-sinks.readthedocs.io/en/latest/observability/),
+then use
+[Prometheus Integration](https://nats-sinks.readthedocs.io/en/latest/prometheus/),
+[OpenTelemetry OTLP Integration](https://nats-sinks.readthedocs.io/en/latest/otlp/),
+[Elastic Observability Profile](https://nats-sinks.readthedocs.io/en/latest/elastic-observability/),
+or
+[Grafana Alloy Profile](https://nats-sinks.readthedocs.io/en/latest/grafana-alloy/),
+or
+[Splunk HEC Integration](https://nats-sinks.readthedocs.io/en/latest/splunk-hec/),
+or
+[StatsD Integration](https://nats-sinks.readthedocs.io/en/latest/statsd/),
+or
+[Syslog Bridge](https://nats-sinks.readthedocs.io/en/latest/syslog/)
+for connector details.
 The NATS server monitoring connector and delivery-boundary decision for
 endpoints such as `/jsz` and `/healthz` are documented in
 [NATS Server Monitoring](https://nats-sinks.readthedocs.io/en/latest/nats-server-monitoring/).
+Optional JetStream advisory counters are configured through
+[Configuration](https://nats-sinks.readthedocs.io/en/latest/configuration/#advisories)
+and documented in
+[Metrics](https://nats-sinks.readthedocs.io/en/latest/metrics/#jetstream-advisory-metrics).
+Durable consumer startup behavior is documented under
+[consumer_management](https://nats-sinks.readthedocs.io/en/latest/configuration/#consumer_management).
 
 ## Payload Bodies
 
@@ -413,6 +545,43 @@ See [Sink Framework](https://nats-sinks.readthedocs.io/en/latest/sink-framework/
 [File Sink](https://nats-sinks.readthedocs.io/en/latest/file-sink/) for the JSON envelope shape and operational
 guidance. Oracle-specific payload storage is documented in
 [Oracle Sink](https://nats-sinks.readthedocs.io/en/latest/oracle-sink/).
+
+## Message Authenticity
+
+The core runner can verify producer-level message signatures before the
+envelope reaches any sink. This is different from NATS authentication and TLS:
+those controls protect broker access and network transport, while message
+authenticity proves that the message body and selected metadata were signed by
+an approved producer key.
+
+Supported algorithms are HMAC-SHA256 and Ed25519. Rules can apply to every
+subject or to selected NATS wildcard subject families:
+
+```json
+{
+  "message_authenticity": {
+    "enabled": true,
+    "unmatched_subject_action": "reject",
+    "rules": [
+      {
+        "subject": "mission.>",
+        "algorithm": "hmac-sha256",
+        "key_id": "producer-key-2026-05",
+        "key_b64_env": "NATS_SINKS_AUTHENTICITY_KEY_B64",
+        "signed_fields": ["subject", "message_id"]
+      }
+    ]
+  }
+}
+```
+
+Verification failures are permanent pre-sink failures. The message never
+reaches Oracle, file, spool, or future sinks. If DLQ is configured, the
+original JetStream message is ACKed only after the DLQ publish succeeds.
+
+See [Message Authenticity](https://nats-sinks.readthedocs.io/en/latest/message-authenticity/)
+for the canonical signed document, producer examples, Ed25519 guidance, metrics,
+and DLQ behavior.
 
 ## Payload Encryption
 
@@ -526,6 +695,40 @@ With the file sink, these values appear as top-level JSON fields such as
 are stored in `PRIORITY`, `CLASSIFICATION`, and `LABELS` columns and repeated
 inside `METADATA_JSON.message_metadata`.
 
+For richer data-centric policy context, enable `security_labels`. The profile
+is optional and metadata-only. It can help downstream systems reason about
+releasability, handling caveats, owner, originator, policy identifiers, and
+retention categories, but it does not replace authorization in Oracle, IAM, or
+the destination platform.
+
+```json
+{
+  "security_labels": {
+    "enabled": true,
+    "allowed_classifications": [
+      "NATO UNCLASSIFIED",
+      "NATO RESTRICTED",
+      "NATO CONFIDENTIAL",
+      "NATO SECRET"
+    ],
+    "default": {
+      "profile": "nats-sinks.security-label.v1",
+      "classification": "NATO RESTRICTED",
+      "releasability": ["NATO"],
+      "handling_caveats": ["MISSION"],
+      "owner": "example-owner",
+      "originator": "example-originator",
+      "policy_id": "example-policy",
+      "retention_category": "mission-log-30d"
+    }
+  }
+}
+```
+
+With the file sink, the profile appears as top-level `security_labels` and
+inside `metadata.security_labels`. With Oracle, the profile is stored in
+`SECURITY_LABELS_JSON` and repeated inside `METADATA_JSON.security_labels`.
+
 ## NATS Connections
 
 `nats-sinks` supports common NATS client authentication options through the
@@ -535,8 +738,14 @@ inside `METADATA_JSON.message_metadata`.
 - username/password authentication with `user` and `password_env` or `password`,
 - server-side bcrypted username/password credentials using the same client-side
   `user` and `password_env` settings,
+- NATS credentials-file and decentralized JWT user workflows through
+  `creds_file`,
+- NKEY challenge authentication through `nkey_seed_file`,
 - TLS server verification with `tls_ca_file`, including private or self-signed
-  NATS server CAs.
+  NATS server CAs,
+- TLS client certificate/key transport settings for mutual TLS deployments,
+- optional `no_echo` connection behavior for reviewed same-connection
+  publish/subscribe policies.
 
 Do not embed credentials in `nats.url`; use environment-backed fields instead.
 See [NATS Connections And Authentication](https://nats-sinks.readthedocs.io/en/latest/nats-connections/) for
@@ -549,6 +758,12 @@ success, and publish to the configured DLQ subject only when DLQ is enabled.
 See [NATS Least-Privilege Permissions](https://nats-sinks.readthedocs.io/en/latest/nats-permissions/) for
 templates and validation checklists.
 
+For stream setup review, `nats-sink stream-plan` can generate an offline
+JetStream planning report for retention, discard policy, storage, replicas,
+duplicate-window settings, and runtime versus administration permissions. It
+does not connect to NATS or modify stream state. See
+[JetStream Stream Management Planning](https://nats-sinks.readthedocs.io/en/latest/stream-management/).
+
 ## CLI
 
 ```bash
@@ -557,10 +772,13 @@ nats-sink validate examples/file-basic/config.json
 nats-sink test-sink examples/file-basic/config.json
 nats-sink validate examples/oracle-jetstream/config.json
 nats-sink show-effective-config examples/oracle-jetstream/config.json
+nats-sink stream-plan examples/oracle-jetstream/config.json
+nats-sink query-lineage examples/oracle-jetstream/config.json --field mission_id --value MISSION-ALPHA --dry-run
 nats-sink test-sink examples/oracle-jetstream/config.json
 nats-sink run examples/oracle-jetstream/config.json
 nats-sink-metrics show .local/nats-sinks/metrics.json --format table
 nats-sink-metrics show .local/nats-sinks/metrics.json --metric "oracle_*"
+nats-sink-metrics show .local/nats-sinks/metrics.json --metric "event_*" --metric "events_*"
 nats-sink-metrics get .local/nats-sinks/metrics.json messages_failed_total --default 0
 nats-sink-observe init-prometheus-policy examples/file-basic/config.json .local/observability.prometheus.json
 nats-sink-observe validate-policy .local/observability.prometheus.json
@@ -574,21 +792,44 @@ The CLI:
 - renders effective configuration as redacted JSON,
 - never prints resolved passwords.
 
+Read-only Oracle lineage query helpers are documented in
+[Lineage Query Helpers](https://nats-sinks.readthedocs.io/en/latest/lineage-query-helpers/).
+
 The metrics CLI reads only a local JSON snapshot written by the runner when
 `metrics.enabled` and `metrics.snapshot_file` are configured. It supports
 table, JSON, JSONL, shell, names, and Prometheus text output so developers can
-pipe results into service checks and scripts. Oracle duplicate/conflict
-counters are visible through the same command with `--metric "oracle_*"`. See
+pipe results into service checks and scripts. Oracle Database
+duplicate/conflict counters are visible through the same command with
+`--metric "oracle_*"`, and Oracle MySQL duplicate/upsert counters are visible
+with `--metric "mysql_*"`.
+Event freshness and staleness metrics are visible with `--metric "event_*"`
+and `--metric "events_*"` when metrics are enabled. See
 [Metrics](https://nats-sinks.readthedocs.io/en/latest/metrics/) for examples.
 
 The observability CLI manages external sharing policy. It can generate a
 disabled Prometheus policy from runtime config, list known metric names and
 subject hints, validate the policy, write policy-filtered Prometheus textfile
-output, and run a disabled-by-default native Prometheus HTTP endpoint. Metrics
-sharing remains off until the global policy and the selected connector are
-explicitly enabled. See
-[Prometheus Integration](https://nats-sinks.readthedocs.io/en/latest/prometheus/)
-for Linux service guidance.
+output, run a disabled-by-default native Prometheus HTTP endpoint, and export
+approved metrics to an OpenTelemetry Collector through OTLP/HTTP JSON,
+including Elastic Observability and Grafana Alloy profiles that reuse the shared
+OTLP core, approved aggregate metric export to Splunk HEC, and best-effort
+StatsD datagram and syslog message export.
+Metrics sharing remains off until the global policy and the selected connector
+are explicitly enabled. See
+[Observability](https://nats-sinks.readthedocs.io/en/latest/observability/),
+[Prometheus Integration](https://nats-sinks.readthedocs.io/en/latest/prometheus/),
+[OpenTelemetry OTLP Integration](https://nats-sinks.readthedocs.io/en/latest/otlp/),
+and the
+[Elastic Observability Profile](https://nats-sinks.readthedocs.io/en/latest/elastic-observability/)
+or
+[Grafana Alloy Profile](https://nats-sinks.readthedocs.io/en/latest/grafana-alloy/)
+or
+[Splunk HEC Integration](https://nats-sinks.readthedocs.io/en/latest/splunk-hec/)
+or
+[StatsD Integration](https://nats-sinks.readthedocs.io/en/latest/statsd/)
+or
+[Syslog Bridge](https://nats-sinks.readthedocs.io/en/latest/syslog/)
+for connector guidance.
 
 ## Python API
 
@@ -642,15 +883,36 @@ Destination-specific details are split into dedicated pages:
   covers Oracle connection types, Autonomous Database, table DDL,
   least-privilege users, idempotent write modes, subject-to-table routing,
   payload storage, metadata columns, and Oracle-specific performance guidance.
+- [Oracle MySQL Sink](https://nats-sinks.readthedocs.io/en/latest/mysql-sink/)
+  covers Oracle MySQL connection settings, TLS CA files, recommended table
+  DDL, least-privilege users, idempotent `upsert` and `insert_ignore` modes,
+  subject-to-table routing, payload storage, metadata columns, and the local
+  container-backed e2e test.
 - [File Sink](https://nats-sinks.readthedocs.io/en/latest/file-sink/) covers
   local file output, atomic write behavior, deterministic file names, duplicate
   policies, gzip compression, filesystem safety, and file-specific performance
   guidance.
+- [Edge Spool Sink](https://nats-sinks.readthedocs.io/en/latest/spool-sink/)
+  covers encrypted local custody for disconnected operation, bounded spool
+  directories, deterministic duplicate handling, priority-aware replay, and
+  forwarding into a final destination sink.
 
 The generic sink framework is documented separately in
-[Sink Framework](https://nats-sinks.readthedocs.io/en/latest/sink-framework/). That boundary is deliberate:
-Oracle and file sinks use the same core delivery semantics, the same envelope
-contract, and the same commit-then-acknowledge rule.
+[Sink Framework](https://nats-sinks.readthedocs.io/en/latest/sink-framework/)
+and the reusable release gate is documented in
+[Sink Certification](https://nats-sinks.readthedocs.io/en/latest/sink-certification/).
+That boundary is deliberate: Oracle Database, Oracle MySQL, file, and spool sinks use the same core
+delivery semantics, the same envelope contract, and the same
+commit-then-acknowledge rule. Future sinks must provide comparable
+certification evidence before they are described as production-ready.
+
+Generic data-handling features such as
+[payload encryption](https://nats-sinks.readthedocs.io/en/latest/payload-encryption/),
+[tamper-evident custody metadata](https://nats-sinks.readthedocs.io/en/latest/tamper-evident-custody/),
+[mission metadata](https://nats-sinks.readthedocs.io/en/latest/mission-metadata/),
+and [priority lanes](https://nats-sinks.readthedocs.io/en/latest/priority-lanes/)
+are documented separately from sink-specific pages so new sinks can adopt them
+without changing the public delivery contract.
 
 ## Failure Behavior
 
@@ -678,6 +940,9 @@ Important failure cases:
 - payload is permanently invalid for the selected sink: message is published to
   DLQ when configured, then the original is ACKed only after DLQ publish
   succeeds,
+- message authenticity verification rejects a missing, malformed, mismatched,
+  or invalid signature: the message does not reach a sink, and the original is
+  ACKed only after DLQ publish succeeds when DLQ is configured,
 - DLQ publish fails: original message is not ACKed.
 
 ## Security Notes
@@ -695,13 +960,17 @@ Important failure cases:
   publish rights for ordinary workers.
 - Use core payload encryption when destination storage should retain encrypted
   message bodies while keeping routing metadata available.
+- Use message authenticity verification when broker authentication and TLS are
+  not enough to prove producer-level event provenance.
+- Use tamper-evident custody metadata when operators need deterministic hashes
+  for later verification, and remember that hashes are not encryption.
 - Use least-privilege destination credentials with access only to the required
   destination resources.
 
 ## Development
 
 ```bash
-python -m pip install -e ".[dev,oracle,crypto,docs]"
+python -m pip install -e ".[dev,oracle,mysql,crypto,docs]"
 ruff format --check .
 ruff check .
 mypy src
@@ -761,6 +1030,14 @@ Release and PyPI publishing instructions are documented in
 tag pushes, GitHub release workflows, TestPyPI, PyPI trusted publishing, and
 manual fallback commands.
 
+Development now follows a branch-first release workflow. Maintainers should
+create `release-*`, `feature-*`, `bugfix-*`, or `hotfix-*` branches, push
+small changes to those branches, and merge to `main` only through reviewed
+pull requests. See
+[Branch-First Development And Release Workflow](https://nats-sinks.readthedocs.io/en/latest/branch-workflow/)
+for the quiet-branch policy, manual release validation, branch protection,
+pull request, and release-tag rules.
+
 Backlog and feature-request workflow is documented in
 [Backlog Management](https://nats-sinks.readthedocs.io/en/latest/backlog-management/).
 GitHub Issues are the live backlog; `CHANGELOG.md` records work that has
@@ -792,6 +1069,7 @@ documented in
 src/nats_sinks/core      Core runtime, config, envelope, runner, DLQ
 src/nats_sinks/sinks     Sink protocols and registry
 src/nats_sinks/oracle    Oracle sink implementation
+src/nats_sinks/mysql     Oracle MySQL sink implementation
 src/nats_sinks/file      Local file sink implementation
 src/nats_sinks/cli       CLI entry point
 tests/unit               Deterministic unit tests
@@ -810,10 +1088,23 @@ Phase 1:
 
 - Core runtime.
 - Oracle sink.
+- Oracle MySQL sink.
 - File sink.
 - NATS reconnect tuning and connection event metrics.
+- WebSocket connection guardrails, optional headers, and local certification
+  harness.
 - Policy-controlled Prometheus textfile export and optional native Prometheus
   HTTP scrape endpoint as separate observability services.
+- Policy-controlled OpenTelemetry OTLP metrics export to an OpenTelemetry
+  Collector as a separate observability command or service.
+- Disabled-by-default Elastic Observability and Grafana Alloy profiles over the
+  shared OTLP observability core.
+- Disabled-by-default Splunk HEC connector for approved aggregate metrics in
+  security operations and incident-response environments.
+- Disabled-by-default StatsD connector for approved best-effort UDP or Unix
+  datagram metric export.
+- Disabled-by-default syslog bridge for approved bounded RFC 5424-style metric
+  messages over UDP or Unix datagram sockets.
 - Disabled-by-default NATS server monitoring connector for approved endpoint
   fields, implemented outside the delivery worker.
 - Kubernetes deployment examples with worker/observability separation,
@@ -821,6 +1112,8 @@ Phase 1:
   references.
 - Least-privilege NATS permissions templates for runtime workers, DLQ publish
   rights, optional consumer management, and advisory readers.
+- Offline JetStream stream-management planning helper for retention, discard,
+  storage, replicas, duplicate-window, and permission review.
 - Advanced JetStream topology guidance for mirrors, sources, subject
   transforms, republish behavior, stream compression, placement, metadata, and
   idempotency review.
@@ -832,31 +1125,35 @@ Phase 1:
 
 Phase 2:
 
-- OpenTelemetry metrics connector.
 - More idempotency strategies.
-- Postgres sink.
+- First-party Oracle-family sink designs for OCI Object Storage,
+  Oracle Berkeley DB, Oracle NoSQL Database, and OCI Streaming.
+- High-priority Palantir Foundry and Palantir Gotham connector evaluations
+  with local contract mocks before any live certification claim.
+- Additional Oracle MySQL HeatWave tuning and certification guidance.
 - HTTP sink.
 - S3 sink design with deterministic object keys.
 - Native OCI Object Storage sink design with deterministic object keys,
   workload identity support, checksums, multipart upload, and least-privilege
   bucket guidance.
-- Kafka and other backend evaluation through the sink framework.
-- Docker image.
-- Certified TLS certificate authentication guidance.
-- Certified NKEY with challenge authentication support.
-- Certified decentralized JWT authentication/authorization support.
-- Explicit JetStream consumer creation and reconciliation.
-- Configurable consumer `AckWait`, `MaxDeliver`, `BackOff`, and `MaxAckPending`.
-- Optional `AckSync` / double-ACK and `InProgress` support.
-- JetStream advisory consumption for operational events.
+- Kafka, search, warehouse, document database, key-value, and wide-column
+  backend evaluation through the sink framework.
+- Public Docker image release publication automation, including signed image
+  publication and container-specific provenance attachments.
+- Expanded live certification runbooks for NATS TLS certificate, NKEY, and
+  decentralized JWT deployments across representative server policies.
+- Deeper sequence-based and timestamp-based JetStream replay-start controls.
+- Optional confirmed ACK and `InProgress` support.
+- Payload-presence metadata and sink certification for headers-only delivery.
 
 Phase 3:
 
-- Plugin discovery.
+- External connector marketplace guidance and certification evidence beyond
+  the current allow-listed entry-point framework.
 - Sink certification tests.
 - Helm chart.
-- Advanced observability connectors and bounded subject-aware metric policies.
-- WebSocket connection support.
+- Additional advanced observability connectors and bounded subject-aware metric
+  policies.
 - Push and ordered consumer evaluation where compatible with project semantics.
 - Stream management helpers beyond the current topology guidance.
 - Future sink certification tests.

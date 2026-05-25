@@ -1,0 +1,26 @@
+{
+  "id": "splunk-hec-observability-connector",
+  "title": "[Feature]: Add a Splunk HEC observability connector",
+  "area": "Metrics and observability",
+  "priority": "P3 - backlog candidate",
+  "target_release": "v0.4.1",
+  "labels": ["observability", "security", "testing"],
+  "problem": "Splunk HTTP Event Collector is often used in security operations and incident-response workflows. nats-sinks currently has no managed Splunk connector, which may push teams toward local scripts that mix metrics and event payloads, bypass metric allow lists, or leak sensitive operational context into a SIEM.",
+  "proposal": "Design and implement an optional Splunk HEC connector that follows the shared observability connector contract. It must be disabled by default, read approved metrics from the local metrics snapshot or shared read-only provider, apply the same observability policy allow and deny lists, use the same stale snapshot, dry-run, timeout, retry, and redaction behavior, and export only policy-approved metric names. The connector should render HEC-compatible metric events with bounded fields, safe source and sourcetype defaults, TLS verification, and token references sourced from environment variables or protected service configuration.",
+  "users": "Security operations teams, platform teams with Splunk Enterprise or Splunk Cloud deployments, and incident-response teams that want nats-sinks health signals without exposing payloads or sensitive message metadata.",
+  "delivery_semantics": "Splunk HEC export must not influence message processing. HEC endpoint failures, token failures, TLS failures, throttling, or rejected events must be logged and counted safely where practical, but they must not affect ACK, NAK, DLQ, retry, sink writes, or idempotency.",
+  "security": "HEC tokens are sensitive. The connector must avoid command-line secrets, redact token references, verify TLS by default, bound request size, and export only low-cardinality approved metric fields. It must not send payload bodies, subjects, classification values, labels, mission metadata values, table names, file paths, or message identifiers by default.",
+  "acceptance": [
+    "Splunk HEC support is optional and disabled by default.",
+    "The connector uses the shared observability policy model and HEC-safe payload shaping.",
+    "HEC token handling, TLS verification, timeout, and retry behavior are documented.",
+    "Failure behavior is safe and never changes message delivery semantics.",
+    "Documentation is added as a sub-page under the Observability documentation section."
+  ],
+  "tests": "Add unit tests for disabled policy, allow and deny filtering, HEC metric event rendering, token redaction, TLS configuration validation, timeout handling, retry limits, stale snapshots, request-size bounds, dry-run output, and sanitized logging. Add optional integration guidance for a local or mocked HEC endpoint behind an integration marker.",
+  "documentation": "Add a Splunk HEC sub-page under the Observability documentation section. The page must explain HEC metric event format, configuration, token handling, TLS, security defaults, sample output, service deployment, and testing.",
+  "closeout": "Close after the release containing Splunk HEC connector support is published. Include the release tag, supported HEC mode, tests run, documentation links, and any follow-up SIEM mapping issues.",
+  "relationships": {
+    "related": ["#10"]
+  }
+}

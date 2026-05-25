@@ -393,6 +393,69 @@ The pull request should normally use `Related #123` rather than `Closes #123`.
 Feature requests remain open until the release containing the work is
 published. Release automation closes managed issues at that boundary.
 
+Pull requests should also carry the same searchable labels as the source
+issue. `scripts/open-release-pr.sh` copies labels by default after it creates
+or refreshes the pull request. It discovers source issues from branch names
+such as `issue-123-short-name`, from dedicated `Related #123` lines in the
+pull request body, and from explicit `--issue` arguments:
+
+```bash
+scripts/open-release-pr.sh \
+  --repo ProjectCuillin/nats-sinks \
+  --base release-v0.4.1 \
+  --issue 123 \
+  --ready
+```
+
+Use `--no-copy-issue-labels-to-pr` only for exceptional maintenance work where
+the PR intentionally has no source issue. Label synchronization copies GitHub
+labels only. The official GitHub Issue `Priority` field is issue metadata, not
+a pull request label, so priority remains managed by the backlog and bug sync
+tooling on the issue itself.
+
+The label synchronization helper also removes stale project-managed labels from
+the pull request by default. For example, if an issue moves from
+`release-unscheduled` to `release-v0.4.1`, the PR should not keep both labels.
+Automation preserves manual labels that it does not own, such as temporary
+reviewer labels. Use `--no-remove-stale-pr-labels` only for deliberate
+repository maintenance where a stale managed label must remain visible for a
+short period.
+
+Issue, feature, and development bug pull requests use guarded non-main
+auto-approval after implementation evidence is complete and the pull request
+is marked ready:
+
+```bash
+scripts/open-release-pr.sh \
+  --repo ProjectCuillin/nats-sinks \
+  --base release-v0.4.1 \
+  --ready
+```
+
+This convenience is only for pull requests that merge into another work branch.
+The helper refuses every pull request whose base branch is `main`. Release pull
+requests into `main` still require explicit maintainer review, release
+validation, and the normal release decision.
+
+Before merging any pull request, post a short sanitized merge comment with the
+test evidence used for the decision. Use the guarded local merge helper so the
+comment is posted before the merge command runs:
+
+```bash
+python scripts/merge-pr-with-comment.py \
+  --repo ProjectCuillin/nats-sinks \
+  --pr 123 \
+  --comment-file .local/pr-merge-comments/pr-123.md \
+  --delete-branch
+```
+
+The comment file must include a heading such as `## Test Evidence`,
+`## Test Results`, `## Validation Evidence`, or `## Verification Evidence`.
+The helper rejects empty comments, comments without test evidence, common
+secret patterns, draft pull requests, and closed pull requests. This keeps the
+backlog, pull request, and release evidence aligned while avoiding silent
+merges.
+
 Use `scripts/comment-backlog-issue.py` for progress notes so comments are
 validated with the same public-safety rules as local backlog JSON:
 
@@ -557,12 +620,26 @@ Before a release:
 4. Confirm open issues still represent future work and are not already done.
 5. Confirm release notes link to the relevant issues or pull requests.
 
+All implementation work for backlog and bug issues must happen inside the
+hierarchical release branch model. The active release branch is named
+`release-vX.Y.Z`. Feature and issue branches are created from that release
+branch using names such as `issue-123-short-name` or
+`feature-123-short-name`. Bugs found while developing a feature branch are
+created from that feature branch using names such as `bug-456-short-name`.
+Ordinary branch pushes are quiet: they should not start GitHub Actions. Pull
+requests target the next branch in the hierarchy: bug branch to feature branch,
+feature branch to release branch, and release branch to `main` only when the
+maintainer explicitly decides to release. See
+[Hierarchical Branch Development And Release Workflow](branch-workflow.md).
+
 ## Working With AI Agents
 
 AI agents can help draft, refine, and close issues, but they must not treat
 chat history as the backlog. When an agent implements a feature, it should:
 
 - check whether a matching GitHub issue exists,
+- create or switch to the approved release, issue, feature, or bug branch
+  before editing files,
 - create or update a local `backlog/items/*.json` file when a new backlog item
   is discovered and live GitHub access is not available,
 - use `scripts/sync-backlog-issues.py --dry-run` to validate generated backlog
@@ -570,6 +647,11 @@ chat history as the backlog. When an agent implements a feature, it should:
 - use `scripts/comment-backlog-issue.py --dry-run` before posting progress or
   close-out comments,
 - mention the issue number in its implementation summary when known,
+- push small commits to the active branch without triggering GitHub Actions on
+  every push,
+- run `scripts/run-release-validation.sh` only when the release branch is ready
+  for merge or a maintainer explicitly requests validation for a feature
+  branch,
 - update `CHANGELOG.md` and documentation,
 - explain tests and known limitations in the final response,
 - help draft a detailed issue close-out comment.

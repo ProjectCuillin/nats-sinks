@@ -51,6 +51,9 @@ represent the same need.
 - Mission metadata as a validated JSON context object for mission, operation,
   platform, source-system, track, confidence, releasability, and lifecycle
   metadata.
+- Optional pre-sink policy enforcement for requiring classification, labels,
+  mission metadata, encrypted payloads, and size limits before destination
+  writes.
 - Payload wrapping for non-JSON text and bytes.
 - Optional payload encryption before sink delivery.
 - Local file output for disconnected handoff and evidence capture.
@@ -66,6 +69,7 @@ represent the same need.
 - [Classification And Labels](classification-and-labels.md)
 - [Chain Of Custody](chain-of-custody.md)
 - [Cross-Domain Handoff Preparation](cross-domain-handoff-preparation.md)
+- [Cross-Domain Handoff Package](cross-domain-handoff-package.md)
 - [Edge Operation](edge-operation.md)
 - [Audit-Oriented Persistence](audit-oriented-persistence.md)
 - [Synthetic Mission Testing](synthetic-mission-testing.md)

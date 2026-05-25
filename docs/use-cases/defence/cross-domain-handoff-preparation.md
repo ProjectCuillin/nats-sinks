@@ -10,6 +10,12 @@ mission context, and chain-of-custody evidence.
 sanitizer, targeting system, fire-control system, weapons-release mechanism,
 rules-of-engagement engine, or autonomous decision platform.
 
+When a review team needs a bounded bundle rather than a single database row or
+file record, use the
+[Cross-Domain Handoff Package](cross-domain-handoff-package.md) blueprint. The
+package blueprint defines a manifest, file roles, hashes, and path-safety
+constraints while keeping transfer approval outside `nats-sinks`.
+
 ```mermaid
 flowchart LR
     JS[JetStream] --> Core[nats-sinks core]
@@ -112,3 +118,5 @@ The file sink is useful when a controlled local artifact is required:
 - Keep encrypted payload keys outside the persisted event record.
 - Do not store transfer decisions in public issue comments or release notes.
 - Keep cross-domain decisions in approved systems outside `nats-sinks`.
+- Use the package blueprint only as review evidence. It is not a guard,
+  certification boundary, or transfer approval.

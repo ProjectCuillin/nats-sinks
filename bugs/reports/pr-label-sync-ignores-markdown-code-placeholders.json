@@ -1,0 +1,27 @@
+{
+  "id": "pr-label-sync-ignores-markdown-code-placeholders",
+  "title": "[Bug]: PR label sync should ignore issue placeholders in Markdown code spans",
+  "area": "CI and automation",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": ["release", "testing", "completed"],
+  "summary": "The pull request label synchronization helper scanned the default PR body and treated the instructional Markdown code-span placeholder Related #123 as a real source issue reference.",
+  "observed": "Refreshing the issue branch PR copied labels from issue #209 and the placeholder issue #123 because the generated PR body contained the instructional text Use Related #123 in a code span.",
+  "expected": "The helper should ignore issue-like text inside Markdown inline code spans and fenced code blocks, and the generated PR body should avoid literal placeholder issue numbers where possible.",
+  "reproduction": "Run scripts/open-release-pr.sh on a PR body that contains an instructional Markdown code span with a placeholder issue reference and label synchronization enabled.",
+  "failing_test": "Add a focused unit test proving that detect_source_issues ignores issue references inside Markdown code spans while still honoring real Related #... body references.",
+  "impact": "A pull request can receive unrelated labels, making review and release filtering less precise. Runtime package behavior, delivery semantics, sink writes, and ACK ordering are unaffected.",
+  "delivery_semantics": "This defect is limited to GitHub workflow metadata automation and cannot change message delivery semantics.",
+  "security": "The fix must avoid copying unintended labels from unrelated issues and must continue to avoid secrets, private locators, payloads, or sensitive metadata in public comments and PR labels.",
+  "acceptance": [
+    "Issue references inside Markdown inline code spans are ignored.",
+    "Issue references inside fenced code blocks are ignored.",
+    "Real non-code issue references in the PR body are still detected.",
+    "The default PR body avoids a literal #123 placeholder.",
+    "Focused unit tests cover the corrected behavior."
+  ],
+  "tests": "Run python -m pytest tests/unit/test_pr_label_sync.py tests/unit/test_pr_auto_approval.py -q and scripts/check.sh after the fix.",
+  "documentation": "No additional public documentation is required. Keep CHANGELOG.md and the sanitized test report accurate.",
+  "closeout": "Close after the bug branch has merged back into the feature branch and PR labels have been corrected on the live PR."
+}

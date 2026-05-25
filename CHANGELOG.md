@@ -10,13 +10,396 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ## [Unreleased]
 
+### Added
+
+- No unreleased changes yet.
+
+## [0.4.1] - 2026-05-25
+
+### Added
+
+- Added maintainer release guidance and a managed backlog item for a future
+  local-only post-release PyPI artifact validation harness. The planned harness
+  will install the latest released `nats-sinks` package from PyPI inside a
+  short-lived container, verify that the local checkout is not being imported,
+  run meaningful artifact smoke checks, and require GitHub bug reports for any
+  findings before fixes start.
+- Added a solo-maintainer branch-protection policy for `main` so release pull
+  requests remain gated by PR governance, dependency review, resolved
+  conversations, and force-push/deletion protections without requiring
+  impossible self-approval.
+- Updated release pull request gate workflows to run on release PR branch
+  updates, keeping ordinary branch pushes quiet while allowing branch
+  protection to see fresh required checks on the latest release commit.
+- Added the first-party Oracle MySQL sink for issue #101, including
+  `nats_sinks.mysql.MySqlSink`, optional `nats-sinks[mysql]` dependency
+  metadata, strict identifier validation, bound SQL values, TLS CA/client
+  certificate options, subject-to-table routing, idempotent `upsert` and
+  `insert_ignore` modes, payload envelope handling for non-JSON bodies, message
+  metadata preservation, Oracle MySQL duplicate/upsert metrics, container-backed
+  e2e certification, examples, and dedicated documentation.
+- Added optional core message authenticity verification before sink writes,
+  including subject-scoped HMAC-SHA256 and Ed25519 rules, canonical signed
+  payload and metadata documents, sanitized verification failures,
+  DLQ-before-ACK rejection handling, aggregate authenticity metrics, public
+  producer helper APIs, configuration validation, tests, and operator
+  documentation.
+- Added an Elastic Observability profile connector over the shared OTLP
+  observability core, including disabled-by-default policy controls,
+  Elastic-safe data stream routing hints, environment-sourced header values,
+  dry-run rendering, bounded retries and request sizes, CLI support through
+  `nats-sink-observe elastic-export`, focused tests, and an Observability
+  documentation sub-page.
+- Added a Grafana Alloy observability profile over the shared OTLP core,
+  including disabled-by-default policy controls, generated Alloy River
+  configuration snippets, environment-sourced header and upstream credential
+  references, dry-run rendering, bounded retries and request sizes, CLI support
+  through `nats-sink-observe grafana-alloy-export` and
+  `nats-sink-observe grafana-alloy-config`, focused tests, and an
+  Observability documentation sub-page.
+- Added a Splunk HEC observability connector for approved aggregate metrics,
+  including disabled-by-default policy controls, environment-sourced HEC token
+  handling, HEC metric event rendering, TLS verification enforcement, dry-run
+  rendering, bounded retries and request sizes, CLI support through
+  `nats-sink-observe splunk-hec-export`, focused tests, and an Observability
+  documentation sub-page.
+- Added a StatsD observability connector for approved best-effort metric
+  datagrams, including disabled-by-default policy controls, UDP and Unix
+  datagram transport modes, safe metric-name normalization, dry-run rendering,
+  bounded datagram sizes, bounded retries, CLI support through
+  `nats-sink-observe statsd-export`, focused tests, and an Observability
+  documentation sub-page.
+- Added a syslog observability bridge for approved RFC 5424-style aggregate
+  metric messages, including disabled-by-default policy controls, UDP and Unix
+  datagram transport modes, bounded message sizes, structured-data escaping,
+  dry-run rendering, bounded retries, CLI support through
+  `nats-sink-observe syslog-export`, focused tests, and an Observability
+  documentation sub-page.
+- Added centralized NATS authentication and TLS connection option construction
+  for username/password, token, credentials-file, NKEY seed-file, local CA TLS,
+  and TLS client certificate workflows, including identity-path redaction,
+  focused unit coverage, and an environment-gated live authentication
+  integration test scaffold.
+- Added a cross-domain handoff package blueprint with a bounded manifest
+  schema, sanitized example package files, SHA-256 validation evidence,
+  documentation links from the defence and file-sink guidance, and explicit
+  non-goals stating that `nats-sinks` is not a cross-domain guard or
+  certification boundary.
+- Added Oracle Linux 9 slim as the required base image for the local
+  `nats-sinks` Docker image, replacing the previous Debian-based
+  `python:3.12-slim` base while preserving the non-root entry point and local
+  Docker/NATS smoke-test workflow.
+- Added a local Docker image and JSON Compose smoke-test stack for issue #12,
+  including a non-root `nats-sink` image, a NATS JetStream service, a
+  file-sink configuration, a `scripts/run-docker-local-smoke.py` runner that
+  builds the image, publishes test messages, verifies persisted files, and
+  avoids local NATS port collisions, plus Docker documentation and unit tests.
+- Added production container hardening for issue #223, including fixed
+  non-root UID/GID `10001`, read-only-root-compatible local Compose settings,
+  stricter Docker build metadata, explicit OCI labels, no image-level
+  healthcheck side effects, expanded `.dockerignore` exclusions, deterministic
+  Docker asset tests, and detailed operator guidance for writable paths, SBOM
+  evidence, vulnerability scanning, provenance, and defence-oriented
+  accreditation caveats.
+- Added a hardened local Oracle MySQL test database container for issue #247,
+  including an Oracle Linux 9 slim based Dockerfile, explicit Oracle MySQL
+  9.7.0 LTS package selection, generated per-run test credentials,
+  loopback-only random port exposure, cleanup-by-default behavior, a Docker
+  smoke runner that verifies table creation plus one insert/read cycle, unit
+  tests for the container assets, and dedicated documentation for future
+  Oracle MySQL sink development.
+- Added guarded non-main pull request auto-approval tooling for ready issue,
+  feature, and bug branches raised by the local workflow. The helper refuses
+  release pull requests targeting `main`, can verify the expected PR author,
+  supports opt-out for manual inspection, and is documented as convenience for
+  development branches rather than a substitute for release approval.
+- Added pull request label synchronization for the local branch workflow. The
+  `scripts/open-release-pr.sh` helper now copies searchable GitHub labels from
+  managed source issues to issue, feature, and bug pull requests by default,
+  with explicit `--issue` support and a standalone `scripts/sync-pr-labels.py`
+  helper for dry-run diagnostics.
+- Added a quiet hierarchical branch development and release workflow with
+  release development branches, issue branches, bug sub-branches, configurable
+  pull request bases, manual release-validation dispatch, pull request
+  governance checks, CODEOWNERS review, branch protection tooling, and release
+  workflow validation that tags are cut only from commits already merged into
+  `main`.
+- Added guarded pull request merge evidence tooling. Maintainers can now use
+  `scripts/merge-pr-with-comment.py` to validate and post a sanitized
+  test-evidence comment before invoking `gh pr merge`, preventing silent local
+  PR merges in the release branch workflow.
+- Added an optional data-centric security label profile that carries structured
+  releasability, handling caveats, owner, originator, policy identifier, and
+  retention category metadata through the core runtime, file sink JSON records,
+  Oracle `SECURITY_LABELS_JSON`, and the generic metadata snapshot.
+- Added strict security-label validation for JSON parsing, duplicate keys,
+  root-field allow lists, size limits, optional controlled vocabularies, and
+  DLQ-before-ACK behavior on invalid publisher-provided profile headers.
+- Added optional Oracle high-throughput staging-table merge mode for `merge`
+  and `insert_ignore` writes, including validated staging configuration,
+  staging-table DDL helpers, rollback-safe transaction handling, duplicate
+  metrics support, unit coverage, and operator documentation.
+- Added Oracle `merge_update_columns` controls so operators can preserve the
+  existing "update all non-key columns" behavior, restrict matched-row updates
+  to selected columns, or leave matched rows unchanged, with validated SQL
+  identifier handling and unit coverage.
+- Added Oracle per-route idempotency overrides so subject-to-table routes can
+  inherit the sink default or use route-specific stream-sequence, message-ID,
+  or payload-field keys with compatible merge update controls.
+- Added a safe sink connector framework with `SinkConnector` metadata,
+  first-party Oracle and FileSink descriptors, explicit `SinkRegistry`
+  registration, disabled-by-default allow-listed Python entry-point discovery
+  for reviewed external connectors, plugin configuration validation, and public
+  API compatibility coverage.
+- Added a documented sink certification contract and reusable
+  `nats_sinks.testing` helpers for lifecycle, durable write success,
+  duplicate redelivery, ACK-boundary protection, and log-redaction checks, with
+  Oracle and file sink coverage included in the deterministic sink check suite.
+- Added researched backlog items for first-party Oracle-family sink candidates:
+  OCI Object Storage, Oracle Berkeley DB, Oracle NoSQL Database, and OCI
+  Streaming.
+- Added high-priority Palantir Foundry and Palantir Gotham sink backlog items,
+  each requiring local fake-client or contract-harness testing before any live
+  certification claim.
+- Added low-priority research backlog items for common Kafka-style destination
+  patterns: Elasticsearch or OpenSearch, Snowflake, BigQuery, Azure object
+  storage, Kafka, MongoDB, Redis, and Cassandra-compatible stores.
+- Added `PayloadKeyRegistry`, a public multi-key payload decryption helper for
+  key-rotation windows, replay tooling, migration checks, and incident-response
+  verification without adding cloud secret-manager SDKs to the core package.
+- Added ADR 0005 documenting the AckTerm and AckNext evaluation, including the
+  decision to keep AckNext out of production sink processing and to allow
+  optional AckTerm only after successful DLQ publication.
+- Added `dead_letter.ack_term_after_publish`, a disabled-by-default terminal
+  acknowledgement policy that sends JetStream `AckTerm` only after successful
+  DLQ publication for permanent failures.
+- Added terminal acknowledgement metrics for opt-in DLQ terminal handling:
+  `messages_terminated_total`, `message_term_seconds`, and
+  `term_errors_total`.
+- Added aggregate event freshness and staleness metrics for event age at receive
+  time and durable store time, stale-event counts, missing or malformed creation
+  timestamps, future timestamp counts, and positive source clock skew. The
+  metrics remain observational only and are available through the local metrics
+  snapshot, `nats-sink-metrics`, Prometheus policy allow lists, and OTLP policy
+  allow lists without changing ACK behavior.
+- Added read-only Oracle lineage query helpers and the `nats-sink query-lineage`
+  command for bounded, redacted inspection of persisted events by allow-listed
+  mission metadata fields, message ID, or subject. The helper uses bind
+  variables for lookup values, validates configured tables and columns, omits
+  payload output by default, and does not affect sink writes or ACK behavior.
+- Added Oracle MySQL sink research and converted the result into the
+  production sink implementation tracked by issue #101.
+- Added a fail-closed pre-sink policy gate that runs after normalization,
+  message metadata, mission metadata, and optional payload encryption but before
+  any destination write. The gate supports subject-scoped requirements for
+  priority, classification, labels, mission metadata, encrypted payloads,
+  approved mission metadata root keys, and bounded sink-bound payload size.
+- Added policy rejection handling that keeps rejected messages away from sinks,
+  follows DLQ-before-ACK behavior for permanent validation failures, and avoids
+  acknowledging originals when DLQ publication fails.
+- Added pre-sink policy metrics, public policy helper exports, configuration
+  validation, commit-then-ACK contract coverage, and operator documentation.
+- Added optional core `size_policy` controls for sink-bound payload bytes,
+  normalized headers, labels, mission metadata, standard metadata, approximate
+  record size, and accepted batch size, with permanent-failure DLQ-before-ACK
+  handling, aggregate metrics, tests, and operator documentation.
+- Added an observability connector evaluation matrix and shared connector
+  contract, then split the broad additional-observability roadmap item into
+  individual connector backlog items for StatsD, Datadog, Splunk HEC, Elastic,
+  Grafana Alloy, OCI Monitoring, Amazon CloudWatch, Azure Monitor, and syslog.
+- Added a headers-only JetStream delivery evaluation and split implementation
+  work into separate backlog items for consumer configuration,
+  payload-presence metadata, and sink or DLQ certification.
+- Added an optional confirmed ACK evaluation and split future implementation
+  work into separate backlog items for confirmed ACK after sink success,
+  confirmed DLQ acknowledgement behavior, and ACK confirmation metrics with an
+  operator runbook.
+- Added an optional InProgress evaluation and split future implementation work
+  into separate backlog items for AckWait or BackOff guardrails, runtime
+  InProgress heartbeats during long sink writes, and InProgress metrics with
+  an operator runbook.
+- Added an ordered-consumer evaluation and split future implementation work
+  into separate backlog items for client compatibility checks, a read-only
+  ordered inspection CLI, and durable replay-to-sinks guidance that keeps
+  production writes on durable pull consumers.
+- Added a push-consumer evaluation and split future implementation work into
+  separate backlog items for capability and configuration guardrails, an
+  opt-in bounded push runner mode, and push delivery-contract certification
+  tests while keeping pull consumers as the production default.
+- Added a subject-aware observability evaluation and split future
+  implementation work into separate backlog items for a disabled-by-default
+  policy model, bounded subject-family aggregation, and certification tests
+  while keeping current metric export aggregate-only by default.
+- Added a WebSocket connection evaluation and split future implementation work
+  into separate backlog items for WebSocket configuration guardrails, optional
+  connection header support, and an integration certification harness while
+  keeping `nats://` and `tls://` as the certified production transports today.
+- Added WebSocket NATS transport guardrails for `ws://` and `wss://`, including
+  fail-closed mixed transport rejection, rejection of credentials embedded in
+  URLs, `wss://` TLS context construction with local CA support, and unchanged
+  commit-then-ACK processing.
+- Added optional WebSocket connection header configuration through
+  `nats.websocket_headers` and `nats.websocket_headers_env`, with bounded
+  header validation, environment-sourced sensitive values, protocol-owned
+  header rejection, redacted effective configuration, and `nats-py`
+  `ws_connection_headers` option construction.
+- Added a collision-safe local WebSocket certification harness and
+  `scripts/run-websocket-e2e.sh`, which starts only its own temporary
+  loopback `nats-server`, chooses free alternative ports when defaults are
+  occupied, publishes synthetic messages over WebSocket, writes them through
+  `FileSink`, and verifies the runner's ACK-after-sink-success path.
+- Added optional tamper-evident custody metadata, including core configuration,
+  deterministic payload and metadata hash helpers, optional previous-record
+  hash capture, runner fail-closed behavior before sink writes, file sink
+  record output, Oracle `METADATA_JSON.custody` persistence, public API
+  exports, tests, and documentation.
+- Added disabled-by-default JetStream advisory observation for selected
+  `$JS.EVENT.ADVISORY...` subjects, including validated advisory configuration,
+  bounded JSON parsing, low-cardinality advisory counters, runner lifecycle
+  isolation from sink ACK behavior, tests, and operator documentation.
+- Added an offline `nats-sink stream-plan` helper for JetStream stream
+  management planning, including retention, discard, storage, replicas,
+  duplicate-window, runtime permission, administration permission, NATS CLI
+  example, and JSON output guidance without connecting to NATS or mutating
+  stream state.
+- Added explicit durable pull-consumer management with `bind_only`,
+  `create_if_missing`, and `reconcile` modes, including safe startup drift
+  validation for filter subject, explicit ACK policy, pull-consumer shape,
+  AckWait, MaxDeliver, MaxAckPending, MaxWaiting, headers-only state, tests,
+  and least-privilege permission documentation.
+- Added richer durable pull-consumer policy configuration for multiple
+  `FilterSubjects`, server-side `BackOff`, consumer replicas, memory-storage
+  state, and bounded low-sensitivity JetStream consumer metadata, with
+  fail-closed validation for unsafe combinations before message processing
+  starts.
+- Added optional `nats.no_echo` support, passed to `nats-py` as `no_echo`,
+  with default-off behavior, environment override support, tests, and
+  documentation that explains when same-connection echo suppression is useful.
+- Added a disabled-by-default OpenTelemetry OTLP metrics connector under
+  `nats-sink-observe otlp-export`, including validated policy fields,
+  allow-list filtering, OTLP/HTTP JSON rendering, bounded request size,
+  timeout and retry controls, environment-sourced headers, sanitized CLI
+  output, unit coverage, public API exports, documentation, and systemd
+  service/timer examples.
+- Added detailed backlog items for future generic multi-sink routing and
+  fan-out, including route matching by subject and metadata, named sink
+  instances, optional ACK-gating wait policy, partial-failure metrics, and
+  routing certification tests.
+- Added `nats_sinks.spool.SpoolSink`, a first-party encrypted edge
+  spool-and-forward sink for disconnected operation, including bounded local
+  custody, record-level AES encryption, deterministic idempotency-key files,
+  priority-aware replay, the `nats-sink replay-spool` command, unit coverage,
+  example configuration, and operator documentation.
+- Added a GoldenGate-inspired sink candidate research page and new managed
+  backlog items for missing Oracle-family, cloud, streaming, lakehouse,
+  database, messaging, and compatibility-profile connector candidates, using
+  Oracle GoldenGate public connectivity documentation as a planning reference
+  without claiming GoldenGate compatibility.
+
+### Changed
+
+- Refined the README and introductory architecture documentation to describe
+  Oracle Database and OCI-hosted Oracle Autonomous Database as natural durable
+  destinations while keeping the framework positioned for multiple sinks.
+- Grouped Prometheus integration, metrics snapshot guidance, and NATS server
+  monitoring under the Observability documentation section so external
+  monitoring connectors are presented as sub-pages of the observability model.
+- Reorganized the MkDocs navigation into a broader tree with sections for
+  start-here material, core concepts, NATS, sinks, data handling,
+  observability, deployment, security and supply chain, testing and quality,
+  use cases, project workflow, and ADRs.
+- Documented payload encryption key rotation, multi-key decryption, and
+  secret-manager bootstrap patterns while keeping automated key rotation and
+  provider-specific secret-manager integrations as future optional extensions.
+- Moved the Postgres sink proposal out of active roadmap phases into
+  "Not Planned Unless Scope Changes" and marked its backlog item as a
+  low-priority, not-planned reference.
+- Updated the NATS feature-gap analysis and roadmap so terminal
+  acknowledgement work is represented as a narrow future DLQ-after-success
+  feature instead of an open-ended AckTerm/AckNext evaluation.
+- Expanded the WebSocket certification backlog requirements so the future
+  local test harness must detect occupied NATS ports, select free loopback
+  alternatives, and avoid interfering with unrelated running NATS processes.
+- Expanded Oracle duplicate visibility so `nats-sink-metrics` can report
+  merge rows, update-enabled merge rows with unknown insert-versus-match
+  outcome, and no-update merge duplicates left unchanged after commit.
+
 ### Fixed
 
+- Fixed a set of Oracle MySQL sink hardening gaps found during focused
+  bug-hunt testing: conflicting password sources, blank password values,
+  malformed password environment names, empty resolved password variables,
+  connection-field control characters, empty TLS path strings, invalid pool
+  names, duplicate or dotted column mappings, unknown or duplicate idempotency
+  key columns, over-qualified table identifiers, max-length table DDL
+  constraint naming, startup error classification for missing secrets,
+  connection-pool cleanup after schema creation failure, and cleanup errors
+  masking committed writes or permanent schema errors.
+- Fixed Oracle MySQL sink connection-pool startup by normalizing positive
+  fractional `connection_timeout` values to integer seconds before passing
+  options to Oracle MySQL Connector/Python, with a regression test and
+  container-backed e2e verification.
+- Fixed Oracle MySQL SQL-builder static-analysis evidence by placing reviewed
+  Bandit B608 suppressions on the exact validated SQL f-string line reported
+  by the scanner, with regression coverage for the annotation placement.
+- Fixed the local Docker smoke runner so expected transient NATS startup
+  connection failures use a quiet error callback and NATS stream seeding
+  failures are reported as concise `SmokeTestError` messages instead of raw
+  tracebacks.
+- Fixed pull request label synchronization to apply labels through
+  `gh issue edit` against the pull request number instead of `gh pr edit`,
+  avoiding an unrelated GitHub CLI GraphQL `projectCards` failure observed
+  during live PR creation.
+- Fixed pull request label source detection so Markdown inline code spans and
+  fenced code blocks do not turn instructional placeholders such as
+  `Related #123` into real source issues.
+- Fixed pull request label source detection so ordinary body references such
+  as `See #123` are not treated as source issues; only branch names, explicit
+  `--issue` arguments, and dedicated `Related #123` lines are used.
+- Fixed `scripts/open-release-pr.sh --issue` so explicit issue numbers are
+  rendered into a `Related Issues` section in the pull request body, keeping
+  issue linkage visible even when it cannot be inferred from the branch name.
+- Fixed pull request label sync dry-run output so it reports "Would copy"
+  instead of implying labels were already copied.
+- Fixed malformed GitHub CLI JSON handling in pull request label sync so the
+  helper raises a controlled workflow error instead of leaking a raw JSON
+  decoding traceback.
+- Fixed stale project-managed pull request labels so old release, severity,
+  sink, lifecycle, and workflow labels are removed when the source issue no
+  longer carries them, while manual reviewer labels are preserved.
+- Fixed metadata trust-boundary validation so message metadata headers,
+  configured priority/classification defaults, configured labels, mission
+  metadata profile allow lists, and security-label vocabularies reject ASCII
+  control characters consistently.
+- Fixed ambiguous configured label handling by rejecting semicolons inside
+  individual JSON array label items while preserving documented
+  semicolon-separated string shorthand.
+- Fixed security-label normalization so scalar fields and list items fail
+  closed on non-string values instead of silently coercing JSON numbers or
+  booleans into policy text.
+- Fixed `NatsEnvelope` header normalization so malformed empty or
+  control-character-bearing header names are dropped before sink storage.
+- Fixed epoch nanosecond conversion to use exact integer arithmetic rather than
+  floating-point timestamp multiplication.
+- Fixed the new WebSocket harness unit tests so they mock loopback port probes
+  rather than binding real sockets, preserving the no-network-unit-tests rule
+  for locked-down CI and developer sandboxes.
+- Fixed GitHub backlog relationship sync so native issue dependencies submit
+  numeric `issue_id` values to the GitHub API instead of string values.
+- Fixed GitHub backlog and bug priority sync so native Issue Priority field
+  updates use the current GitHub Issue Field Values API payload shape.
+- Fixed the Dependency Review workflow by moving
+  `actions/dependency-review-action` to the Node.js 24-compatible `v5` release
+  line so pull request dependency review no longer emits Node.js 20 action
+  runtime deprecation warnings.
 - Fixed the high-confidence secret scanner so it prefers `rg` when available
   but falls back to `grep` in minimal CI environments where ripgrep is not
   installed.
 - Updated the PyPI version badge URL to use a shorter Shields.io cache period
   so README and documentation badges refresh more quickly after releases.
+- Fixed the mission-support documentation discoverability regression test so it
+  validates the current tree-shaped MkDocs navigation instead of the previous
+  flat navigation entry.
 
 ## [0.4.0] - 2026-05-22
 

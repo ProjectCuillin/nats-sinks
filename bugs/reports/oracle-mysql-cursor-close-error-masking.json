@@ -1,0 +1,28 @@
+{
+  "id": "oracle-mysql-cursor-close-error-masking",
+  "title": "[Bug]: Oracle MySQL cursor close failure can mask permanent schema errors",
+  "area": "Oracle MySQL sink",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": ["mysql", "hardening", "testing"],
+  "summary": "Oracle MySQL cursor cleanup failures could mask the original permanent write error.",
+  "observed": "A schema-related write failure could be replaced by a cursor close failure, hiding the human-readable table-shape guidance.",
+  "expected": "Cleanup failures must not mask original write failures.",
+  "reproduction": "Run the focused Oracle MySQL hardening regression test for cursor close error masking.",
+  "failing_test": "tests/unit/test_bug_hunt_mysql_sink_hardening.py::test_mysql_cursor_close_failure_does_not_mask_schema_error",
+  "impact": "Operators could lose the actionable unknown-column or schema mismatch message.",
+  "delivery_semantics": "The fix preserves the original failed-write classification and rollback behavior.",
+  "security": "The cleanup warning remains sanitized and avoids payload or secret exposure.",
+  "acceptance": [
+    "Oracle MySQL cursor close failures are logged only.",
+    "The original permanent schema error remains visible to the caller.",
+    "The focused regression test passes."
+  ],
+  "tests": "Run the focused Oracle MySQL hardening regression test and Oracle MySQL sink write tests.",
+  "documentation": "No separate user documentation is required beyond release-note mention of the error handling fix.",
+  "closeout": "Close only after the release containing the cleanup fix is published.",
+  "relationships": {
+    "related": ["#101"]
+  }
+}

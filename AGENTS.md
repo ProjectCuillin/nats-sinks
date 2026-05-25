@@ -71,6 +71,55 @@ silent loss after an early ACK is not.
   behavior.
 - Keep formatting, linting, typing, tests, packaging, and documentation checks
   green before considering work complete.
+- Never make ordinary code, documentation, release-note, or automation changes
+  directly on `main`. Use the hierarchical branch model: `release-vX.Y.Z`
+  from `main`, issue or feature branches from the release branch, and bug
+  branches from the active issue or feature branch when defects are found
+  during development.
+- Merge bug branches back into their issue or feature branch after the failing
+  test, fix, and sanitized evidence are complete. Merge issue or feature
+  branches back into the release branch after implementation evidence,
+  documentation, changelog updates, and local checks are complete. Merge the
+  release branch into `main` only when the maintainer explicitly decides to
+  release.
+- Keep ordinary branch pushes quiet. Do not trigger GitHub Actions after every
+  small branch commit. Use `scripts/open-release-pr.sh --base <target-branch>`
+  to open or refresh a draft pull request against the correct hierarchy
+  target, then run `scripts/run-release-validation.sh` only when the branch is
+  ready for merge or release validation.
+- For issue, feature, and bug pull requests raised by this workflow,
+  `scripts/open-release-pr.sh --ready` auto-approves ready non-main PRs by
+  default. Use `--no-auto-approve-non-main` only when manual inspection is
+  needed before approval. The approval helper must refuse PRs targeting
+  `main`, should verify the expected author when possible, and does not
+  replace release validation, maintainer review, issue evidence, docs, or
+  changelog work. Release PRs into `main` are always manual.
+- Pull requests should inherit the searchable labels from their managed source
+  issues so issue and PR filtering stay aligned. Use
+  `scripts/open-release-pr.sh --issue <number>` when automatic detection from
+  the branch name or a dedicated `Related #...` body line is not sufficient.
+  The helper copies source issue labels by default and removes stale
+  project-managed PR labels while preserving manual labels. Use
+  `--no-copy-issue-labels-to-pr` only for exceptional maintenance work. Do not
+  convert the official GitHub Issue `Priority` field into a pull request
+  label; priority remains managed on the issue.
+- Never merge a pull request without a short sanitized merge comment. The
+  comment should summarize the relevant test results or validation evidence.
+  Use `python scripts/merge-pr-with-comment.py --pr <number> --comment-file
+  <file>` for local merges so the comment is posted before the merge command.
+  Keep merge comments free of secrets, private endpoints, payloads, local
+  paths, and token values.
+- The `Branch Pull Request` workflow is manual and token-gated. Do not
+  re-enable push-triggered pull request creation unless the maintainer
+  explicitly changes the release policy. Do not create release tags from
+  unmerged work branches; the release workflow rejects tags that are not
+  already contained in `main`.
+- Treat `main` branch protection as part of the safety model. The repository
+  currently uses a solo-maintainer release model: require pull requests,
+  release pull request governance, dependency review, resolved conversations,
+  no force pushes, and no branch deletion. Do not require CODEOWNER review or
+  one approving review for `main`, because GitHub blocks self-approval and that
+  would deadlock releases for a one-person repository.
 - Treat GitHub Issues as the live backlog and `CHANGELOG.md` as the shipped
   release history. Before implementing user-visible work, look for a matching
   GitHub issue or prepare a detailed feature request unless the change is a
@@ -110,6 +159,11 @@ silent loss after an early ACK is not.
   work, apply a concrete release label, and post a sanitized `started`
   lifecycle note with `Planned Work`, `Test Plan`, and
   `Documentation And Release Notes` sections.
+- Before editing code for a managed issue, create or switch to the issue branch
+  from the active release branch. If a bug is discovered inside that feature
+  branch, create a separate bug report, branch from the feature branch, add the
+  failing test first, and merge the bug branch back into the feature branch
+  after verification.
 - When implementation is complete locally, post a sanitized `completed` or
   `closeout` lifecycle note with `Completed Work`, `Acceptance Criteria`,
   `Test Plan Evidence`, and `Close-Out Evidence` sections. Use
@@ -179,8 +233,23 @@ silent loss after an early ACK is not.
   native-library inputs.
 - Never log payload encryption keys, generated key material, plaintext payloads,
   or decrypted payloads by default.
+- For payload encryption key rotation work, preserve the encrypted envelope
+  schema, keep `key_id` values non-secret and bland, and test old/new key
+  decryption through `PayloadKeyRegistry`.
+- Keep provider-specific secret-manager SDKs out of the core package unless a
+  future optional extra and connector are explicitly designed, documented, and
+  tested.
 - Validate external input, especially SQL identifiers, NATS subject routing
   patterns, file paths, and configuration fields.
+- Build NATS connection options only through `nats_sinks.core.nats_options`.
+  This keeps password, token, credentials-file, NKEY seed-file, TLS context,
+  WebSocket header, and reconnect handling centralized and reviewable.
+- Treat NATS credentials files, NKEY seed files, TLS private keys, and client
+  certificate paths as sensitive identity material. Redact them from CLI
+  output, logs, issue comments, evidence, and documentation examples.
+- Keep live NATS authentication workflow tests behind explicit environment
+  flags. Normal unit, smoke, and release-prep checks must not depend on real
+  NATS identities, certificate files, or private endpoints.
 - Use bind variables for values and strict allow-list validation for SQL
   identifiers.
 - Do not add dependencies without a clear reason and corresponding docs.
@@ -212,6 +281,20 @@ silent loss after an early ACK is not.
   behavior, native dependencies, HTTP/web/upload/plugin features, or release
   workflow changes may require reopening controls previously marked
   `Not applicable`.
+- Treat each new destination as a sink connector with documented durable
+  success, idempotency, security, and certification requirements. Oracle
+  Database and FileSink are first-party built-ins; future Oracle-family sinks
+  should also be first-party connectors unless governance explicitly changes
+  that posture.
+- Keep external connector discovery disabled by default and allow-list based.
+  Never let JSON configuration choose arbitrary module paths, class paths, or
+  dynamic imports. External connectors must expose `SinkConnector` metadata,
+  match the allow-listed entry-point name, and pass certification tests before
+  production recommendation.
+- Palantir Foundry, Palantir Gotham, and other third-party platform connectors
+  require local fake clients or contract harnesses before live certification is
+  attempted. Do not imply production certification from public documentation
+  alone.
 - Prefer environment-backed encryption key fields such as
   `encryption.key_b64_env`; never commit direct encryption key material.
 - Document and test `encryption.rules` whenever they change. Rule order is a
@@ -240,6 +323,11 @@ silent loss after an early ACK is not.
   classification, labels, payload fields, usernames, and host-specific secrets
   require explicit design review and documentation before any connector can
   publish them.
+- Subject-aware observability must remain disabled by default until a reviewed
+  policy model, bounded subject-family aggregation, and certification tests are
+  in place. Prefer stable operator-approved family labels over raw subjects,
+  enforce cardinality caps, and do not treat hashed subjects as automatically
+  non-sensitive.
 - Keep NATS server monitoring endpoint support outside the delivery runner.
   `JetStreamSinkRunner` must not poll `/jsz`, `/healthz`, or similar endpoints.
   Any `nats-sink-observe` connector must be disabled by default, validate the
@@ -308,6 +396,12 @@ silent loss after an early ACK is not.
   feature has been designed and tested. Never imply that nats-sinks performs
   targeting, fire-control, weapons release, rules-of-engagement evaluation, or
   autonomous decision-making.
+- Treat cross-domain handoff package material as review evidence only. Never
+  claim that a package, file sink output, or documentation blueprint is a
+  cross-domain guard, release authority, data diode, sanitizer, transfer
+  approval, or certification boundary. Package examples must use sanitized
+  identifiers, bounded manifests, validated relative paths, explicit hashes,
+  and no secrets.
 - Keep README documentation links PyPI-safe with fully qualified public URLs,
   and keep `docs/` page-to-page links relative so Read the Docs preserves
   version-local navigation.

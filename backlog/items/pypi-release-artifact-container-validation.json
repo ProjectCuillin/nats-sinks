@@ -1,0 +1,26 @@
+{
+  "id": "pypi-release-artifact-container-validation",
+  "title": "[Feature]: Add local container validation for the latest PyPI release artifact",
+  "area": "Packaging and release",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "unscheduled",
+  "labels": ["release", "testing", "deployment", "security"],
+  "problem": "Pre-release validation proves that the source tree, local build, and release workflow are expected to work, but it does not independently prove that the package actually published to PyPI behaves the same way once external users install it. Maintainers need a local post-release QA failsafe that installs the latest released nats-sinks package from PyPI inside a clean container and runs meaningful checks against that published artifact only.",
+  "proposal": "Create a local-only post-release validation harness that starts a short-lived container, installs the latest released nats-sinks package from PyPI rather than from the local checkout, and runs the most meaningful artifact-level checks available without private infrastructure. The harness should verify CLI availability, package metadata, Python import surfaces, configuration validation, file sink smoke behavior, metrics CLI behavior, optional extras where practical, and container isolation rules. It should optionally accept an explicit version so maintainers can verify a specific release tag. The harness must clearly report whether it used the PyPI artifact, must not mount the local source tree as an import path, and must not run in GitHub Actions by default. It is a post-release operator check, not a substitute for pre-release tests.",
+  "users": "Maintainers publishing nats-sinks releases, release engineers validating PyPI artifacts, security reviewers checking supply-chain controls, and external operators who need confidence that the public package behaves like the tested release candidate.",
+  "delivery_semantics": "This feature does not change NATS delivery behavior. It should include smoke scenarios that validate the published package can still execute commit-before-acknowledge style local sink tests, but it must not claim live NATS or live database delivery unless those services are explicitly configured by the maintainer.",
+  "security": "The harness must use a clean container, avoid mounting secrets or the source checkout into Python import paths, avoid command-line secrets, run with the minimum container privileges practical, redact environment and package-index output, avoid publishing evidence to GitHub Actions logs, and never upload generated reports automatically. Any finding must be converted into a sanitized GitHub bug report before implementation work starts.",
+  "acceptance": [
+    "A local-only script exists to run post-release PyPI artifact validation inside a short-lived container.",
+    "The script installs nats-sinks from PyPI and refuses to pass when the local checkout is importable instead of the installed package.",
+    "The script supports checking the latest release and an explicit version.",
+    "The script runs meaningful artifact checks for CLI help, version reporting, Python imports, config validation, file sink smoke behavior, and metrics CLI behavior.",
+    "The script can optionally include package extras checks when dependencies are available without requiring private services.",
+    "The script produces a sanitized local report and does not print secrets, private endpoints, payload dumps, or full environment values.",
+    "The script is documented as a manual local post-release check and is not added to GitHub Actions.",
+    "The maintainer release runbook explains that any failure must become a GitHub bug issue before fixes start."
+  ],
+  "tests": "Add deterministic unit tests for command construction, source-tree isolation checks, version selection, report redaction, failure classification, and container cleanup. Add a local smoke test that can be run manually after a release to install from PyPI in a short-lived container. Do not make this test part of normal GitHub Actions because it validates public registry state after publication.",
+  "documentation": "Update docs/release.md and docs/publishing.md with a post-release PyPI artifact validation section. Explain what the local container test proves, what it does not prove, when to run it, how findings become bug reports, and why it is intentionally separate from GitHub Actions.",
+  "closeout": "Close after a release includes the local post-release PyPI artifact validation harness, tests, documentation, release checklist updates, and a sanitized example report. Include evidence that the harness was run against a real PyPI release without using the local source tree."
+}

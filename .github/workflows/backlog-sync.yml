@@ -12,7 +12,8 @@ on:
           - "false"
           - "true"
   push:
-    branches: [main]
+    branches:
+      - main
     paths:
       - "backlog/items/**/*.json"
       - "scripts/sync-backlog-issues.py"

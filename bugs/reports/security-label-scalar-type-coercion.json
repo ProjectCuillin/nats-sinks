@@ -1,0 +1,26 @@
+{
+  "id": "security-label-scalar-type-coercion",
+  "title": "[Bug]: Security label scalar fields implicitly coerce non-string values",
+  "area": "Security",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": ["security-labels", "input-validation", "bug-hunt"],
+  "summary": "Security label scalar fields such as classification and retention_category accept non-string JSON values and silently coerce them to text.",
+  "observed": "normalize_security_label_profile accepts values like {'classification': 123} and stores the classification as '123'.",
+  "expected": "Security label scalar fields should require strings so policy metadata is explicit and reviewable.",
+  "reproduction": "Call normalize_security_label_profile({'profile': 'nats-sinks.security-label.v1', 'classification': 123}) and observe validation succeeds.",
+  "failing_test": "Add a unit test that expects non-string security label scalar fields to raise ValidationError.",
+  "impact": "Implicit coercion can hide publisher mistakes and weaken security-label vocabulary enforcement.",
+  "delivery_semantics": "Invalid security label metadata follows existing validation failure handling. ACK ordering is unchanged.",
+  "security": "The fix should fail closed for malformed security labels and avoid logging the label content.",
+  "acceptance": [
+    "Security label scalar fields reject non-string non-null values.",
+    "String scalar values and omitted values remain valid.",
+    "The focused regression test proves numeric scalar fields fail closed.",
+    "The release notes mention stricter security label typing."
+  ],
+  "tests": "Run focused security label tests and full validation.",
+  "documentation": "Update release notes and test report.",
+  "closeout": "Mark completed after merge with sanitized evidence."
+}

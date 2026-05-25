@@ -136,7 +136,8 @@ message-body encryption for the same runtime path.
 
 Exactly one of `key_b64` or `key_b64_env` may be configured when encryption is
 enabled. The direct `key_b64` field is validated and redacted, but production
-deployments should use `key_b64_env` or a future secret-manager integration.
+deployments should use `key_b64_env` or deployment bootstrap code that reads
+from an approved secret manager before creating `EncryptionConfig`.
 
 ## Subject-Specific Encryption
 
@@ -361,6 +362,119 @@ Decryption validates:
 If validation fails, the helper raises a framework `SerializationError`
 without printing payload contents or key material.
 
+## Key Rotation And Multi-Key Decryption
+
+Encrypted payload envelopes include a non-secret `key_id`. The value identifies
+which key generation was used for a stored record. It is not a secret, but it
+is still operational metadata, so avoid names that reveal mission details,
+classified operation names, internal network names, or customer identifiers.
+
+For normal runtime encryption, configure one active key for each global policy
+or subject rule. For offline verification, replay, migration, or incident
+response, use `PayloadKeyRegistry` to keep old and new decryption keys
+available during a rotation window:
+
+```python
+from nats_sinks import EncryptionConfig, PayloadKeyRegistry
+
+registry = PayloadKeyRegistry(
+    [
+        EncryptionConfig(
+            enabled=True,
+            algorithm="aes-256-gcm",
+            key_id="orders-prod-2026-05",
+            key_b64_env="NATS_SINKS_PAYLOAD_KEY_2026_05_B64",
+        ),
+        EncryptionConfig(
+            enabled=True,
+            algorithm="aes-256-gcm",
+            key_id="orders-prod-2026-06",
+            key_b64_env="NATS_SINKS_PAYLOAD_KEY_2026_06_B64",
+        ),
+    ]
+)
+
+plaintext = registry.decrypt_payload(stored_payload)
+```
+
+The registry selects the correct decryptor by reading the stored envelope's
+`key_id`. Unknown, missing, duplicate, or malformed key identifiers fail closed
+with a framework `SerializationError` or `ConfigurationError`; they are not
+guessed, repaired, or silently skipped.
+
+```mermaid
+sequenceDiagram
+    participant Ops as Operator
+    participant Config as Runtime Config
+    participant Sink as Destination Storage
+    participant Registry as PayloadKeyRegistry
+
+    Ops->>Config: Deploy active key_id orders-prod-2026-05
+    Config->>Sink: Store encrypted records with key_id 2026-05
+    Ops->>Config: Rotate active key_id to orders-prod-2026-06
+    Config->>Sink: Store new encrypted records with key_id 2026-06
+    Ops->>Registry: Register 2026-05 and 2026-06 decrypt configs
+    Registry->>Sink: Read stored encrypted payload envelope
+    Sink-->>Registry: Envelope includes key_id
+    Registry-->>Ops: Decrypted plaintext for authorized tooling
+```
+
+The recommended rotation process is:
+
+1. Generate new AES-256 key material outside the repository.
+2. Store the new key in the approved secret store or protected service
+   environment.
+3. Deploy configuration with a new `key_id` and new `key_b64_env`.
+4. Keep previous key material available to authorized decryption tooling for
+   the full retention, replay, and audit window.
+5. Remove old keys only after records encrypted with those keys no longer need
+   to be decrypted.
+
+This is a documentation and helper-library pattern, not an automatic key
+rotation controller. The core runner does not contact cloud KMS, HSM, Vault,
+OCI Vault, AWS KMS, Azure Key Vault, HashiCorp Vault, or Kubernetes Secret
+providers directly. That keeps the runtime dependency surface small and lets
+operators use their platform-approved secret manager.
+
+### Secret-Manager Bootstrap Pattern
+
+If your platform retrieves key material from a managed secret service, fetch
+the base64 key in deployment bootstrap code and pass it into
+`EncryptionConfig`. Keep provider SDKs in your deployment package unless and
+until nats-sinks adds a dedicated optional connector.
+
+```python
+from nats_sinks import EncryptionConfig, PayloadKeyRegistry
+
+
+def load_key_from_approved_secret_store(secret_name: str) -> str:
+    """Return a base64 AES-256 key from your organization's secret store."""
+
+    raise NotImplementedError("Implement with your approved platform SDK")
+
+
+registry = PayloadKeyRegistry(
+    [
+        EncryptionConfig(
+            enabled=True,
+            algorithm="aes-256-gcm",
+            key_id="orders-prod-2026-05",
+            key_b64=load_key_from_approved_secret_store("orders-prod-2026-05"),
+        ),
+        EncryptionConfig(
+            enabled=True,
+            algorithm="aes-256-gcm",
+            key_id="orders-prod-2026-06",
+            key_b64=load_key_from_approved_secret_store("orders-prod-2026-06"),
+        ),
+    ]
+)
+```
+
+Do not log secret names if they reveal sensitive operational context. Do not
+place key material in GitHub Issues, test reports, screenshots, command-line
+arguments, or Markdown examples.
+
 ## Sink Behavior
 
 ### File Sink
@@ -477,6 +591,8 @@ runs coverage for:
 - AES-256-GCM encryption and decryption,
 - AES-256-CCM encryption and decryption,
 - empty payload encryption,
+- multi-key decryption through `PayloadKeyRegistry`,
+- duplicate, unknown, and algorithm-mismatched key handling,
 - wrong key identifier handling,
 - redacted configuration output,
 - runner encryption before sink write and ACK after sink success,
@@ -494,6 +610,8 @@ production.
 - Prefer `key_b64_env` over direct `key_b64`.
 - Protect service environment files with restrictive file permissions.
 - Rotate keys with a planned `key_id` strategy.
+- Use `PayloadKeyRegistry` when authorized tools need to read records written
+  across more than one key generation.
 - Keep old keys available for as long as old destination records must be
   decrypted.
 - Treat destination metadata as clear text.
@@ -506,8 +624,7 @@ production.
 This release intentionally keeps payload encryption simple and auditable:
 
 - no built-in key management service integration,
-- no multi-key decrypt registry,
-- no automatic key rotation,
+- no automatic key rotation orchestration,
 - no metadata encryption,
 - no destination-side decryption workflow,
 - no claim of exactly-once delivery.

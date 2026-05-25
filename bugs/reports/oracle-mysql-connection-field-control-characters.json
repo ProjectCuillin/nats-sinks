@@ -1,0 +1,28 @@
+{
+  "id": "oracle-mysql-connection-field-control-characters",
+  "title": "[Bug]: Oracle MySQL sink accepts control characters in connection fields",
+  "area": "Oracle MySQL sink",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": ["mysql", "hardening", "testing"],
+  "summary": "Oracle MySQL host, database, and user fields did not reject control characters.",
+  "observed": "Connection field values containing newline-style control characters could pass validation.",
+  "expected": "Connection field values must be non-empty plain strings without control characters.",
+  "reproduction": "Run the focused Oracle MySQL hardening regression test for connection-field control characters.",
+  "failing_test": "tests/unit/test_bug_hunt_mysql_sink_hardening.py::test_mysql_config_rejects_control_characters_in_connection_fields",
+  "impact": "Control characters can make diagnostics misleading and complicate safe logging of configuration errors.",
+  "delivery_semantics": "The fix is configuration validation only and does not change committed-write behavior.",
+  "security": "Rejecting control characters reduces log injection and configuration confusion risk.",
+  "acceptance": [
+    "Oracle MySQL host, database, and user values reject control characters.",
+    "Normal non-empty values continue to validate.",
+    "The focused regression test passes."
+  ],
+  "tests": "Run the focused Oracle MySQL hardening regression test and the Oracle MySQL unit test suite.",
+  "documentation": "Document the connection-field validation boundary.",
+  "closeout": "Close only after the release containing the validation fix is published.",
+  "relationships": {
+    "related": ["#101"]
+  }
+}

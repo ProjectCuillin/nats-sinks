@@ -1,0 +1,30 @@
+{
+  "id": "push-consumer-certification-tests",
+  "title": "[Feature]: Add push-consumer delivery-contract and flow-control certification tests",
+  "area": "Testing",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["nats", "testing", "documentation"],
+  "problem": "Push consumers introduce callback scheduling, server-initiated delivery, flow-control messages, idle heartbeats, client pending buffers, and queue-group behavior. Without focused certification tests, a push mode could regress ACK ordering, shutdown behavior, or memory bounds.",
+  "proposal": "Add a dedicated test suite and operator evidence plan for push-consumer behavior. The suite should prove manual ACK ordering, no ACK on temporary failure, DLQ-before-ACK on permanent failure, bounded in-flight work, flow-control and heartbeat handling, graceful shutdown, and unchanged pull-mode behavior.",
+  "users": "Maintainers reviewing push-mode readiness, release engineers validating a future push-support release, and operators needing evidence before enabling push mode in production.",
+  "delivery_semantics": "Tests must prove that push mode does not ACK before durable sink success and does not treat callback completion as successful message processing.",
+  "security": "Test fixtures and evidence must not include real server addresses, credentials, private subjects, payloads, or classified operational labels. Failure evidence must be sanitized before posting to GitHub issues.",
+  "acceptance": [
+    "Contract tests prove ACK after durable sink success in push mode.",
+    "Contract tests prove no ACK on temporary failures in push mode.",
+    "Contract tests prove DLQ publish succeeds before original ACK in push mode.",
+    "Tests cover bounded queue overflow and graceful shutdown behavior.",
+    "Optional local NATS integration tests are marked and isolated."
+  ],
+  "tests": "Add mocked unit tests, failure-injection tests, and optional NATS integration tests behind explicit markers or environment variables. Include tests for flow-control, idle heartbeat, pending limits, callback errors, and pull-mode non-regression. Run scripts/check.sh.",
+  "documentation": "Update testing, operations, push-consumer evaluation, release readiness, roadmap, and changelog documentation.",
+  "closeout": "Close after the release containing push-consumer certification tests is published. Include release tag, test command evidence, skipped integration-test rationale, and limitations.",
+  "relationships": {
+    "related": ["#38"],
+    "blocked_by": [
+      "backlog:push-consumer-capability-config",
+      "backlog:push-consumer-runner-mode"
+    ]
+  }
+}

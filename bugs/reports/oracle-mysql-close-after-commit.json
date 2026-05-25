@@ -1,0 +1,28 @@
+{
+  "id": "oracle-mysql-close-after-commit",
+  "title": "[Bug]: Oracle MySQL connection close failure can fail an already committed write",
+  "area": "Oracle MySQL sink",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": ["mysql", "hardening", "testing"],
+  "summary": "Oracle MySQL connection close failures after commit could be surfaced as write failures.",
+  "observed": "A committed batch could still raise because connection cleanup failed after the durable boundary was crossed.",
+  "expected": "Cleanup failure after successful commit should be logged and must not fail the committed write.",
+  "reproduction": "Run the focused Oracle MySQL hardening regression test for connection close after commit.",
+  "failing_test": "tests/unit/test_bug_hunt_mysql_sink_hardening.py::test_mysql_connection_close_after_commit_does_not_fail_committed_write",
+  "impact": "A cleanup-only error could cause redelivery of data that was already committed.",
+  "delivery_semantics": "The fix protects ACK-after-commit semantics by not treating post-commit cleanup as a failed write.",
+  "security": "The cleanup warning avoids payload or secret logging while preserving operational visibility.",
+  "acceptance": [
+    "Oracle MySQL connection close failures after commit are logged only.",
+    "Committed writes return success after the durable boundary is crossed.",
+    "The focused regression test passes."
+  ],
+  "tests": "Run the focused Oracle MySQL hardening regression test and Oracle MySQL sink write tests.",
+  "documentation": "No separate user documentation is required beyond release-note mention of the delivery semantics fix.",
+  "closeout": "Close only after the release containing the cleanup fix is published.",
+  "relationships": {
+    "related": ["#101"]
+  }
+}

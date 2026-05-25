@@ -2,22 +2,22 @@
   "id": "postgres-sink",
   "title": "[Feature]: Add a production Postgres sink",
   "area": "Future sink",
-  "priority": "P2 - next minor release candidate",
+  "priority": "P4 - research or design needed",
   "target_release": "unscheduled",
-  "labels": ["sink-new", "sink-postgres"],
+  "labels": ["sink-postgres", "not-planned"],
   "problem": "Postgres is a common durable destination for event storage and operational reporting. nats-sinks currently has Oracle and file sinks, but no Postgres sink. Users who need Postgres must write their own sink, which increases the risk of early ACKs, unsafe duplicate handling, inconsistent payload envelopes, and unreviewed SQL construction.",
-  "proposal": "Add `nats_sinks.postgres.PostgresSink` as a production sink with connection pooling, JSON-capable payload storage, metadata persistence, idempotent merge and insert-ignore behavior using database conflict handling, safe identifier validation, bind variables, optional schema helpers, and clear error translation into framework errors.",
-  "users": "Developers and operators who use NATS JetStream with Postgres as the durable event store, plus maintainers who need the first non-Oracle database sink to prove the generic sink extension model.",
-  "delivery_semantics": "PostgresSink must return success only after the database transaction commits. The core must ACK only after that success. Duplicate redelivery must be safe in production modes. Append-style behavior, if supported, must be clearly documented as non-idempotent.",
-  "security": "The sink must validate table and column names, use bind variables for all values, avoid logging payloads or connection details, support least-privilege guidance, and keep connection credentials out of examples. Unit tests must not make network calls.",
+  "proposal": "Do not implement `nats_sinks.postgres.PostgresSink` under the current roadmap. Keep this issue as a scoped reference for possible future reconsideration if user demand, contributor ownership, funding, certification needs, or a concrete deployment requirement changes the project scope.",
+  "users": "Potential future contributors and operators who may need Postgres as a durable event store, plus maintainers who need a public record explaining that Postgres is not currently planned.",
+  "delivery_semantics": "If this work is ever reopened, PostgresSink must return success only after the database transaction commits. The core must ACK only after that success. Duplicate redelivery must be safe in production modes. Append-style behavior, if supported, must be clearly documented as non-idempotent.",
+  "security": "If this work is ever reopened, the sink must validate table and column names, use bind variables for all values, avoid logging payloads or connection details, support least-privilege guidance, and keep connection credentials out of examples. Unit tests must not make network calls.",
   "acceptance": [
-    "PostgresSink is importable from nats_sinks.postgres without breaking existing imports.",
-    "Production idempotent modes are implemented and tested.",
-    "The sink certification contract is satisfied where applicable.",
-    "CLI config supports sink.type postgres through the safe registry.",
-    "Dedicated Postgres documentation and examples are added."
+    "The roadmap lists Postgres under Not Planned Unless Scope Changes.",
+    "The GitHub issue is labeled not-planned and no longer labeled as active new sink work.",
+    "The GitHub issue priority is set to the official Low value through the backlog priority mapping.",
+    "A public GitHub issue comment explains why the work is not currently planned and what would justify reopening it.",
+    "The issue remains available as a historical feature request without implying a committed release target."
   ],
-  "tests": "Add unit tests for configuration, SQL generation, row mapping, duplicate handling, error translation, and ACK ordering with mocks. Add environment-gated integration tests if a test database is available. Run scripts/check-sinks.sh and scripts/check.sh.",
-  "documentation": "Add docs/postgres-sink.md and update README.md, docs/sink-framework.md, docs/configuration.md, docs/idempotency.md, docs/security.md, examples, ROADMAP.md, and CHANGELOG.md.",
-  "closeout": "Close only after the release containing PostgresSink is published. Include the release tag, supported modes, tests run, documentation updated, and known limitations."
+  "tests": "Run local backlog validation and Markdown link checks after moving the item out of active roadmap sections.",
+  "documentation": "Update ROADMAP.md, docs/roadmap.md, docs/index.md, docs/idempotency.md, and CHANGELOG.md so public documentation does not present Postgres as active planned work.",
+  "closeout": "Keep closed or labeled not-planned unless the project scope changes. Reopen only with a concrete maintainer decision, updated acceptance criteria, and a new target release."
 }

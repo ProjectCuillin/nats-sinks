@@ -1,0 +1,28 @@
+{
+  "id": "mongodb-sink",
+  "title": "[Feature]: Evaluate a MongoDB sink",
+  "area": "Future sink",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "security", "testing"],
+  "problem": "Document database sinks are common in event pipelines. nats-sinks does not yet provide a MongoDB sink for storing normalized envelopes or payload projections as documents.",
+  "proposal": "Evaluate a MongoDB sink that writes one document per message with deterministic `_id` values, idempotent upsert or insert-ignore style policies, bounded bulk writes, and strict collection and database name validation.",
+  "users": "Application and platform teams that need JetStream events in a document database while preserving nats-sinks delivery semantics.",
+  "delivery_semantics": "The sink must never ACK messages. It may return success only after the configured write concern has been satisfied for all documents in the batch. Write concern failures, duplicate conflicts not handled by policy, and partial bulk errors must raise framework errors.",
+  "security": "The sink must validate database names, collection names, write concerns, auth mode, TLS settings, and document size limits. Logs must redact credentials, payloads, and connection details by default.",
+  "acceptance": [
+    "Research identifies supported MongoDB deployment targets and write concern defaults.",
+    "Functional requirements cover deterministic document IDs, duplicate policies, metadata mapping, payload envelopes, and optional indexes.",
+    "Non-functional requirements cover bulk sizing, write concern, retry classification, timeouts, and document size limits.",
+    "Security requirements cover TLS, credential redaction, least privilege, and no payload logging.",
+    "Tests cover fake bulk write success, duplicate handling, write concern failure, config validation, and no ACK on sink failure."
+  ],
+  "tests": "Use fake MongoDB client objects for unit tests and gate live tests behind ignored local config. Include contract tests for commit-then-ack ordering.",
+  "documentation": "If implemented, add a dedicated MongoDB sink documentation page and update sink framework, configuration, security, operations, testing, roadmap, and changelog docs.",
+  "closeout": "Close after research decision or released connector. Include selected approach, tests, documentation, and known limitations.",
+  "relationships": {
+    "related": [
+      "backlog:sink-certification-contract-and-tests"
+    ]
+  }
+}

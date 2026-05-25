@@ -1,0 +1,26 @@
+{
+  "id": "mission-metadata-allowed-profile-control",
+  "title": "[Bug]: Mission metadata allowed_profiles accepts non-newline control characters",
+  "area": "Configuration",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": ["mission-metadata", "input-validation", "bug-hunt"],
+  "summary": "Mission metadata allowed profile validation rejects newlines and NUL bytes but still accepts other ASCII control characters.",
+  "observed": "MissionMetadataConfig accepts allowed_profiles entries containing tab characters.",
+  "expected": "Mission metadata allowed_profiles should reject every ASCII control character.",
+  "reproduction": "Construct MissionMetadataConfig(allowed_profiles=['mission\\tprofile']) and observe validation succeeds.",
+  "failing_test": "Add a unit test that expects non-newline control characters in allowed_profiles to fail validation.",
+  "impact": "Malformed allowed profile values can make metadata validation policy difficult to audit.",
+  "delivery_semantics": "No ACK or sink contract behavior changes.",
+  "security": "Allowed profile values are policy configuration and should be explicit and free of control characters.",
+  "acceptance": [
+    "mission_metadata.allowed_profiles rejects all ASCII control characters.",
+    "Valid profile strings remain accepted.",
+    "The regression test covers a tab or delete character.",
+    "Release notes mention configuration validation hardening."
+  ],
+  "tests": "Run focused mission metadata config tests and full validation.",
+  "documentation": "Update CHANGELOG.md and test report.",
+  "closeout": "Mark completed after merge with sanitized evidence."
+}

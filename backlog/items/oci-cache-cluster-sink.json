@@ -1,0 +1,23 @@
+{
+  "id": "oci-cache-cluster-sink",
+  "title": "[Feature]: Evaluate an OCI Cache Cluster sink",
+  "area": "Future sink",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "sink-oci", "security", "testing"],
+  "problem": "OCI GoldenGate lists OCI Cache Cluster as a target-only Big Data connection. nats-sinks has a generic Redis sink backlog item, but it does not yet define whether Oracle-managed cache clusters need a dedicated OCI sink profile.",
+  "proposal": "Research an OCI Cache Cluster sink profile that builds on Redis-compatible semantics where appropriate while documenting Oracle Cloud authentication, network placement, TLS, eviction risk, TTL behavior, and whether a cache can satisfy a durable sink contract. The design must fail closed if the target cannot provide durable custody comparable to a database, object store, or committed spool.",
+  "users": "OCI operators and application teams that want low-latency event handoff into Oracle-managed cache infrastructure without mistaking cache acceptance for durable archival storage.",
+  "delivery_semantics": "The design must explicitly state whether cache writes are durable enough for ACK gating. If not, the connector must be marked non-durable or must only be usable as a non-ACK-gated fan-out target once routing and fan-out semantics exist.",
+  "security": "Connection secrets, TLS material, keys, labels, and payload data must not be logged. Network security lists, private endpoints, and least-privilege policies must be documented.",
+  "acceptance": [
+    "Research determines whether OCI Cache Cluster can be a durable ACK-gated sink.",
+    "The profile documents TTL, eviction, persistence, clustering, and duplicate handling.",
+    "Configuration separates Oracle-managed cache from generic Redis endpoints.",
+    "Tests use fakes or local Redis-compatible services without network calls in unit tests.",
+    "Documentation warns operators when cache storage is not durable enough for critical custody."
+  ],
+  "tests": "Add unit tests for configuration, key mapping, TTL validation, duplicate policy decisions, and temporary/permanent error classification. Live tests must be gated and isolated.",
+  "documentation": "Document the OCI Cache Cluster evaluation under sink planning and update roadmap and security guidance.",
+  "closeout": "Close after the research decision or implementation is released."
+}

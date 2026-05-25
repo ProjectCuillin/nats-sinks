@@ -1,0 +1,29 @@
+{
+  "id": "bug-github-dependency-sync-issue-id-type",
+  "title": "[Bug]: Backlog relationship sync sends dependency issue id as text",
+  "area": "CI and automation",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": [
+    "testing",
+    "completed"
+  ],
+  "summary": "The managed backlog sync workflow can fail while adding GitHub issue dependencies because the GitHub CLI call sends issue_id as a string value instead of an integer value.",
+  "observed": "When syncing a backlog item with a dependency relationship, GitHub rejects the dependency request because issue_id is not submitted as an integer.",
+  "expected": "Backlog relationship sync should submit issue_id as an integer so GitHub can create native issue dependency relationships when the repository supports them.",
+  "reproduction": "Run the focused issue-planning relationship test and verify that the generated gh api command uses the integer field form for issue_id.",
+  "failing_test": "tests/unit/test_issue_planning_sync.py::test_sync_issue_planning_applies_native_blocked_by_relationship",
+  "impact": "Feature and bug issue bodies are still created, but native GitHub issue relationships may fail to sync, weakening backlog navigation and release planning evidence.",
+  "delivery_semantics": "No runtime delivery behavior changes. This fix affects GitHub issue automation only.",
+  "security": "The fix must not expose private repository details, credentials, URLs, IP addresses, tokens, or issue comments containing sensitive deployment information.",
+  "acceptance": [
+    "A focused regression test proves issue dependency creation uses an integer issue_id form.",
+    "Backlog sync can continue after relationship fields are present.",
+    "Existing issue planning tests continue to pass.",
+    "The changelog records the automation fix."
+  ],
+  "tests": "Run tests/unit/test_issue_planning_sync.py and scripts/check.sh.",
+  "documentation": "Update CHANGELOG.md because this changes release-planning automation behavior.",
+  "closeout": "Close only after the release containing the fix is published. Include regression evidence, full validation evidence, and any remaining limitations."
+}

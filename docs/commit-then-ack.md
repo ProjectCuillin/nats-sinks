@@ -83,6 +83,75 @@ sequenceDiagram
 
 If DLQ publish fails, the original message is not ACKed.
 
+## Terminal Acknowledgements
+
+NATS also supports terminal acknowledgements (`AckTerm`) and next-message
+acknowledgements (`AckNext`). They have different safety properties and must
+not be treated as ordinary sink-success ACKs.
+
+`AckTerm` stops redelivery without marking the message as successfully
+processed. `nats-sinks` supports it only as an explicit opt-in DLQ policy:
+when `dead_letter.ack_term_after_publish` is true, the runner publishes the DLQ
+record first and sends `AckTerm` only after that publication succeeds. The
+default remains DLQ publication followed by normal ACK. `AckTerm` must never be
+sent before sink success, before DLQ publication success, or for temporary
+failures.
+
+`AckNext` acknowledges a pull-consumer message and requests more messages in
+one protocol operation. That is not a good fit for `nats-sinks` production sink
+processing because the runner already controls fetch size, batch timeout, and
+backpressure explicitly. Keeping fetch separate from ACK makes the safety
+boundary easier to review and test.
+
+The full decision is documented in
+[ADR 0005: AckTerm And AckNext Evaluation](adr/0005-ackterm-acknext-evaluation.md).
+
+## Confirmed Acknowledgements
+
+Some NATS clients support a confirmed ACK operation, often called `AckSync` or
+double ACK. Confirmed ACK waits for the server to confirm that it processed the
+ACK. That can improve operational visibility, but it does not move the safety
+boundary.
+
+For `nats-sinks`, confirmed ACK must still be the final step. It may be useful
+as a future opt-in option after durable sink success, but it must never run
+before `sink.write_batch(...)` returns success and it must never be used to
+claim exactly-once delivery. If the sink commit succeeds and ACK confirmation
+then times out, the message may redeliver and idempotency must handle the
+duplicate.
+
+The evaluation and future implementation split are documented in
+[Acknowledgement Confirmation Evaluation](acknowledgement-confirmation.md).
+
+## InProgress Signals
+
+JetStream `InProgress` signals tell the server that a delivered message is
+still being worked on and that the acknowledgement wait window should be
+extended. They are not success acknowledgements. They must never replace final
+ACK, NAK, Term, retry, or DLQ behavior.
+
+For `nats-sinks`, any future `InProgress` feature must remain optional,
+disabled by default, bounded, and owned by the core runner. The sink still only
+returns durable success or raises an error. If the sink fails after one or more
+progress signals, the message remains eligible for redelivery or DLQ according
+to policy.
+
+The evaluation and recommended implementation split are documented in
+[InProgress Evaluation](in-progress-evaluation.md).
+
+## Push Consumers
+
+JetStream push consumers deliver messages to a delivery subject instead of
+waiting for the client to fetch a bounded batch. That does not change the ACK
+rule. A future push runner mode must use manual acknowledgement only and must
+ACK only after the sink reports durable success or after DLQ publication
+succeeds for permanent failures.
+
+Push mode is not enabled today. It needs bounded callback intake, pending
+message and byte limits, flow-control and heartbeat handling, and shutdown
+tests before it can be production-ready. The evaluation and implementation
+split are documented in [Push Consumer Evaluation](push-consumer-evaluation.md).
+
 ## Non-Negotiable Invariant
 
 > A JetStream message must only be acknowledged after all required durable side effects have completed successfully. ACK is the final confirmation of successful processing, never a prerequisite for processing.

@@ -1,0 +1,26 @@
+{
+  "id": "message-metadata-priority-default-control",
+  "title": "[Bug]: Priority default metadata accepts control characters",
+  "area": "Configuration",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": ["metadata", "input-validation", "bug-hunt"],
+  "summary": "Priority defaults are normalized with whitespace trimming but are not rejected when they contain embedded control characters.",
+  "observed": "message_metadata.priority.default can contain embedded control characters and still become part of the effective runtime metadata policy.",
+  "expected": "Priority defaults should reject control characters so metadata remains safe for logs, metrics, routing, and destination storage.",
+  "reproduction": "Construct MessageMetadataFieldConfig(header='Priority', default='routine\\u0000x') and observe validation succeeds.",
+  "failing_test": "Add a unit test that expects priority defaults containing ASCII control characters to fail validation.",
+  "impact": "Unsafe default metadata can propagate into all messages on a subject family and make downstream records difficult to inspect safely.",
+  "delivery_semantics": "No ACK or sink success ordering behavior changes.",
+  "security": "The fix must fail closed during configuration validation and avoid logging the unsafe value.",
+  "acceptance": [
+    "Priority defaults reject all ASCII control characters.",
+    "Blank defaults continue to normalize to null.",
+    "The regression test covers an embedded control character.",
+    "Release notes describe stricter metadata default validation."
+  ],
+  "tests": "Run focused unit tests and the full local validation script.",
+  "documentation": "Update CHANGELOG.md and test-report evidence.",
+  "closeout": "Mark completed after merge with sanitized validation evidence."
+}

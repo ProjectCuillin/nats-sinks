@@ -1,0 +1,87 @@
+name: Branch Pull Request
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  create-or-update-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Create or update pull request
+        env:
+          GH_TOKEN: ${{ secrets.NATS_SINKS_PR_BOT_TOKEN }}
+          BRANCH_NAME: ${{ github.ref_name }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -eu
+
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::notice title=Pull request not created::Set NATS_SINKS_PR_BOT_TOKEN to let this manual workflow create or update pull requests."
+            exit 0
+          fi
+
+          if [ "$BRANCH_NAME" = "main" ]; then
+            echo "Refusing to create a pull request from main." >&2
+            exit 1
+          fi
+
+          title="Work branch: $BRANCH_NAME"
+          if printf '%s' "$BRANCH_NAME" | grep -Eq '^release-v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            title="Release ${BRANCH_NAME#release-v}"
+          fi
+
+          body_file="$(mktemp)"
+          cat >"$body_file" <<'PR_BODY'
+          ## Branch-First Release Workflow
+
+          This pull request was created or refreshed automatically from a
+          maintained work branch. It is the review boundary before anything
+          reaches `main`.
+
+          ## Required Release Controls
+
+          - [ ] CI is green for all supported Python versions.
+          - [ ] CodeQL, dependency review, docs, and sink checks are green when applicable.
+          - [ ] Changelog and documentation are updated for user-visible changes.
+          - [ ] Related managed issues have implementation, test evidence, and close-out comments.
+          - [ ] No secrets, credentials, private endpoints, payload dumps, or local paths are included.
+          - [ ] Maintainer review has been completed.
+
+          ## Merge Policy
+
+          Use `Related #123` for managed issues until the release is actually
+          published. Do not use automatic closing keywords for feature or bug
+          work that must remain open until release automation closes it.
+          PR_BODY
+
+          existing_pr="$(
+            gh pr list \
+              --repo "$REPOSITORY" \
+              --head "$BRANCH_NAME" \
+              --base main \
+              --state open \
+              --json number \
+              --jq '.[0].number // empty'
+          )"
+
+          if [ -n "$existing_pr" ]; then
+            gh pr edit "$existing_pr" \
+              --repo "$REPOSITORY" \
+              --title "$title" \
+              --body-file "$body_file"
+            echo "Updated pull request #$existing_pr for $BRANCH_NAME."
+          else
+            gh pr create \
+              --repo "$REPOSITORY" \
+              --base main \
+              --head "$BRANCH_NAME" \
+              --title "$title" \
+              --body-file "$body_file"
+          fi

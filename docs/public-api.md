@@ -18,7 +18,9 @@ The most important top-level imports are:
 ```python
 from nats_sinks import JetStreamSinkRunner, NatsEnvelope, Sink
 from nats_sinks.file import FileSink
+from nats_sinks.mysql import MySqlSink
 from nats_sinks.oracle import OracleSink
+from nats_sinks.sinks import SinkConnector, SinkRegistry
 ```
 
 These imports are intentionally stable. A user should not need to know whether
@@ -32,20 +34,49 @@ The tests also cover:
 - framework error classes such as `TemporarySinkError`, `PermanentSinkError`,
   `ConfigurationError`, `AckError`, and `DeadLetterError`,
 - payload encryption helpers such as `EncryptionConfig`, `PayloadEncryptor`,
-  `SubjectPayloadEncryptor`, and `decrypt_payload`,
+  `SubjectPayloadEncryptor`, `PayloadKeyRegistry`, and `decrypt_payload`,
+- message authenticity helpers such as `MessageAuthenticityConfig`,
+  `MessageAuthenticityRuleConfig`, `canonical_message_authenticity_bytes`,
+  `canonical_message_authenticity_document`, `hmac_sha256_signature_b64`, and
+  `evaluate_message_authenticity`,
+- custody helpers such as `CustodyConfig`, `compute_custody_metadata`,
+  `attach_custody_metadata`, and `canonical_json_bytes`,
+- durable consumer-management helpers such as `ConsumerManagementConfig`,
+  `ensure_jetstream_consumer`, `detect_consumer_drift`, and
+  `build_consumer_config`, including the richer durable pull-consumer policy
+  fields for filter subjects, BackOff, replicas, memory storage, and metadata,
+- JetStream advisory helpers such as `JetStreamAdvisoryConfig`,
+  `JetStreamAdvisoryMonitor`, `parse_jetstream_advisory`, and
+  `observe_jetstream_advisory_message`,
 - message metadata configuration classes,
+- pre-sink policy configuration and evaluation helpers such as
+  `PreSinkPolicyConfig`, `PreSinkPolicyRuleConfig`,
+  `PolicyViolationError`, and `evaluate_pre_sink_policy`,
 - payload normalization helpers,
 - metrics classes and helpers such as `MetricNames`, `InMemoryMetrics`,
   `JsonFileMetrics`, `load_metrics_snapshot`, and
   `metric_rows_from_snapshot`,
 - observability policy and connector helpers such as `ObservabilityPolicy`,
   `PrometheusTextfilePolicy`, `PrometheusHttpEndpointPolicy`,
-  `NatsServerMonitoringPolicy`, `collect_nats_monitoring_snapshot`, and
+  `OtlpMetricsPolicy`, `ElasticObservabilityPolicy`,
+  `GrafanaAlloyObservabilityPolicy`, `SplunkHecObservabilityPolicy`,
+  `StatsdObservabilityPolicy`, `SyslogObservabilityPolicy`,
+  `NatsServerMonitoringPolicy`,
+  `collect_nats_monitoring_snapshot`,
+  `render_otlp_metrics_json`, `export_otlp_metrics`,
+  `render_elastic_otlp_metrics_json`,
+  `export_elastic_observability_metrics`, and
+  `render_grafana_alloy_otlp_metrics_json`, `export_grafana_alloy_metrics`,
+  `render_grafana_alloy_config`, `render_splunk_hec_event_json`,
+  `export_splunk_hec_metrics`, `render_statsd_lines`,
+  `export_statsd_metrics`, `render_syslog_messages`,
+  `export_syslog_metrics`, and
   `render_nats_monitoring_prometheus`,
 - sink extension points such as `Sink`, `HealthCheckableSink`,
-  `SchemaAwareSink`, `FlushableSink`, and `SinkRegistry`,
-- production sink package exports for `nats_sinks.file` and
-  `nats_sinks.oracle`,
+  `SchemaAwareSink`, `FlushableSink`, `SinkRegistry`, `SinkConnector`,
+  `load_entry_point_connectors`, and `normalize_connector_name`,
+- production sink package exports for `nats_sinks.file`, `nats_sinks.mysql`,
+  and `nats_sinks.oracle`,
 - documented configuration helpers such as `load_config` and
   `redacted_config`,
 - command entry points for `nats-sink`, `nats-sink-metrics`, and
@@ -106,25 +137,47 @@ scripts/check.sh
 When a feature should become part of the supported Python API, update the code,
 documentation, and compatibility test together.
 
-For example, if a future Postgres sink is added, the intended public import
-would likely be:
+For example, the first-party Oracle MySQL sink exposes this stable public
+import:
 
 ```python
-from nats_sinks.postgres import PostgresSink
+from nats_sinks.mysql import MySqlSink
 ```
 
-The release-ready change should then include:
+When adding another first-party sink, use the same release-ready checklist:
 
-1. `src/nats_sinks/postgres/__init__.py` exporting `PostgresSink`.
+1. `src/nats_sinks/mysql/__init__.py` exporting `MySqlSink`.
 2. Documentation showing the import.
-3. A `tests/unit/test_public_api.py` contract entry for `nats_sinks.postgres`.
+3. A `tests/unit/test_public_api.py` contract entry for `nats_sinks.mysql`.
 4. Changelog text explaining the new public API.
 5. Sink-specific unit tests and integration tests behind the appropriate
    markers.
+6. A `SinkConnector` descriptor registered in the explicit sink registry.
 
 This keeps new sinks additive. Existing imports such as
 `from nats_sinks.oracle import OracleSink` and
 `from nats_sinks.file import FileSink` should continue to work.
+
+Third-party connector packages should normally expose a `SinkConnector`
+descriptor through the `nats_sinks.sinks` entry-point group. The descriptor API
+is part of the public extension surface, but plugin discovery remains disabled
+by default and allow-list based. See [Sink Framework](sink-framework.md) for
+the connector descriptor and certification requirements.
+
+Sink certification helpers are also documented public imports for maintainers
+and connector authors:
+
+```python
+from nats_sinks.testing import (
+    SinkCertificationCase,
+    certification_envelope,
+    certify_sink_write_success,
+)
+```
+
+These helpers are release-tested so future sink packages can share the same
+baseline evidence without copying internal test code. See
+[Sink Certification](sink-certification.md).
 
 ## Breaking Changes
 

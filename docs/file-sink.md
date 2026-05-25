@@ -4,6 +4,11 @@ The local file sink writes JetStream messages to JSON files on a local or
 mounted filesystem. It is the second production sink in `nats-sinks`, alongside
 Oracle Database.
 
+If you need disconnected local custody followed by later replay into another
+sink, use the [Edge Spool Sink](spool-sink.md) instead. `FileSink` is a final
+filesystem destination; `SpoolSink` is a local custody queue with encrypted
+replay records and explicit forwarding semantics.
+
 The file sink is useful when you need a durable handoff directory, a simple
 audit trail, a development destination without a database, or an integration
 point for another process that watches files. It follows the same core rule as
@@ -14,6 +19,12 @@ simple local handoff, disconnected transfer, or inspection point before a more
 specialized backend is introduced. The file sink is not a replacement for a
 records-management system, but it gives a clear durable boundary and preserves
 the same metadata contract as the database sink.
+
+For reviewable handoff bundles, see the
+[Cross-Domain Handoff Package](use-cases/defence/cross-domain-handoff-package.md)
+blueprint. The blueprint shows how a file-oriented workflow can group a
+manifest, metadata, payload reference, and evidence files without claiming that
+`nats-sinks` is a cross-domain guard or certification boundary.
 
 > Commit first. ACK last. Design for redelivery.
 
@@ -49,6 +60,26 @@ method. Delivery behavior remains owned by the core runtime.
 For operational evidence handling, this matters: the final file path is the
 durable artifact, and the JetStream ACK is sent only after that artifact has
 been placed according to the configured durability settings.
+
+## Certification Status
+
+`FileSink` is part of the first-party production sink surface and is covered by
+the shared [Sink Certification](sink-certification.md) process. Its
+certification evidence includes:
+
+- lifecycle and write certification using the reusable helper module,
+- duplicate-redelivery certification with deterministic file names and
+  `skip_existing`,
+- atomic temporary-file-to-final-file placement tests,
+- gzip and uncompressed output tests,
+- encrypted payload envelope storage and decrypt verification,
+- JSON, text, bytes, and empty payload handling,
+- path traversal and unsafe filename sanitization tests,
+- local file e2e tests proving ACK happens after file success.
+
+Live external services are not required for the file sink certification path.
+All deterministic tests write under pytest-managed temporary directories or
+ignored `.local/` paths.
 
 ## Installation
 
@@ -245,6 +276,19 @@ Each uncompressed file contains a single JSON document:
     "mission_id": "SYN-MISSION-001",
     "f2t2ea_phase": "track"
   },
+  "security_labels": {
+    "profile": "nats-sinks.security-label.v1",
+    "priority": "immediate",
+    "classification": "NATO SECRET",
+    "labels": ["mission-report", "coalition", "watch-floor"],
+    "releasability": ["NATO", "FVEY"],
+    "handling_caveats": ["MISSION"],
+    "owner": "example-owner",
+    "originator": "example-originator",
+    "policy_id": "example-policy",
+    "retention_category": "mission-log-1y"
+  },
+  "custody": null,
   "payload": {
     "report_id": "R-1001",
     "status": "received"
@@ -280,8 +324,52 @@ JSON `null`. This is the recommended pattern for optional F2T2EA phase tagging
 and other mission-support context that should not become fixed generic
 framework fields. See [Mission Metadata](mission-metadata.md) and
 [F2T2EA Event Phase Tagging](use-cases/defence/f2t2ea-event-phase-tagging.md).
+
+When top-level `security_labels.enabled` is true, the file sink writes the
+validated data-centric security label profile as top-level `security_labels`
+and also includes it in `metadata.security_labels`. If the profile is absent,
+both locations use JSON `null`. The profile can carry releasability, handling
+caveats, owner, originator, policy ID, and retention category without turning
+every policy concept into a fixed file-sink field. See
+[Data-Centric Security Label Profile](security-label-profile.md).
+
 For broader file-based handoff, edge operation, classification, labels, and
 audit examples, see [Defence And Mission Support](use-cases/defence/index.md).
+
+If a file workflow is used to stage review packages, generate package directory
+names and file names from validated internal identifiers. Do not allow
+publisher-controlled values to become raw path components, and keep package
+size, file count, manifest size, metadata size, and payload size bounded.
+
+When top-level `custody.enabled` is true, the file sink writes the custody
+object as a top-level `custody` field. This object contains hashes for the
+normalized payload and stable metadata before the file was written. It gives
+auditors a deterministic value to recompute later, while the normal
+commit-then-ACK rule still depends on the file being atomically placed.
+
+Example custody object:
+
+```json
+{
+  "custody": {
+    "schema": "nats_sinks.custody.v1",
+    "schema_version": 1,
+    "algorithm": "sha256",
+    "hash_input_format": "canonical-json",
+    "key_id": "custody-policy-v1",
+    "payload_hash": "hex-encoded-payload-hash",
+    "metadata_hash": "hex-encoded-metadata-hash",
+    "record_hash": "hex-encoded-record-hash",
+    "previous_record_hash": null,
+    "hash_payload": true,
+    "hash_metadata": true,
+    "privacy": "hashes_are_not_encryption"
+  }
+}
+```
+
+See [Tamper-Evident Custody Metadata](tamper-evident-custody.md) for the full
+configuration model and privacy notes.
 
 ### Output Shape With Payload Encryption
 
@@ -307,6 +395,18 @@ the visible effect of enabling encryption for the same message:
     "profile": "mission-event-v1",
     "mission_id": "SYN-MISSION-001",
     "f2t2ea_phase": "track"
+  },
+  "security_labels": {
+    "profile": "nats-sinks.security-label.v1",
+    "priority": "immediate",
+    "classification": "NATO SECRET",
+    "labels": ["mission-report", "coalition", "watch-floor"],
+    "releasability": ["NATO", "FVEY"],
+    "handling_caveats": ["MISSION"],
+    "owner": "example-owner",
+    "originator": "example-originator",
+    "policy_id": "example-policy",
+    "retention_category": "mission-log-1y"
   },
   "payload": {
     "_nats_sinks_encryption": {

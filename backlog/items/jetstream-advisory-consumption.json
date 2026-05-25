@@ -3,10 +3,10 @@
   "title": "[Feature]: Add optional JetStream advisory consumption",
   "area": "Metrics and observability",
   "priority": "P3 - backlog candidate",
-  "target_release": "unscheduled",
-  "labels": ["nats", "observability"],
+  "target_release": "v0.4.1",
+  "labels": ["nats", "observability", "completed"],
   "problem": "JetStream emits advisories for operational events such as max-deliver signals. nats-sinks currently focuses on sink processing metrics and does not consume advisories. Operators may benefit from correlating advisories with retry, DLQ, and redelivery behavior, but advisory content and permissions need careful handling.",
-  "proposal": "Add an optional advisory consumer or documented companion workflow that can observe selected JetStream advisories, translate them into safe metrics or logs, and integrate with the observability policy model. The feature should be disabled by default and separated from the sink processing path.",
+  "proposal": "Add an optional advisory consumer that can observe selected JetStream advisories, translate them into safe metrics or logs, and integrate with the observability policy model. The feature is disabled by default and separated from the sink processing path.",
   "users": "Operators troubleshooting delivery behavior, NATS administrators, and maintainers improving operational visibility.",
   "delivery_semantics": "Advisory consumption must not drive ACK decisions for source messages. It is observational and must not alter retry, DLQ, or sink write behavior.",
   "security": "Advisory subjects and payloads may reveal operational details. The feature must validate allowed advisory subjects, avoid sensitive labels by default, and document required NATS permissions separately from sink runtime permissions.",
@@ -17,7 +17,7 @@
     "Tests prove advisory processing is isolated from sink ACK behavior.",
     "Permission guidance is included."
   ],
-  "tests": "Add unit tests for advisory parsing, filtering, metrics, and isolation from delivery logic. Add optional local NATS integration tests if practical. Run scripts/check.sh.",
+  "tests": "Unit tests cover advisory parsing, subject filtering, metrics, configuration validation, monitor lifecycle, and isolation from sink ACK behavior. Optional local NATS integration tests remain future certification work. Run scripts/check.sh.",
   "documentation": "Update docs/observability.md, docs/metrics.md, docs/operations.md, docs/security.md, docs/nats-feature-gap-analysis.md, ROADMAP.md, and CHANGELOG.md.",
   "closeout": "Close after the release containing advisory support is published. Include release tag, advisory types covered, tests run, and limitations."
 }

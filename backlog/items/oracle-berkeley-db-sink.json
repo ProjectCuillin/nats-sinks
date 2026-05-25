@@ -1,0 +1,30 @@
+{
+  "id": "oracle-berkeley-db-sink",
+  "title": "[Feature]: Add an Oracle Berkeley DB sink",
+  "area": "Future sink",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "sink-oracle", "security", "testing"],
+  "problem": "Oracle Berkeley DB is a mature embedded key-value database that can be useful for edge nodes, disconnected deployments, and compact local persistence where running a full database service is not appropriate. nats-sinks currently has a local file sink, but it does not provide a transactional embedded database sink with key-based duplicate handling, recovery behavior, and stronger lookup semantics.",
+  "proposal": "Research, design, and later implement a first-party Oracle-family Berkeley DB sink in the main repository. The sink should use a reviewed Python binding only when the dependency, licensing, platform support, and native library posture are acceptable for production use. The sink should store normalized nats-sinks message envelopes by deterministic keys, support transactional commits where available, expose duplicate policies such as keep-existing and verify-existing, and document when Berkeley DB is a good fit compared with FileSink, Oracle Database, and OCI Object Storage. If native dependency risk or licensing constraints make a production implementation unsuitable, the issue should close with a documented non-implementation decision instead of forcing a fragile sink.",
+  "users": "Operators running edge collectors, tactical or disconnected nodes, local replay buffers, and compact gateways that need durable local persistence without a network database dependency.",
+  "delivery_semantics": "The core runner must continue to own ACK behavior. The Berkeley DB sink may return success only after the local transaction or durable write has completed according to the configured durability mode. If open, put, duplicate verification, sync, or transaction commit fails, the sink must raise a framework error and the core must not ACK. Redelivery after a successful local commit must be safe through deterministic keys and duplicate policy handling.",
+  "security": "The sink must validate and canonicalize database directory paths, reject path traversal, keep database files under an approved base directory, and document filesystem permissions. Native-library and Python-extension risks must be explicitly assessed because Berkeley DB bindings cross a memory-safety boundary. Payloads and metadata must not be logged by default. File permissions, locking behavior, recovery files, backups, and cleanup guidance must be documented for least-privilege service users.",
+  "acceptance": [
+    "A design decision records the selected Python binding, licensing posture, supported platforms, and native dependency risk before implementation starts.",
+    "Functional requirements cover deterministic keys, duplicate policies, transactional commits, local recovery, optional compression, encryption compatibility, and metadata storage.",
+    "Non-functional requirements cover filesystem locking, crash recovery, bounded batch sizes, sync behavior, throughput tuning, and failure classification.",
+    "Security requirements cover base-directory enforcement, permissions, native dependency patching, redaction, and backup handling.",
+    "Tests cover config validation, key construction, duplicate policies, commit failure, recovery-related errors, and no ACK on sink failure.",
+    "Documentation explains when Berkeley DB is appropriate and when Oracle Database, FileSink, or OCI Object Storage is a better choice."
+  ],
+  "tests": "Start with fake Berkeley DB environment objects so unit tests require no native database library. Cover safe path validation, deterministic key rendering, duplicate detection, commit success, commit failure, open failure, sync failure, readback verification, and sink contract behavior. Add optional integration tests only after dependency and platform support are agreed. Live or native tests must be gated and must not write outside ignored local test directories.",
+  "documentation": "Add a dedicated Berkeley DB sink page when implementation starts. Update docs/sink-framework.md, docs/configuration.md, docs/security.md, docs/operations.md, docs/testing.md, ROADMAP.md, docs/roadmap.md, and CHANGELOG.md. The documentation must be clear that Berkeley DB is an embedded local store and not a replacement for a replicated database service.",
+  "closeout": "Close only after the release containing either a production Berkeley DB sink or an explicit non-implementation decision is published. Include release tag, selected binding or decision rationale, tests run, documentation updated, and known limitations.",
+  "relationships": {
+    "related": [
+      "backlog:sink-certification-contract-and-tests",
+      "backlog:edge-spool-and-forward-mode"
+    ]
+  }
+}

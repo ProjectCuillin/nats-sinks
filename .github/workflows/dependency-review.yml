@@ -2,9 +2,14 @@ name: Dependency Review
 
 on:
   pull_request:
+    types:
+      - ready_for_review
+      - reopened
+      - synchronize
 
 jobs:
   dependency-review:
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     permissions:
       contents: read

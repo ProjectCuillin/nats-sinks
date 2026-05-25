@@ -1,0 +1,28 @@
+{
+  "id": "oracle-mysql-table-identifier-depth",
+  "title": "[Bug]: Oracle MySQL table identifier validation allows too many parts",
+  "area": "Oracle MySQL sink",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": ["mysql", "hardening", "testing"],
+  "summary": "Oracle MySQL table identifier validation allowed more than table or database.table.",
+  "observed": "An identifier with multiple dots could pass the allow-list check.",
+  "expected": "Table identifiers must be limited to table or database.table.",
+  "reproduction": "Run the focused Oracle MySQL hardening regression test for table identifier depth.",
+  "failing_test": "tests/unit/test_bug_hunt_mysql_sink_hardening.py::test_mysql_table_identifier_rejects_more_than_schema_and_table",
+  "impact": "Over-qualified identifiers are outside the documented contract and make SQL generation harder to review.",
+  "delivery_semantics": "The fix rejects invalid table configuration before delivery work starts.",
+  "security": "A small identifier grammar keeps dynamic SQL assembly reviewable.",
+  "acceptance": [
+    "Oracle MySQL table identifiers reject values with more than two parts.",
+    "Single table and database.table identifiers remain accepted.",
+    "The focused regression test passes."
+  ],
+  "tests": "Run the focused Oracle MySQL hardening regression test and the Oracle MySQL SQL tests.",
+  "documentation": "Document the table identifier grammar.",
+  "closeout": "Close only after the release containing the identifier validation fix is published.",
+  "relationships": {
+    "related": ["#101"]
+  }
+}

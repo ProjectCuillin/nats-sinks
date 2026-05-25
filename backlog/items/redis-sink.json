@@ -1,0 +1,28 @@
+{
+  "id": "redis-sink",
+  "title": "[Feature]: Evaluate a Redis sink",
+  "area": "Future sink",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "security", "testing"],
+  "problem": "Cache and key-value sinks are common in connector ecosystems, but Redis durability semantics vary widely by deployment and configuration. nats-sinks does not yet provide a Redis sink and should avoid treating a cache as durable storage without clear warnings.",
+  "proposal": "Evaluate whether a Redis sink belongs in nats-sinks and, if so, restrict it to explicitly documented durable or operational-cache use cases. The design should cover deterministic keys, duplicate behavior, optional streams or hashes, persistence requirements, and warnings when Redis is not a durable sink for the workload.",
+  "users": "Operators and application teams that need low-latency operational state projection from JetStream into Redis-compatible systems.",
+  "delivery_semantics": "The sink must never ACK messages. It may return success only after the configured Redis command or transaction has completed and any required durability policy has been satisfied. If the deployment cannot provide a meaningful durable boundary, the connector must be marked experimental or operational-cache only.",
+  "security": "The sink must validate key templates, database selection, TLS settings, authentication mode, command mode, TTL values, and size limits. Logs must redact credentials and payloads by default.",
+  "acceptance": [
+    "Research decides whether Redis can be a production sink or should remain experimental or cache-oriented.",
+    "Functional requirements cover key templates, duplicate policies, data structures, optional TTLs, and metadata projection.",
+    "Non-functional requirements cover durability settings, timeouts, backpressure, memory limits, and retry classification.",
+    "Security requirements cover TLS, authentication, key validation, least privilege, and no payload logging.",
+    "Tests cover fake client success, duplicate behavior, timeout, unsafe key rejection, and no ACK on sink failure."
+  ],
+  "tests": "Use fake Redis clients for unit tests and gate live tests behind ignored local config. Include explicit tests for non-durable mode warnings.",
+  "documentation": "If implemented, add a dedicated Redis sink documentation page with strong durability caveats and update sink framework, configuration, security, operations, testing, roadmap, and changelog docs.",
+  "closeout": "Close after research decision or released connector. Include durability decision, tests, documentation, and known limitations.",
+  "relationships": {
+    "related": [
+      "backlog:sink-certification-contract-and-tests"
+    ]
+  }
+}

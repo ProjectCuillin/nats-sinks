@@ -34,8 +34,11 @@ certified support in the sink framework.
 - TLS server verification with a local CA file,
 - multiple NATS seed URLs,
 - reconnect tuning and NATS connection event metrics,
-- pass-through fields for NATS credentials and NKEY seed files, not yet
-  certified as production auth modes.
+- offline JetStream stream-management planning for retention, discard,
+  storage, replicas, duplicate-window, and permission review,
+- client-side credentials-file, NKEY seed-file, and TLS client certificate
+  option construction with validation, redaction, documentation, and gated
+  integration-test hooks.
 
 ## High-Level Gap Map
 
@@ -48,14 +51,18 @@ mindmap
       Token auth
       User password auth
       TLS local CA
+      Credentials file auth
+      NKEY seed auth
+      TLS client certificates
+      WebSocket connection guardrails
       DLQ publishing
+      Stream planning helper
     Not yet supported
       Rich consumer config
-      Stream management
+      Stream mutation
       Push and ordered consumers
       AckSync and InProgress
-      NKEY and JWT certification
-      WebSocket connections
+      Advanced WebSocket proxy runbooks
       KV and object stores
       Request reply and services
       Advisories and system events
@@ -75,10 +82,11 @@ Current gap details:
 | Multiple seed URLs for clusters | NATS clients can connect with multiple seed URLs. | Supported through `nats.urls`, which is passed to `nats-py` as `servers`. | Implemented |
 | Reconnect tuning | NATS clients expose reconnect wait, max reconnects, buffers, ping behavior, and event callbacks. | Supported through JSON fields for reconnect enablement, connect timeout, reconnect wait, maximum reconnect attempts, ping settings, pending bytes, and drain timeout. | Implemented |
 | Connection event metrics | NATS clients can report disconnect, reconnect, closed, discovered server, and async error events. | Runner wraps `nats-py` callbacks and records connection event metrics while preserving user-supplied callbacks. | Implemented |
-| WebSocket connections | NATS URLs can use `ws://` for WebSocket connections. | Not documented, tested, or exposed with WebSocket-specific options. | Phase 3 |
-| TLS certificate identity auth | NATS can use client certificate/key material and server-side TLS verification. | Client cert/key can be loaded into the SSL context, but production certificate-auth guidance and tests are not certified. | Phase 2 |
-| NKEY challenge auth | NATS supports challenge-response auth using Ed25519 NKEYs. | `nkey_seed_file` exists as pass-through config, but this is not documented or tested as certified support. | Phase 2 |
-| Decentralized JWT auth | NATS supports operator/account/user JWT auth with credentials files and resolvers. | `creds_file` exists as pass-through config, but JWT workflows are not certified or documented deeply. | Phase 2 |
+| No-echo connection option | NATS clients can request server-side suppression of messages published on the same connection being echoed back to matching subscriptions on that connection. | Supported through `nats.no_echo`, passed to `nats-py` as `no_echo`. The default is `false` because normal JetStream pull-consumer sink workers do not depend on same-connection echo suppression. | Implemented |
+| WebSocket connections | NATS URLs can use `ws://` for WebSocket connections, and NATS server WebSocket support can run alongside traditional TCP connections. | Supported with project guardrails for mixed transport rejection, credential-free URLs, `wss://` local CA handling, validated optional headers, and an optional local certification harness. See [WebSocket Connection Evaluation](websocket-connection-evaluation.md). | Implemented; continue hardening proxy-specific runbooks. |
+| TLS certificate identity auth | NATS can use client certificate/key material and server-side TLS verification. | Client cert/key option construction, redaction, validation, and documentation are certified on the client side. Server-side certificate identity policy remains an operator responsibility. | Implemented for client configuration; keep expanding live certification runbooks. |
+| NKEY challenge auth | NATS supports challenge-response auth using Ed25519 NKEYs. | `nkey_seed_file` is validated, redacted, passed to `nats-py` as `nkeys_seed`, and covered by unit plus gated integration tests. | Implemented for client configuration; keep expanding live certification runbooks. |
+| Decentralized JWT auth | NATS supports operator/account/user JWT auth with credentials files and resolvers. | `creds_file` is validated, redacted, passed to `nats-py` as `user_credentials`, and documented as the client-side credentials-file workflow. Account resolver setup remains server-side policy. | Implemented for client configuration; keep expanding live certification runbooks. |
 | Accounts, exports, imports, permissions | NATS supports account isolation and subject-level permissions. | Least-privilege runtime, DLQ, management, and advisory permission templates are documented. Account export/import designs remain server-side operator policy. | Implemented for runtime templates; deeper account design remains Phase 2 |
 | Auth callouts | NATS supports auth callout extensions. | Server-side feature; not supported or documented for sink deployments. | Phase 3 |
 
@@ -94,19 +102,19 @@ Current gap details:
 
 | NATS capability | NATS support | Current `nats-sinks` status | Suggested priority |
 | --- | --- | --- | --- |
-| Explicit consumer creation/update | Consumers have a rich server-side configuration model. | Runner uses `pull_subscribe`; it does not create or reconcile consumer config. | Phase 2 |
-| AckWait | Controls when unacked messages redeliver. | Not configurable in JSON; users must manage consumer externally. | Phase 2 |
-| MaxDeliver | Controls maximum redelivery attempts before advisories. | `delivery.max_retries` bounds active delayed NAK attempts, but it is not reconciled with server `MaxDeliver`. | Phase 2 |
-| BackOff | Server-side redelivery backoff sequence. | Local delayed NAK backoff supports fixed, linear, exponential, cap, and jitter controls; server-side backoff config is not managed. | Phase 2 |
-| MaxAckPending | Server-side flow control for outstanding unacked messages. | `batch_size` bounds fetches, but consumer `MaxAckPending` is not configured. | Phase 2 |
-| DeliverPolicy | Start at all, new, last, sequence, time, or last-per-subject. | Not exposed; external consumer setup required. | Phase 2 |
-| Multiple FilterSubjects | Consumers can filter on multiple subjects. | Single `nats.subject` only. Oracle table routing happens after delivery. | Phase 2 |
-| HeadersOnly delivery | Consumers can deliver only headers. | Not supported; sinks expect payload bytes. | Phase 3 |
-| Consumer metadata | Consumers support user metadata. | Not exposed. | Phase 3 |
-| Push consumers | NATS supports push delivery to a subject. | Not supported by the runner by design today. | Phase 3 |
-| Ordered consumers | NATS supports ordered push and pull consumers for inspection/replay. | Not supported; not suitable for durable sink writes by default because ordered consumers do not use the same ACK semantics. | Phase 3 |
+| Explicit consumer creation/update | Consumers have a rich server-side configuration model. | `consumer_management.mode` supports `bind_only`, `create_if_missing`, and `reconcile` for durable pull consumers. Existing unsafe drift fails closed before messages are fetched. | Implemented for durable pull consumers |
+| AckWait | Controls when unacked messages redeliver. | `consumer_management.ack_wait_seconds` can create, reconcile, or validate the server setting for durable pull consumers. It is rejected when `backoff_seconds` is configured because JetStream BackOff overrides AckWait. | Implemented for durable pull consumers |
+| MaxDeliver | Controls maximum redelivery attempts before advisories. | `consumer_management.max_deliver` can create, reconcile, or validate the server setting. `delivery.max_retries` still controls active delayed NAK attempts before leaving messages redeliverable. | Implemented for durable pull consumers |
+| BackOff | Server-side redelivery backoff sequence. | `consumer_management.backoff_seconds` can create, reconcile, or validate bounded server-side BackOff sequences when `max_deliver` is also configured. Local delayed NAK backoff remains under `delivery.retry_backoff_*`. | Implemented for durable pull consumers |
+| MaxAckPending | Server-side flow control for outstanding unacked messages. | `consumer_management.max_ack_pending` can create, reconcile, or validate the server setting. `delivery.batch_size` remains the client-side fetch bound. | Implemented for durable pull consumers |
+| DeliverPolicy | Start at all, new, last, sequence, time, or last-per-subject. | `consumer_management.deliver_policy` supports `all`, `last`, `new`, and `last_per_subject`. Sequence and time starts remain future work. | Partially implemented |
+| Multiple FilterSubjects | Consumers can filter on multiple subjects. | `consumer_management.filter_subjects` supports bounded plural filters that must remain within `nats.subject`; Oracle table routing still happens after delivery. | Implemented for durable pull consumers |
+| HeadersOnly delivery | Consumers can deliver only headers and expose the omitted body size through a NATS header. | `consumer_management.headers_only` can create, reconcile, or validate the server setting. Payload-presence metadata and sink/DLQ certification remain tracked separately. | Partially implemented |
+| Consumer metadata | Consumers support user metadata. | `consumer_management.metadata` supports bounded low-sensitivity string metadata and rejects secret-looking keys. | Implemented for durable pull consumers |
+| Push consumers | NATS supports push delivery to a subject, optional queue-style deliver groups, `MaxAckPending`, FlowControl, and IdleHeartbeat. | Evaluated in [Push Consumer Evaluation](push-consumer-evaluation.md). Not enabled in runtime; follow-up work is split into capability/config guardrails, an opt-in bounded push runner mode, and push delivery-contract certification tests. Pull remains the default. | Phase 3 |
+| Ordered consumers | NATS supports ordered consumers for inspection and analysis workflows. | Evaluated in [Ordered Consumer Evaluation](ordered-consumer-evaluation.md). Not enabled in runtime; follow-up work is split into client compatibility checks, a read-only inspection CLI, and durable replay-to-sinks guidance that keeps production writes on durable pull consumers. | Phase 3 |
 | Queue-style push subscriptions | Push delivery can use queue groups. | Not supported. Pull consumers are preferred for sink work. | Phase 3 |
-| Consumer replicas and memory storage | Consumer state can have replica and memory options. | Not exposed. | Phase 3 |
+| Consumer replicas and memory storage | Consumer state can have replica and memory options. | `consumer_management.num_replicas` and `consumer_management.memory_storage` can create, reconcile, or validate these settings when explicitly configured. | Implemented for durable pull consumers |
 
 ## JetStream ACK And Redelivery Gaps
 
@@ -118,12 +126,12 @@ Current gap details:
 
 | NATS capability | NATS support | Current `nats-sinks` status | Suggested priority |
 | --- | --- | --- | --- |
-| Double ACK / AckSync | Client can wait for the server to confirm receipt of the ACK. | Runner uses ordinary ACK. If ACK is lost after destination commit, redelivery is handled by idempotency. | Phase 2 |
-| In-progress ACK | Extends `AckWait` while long processing continues. | Not supported; long Oracle writes can redeliver if server `AckWait` is too short. | Phase 2 |
-| Term ACK | Stops redelivery without marking successful processing. | Not supported; permanent failures use DLQ then ACK when DLQ publish succeeds. | Phase 3 |
+| Double ACK / AckSync | Client can wait for the server to confirm receipt of the ACK. | Evaluated in [Acknowledgement Confirmation Evaluation](acknowledgement-confirmation.md). Runner still uses ordinary ACK by default; implementation work is split into optional confirmed ACK, DLQ confirmation, and metrics or runbook backlog items. | Phase 2 |
+| In-progress ACK | Extends `AckWait` while long processing continues. | Evaluated in [InProgress Evaluation](in-progress-evaluation.md). Runner does not send progress signals today; implementation work is split into AckWait guardrails, optional runtime heartbeat, and metrics or runbook backlog items. | Phase 2 |
+| Term ACK | Stops redelivery without marking successful processing. | Supported as explicit `dead_letter.ack_term_after_publish` policy only after DLQ publication succeeds. Disabled by default. | Implemented |
 | AckAll | ACK one message and implicitly ACK earlier messages. | Intentionally unsupported because commit-then-ack requires explicit per-message safety. | Not planned |
 | AckNone | Server treats delivery as success without client ACK. | Intentionally unsupported because it violates commit-then-ack. | Not planned |
-| AckNext | ACK and request more messages in one protocol operation. | Not supported; runner fetches batches explicitly. | Phase 3 |
+| AckNext | ACK and request more messages in one protocol operation. | Not planned unless scope changes. The runner fetches batches explicitly so ACK, backpressure, timeout, and retry behavior stay separately testable. | Not planned |
 
 ## JetStream Stream Management Gaps
 
@@ -137,9 +145,9 @@ Current gap details:
 
 | NATS capability | NATS support | Current `nats-sinks` status | Suggested priority |
 | --- | --- | --- | --- |
-| Stream creation and reconciliation | Streams have rich configuration. | Not managed by `nats-sinks`; users create streams externally. | Phase 2 |
-| Retention and discard policies | Limits, interest, and work-queue retention are server-side stream options. | Not managed or validated. | Phase 2 |
-| Duplicate window | Streams can deduplicate publisher writes by `Nats-Msg-Id`. | Consumed `Nats-Msg-Id` can be used for sink idempotency, but publisher dedupe windows are not managed. | Phase 2 |
+| Stream creation and reconciliation | Streams have rich configuration. | `nats-sink stream-plan` provides offline planning guidance and permission separation. It does not mutate NATS; users still create or update streams externally. | Guidance helper implemented; mutation remains outside runtime scope |
+| Retention and discard policies | Limits, interest, and work-queue retention are server-side stream options. | `nats-sink stream-plan` validates allow-listed planning values and documents operational tradeoffs. It does not enforce server state. | Guidance helper implemented |
+| Duplicate window | Streams can deduplicate publisher writes by `Nats-Msg-Id`. | `nats-sink stream-plan` includes duplicate-window guidance. Consumed `Nats-Msg-Id` can still be used for sink idempotency; publisher dedupe remains complementary, not a replacement. | Guidance helper implemented |
 | Mirrors and sources | Streams can replicate from other streams. | Not managed by the runner; topology considerations and idempotency impacts are documented. | Guidance implemented; management remains Phase 3 |
 | Subject transforms | NATS can transform subjects at stream ingress, source, mirror, or republish boundaries. | Not managed by the runner; documentation explains that sink routing sees the delivered subject. | Guidance implemented; management remains Phase 3 |
 | RePublish | Streams can republish stored messages to another subject. | Not managed. Documentation separates server-side RePublish from sink DLQ publishing. | Guidance implemented; management remains Phase 3 |
@@ -177,8 +185,8 @@ events, API activity, stream changes, and consumer changes.
 
 | NATS capability | NATS support | Current `nats-sinks` status | Suggested priority |
 | --- | --- | --- | --- |
-| JetStream advisories | `$JS.EVENT.ADVISORY.>` publishes operational events such as stream and consumer actions. | Not consumed or surfaced by `nats-sinks`. | Phase 2 |
-| MaxDeliver advisory handling | NATS emits advisories when messages hit maximum delivery attempts. | Not integrated; DLQ is driven by sink exceptions, not server advisories. | Phase 2 |
+| JetStream advisories | `$JS.EVENT.ADVISORY.>` publishes operational events such as stream and consumer actions. | Optional observation is supported through the disabled-by-default `advisories` config. The observer emits aggregate counters only and remains separate from sink ACK decisions. | Implemented for selected advisory counters |
+| MaxDeliver advisory handling | NATS emits advisories when messages hit maximum delivery attempts. | Optional observation records `jetstream_advisory_max_deliver_total`. DLQ is still driven by sink exceptions and pre-sink policy, not by advisories. | Implemented as observation only |
 | Server monitoring endpoints | NATS exposes monitoring such as `/jsz` and `/healthz`. | Implemented as a separate disabled-by-default `nats-sink-observe` connector with explicit endpoint and field allow lists. The delivery worker still does not poll server monitoring endpoints. | Implemented for selected fields |
 | Reconnect/disconnect metrics | Client libraries expose connection event callbacks. | Runner records disconnect, reconnect, close, discovered-server, and async-error callback metrics. | Implemented |
 | Prometheus/OpenTelemetry export | NATS and application metrics can be exported externally. | Basic counters, gauges, timing observations, a local JSON snapshot, `nats-sink-metrics`, policy-controlled Prometheus textfile export, and an optional native Prometheus HTTP endpoint exist. OpenTelemetry is not shipped yet. | Phase 2 for OpenTelemetry |
@@ -194,13 +202,21 @@ Some gaps should remain intentional:
   deployment-design guidance without making the sink worker a stream
   management tool.
 - Ordered consumers are useful for inspection and replay, but they do not match
-  the first release's durable destination-write model.
+  the durable destination-write model.
+- Push consumers may be supportable later, but only as an explicit manual-ACK
+  runner mode with bounded in-flight work, flow-control handling, and shutdown
+  tests.
 
 Other gaps are good candidates for future work:
 
 - certified credentials-file, NKEY, and JWT workflows,
 - explicit consumer configuration and reconciliation,
-- `AckSync` and `InProgress` support,
+- optional confirmed ACK support, ACK confirmation metrics, optional
+  `InProgress` heartbeat support, and InProgress guardrails,
+- push-consumer capability/config guardrails, opt-in push runner mode, and
+  push delivery-contract certification tests,
+- read-only ordered-consumer inspection tooling and durable replay-to-sinks
+  guidance,
 - multi-subject filters,
 - JetStream advisory consumption beyond the documented read-only advisory
   permission template.
@@ -218,6 +234,7 @@ Other gaps are good candidates for future work:
 - [NATS NKEY Authentication](https://docs.nats.io/running-a-nats-service/configuration/securing_nats/auth_intro/nkey_auth)
 - [NATS Decentralized JWT Authentication/Authorization](https://docs.nats.io/running-a-nats-service/configuration/securing_nats/auth_intro/jwt)
 - [JetStream Consumers](https://docs.nats.io/nats-concepts/jetstream/consumers)
+- [nats.py message acknowledgement methods](https://nats-io.github.io/nats.py/_modules/nats/aio/msg.html)
 - [JetStream Streams](https://docs.nats.io/nats-concepts/jetstream/streams)
 - [JetStream Model Deep Dive](https://docs.nats.io/using-nats/developer/develop_jetstream/model_deep_dive)
 - [NATS Subject Mapping And Partitioning](https://docs.nats.io/nats-concepts/subject_mapping)

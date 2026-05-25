@@ -1,0 +1,26 @@
+{
+  "id": "datadog-observability-connector",
+  "title": "[Feature]: Add a Datadog observability connector",
+  "area": "Metrics and observability",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["observability", "security", "testing"],
+  "problem": "Datadog is a common hosted observability platform, and operators may want nats-sinks metrics in existing Datadog dashboards. nats-sinks currently avoids direct Datadog export, so teams may build ad hoc DogStatsD or API scripts that bypass the disabled-by-default observability policy, create high-cardinality tags, or expose operational metadata.",
+  "proposal": "Design and implement an optional Datadog connector that follows the shared observability connector contract. It must be disabled by default, read approved metrics from the local metrics snapshot or shared read-only provider, apply the same observability policy allow and deny lists, use the same stale snapshot, dry-run, timeout, retry, and redaction behavior, and export only policy-approved metric names. The preferred first path should be DogStatsD through a local Datadog Agent. Direct API submission may be evaluated as a later mode if the dependency, credential, and rate-limit model remains safe.",
+  "users": "Operators using Datadog for hosted dashboards and alerts, platform teams standardizing service telemetry, and security reviewers concerned with metric tag cardinality and information sharing.",
+  "delivery_semantics": "Datadog export must remain observational only. Agent outages, network errors, rejected payloads, API throttling, or credential failures must not affect message delivery, ACK, NAK, DLQ, retry, sink success, or idempotency.",
+  "security": "Datadog tags can create confidentiality and cost risk. The connector must export no subject names, classification values, labels, mission metadata, table names, file paths, usernames, hostnames, message IDs, or high-cardinality values by default. API keys or application keys must be referenced through environment variables or approved service configuration and never through command-line arguments or logs.",
+  "acceptance": [
+    "Datadog support is optional and disabled by default.",
+    "The connector uses the shared observability policy model and safe metric-name mapping.",
+    "DogStatsD through a local Agent is evaluated as the preferred first transport.",
+    "Tag cardinality and billing risk are documented as explicit limitations.",
+    "Documentation is added as a sub-page under the Observability documentation section."
+  ],
+  "tests": "Add unit tests for disabled policy, allow and deny filtering, DogStatsD metric rendering, safe tag suppression, credential redaction, timeout handling, retry exhaustion, stale snapshots, dry-run behavior, and sanitized failure logs. Add optional integration guidance for a local Agent or mock DogStatsD listener behind an integration marker.",
+  "documentation": "Add a Datadog sub-page under the Observability documentation section. The page must include configuration, Agent-based operation, security defaults, tag limitations, sample output, service deployment, local tests, and any direct API non-goals or future modes.",
+  "closeout": "Close after the release containing Datadog connector support is published. Include the release tag, transport mode, tests run, documentation links, and any follow-up API or Agent-mode issues.",
+  "relationships": {
+    "related": ["#10"]
+  }
+}

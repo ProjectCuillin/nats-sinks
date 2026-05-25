@@ -1,0 +1,54 @@
+{
+  "nats": {
+    "url": "nats://nats:4222",
+    "name": "nats-sinks-docker-local",
+    "stream": "ORDERS",
+    "consumer": "docker-file-sink",
+    "subject": "orders.*",
+    "durable": true,
+    "connect_timeout_seconds": 5,
+    "max_reconnect_attempts": 10,
+    "reconnect_time_wait_seconds": 1
+  },
+  "delivery": {
+    "batch_size": 8,
+    "batch_timeout_ms": 500,
+    "ack_policy": "after_sink_commit",
+    "temporary_failure_action": "nak"
+  },
+  "message_metadata": {
+    "priority": {
+      "header": "Nats-Sinks-Priority",
+      "default": "normal"
+    },
+    "classification": {
+      "header": "Nats-Sinks-Classification",
+      "default": "NATO UNCLASSIFIED"
+    },
+    "labels": {
+      "header": "Nats-Sinks-Labels",
+      "default": [
+        "docker-local",
+        "smoke-test"
+      ]
+    }
+  },
+  "dead_letter": {
+    "enabled": true,
+    "subject": "orders.docker-local.dlq",
+    "include_payload": false
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/var/lib/nats-sinks/file/events",
+    "mode": "one_file_per_message",
+    "filename_strategy": "stream_sequence",
+    "extension": ".json",
+    "payload_mode": "json_or_envelope",
+    "include_metadata": true,
+    "partition_by_subject": true,
+    "create_directory": true,
+    "fsync": false,
+    "duplicate_policy": "skip_existing"
+  }
+}

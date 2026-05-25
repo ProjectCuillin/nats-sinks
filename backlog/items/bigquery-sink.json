@@ -1,0 +1,28 @@
+{
+  "id": "bigquery-sink",
+  "title": "[Feature]: Evaluate a Google BigQuery sink",
+  "area": "Future sink",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "security", "testing"],
+  "problem": "BigQuery is a common analytics destination in connector ecosystems. nats-sinks does not yet provide a BigQuery sink for organizations using Google Cloud analytics stores.",
+  "proposal": "Evaluate a BigQuery sink that writes normalized envelopes through an ingestion path with a clear success boundary, deterministic insert IDs or equivalent idempotency, bounded batches, and strict dataset and table validation.",
+  "users": "Analytics teams and platform engineers that need JetStream event handoff into BigQuery while preserving nats-sinks delivery semantics.",
+  "delivery_semantics": "The sink must never ACK messages. It may return success only after BigQuery has accepted the configured write operation and all row-level errors have been evaluated. Failed or partial inserts must raise framework errors unless explicitly handled through an idempotent duplicate policy.",
+  "security": "The sink must validate project, dataset, and table identifiers; support workload identity where available; redact credentials; and avoid logging payloads or sensitive metadata by default.",
+  "acceptance": [
+    "Research identifies the safest BigQuery ingestion method and idempotency strategy.",
+    "Functional requirements cover table mapping, insert IDs, duplicate behavior, metadata columns, schema handling, and payload envelopes.",
+    "Non-functional requirements cover batch sizing, quotas, retry classification, timeouts, and throughput tuning.",
+    "Security requirements cover identity, least privilege, redaction, and no payload logging.",
+    "Tests cover fake client success, row-level failure, duplicate handling, config validation, and no ACK on sink failure."
+  ],
+  "tests": "Use fake clients for unit tests and gate live tests behind ignored local config. Include commit-then-ack contract tests.",
+  "documentation": "If implemented, add a dedicated BigQuery sink documentation page and update core sink, configuration, security, operations, testing, roadmap, and changelog documentation.",
+  "closeout": "Close after research decision or released connector. Include selected approach, tests, documentation, and known limitations.",
+  "relationships": {
+    "related": [
+      "backlog:sink-certification-contract-and-tests"
+    ]
+  }
+}

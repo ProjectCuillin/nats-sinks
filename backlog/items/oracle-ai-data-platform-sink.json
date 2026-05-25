@@ -1,0 +1,23 @@
+{
+  "id": "oracle-ai-data-platform-sink",
+  "title": "[Feature]: Evaluate an Oracle AI Data Platform sink",
+  "area": "Future sink",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "sink-oracle", "security", "testing"],
+  "problem": "Oracle GoldenGate lists Oracle AI Data Platform as a target-only Oracle platform. nats-sinks does not yet have a connector strategy for this Oracle data platform family.",
+  "proposal": "Research a first-party Oracle AI Data Platform sink or profile that can persist normalized NatsEnvelope records into the platform through supported APIs, staging areas, lakehouse tables, or object-backed ingestion paths. The design should identify the official Oracle SDK or service interface, define deterministic object or row keys, and describe how the connector remains independent from model inference or AI decision-making workflows.",
+  "users": "Oracle AI Data Platform users, data engineers, analytics teams, and mission-support operators who need auditable event persistence before downstream analysis.",
+  "delivery_semantics": "The sink may return success only after Oracle AI Data Platform has durably accepted the event or a documented staging artifact. Redelivery must be handled through deterministic keys and duplicate policies.",
+  "security": "Credentials must come from secure runtime configuration, OCI identity, Vault, or a documented Oracle-supported mechanism. The sink must not emit payloads, prompts, model data, labels, or classification values to logs unless explicitly enabled for controlled testing.",
+  "acceptance": [
+    "Research identifies supported Oracle APIs and durable write boundaries.",
+    "The design separates event persistence from AI inference or decision automation.",
+    "Configuration and test strategy are documented before implementation.",
+    "Idempotency, duplicate handling, encryption, and metadata mapping are specified.",
+    "Documentation states that nats-sinks is an event custody component, not an AI decision engine."
+  ],
+  "tests": "Begin with mocked SDK tests for config parsing, key generation, duplicate decisions, and error classification. Gate any live test behind explicit environment variables and ignored local configuration.",
+  "documentation": "Add Oracle AI Data Platform sink guidance under Sinks and update security, operations, idempotency, and roadmap documentation.",
+  "closeout": "Close after the research or implementation release is published with evidence and limitations."
+}

@@ -59,6 +59,14 @@ flowchart TD
 
 ## Step 1: Prepare The Release
 
+Start from a release branch, not from `main`:
+
+```bash
+git switch main
+git pull --ff-only
+git switch -c release-v0.4.1
+```
+
 Update:
 
 - `pyproject.toml` version,
@@ -97,6 +105,31 @@ quality-of-life check so commands such as `gh run list`, `gh run view`, and
 `gh release view` work immediately after the tag push. If authentication is
 invalid and a terminal is available, the helper asks whether it should start
 browser-based `gh auth login`. It never prints token values.
+
+Push the release branch and open or refresh the release pull request:
+
+```bash
+scripts/open-release-pr.sh --repo ProjectCuillin/nats-sinks --base main
+```
+
+For issue branches, use the active release branch as the pull request base, for
+example `--base release-v0.4.1`. For bug branches created during feature
+development, use the feature branch as the base. The helper creates a draft
+pull request by default. Ordinary branch pushes do not start GitHub Actions.
+When the release branch is ready for merge and release validation, mark the
+pull request ready and dispatch the validation workflows:
+
+```bash
+scripts/run-release-validation.sh --repo ProjectCuillin/nats-sinks
+```
+
+The repository also includes a manual `Branch Pull Request` workflow for
+token-gated pull request creation. It requires `NATS_SINKS_PR_BOT_TOKEN` and is
+not triggered by branch pushes.
+
+The pull request must pass CI and receive maintainer approval before it is
+merged into `main`. The release tag must be created from `main`; the release
+workflow rejects tags that point to unmerged branch commits.
 
 ## PyPI README Link Hygiene
 
@@ -213,6 +246,8 @@ limitations, and security notes.
 Use annotated tags:
 
 ```bash
+git switch main
+git pull --ff-only
 git tag -a v0.1.0 -m "Release v0.1.0"
 git push origin v0.1.0
 ```
@@ -330,6 +365,37 @@ python scripts/close-released-backlog-issues.py \
   --repo ProjectCuillin/nats-sinks \
   --release v0.1.0
 ```
+
+## Step 7: Run Local PyPI Artifact Verification
+
+After PyPI publication succeeds, perform one final local QA check against the
+package as external users receive it. This is intentionally separate from the
+GitHub release workflow: GitHub Actions validates the release candidate and
+publishes the artifacts, while the local post-release check validates that the
+published PyPI artifact can be installed and used from a clean environment.
+
+The planned maintained harness will run in a short-lived container, install
+`nats-sinks` from PyPI, verify that the local checkout is not imported, and run
+artifact-level smoke checks for CLI help, version reporting, Python imports,
+configuration validation, file sink behavior, and metrics CLI behavior. It
+will support checking the latest released version or an explicit version, and
+it will write only sanitized local evidence.
+
+Until that harness exists, a maintainer can run a manual clean-container check:
+
+```bash
+docker run --rm -it container-registry.oracle.com/os/oraclelinux:9-slim bash -lc '\
+  microdnf install -y --setopt=install_weak_deps=0 python3.11 python3.11-pip && \
+  python3.11 -m pip install --no-cache-dir nats-sinks && \
+  nats-sink --help >/tmp/nats-sink-help && \
+  python3.11 -c "from nats_sinks import JetStreamSinkRunner; from nats_sinks.file import FileSink; print(\"ok\")"'
+```
+
+Do not run this as a default GitHub Action. It depends on public registry state
+after publication and belongs in the maintainer release checklist. If it finds
+a defect, create a sanitized GitHub bug report before changing code. The bug
+report should include the failing post-release check, expected behavior,
+sanitized observed behavior, target release label, and test-driven fix plan.
 
 ## Rollback Guidance
 

@@ -19,7 +19,7 @@ from nats_sinks.core.config import (
     load_config,
     redacted_config,
 )
-from nats_sinks.core.encryption import ENCRYPTED_PAYLOAD_KEY, PayloadEncryptor
+from nats_sinks.core.encryption import ENCRYPTED_PAYLOAD_KEY, PayloadEncryptor, PayloadKeyRegistry
 from nats_sinks.core.errors import ConfigurationError, SerializationError
 from nats_sinks.core.runner import JetStreamSinkRunner
 
@@ -293,6 +293,94 @@ def test_decrypt_rejects_wrong_key_id() -> None:
 
     with pytest.raises(SerializationError, match="key_id"):
         PayloadEncryptor(wrong_config).decrypt_payload(encrypted)
+
+
+def test_key_registry_decrypts_old_and_new_rotation_keys() -> None:
+    old_config = EncryptionConfig(
+        enabled=True,
+        algorithm="aes-256-gcm",
+        key_id="orders-prod-2026-05",
+        key_b64=_key_b64(),
+    )
+    new_config = EncryptionConfig(
+        enabled=True,
+        algorithm="aes-256-gcm",
+        key_id="orders-prod-2026-06",
+        key_b64=_key_b64(),
+    )
+    old_payload = PayloadEncryptor(old_config).encrypt_bytes(b"old retained payload")
+    new_payload = PayloadEncryptor(new_config).encrypt_bytes(b"new retained payload")
+
+    registry = PayloadKeyRegistry([new_config, old_config])
+
+    assert registry.key_ids == ("orders-prod-2026-05", "orders-prod-2026-06")
+    assert registry.decrypt_payload(old_payload) == b"old retained payload"
+    assert registry.decrypt_payload(new_payload) == b"new retained payload"
+
+
+def test_key_registry_uses_environment_backed_key_configs(monkeypatch: pytest.MonkeyPatch) -> None:
+    key_b64 = _key_b64()
+    monkeypatch.setenv("NATS_SINKS_ROTATION_TEST_KEY_B64", key_b64)
+    config = EncryptionConfig(
+        enabled=True,
+        algorithm="aes-256-gcm",
+        key_id="orders-env-key",
+        key_b64_env="NATS_SINKS_ROTATION_TEST_KEY_B64",
+    )
+    encrypted = PayloadEncryptor(config).encrypt_bytes(b"environment sourced key")
+
+    assert PayloadKeyRegistry([config]).decrypt_payload(encrypted) == b"environment sourced key"
+
+
+def test_key_registry_rejects_duplicate_key_identifiers() -> None:
+    config = EncryptionConfig(
+        enabled=True,
+        algorithm="aes-256-gcm",
+        key_id="duplicate-key",
+        key_b64=_key_b64(),
+    )
+
+    with pytest.raises(ConfigurationError, match="duplicate payload encryption key_id"):
+        PayloadKeyRegistry([config, config])
+
+
+def test_key_registry_fails_closed_for_unknown_payload_key_id() -> None:
+    old_config = EncryptionConfig(
+        enabled=True,
+        algorithm="aes-256-gcm",
+        key_id="orders-old",
+        key_b64=_key_b64(),
+    )
+    missing_config = EncryptionConfig(
+        enabled=True,
+        algorithm="aes-256-gcm",
+        key_id="orders-not-registered",
+        key_b64=_key_b64(),
+    )
+    encrypted = PayloadEncryptor(missing_config).encrypt_bytes(b"unknown key")
+
+    with pytest.raises(SerializationError, match="key_id is not registered"):
+        PayloadKeyRegistry([old_config]).decrypt_payload(encrypted)
+
+
+def test_key_registry_fails_closed_for_algorithm_mismatch() -> None:
+    key_b64 = _key_b64()
+    encrypt_config = EncryptionConfig(
+        enabled=True,
+        algorithm="aes-256-gcm",
+        key_id="shared-key-id",
+        key_b64=key_b64,
+    )
+    decrypt_config = EncryptionConfig(
+        enabled=True,
+        algorithm="aes-256-ccm",
+        key_id="shared-key-id",
+        key_b64=key_b64,
+    )
+    encrypted = PayloadEncryptor(encrypt_config).encrypt_bytes(b"algorithm mismatch")
+
+    with pytest.raises(SerializationError, match="algorithm"):
+        PayloadKeyRegistry([decrypt_config]).decrypt_payload(encrypted)
 
 
 @dataclass

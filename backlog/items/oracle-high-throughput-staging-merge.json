@@ -3,7 +3,7 @@
   "title": "[Feature]: Add Oracle high-throughput staging-table merge mode",
   "area": "Oracle sink",
   "priority": "P2 - next minor release candidate",
-  "target_release": "unscheduled",
+  "target_release": "v0.4.1",
   "labels": ["sink-oracle"],
   "problem": "The Oracle sink writes batches efficiently for the current production foundation, but very large message volumes may benefit from array-loaded staging tables followed by one set-based merge into the destination table. This can reduce per-row merge overhead, but it introduces new schema, cleanup, transaction, and privilege concerns that need a deliberate design.",
   "proposal": "Design and implement an optional high-throughput Oracle mode that loads normalized rows into a validated staging table and then performs one set-based merge into the configured destination table. The mode should be disabled by default, require explicit staging configuration, preserve idempotency, commit only after the full durable operation succeeds, and clean up staging data safely.",

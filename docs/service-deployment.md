@@ -24,6 +24,8 @@ deployments and Oracle-backed operational event stores.
 /etc/systemd/system/nats-sink-prometheus-textfile.service
 /etc/systemd/system/nats-sink-prometheus-textfile.timer
 /etc/systemd/system/nats-sink-prometheus-http.service
+/etc/systemd/system/nats-sink-otlp.service
+/etc/systemd/system/nats-sink-otlp.timer
 /etc/systemd/system/nats-sink-nats-monitoring.service
 /etc/systemd/system/nats-sink-nats-monitoring.timer
 ```
@@ -78,6 +80,24 @@ sequenceDiagram
     Http-->>Prom: return approved Prometheus text
 ```
 
+Optional OpenTelemetry OTLP export also runs separately:
+
+```mermaid
+sequenceDiagram
+    participant Sink as nats-sink.service
+    participant Snapshot as metrics.json
+    participant Timer as nats-sink-otlp.timer
+    participant Obs as nats-sink-observe
+    participant Policy as observability policy
+    participant Collector as OpenTelemetry Collector
+
+    Sink->>Snapshot: write local metrics snapshot
+    Timer->>Obs: run otlp-export command
+    Obs->>Policy: read allow-list policy
+    Obs->>Snapshot: read snapshot only when OTLP is enabled
+    Obs->>Collector: POST bounded OTLP/HTTP JSON
+```
+
 Optional NATS server monitoring collection also runs separately. It reads only
 policy-approved endpoint fields and never participates in ACK decisions:
 
@@ -107,10 +127,12 @@ The script reads `/etc/os-release`, detects Debian-family systems or Oracle
 Linux, installs the right Python package prerequisites, creates the `nats-sink`
 service user, installs the main `nats-sink.service`, installs the disabled
 Prometheus textfile service/timer assets, installs the disabled native
-Prometheus HTTP service asset, installs the disabled NATS monitoring
-service/timer assets, and enables only the main sink service. Prometheus and
-NATS monitoring sharing remain disabled until the observability policy and the
-selected observability service are explicitly enabled.
+Prometheus HTTP service asset, installs the disabled OTLP service/timer assets,
+installs the disabled NATS monitoring service/timer assets, and enables only
+the main sink service. Prometheus, OTLP, Elastic Observability, Grafana Alloy,
+Splunk HEC, StatsD, syslog, and NATS monitoring sharing remain disabled until the
+observability policy and the selected observability service are explicitly
+enabled.
 
 The installer works in two modes. When it is run from a local git checkout, it
 copies tracked example configuration files and systemd unit files from that
@@ -208,6 +230,8 @@ sudo install -m 0644 examples/systemd/nats-sink.service /etc/systemd/system/nats
 sudo install -m 0644 examples/systemd/nats-sink-prometheus-textfile.service /etc/systemd/system/nats-sink-prometheus-textfile.service
 sudo install -m 0644 examples/systemd/nats-sink-prometheus-textfile.timer /etc/systemd/system/nats-sink-prometheus-textfile.timer
 sudo install -m 0644 examples/systemd/nats-sink-prometheus-http.service /etc/systemd/system/nats-sink-prometheus-http.service
+sudo install -m 0644 examples/systemd/nats-sink-otlp.service /etc/systemd/system/nats-sink-otlp.service
+sudo install -m 0644 examples/systemd/nats-sink-otlp.timer /etc/systemd/system/nats-sink-otlp.timer
 sudo install -m 0644 examples/systemd/nats-sink-nats-monitoring.service /etc/systemd/system/nats-sink-nats-monitoring.service
 sudo install -m 0644 examples/systemd/nats-sink-nats-monitoring.timer /etc/systemd/system/nats-sink-nats-monitoring.timer
 sudo systemctl daemon-reload
@@ -232,6 +256,8 @@ sudo install -m 0644 examples/systemd/nats-sink.service /etc/systemd/system/nats
 sudo install -m 0644 examples/systemd/nats-sink-prometheus-textfile.service /etc/systemd/system/nats-sink-prometheus-textfile.service
 sudo install -m 0644 examples/systemd/nats-sink-prometheus-textfile.timer /etc/systemd/system/nats-sink-prometheus-textfile.timer
 sudo install -m 0644 examples/systemd/nats-sink-prometheus-http.service /etc/systemd/system/nats-sink-prometheus-http.service
+sudo install -m 0644 examples/systemd/nats-sink-otlp.service /etc/systemd/system/nats-sink-otlp.service
+sudo install -m 0644 examples/systemd/nats-sink-otlp.timer /etc/systemd/system/nats-sink-otlp.timer
 sudo install -m 0644 examples/systemd/nats-sink-nats-monitoring.service /etc/systemd/system/nats-sink-nats-monitoring.service
 sudo install -m 0644 examples/systemd/nats-sink-nats-monitoring.timer /etc/systemd/system/nats-sink-nats-monitoring.timer
 sudo systemctl daemon-reload
@@ -267,7 +293,8 @@ The Prometheus service uses `nats-sink-observe`, not `nats-sink`. It reads the
 metrics snapshot and writes only policy-approved metrics. If the policy remains
 disabled, it writes a harmless comment and does not require the snapshot to
 exist. See [Prometheus Integration](prometheus.md) for policy examples and
-node_exporter guidance.
+node_exporter guidance; in the documentation navigation, that page lives under
+the Observability section.
 
 Enable the native Prometheus HTTP service only when the policy explicitly
 enables `prometheus.http_endpoint.enabled` and the chosen listener address is
@@ -282,6 +309,48 @@ journalctl -u nats-sink-prometheus-http.service -n 50
 The native endpoint reads the same local snapshot and policy as the textfile
 connector. It should remain separate from `nats-sink.service` so a scrape
 endpoint failure cannot change JetStream ACK behavior.
+
+Enable the OTLP export timer only when the observability policy explicitly
+enables `otlp.enabled`, the collector endpoint has been reviewed, any required
+header values are provided through `/etc/nats-sinks/nats-sink.env`, and the
+collector is an approved operational information-sharing boundary:
+
+```bash
+sudo systemctl enable --now nats-sink-otlp.timer
+systemctl status nats-sink-otlp.timer
+journalctl -u nats-sink-otlp.service -n 50
+```
+
+The OTLP service uses `nats-sink-observe otlp-export`. It reads only the local
+metrics snapshot and observability policy, sends only policy-approved metric
+names, and exits non-zero if the collector is unavailable after bounded
+attempts. See [OpenTelemetry OTLP Integration](otlp.md) for policy examples,
+dry-run output, timeout and retry controls, and limitations.
+
+For Grafana Alloy, keep Alloy as a separate service and use
+`nats-sink-observe grafana-alloy-export` as the nats-sinks side of the handoff.
+The profile can also render a starter Alloy River snippet with
+`nats-sink-observe grafana-alloy-config`. See
+[Grafana Alloy Profile](grafana-alloy.md) for service separation, generated
+config, and security guidance.
+
+For Splunk HEC, run `nats-sink-observe splunk-hec-export` as a separate
+oneshot service or timer with read access to the metrics snapshot, read access
+to the observability policy, and a protected environment variable containing
+the HEC token. See [Splunk HEC Integration](splunk-hec.md) for HEC event
+format, token handling, TLS expectations, and service guidance.
+
+For StatsD, run `nats-sink-observe statsd-export` as a separate oneshot
+service or timer with read access to the metrics snapshot and observability
+policy, and send datagrams only to the approved StatsD-compatible listener.
+See [StatsD Integration](statsd.md) for datagram format, best-effort transport
+limitations, and service guidance.
+
+For syslog, run `nats-sink-observe syslog-export` as a separate oneshot
+service or timer with read access to the metrics snapshot and observability
+policy, and send bounded RFC 5424-style messages only to the approved syslog
+listener. See [Syslog Bridge](syslog.md) for message format, best-effort
+transport limitations, and service guidance.
 
 Enable the NATS server monitoring timer only when the observability policy
 explicitly enables `nats_server_monitoring.enabled`, endpoint and field allow

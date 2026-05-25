@@ -159,8 +159,16 @@ flowchart LR
 
 Some early deployments allow the runtime worker to create or bind the durable
 consumer automatically. This is more convenient, but it grants more authority
-than the pre-created-consumer model. Use it only when the operational process
-accepts that tradeoff.
+than the pre-created-consumer model. Use it only when
+`consumer_management.mode` is `create_if_missing` or `reconcile` and the
+operational process accepts that tradeoff. For `bind_only`, prefer Template A.
+
+When `consumer_management.filter_subjects` contains multiple filters, NATS uses
+the general durable consumer create subject rather than the single-filter API
+subject that embeds `{filter}`. That means the permission boundary is less
+granular. If subject-level authorization is critical, prefer pre-creating the
+consumer with an administrative identity and running the worker in `bind_only`
+mode.
 
 ```text
 permissions: {
@@ -187,11 +195,61 @@ not be able to encode each filter in the permission subject. In that case,
 prefer pre-creating the consumer with an administrative account and granting the
 runtime worker only fetch and ACK permissions.
 
-## Template D: Separate Advisory Reader
+When `reconcile` is enabled, the worker may submit updated consumer settings
+for an already compatible durable pull consumer. Keep that permission scoped to
+the configured `<STREAM>`, `<CONSUMER>`, and `<SOURCE_SUBJECT>`. Never use a
+wildcard consumer-management grant for the sink worker unless the account is a
+separate deployment automation identity rather than the long-running runtime
+identity.
+
+## Template D: Separate Stream Management Identity
+
+Stream management is a separate operational role. The ordinary sink runtime
+account should not need to create, update, purge, delete, restore, or snapshot
+streams. Use a separate administrative account, Terraform identity, release
+pipeline identity, or controlled platform service to apply stream settings.
+
+The offline helper can prepare a reviewable plan:
+
+```bash
+nats-sink stream-plan /etc/nats-sinks/config.json --format json
+```
+
+That command does not need the following permissions because it never connects
+to NATS. The permissions below are for the separate identity that applies the
+plan through normal NATS administration tooling.
+
+```text
+permissions: {
+  publish: {
+    allow: [
+      "$JS.API.STREAM.CREATE.<STREAM>",
+      "$JS.API.STREAM.UPDATE.<STREAM>",
+      "$JS.API.STREAM.INFO.<STREAM>",
+      "$JS.API.STREAM.NAMES",
+      "$JS.API.CONSUMER.DURABLE.CREATE.<STREAM>.<CONSUMER>"
+    ]
+  }
+  subscribe: {
+    allow: [
+      "_INBOX.>"
+    ]
+  }
+}
+```
+
+Only grant delete, purge, restore, snapshot, or broader stream-management
+subjects when an operational runbook explicitly requires them. Those actions
+can affect retention, audit history, replay readiness, and evidence custody.
+
+## Template E: Separate Advisory Reader
 
 JetStream advisories are useful for operations teams, but they are not required
-for the sink worker to preserve commit-then-acknowledge semantics. If you need
-to consume advisories, use a separate read-only observer account where possible.
+for the sink worker to preserve commit-then-acknowledge semantics. `nats-sinks`
+can observe selected advisories when `advisories.enabled` is true, but a
+separate read-only observer account is still preferred where operational policy
+allows it. If the delivery worker observes advisories itself, grant only the
+exact advisory subjects listed in `advisories.subjects`.
 
 ```text
 authorization {
@@ -207,8 +265,8 @@ authorization {
         }
         subscribe: {
           allow: [
-            "$JS.EVENT.ADVISORY.>",
-            "$JS.EVENT.METRIC.CONSUMER_ACK.<STREAM>.<CONSUMER>"
+            "$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES.<STREAM>.<CONSUMER>",
+            "$JS.EVENT.ADVISORY.CONSUMER.MSG_TERMINATED.<STREAM>.<CONSUMER>"
           ]
         }
       }

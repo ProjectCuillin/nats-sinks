@@ -1,0 +1,8 @@
+# SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
+# SPDX-License-Identifier: Apache-2.0
+
+# Maintainer ownership remains documented here for GitHub review suggestions
+# and future multi-maintainer operation. In the current solo-maintainer model,
+# branch protection must not require CODEOWNER approval because GitHub blocks
+# self-approval and would deadlock releases.
+* @louwersj

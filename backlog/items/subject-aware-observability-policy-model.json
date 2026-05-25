@@ -1,0 +1,30 @@
+{
+  "id": "subject-aware-observability-policy-model",
+  "title": "[Feature]: Add subject-aware observability policy model",
+  "area": "Metrics and observability",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["observability", "security", "testing", "documentation"],
+  "problem": "Operators may need subject-family visibility, but the current observability policy intentionally does not export subjects. Adding subject labels without a dedicated policy model would risk sensitive metadata disclosure and unbounded metric cardinality.",
+  "proposal": "Add a disabled-by-default subject-aware observability policy block that supports default-deny behavior, explicit subject-family allow rules, stable operator-chosen labels, bounded maximum subject families, deterministic overflow behavior, and optional hash/redaction display modes. The policy should reject raw subject sharing unless an explicit reviewed mode allows it.",
+  "users": "Operators who need controlled subject-family observability, security reviewers, and maintainers extending the observability connector model.",
+  "delivery_semantics": "Subject-aware policy validation must not affect message delivery. Invalid or disabled observability policy must fail closed for export while leaving ACK behavior, sink writes, retries, and DLQ handling unchanged.",
+  "security": "Subjects are controlled metadata. The policy must be disabled by default, reject high-cardinality or secret-looking labels, validate NATS subject patterns with the shared matcher, avoid payload and credential values, and document that hashing is not a confidentiality boundary.",
+  "acceptance": [
+    "Subject-aware export remains disabled by default.",
+    "Policy uses default-deny subject-family rules.",
+    "Operator-chosen labels are validated and bounded.",
+    "Cardinality caps and overflow actions are explicit.",
+    "Invalid subject-aware policy fails closed without changing delivery behavior."
+  ],
+  "tests": "Add unit tests for disabled default, allow rules, deny rules, invalid subject patterns, invalid labels, cardinality cap validation, overflow action validation, hash/redaction mode validation, and unchanged aggregate policy behavior. Run scripts/check.sh.",
+  "documentation": "Update subject-aware observability evaluation, observability, metrics, Prometheus, security, roadmap, and changelog documentation.",
+  "closeout": "Close after the release containing the subject-aware observability policy model is published. Include release tag, tests, documentation, and limitations.",
+  "relationships": {
+    "related": ["#44"],
+    "blocks": [
+      "backlog:subject-aware-metric-aggregation",
+      "backlog:subject-aware-observability-certification"
+    ]
+  }
+}

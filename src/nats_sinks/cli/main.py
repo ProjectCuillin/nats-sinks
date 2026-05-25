@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import ssl
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -27,15 +26,31 @@ import typer
 from pydantic import ValidationError as PydanticValidationError
 
 from nats_sinks import __version__
-from nats_sinks.core.config import AppConfig, load_config, redacted_config
+from nats_sinks.core.config import AppConfig, SinkPluginConfig, load_config, redacted_config
 from nats_sinks.core.errors import ConfigurationError, NatsSinksError
 from nats_sinks.core.logging import configure_logging
 from nats_sinks.core.metrics import JsonFileMetrics, MetricsRecorder
+from nats_sinks.core.nats_options import build_nats_connect_options
 from nats_sinks.core.runner import JetStreamSinkRunner
+from nats_sinks.core.stream_management import (
+    StreamManagementOptions,
+    StreamManagementPlan,
+    build_stream_management_plan,
+)
 from nats_sinks.file import FileSink
-from nats_sinks.oracle import OracleSink
+from nats_sinks.mysql import MySqlSink
+from nats_sinks.oracle import (
+    OracleLineageReader,
+    OracleSink,
+    OracleSinkConfig,
+    build_oracle_lineage_query,
+    render_lineage_result_text,
+    resolve_lineage_table,
+)
 from nats_sinks.sinks.base import HealthCheckableSink, Sink
+from nats_sinks.sinks.connectors import SinkConnector, load_entry_point_connectors
 from nats_sinks.sinks.registry import SinkRegistry
+from nats_sinks.spool import SpoolSink, replay_spool_to_sink
 
 app = typer.Typer(help="Run NATS JetStream sink connectors.")
 
@@ -48,10 +63,68 @@ def _version_callback(value: bool) -> None:
         raise typer.Exit()
 
 
-def _registry() -> SinkRegistry:
+def _registry(plugins: SinkPluginConfig | None = None) -> SinkRegistry:
+    """Build the explicit sink connector registry.
+
+    Oracle Database, Oracle MySQL, and FileSink are first-party built-ins and are always
+    registered.  External connectors are loaded only when the JSON config
+    explicitly enables plugin discovery and allow-lists the connector name.
+    """
+
     registry = SinkRegistry()
-    registry.register("file", FileSink.from_mapping)
-    registry.register("oracle", OracleSink.from_mapping)
+    registry.register_connector(
+        SinkConnector(
+            name="file",
+            factory=FileSink.from_mapping,
+            summary="Built-in local JSON file sink.",
+            built_in=True,
+            production_ready=True,
+            documentation="docs/file-sink.md",
+            certification=("commit-then-ack", "unit", "integration"),
+        )
+    )
+    registry.register_connector(
+        SinkConnector(
+            name="oracle",
+            factory=OracleSink.from_mapping,
+            summary="Built-in Oracle Database sink.",
+            built_in=True,
+            production_ready=True,
+            requires_extra="oracle",
+            documentation="docs/oracle-sink.md",
+            certification=("commit-then-ack", "unit", "integration", "live-e2e"),
+        )
+    )
+    registry.register_connector(
+        SinkConnector(
+            name="mysql",
+            factory=MySqlSink.from_mapping,
+            summary="Built-in Oracle MySQL sink.",
+            built_in=True,
+            production_ready=True,
+            requires_extra="mysql",
+            documentation="docs/mysql-sink.md",
+            certification=("commit-then-ack", "unit", "integration", "container-e2e"),
+        )
+    )
+    registry.register_connector(
+        SinkConnector(
+            name="spool",
+            factory=SpoolSink.from_mapping,
+            summary="Built-in encrypted local edge spool sink.",
+            built_in=True,
+            production_ready=True,
+            requires_extra="crypto",
+            documentation="docs/spool-sink.md",
+            certification=("commit-then-ack", "unit", "replay"),
+        )
+    )
+    if plugins is not None and plugins.enabled:
+        for connector in load_entry_point_connectors(
+            allowed_names=plugins.allowed_sinks,
+            require_production_ready=plugins.require_production_ready,
+        ):
+            registry.register_connector(connector)
     return registry
 
 
@@ -70,7 +143,19 @@ def _load_or_exit(config_path: Path) -> AppConfig:
 def _build_sink(config: AppConfig) -> Sink:
     raw_sink = _raw_sink_config(config)
     sink_type = str(raw_sink.get("type", ""))
-    return _registry().create(sink_type, raw_sink)
+    return _registry(config.plugins).create(sink_type, raw_sink)
+
+
+def _oracle_sink_config(config: AppConfig) -> OracleSinkConfig:
+    """Return validated Oracle config for read-only Oracle helper commands."""
+
+    raw_sink = _raw_sink_config(config)
+    if raw_sink.get("type") != "oracle":
+        raise ConfigurationError("lineage queries currently require sink.type 'oracle'")
+    try:
+        return OracleSinkConfig.model_validate(raw_sink)
+    except PydanticValidationError as exc:
+        raise ConfigurationError(str(exc)) from exc
 
 
 def _attach_metrics_to_sink(sink: Sink, metrics: MetricsRecorder | None) -> None:
@@ -91,64 +176,47 @@ def _print_redacted(config: AppConfig) -> None:
     typer.echo(json.dumps(redacted_config(config), indent=2, sort_keys=False))
 
 
-def _nats_options(config: AppConfig) -> dict[str, Any]:
-    """Convert validated JSON config into `nats-py` connection options.
+def _print_stream_plan_text(plan: StreamManagementPlan) -> None:
+    """Render a stream management plan for human terminal review.
 
-    Secret values are resolved at this final boundary rather than during config
-    loading so validation and redacted config rendering can run without reading
-    secret environment variables.  The returned dictionary is passed directly to
-    `nats.connect`, so option names intentionally match `nats-py` keywords.
+    The text intentionally contains stream and subject names because the command
+    is an operator-facing local helper.  It never prints credentials, server
+    URLs, IP addresses, payloads, or certificate material.
     """
 
-    password = config.nats.resolve_password()
-    token = config.nats.resolve_token()
-    servers = config.nats.urls or [config.nats.url]
-    options: dict[str, Any] = {
-        key: value
-        for key, value in {
-            "servers": servers,
-            "user": config.nats.user,
-            "password": password,
-            "token": token,
-            "name": config.nats.name,
-            "user_credentials": config.nats.creds_file,
-            "nkeys_seed": config.nats.nkey_seed_file,
-            "allow_reconnect": config.nats.allow_reconnect,
-            "connect_timeout": config.nats.connect_timeout_seconds,
-            "reconnect_time_wait": config.nats.reconnect_time_wait_seconds,
-            "max_reconnect_attempts": config.nats.max_reconnect_attempts,
-            "ping_interval": config.nats.ping_interval_seconds,
-            "max_outstanding_pings": config.nats.max_outstanding_pings,
-            "pending_size": config.nats.pending_size_bytes,
-            "drain_timeout": config.nats.drain_timeout_seconds,
-        }.items()
-        if value is not None
-    }
+    typer.echo("JetStream stream management plan")
+    typer.echo(f"Stream: {plan.stream}")
+    typer.echo(f"Durable consumer: {plan.durable_consumer}")
+    typer.echo("Subjects:")
+    for subject in plan.subjects:
+        typer.echo(f"  - {subject}")
+    typer.echo("Recommended stream settings:")
+    typer.echo(f"  retention: {plan.settings.retention}")
+    typer.echo(f"  discard: {plan.settings.discard}")
+    typer.echo(f"  storage: {plan.settings.storage}")
+    typer.echo(f"  replicas: {plan.settings.replicas}")
+    typer.echo(f"  duplicate_window_seconds: {plan.settings.duplicate_window_seconds}")
+    typer.echo("Runtime permissions to keep narrow:")
+    for permission in plan.runtime_permissions:
+        typer.echo(f"  - {permission}")
+    typer.echo("Administrative permissions for a separate setup identity:")
+    for permission in plan.administration_permissions:
+        typer.echo(f"  - {permission}")
+    typer.echo("NATS CLI example:")
+    typer.echo(f"  {plan.nats_cli_example}")
+    typer.echo("Notes:")
+    for note in plan.notes:
+        typer.echo(f"  - {note}")
+    if plan.warnings:
+        typer.echo("Warnings:")
+        for warning in plan.warnings:
+            typer.echo(f"  - {warning}")
 
-    if any(
-        (
-            config.nats.tls_ca_file,
-            config.nats.tls_cert_file,
-            config.nats.tls_key_file,
-            any(server.startswith("tls://") for server in servers),
-        )
-    ):
-        # A local CA file lets operators trust a private or self-signed NATS
-        # server CA without disabling certificate verification globally.
-        context = ssl.create_default_context(cafile=config.nats.tls_ca_file)
-        context.check_hostname = config.nats.tls_verify
-        if not config.nats.tls_verify:
-            context.verify_mode = ssl.CERT_NONE
-        if config.nats.tls_cert_file:
-            # Client certificates are passed through for deployments that use
-            # mutual TLS transport. Full certificate-identity authorization is
-            # tracked as a roadmap item because it needs more acceptance tests.
-            context.load_cert_chain(
-                certfile=config.nats.tls_cert_file,
-                keyfile=config.nats.tls_key_file,
-            )
-        options["tls"] = context
-    return options
+
+def _nats_options(config: AppConfig) -> dict[str, Any]:
+    """Convert validated JSON config into `nats-py` connection options."""
+
+    return build_nats_connect_options(config.nats)
 
 
 def _metrics_recorder(config: AppConfig) -> MetricsRecorder | None:
@@ -209,6 +277,197 @@ def show_effective_config(
     _print_redacted(loaded)
 
 
+@app.command("stream-plan")
+def stream_plan(
+    config: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    retention: Annotated[
+        str,
+        typer.Option(
+            "--retention",
+            help="Planned stream retention policy: limits, interest, or workqueue.",
+        ),
+    ] = "limits",
+    discard: Annotated[
+        str,
+        typer.Option("--discard", help="Planned stream discard policy: old or new."),
+    ] = "old",
+    storage: Annotated[
+        str,
+        typer.Option("--storage", help="Planned stream storage type: file or memory."),
+    ] = "file",
+    replicas: Annotated[
+        int,
+        typer.Option("--replicas", help="Planned stream replica count, from 1 to 5."),
+    ] = 1,
+    duplicate_window_seconds: Annotated[
+        int,
+        typer.Option(
+            "--duplicate-window-seconds",
+            help="Planned JetStream duplicate detection window in seconds.",
+        ),
+    ] = 120,
+    output_format: Annotated[
+        str,
+        typer.Option("--format", help="Output format: text or json."),
+    ] = "text",
+) -> None:
+    """Generate an offline JetStream stream-management plan.
+
+    This command is intentionally separate from `nats-sink run`. It does not
+    connect to NATS, does not create streams, does not update consumers, and
+    does not require administrative credentials. Operators can use the output as
+    a review artifact before applying changes with their approved NATS
+    administration process.
+    """
+
+    loaded = _load_or_exit(config)
+    try:
+        options = StreamManagementOptions(
+            retention=retention,
+            discard=discard,
+            storage=storage,
+            replicas=replicas,
+            duplicate_window_seconds=duplicate_window_seconds,
+        )
+        plan = build_stream_management_plan(loaded, options)
+    except NatsSinksError as exc:
+        typer.echo(f"Configuration error: {exc}", err=True)
+        raise typer.Exit(2) from exc
+
+    normalized_format = output_format.strip().casefold()
+    if normalized_format == "json":
+        typer.echo(json.dumps(plan.to_dict(), indent=2, sort_keys=False))
+    elif normalized_format == "text":
+        _print_stream_plan_text(plan)
+    else:
+        typer.echo("Configuration error: --format must be text or json", err=True)
+        raise typer.Exit(2)
+
+
+@app.command("query-lineage")
+def query_lineage(
+    config: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    field: Annotated[
+        str,
+        typer.Option(
+            "--field",
+            help=(
+                "Allow-listed lineage field: correlation_id, causation_id, mission_id, "
+                "tasking_id, track_id, message_id, or subject."
+            ),
+        ),
+    ],
+    value: Annotated[
+        str,
+        typer.Option("--value", help="Identifier value to look up using a bind variable."),
+    ],
+    table: Annotated[
+        str | None,
+        typer.Option(
+            "--table",
+            help=(
+                "Optional configured Oracle table to query. Must be sink.table or one of "
+                "sink.table_routes[].table."
+            ),
+        ),
+    ] = None,
+    limit: Annotated[
+        int,
+        typer.Option("--limit", help="Maximum records to return, from 1 to 1000."),
+    ] = 50,
+    output_format: Annotated[
+        str,
+        typer.Option("--format", help="Output format: text or json."),
+    ] = "text",
+    include_payload: Annotated[
+        bool,
+        typer.Option(
+            "--include-payload",
+            help="Explicitly include the payload column in output. Disabled by default.",
+        ),
+    ] = False,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="Validate and print the generated query without connecting to Oracle.",
+        ),
+    ] = False,
+) -> None:
+    """Query persisted Oracle lineage records through a read-only helper.
+
+    The command is intended for operators and auditors who need bounded,
+    script-friendly inspection of already persisted records.  It does not
+    connect to NATS, does not ACK messages, does not write to Oracle, and does
+    not print payloads unless `--include-payload` is explicitly provided.
+    """
+
+    loaded = _load_or_exit(config)
+    try:
+        oracle_config = _oracle_sink_config(loaded)
+        table_name = resolve_lineage_table(oracle_config, table)
+        query = build_oracle_lineage_query(
+            table=table_name,
+            columns=oracle_config.columns,
+            field=field,
+            value=value,
+            limit=limit,
+            include_payload=include_payload,
+        )
+    except NatsSinksError as exc:
+        typer.echo(f"Configuration error: {exc}", err=True)
+        raise typer.Exit(2) from exc
+
+    normalized_format = output_format.strip().casefold()
+    if normalized_format not in {"text", "json"}:
+        typer.echo("Configuration error: --format must be text or json", err=True)
+        raise typer.Exit(2)
+
+    if dry_run:
+        bind_names = sorted(query.binds)
+        safe_plan = {
+            "field": query.field,
+            "table": query.table_name,
+            "limit": query.limit,
+            "payload_included": query.include_payload,
+            "binds": bind_names,
+            "sql": query.sql,
+        }
+        if normalized_format == "json":
+            typer.echo(json.dumps(safe_plan, indent=2, sort_keys=False))
+        else:
+            typer.echo("Oracle lineage query dry run")
+            typer.echo(f"field={safe_plan['field']}")
+            typer.echo(f"table={safe_plan['table']}")
+            typer.echo(f"limit={safe_plan['limit']}")
+            typer.echo(f"payload_included={safe_plan['payload_included']}")
+            typer.echo(f"binds={','.join(bind_names)}")
+            typer.echo(query.sql)
+        return
+
+    try:
+        result = asyncio.run(
+            OracleLineageReader(oracle_config).query(
+                field=field,
+                value=value,
+                table=table,
+                limit=limit,
+                include_payload=include_payload,
+            )
+        )
+    except NatsSinksError as exc:
+        typer.echo(f"Lineage query failed: {exc}", err=True)
+        raise typer.Exit(1) from exc
+    except Exception as exc:
+        typer.echo(f"Unexpected lineage query failure: {type(exc).__name__}", err=True)
+        raise typer.Exit(1) from exc
+
+    if normalized_format == "json":
+        typer.echo(json.dumps(result.to_dict(), indent=2, sort_keys=False, allow_nan=False))
+    else:
+        typer.echo(render_lineage_result_text(result))
+
+
 @app.command()
 def run(
     config: Annotated[Path, typer.Argument(exists=True, readable=True)],
@@ -243,11 +502,19 @@ def run(
             durable=loaded.nats.durable,
             sink=sink,
             delivery=loaded.delivery,
+            consumer_management=loaded.consumer_management,
             dead_letter=loaded.dead_letter,
             message_metadata=loaded.message_metadata,
+            message_authenticity=loaded.message_authenticity,
             mission_metadata=loaded.mission_metadata,
+            security_labels=loaded.security_labels,
             encryption=loaded.encryption,
+            custody=loaded.custody,
+            advisories=loaded.advisories,
+            size_policy=loaded.size_policy,
+            pre_sink_policy=loaded.pre_sink_policy,
             metrics=metrics,
+            metrics_config=loaded.metrics,
             nats_options=_nats_options(loaded),
         )
         asyncio.run(runner.run())
@@ -293,3 +560,75 @@ def test_sink(
         typer.echo(f"Unexpected sink test failure: {type(exc).__name__}", err=True)
         raise typer.Exit(1) from exc
     typer.echo("Sink test succeeded.")
+
+
+@app.command("replay-spool")
+def replay_spool(
+    spool_config: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    target_config: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    max_records: Annotated[
+        int | None,
+        typer.Option(
+            "--max-records",
+            help="Maximum committed spool records to replay during this invocation.",
+        ),
+    ] = None,
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
+) -> None:
+    """Replay committed spool records into a configured target sink.
+
+    Both arguments are normal nats-sinks JSON configuration files.  The first
+    must select `sink.type: "spool"` and points at the local spool directory.
+    The second selects the final destination sink, such as `file` or `oracle`.
+    Replay never ACKs JetStream messages because the original ACK boundary was
+    the local spool commit performed by `nats-sink run`.
+    """
+
+    if max_records is not None and max_records < 1:
+        typer.echo("Configuration error: --max-records must be greater than zero", err=True)
+        raise typer.Exit(2)
+
+    loaded_spool = _load_or_exit(spool_config)
+    loaded_target = _load_or_exit(target_config)
+    spool_sink = _build_sink(loaded_spool)
+    target_sink = _build_sink(loaded_target)
+    if not isinstance(spool_sink, SpoolSink):
+        typer.echo("Configuration error: first config must use sink.type 'spool'", err=True)
+        raise typer.Exit(2)
+    if isinstance(target_sink, SpoolSink):
+        typer.echo("Configuration error: target config must not use sink.type 'spool'", err=True)
+        raise typer.Exit(2)
+
+    async def _replay() -> None:
+        await spool_sink.start()
+        if dry_run:
+            entries = await asyncio.to_thread(spool_sink.committed_entries)
+            limited = entries if max_records is None else entries[:max_records]
+            typer.echo(f"Dry run complete; {len(limited)} committed spool record(s) eligible.")
+            return
+
+        await target_sink.start()
+        try:
+            result = await replay_spool_to_sink(
+                spool_sink,
+                target_sink,
+                max_records=max_records,
+            )
+        finally:
+            await target_sink.stop()
+        typer.echo(
+            "Replay complete: "
+            f"scanned={result.scanned_records} "
+            f"replayed={result.replayed_records} "
+            f"deleted={result.deleted_records} "
+            f"failed={result.failed_records}"
+        )
+
+    try:
+        asyncio.run(_replay())
+    except NatsSinksError as exc:
+        typer.echo(f"Replay failed: {exc}", err=True)
+        raise typer.Exit(1) from exc
+    except Exception as exc:
+        typer.echo(f"Unexpected replay failure: {type(exc).__name__}", err=True)
+        raise typer.Exit(1) from exc

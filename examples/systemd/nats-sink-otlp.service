@@ -1,0 +1,20 @@
+[Unit]
+Description=nats-sinks OpenTelemetry OTLP metrics export
+Documentation=https://github.com/ProjectCuillin/nats-sinks/
+RequiresMountsFor=/var/lib/nats-sink
+
+[Service]
+Type=oneshot
+User=nats-sink
+Group=nats-sink
+EnvironmentFile=-/etc/nats-sinks/nats-sink.env
+ExecStart=/opt/nats-sinks/venv/bin/nats-sink-observe otlp-export /var/lib/nats-sink/metrics.json /etc/nats-sinks/observability.prometheus.json
+WorkingDirectory=/var/lib/nats-sink
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadOnlyPaths=/etc/nats-sinks /var/lib/nats-sink
+
+[Install]
+WantedBy=multi-user.target

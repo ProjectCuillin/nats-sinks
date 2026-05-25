@@ -1,0 +1,35 @@
+{
+  "id": "oracle-mysql-connection-timeout-float",
+  "title": "[Bug]: Oracle MySQL sink should pass integer connection timeouts to the driver",
+  "area": "Oracle MySQL sink",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": [
+    "mysql",
+    "testing",
+    "issue-101"
+  ],
+  "summary": "The Oracle MySQL sink accepts a positive numeric connection timeout, but Oracle MySQL Connector/Python 9.7.0 can reject a floating-point timeout before the connection pool is created.",
+  "observed": "During the Oracle MySQL sink container e2e run for issue #101, the driver raised a TypeError while opening the connection pool because the timeout value was passed as a float.",
+  "expected": "The Oracle MySQL sink should normalize the validated timeout to the integer seconds shape expected by the driver before creating the connection pool.",
+  "reproduction": "Run the Oracle MySQL sink container e2e harness with the Oracle MySQL optional dependency installed and the default sink configuration.",
+  "failing_test": "Add a focused unit test that builds an Oracle MySQL sink with a fractional timeout and asserts the generated pool options pass an integer timeout to the driver.",
+  "impact": "The bug blocks the new Oracle MySQL sink from completing its local container-backed e2e certification even though connection settings and credentials are otherwise valid.",
+  "delivery_semantics": "The failure happens during sink startup before any NATS messages are fetched. It does not create early ACKs, duplicate writes, DLQ writes, or partial Oracle MySQL commits.",
+  "security": "The fix should not log host details, credentials, or database names. Timeout normalization is a local type-safety change and keeps the existing redaction and least-privilege guidance intact.",
+  "acceptance": [
+    "The Oracle MySQL sink passes an integer connection timeout to Oracle MySQL Connector/Python.",
+    "Fractional positive timeout configuration remains accepted but is normalized before driver use.",
+    "A focused regression test proves the timeout option shape.",
+    "The Oracle MySQL container e2e harness reaches the database write path instead of failing at pool creation."
+  ],
+  "tests": "Run the focused Oracle MySQL sink unit tests, the public API and sink certification subsets, and the Oracle MySQL sink container e2e harness.",
+  "documentation": "No public configuration syntax changes are required. Update the changelog and test report with the regression and e2e evidence.",
+  "closeout": "Mark completed after the regression test and Oracle MySQL e2e test pass on the issue branch and sanitized evidence is posted.",
+  "relationships": {
+    "related": [
+      "#101"
+    ]
+  }
+}

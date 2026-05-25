@@ -96,6 +96,20 @@ Dependabot proposes updates. SBOMs capture release evidence for a built
 artifact. None of these controls replaces normal review, tests, or security
 analysis.
 
+## Connector Dependency Discipline
+
+Observability connectors follow the same dependency discipline as sinks. The
+OpenTelemetry OTLP metrics connector currently uses the Python standard
+library to emit OTLP/HTTP JSON and therefore does not add an OpenTelemetry SDK
+or protobuf dependency to the base package. That choice keeps the default
+installation small, makes dependency review simpler, and avoids changing the
+runtime footprint for users who do not enable OTLP export.
+
+If a future connector needs a vendor SDK, gRPC transport, protobuf encoder, or
+cloud authentication library, add it behind an optional extra, document why the
+dependency is required, update the generated manifest files, and include tests
+proving the base install still works without that optional connector.
+
 ## Security Notes
 
 Generated dependency manifests must never include secrets, private indexes with

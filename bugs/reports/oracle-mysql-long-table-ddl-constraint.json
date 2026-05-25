@@ -1,0 +1,28 @@
+{
+  "id": "oracle-mysql-long-table-ddl-constraint",
+  "title": "[Bug]: Oracle MySQL auto-create DDL fails for max-length table identifiers",
+  "area": "Oracle MySQL sink",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": ["mysql", "hardening", "testing"],
+  "summary": "The Oracle MySQL DDL helper appended a primary-key suffix to table names, causing max-length table identifiers to exceed the identifier limit.",
+  "observed": "A valid max-length table name could fail recommended DDL generation because the generated constraint name became too long.",
+  "expected": "Auto-create DDL must generate valid deterministic constraint names for valid table names.",
+  "reproduction": "Run the focused Oracle MySQL hardening regression test for max-length table DDL.",
+  "failing_test": "tests/unit/test_bug_hunt_mysql_sink_hardening.py::test_mysql_ddl_supports_max_length_table_identifier",
+  "impact": "Local test tables and disposable environments can fail even when the table identifier itself is valid.",
+  "delivery_semantics": "The fix affects DDL generation only and does not change write or ACK behavior.",
+  "security": "Deterministic bounded names keep auto-create behavior predictable without exposing environment details.",
+  "acceptance": [
+    "Oracle MySQL DDL generation supports max-length valid table identifiers.",
+    "Generated primary-key names remain deterministic and within identifier limits.",
+    "The focused regression test passes."
+  ],
+  "tests": "Run the focused Oracle MySQL hardening regression test and Oracle MySQL DDL tests.",
+  "documentation": "No separate user documentation is required beyond existing auto-create guidance unless behavior is clarified in release notes.",
+  "closeout": "Close only after the release containing the DDL fix is published.",
+  "relationships": {
+    "related": ["#101"]
+  }
+}

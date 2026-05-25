@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "nats-sinks"
-version = "0.4.0"
+version = "0.4.1"
 description = "Production-ready outbound sink connectors for NATS JetStream."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -12,7 +12,7 @@ license = "Apache-2.0"
 authors = [
   { name = "Johan Louwers", email = "louwersj@gmail.com" }
 ]
-keywords = ["nats", "jetstream", "sink", "oracle", "file", "messaging", "etl", "streaming"]
+keywords = ["nats", "jetstream", "sink", "oracle", "mysql", "file", "spool", "messaging", "etl", "streaming"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",
@@ -36,8 +36,14 @@ dependencies = [
 crypto = [
   "cryptography>=42,<49",
 ]
+spool = [
+  "nats-sinks[crypto]",
+]
 oracle = [
   "oracledb>=2.3,<5",
+]
+mysql = [
+  "mysql-connector-python>=9,<10",
 ]
 test = [
   "cryptography>=42,<49",
@@ -63,7 +69,7 @@ docs = [
   "pymdown-extensions>=10.9,<11",
 ]
 all = [
-  "nats-sinks[crypto,oracle]",
+  "nats-sinks[crypto,mysql,oracle]",
 ]
 
 [project.urls]
@@ -111,7 +117,7 @@ show_error_codes = true
 packages = ["nats_sinks"]
 
 [[tool.mypy.overrides]]
-module = ["nats.*", "oracledb.*"]
+module = ["mysql.*", "nats.*", "oracledb.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
@@ -11,6 +12,7 @@ import pytest
 from nats_sinks.core.config import (
     MAX_CONFIG_BYTES,
     ConfigurationError,
+    SinkPluginConfig,
     load_config,
     redacted_config,
 )
@@ -46,6 +48,94 @@ def test_load_valid_config_with_env_override(
 
     assert config.nats.url == "tls://nats.example:4222"
     assert config.delivery.ack_policy == "after_sink_commit"
+    assert config.nats.no_echo is False
+
+
+def test_nats_no_echo_can_be_enabled_with_env_override(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*"
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/tmp/nats-sinks-test"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("NATS_SINKS_NATS_NO_ECHO", "true")
+
+    config = load_config(path)
+
+    assert config.nats.no_echo is True
+
+
+def test_sink_plugin_config_defaults_to_disabled() -> None:
+    config = SinkPluginConfig()
+
+    assert config.enabled is False
+    assert config.allowed_sinks == ()
+    assert config.require_production_ready is True
+
+
+def test_sink_plugin_config_normalizes_explicit_allow_list() -> None:
+    config = SinkPluginConfig(enabled=True, allowed_sinks=["  ACME_File  ", "acme-http"])
+
+    assert config.allowed_sinks == ("acme_file", "acme-http")
+
+
+def test_sink_plugin_config_requires_allow_list_when_enabled() -> None:
+    with pytest.raises(ValueError, match="requires at least one allowed sink name"):
+        SinkPluginConfig(enabled=True)
+
+
+def test_sink_plugin_config_rejects_duplicate_or_unsafe_names() -> None:
+    with pytest.raises(ValueError, match="duplicate sink name"):
+        SinkPluginConfig(allowed_sinks=["acme", "ACME"])
+
+    with pytest.raises(ValueError, match="entries must start"):
+        SinkPluginConfig(allowed_sinks=["../acme"])
+
+
+def test_load_config_accepts_disabled_plugin_section(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*"
+  },
+  "plugins": {
+    "enabled": false,
+    "allowed_sinks": [],
+    "require_production_ready": true
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/tmp/nats-sinks-test"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(path, env_overrides=False)
+
+    assert config.plugins.enabled is False
+    assert config.plugins.allowed_sinks == ()
 
 
 def test_invalid_json_root_raises(tmp_path: Path) -> None:
@@ -156,7 +246,7 @@ def test_redacted_config_hides_secrets(monkeypatch: pytest.MonkeyPatch, tmp_path
     assert os.environ["NATS_SINKS_NATS_URL"] == "nats://localhost:4222"
 
 
-def test_redacted_config_hides_nats_url_credentials(tmp_path: Path) -> None:
+def test_nats_url_credentials_are_rejected(tmp_path: Path) -> None:
     path = tmp_path / "config.json"
     path.write_text(
         """
@@ -179,9 +269,40 @@ def test_redacted_config_hides_nats_url_credentials(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
+    with pytest.raises(ConfigurationError, match="must not include credentials"):
+        load_config(path, env_overrides=False)
+
+
+def test_redacted_config_hides_websocket_header_values(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "wss://nats.example:8443",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*",
+    "websocket_headers": {
+      "X-Route-Hint": "approved-edge"
+    },
+    "websocket_headers_env": {
+      "Authorization": "NATS_WS_AUTHORIZATION"
+    }
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/tmp/nats-sinks-test"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
     rendered = redacted_config(load_config(path, env_overrides=False))
 
-    assert rendered["nats"]["url"] == "********"
+    assert rendered["nats"]["websocket_headers"]["X-Route-Hint"] == "********"
+    assert rendered["nats"]["websocket_headers_env"]["Authorization"] == "********"
 
 
 def test_redacted_config_hides_oracle_wallet_password(tmp_path: Path) -> None:
@@ -278,6 +399,376 @@ def test_logging_level_can_be_set_to_debug(tmp_path: Path) -> None:
     assert config.logging.level == "DEBUG"
 
 
+def test_custody_config_can_be_enabled_with_env_override(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*"
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/tmp/nats-sinks-test"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("NATS_SINKS_CUSTODY_ENABLED", "true")
+    monkeypatch.setenv("NATS_SINKS_CUSTODY_ALGORITHM", "sha512")
+
+    config = load_config(path)
+
+    assert config.custody.enabled is True
+    assert config.custody.algorithm == "sha512"
+
+
+def test_enabled_custody_requires_at_least_one_hash(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*"
+  },
+  "custody": {
+    "enabled": true,
+    "hash_payload": false,
+    "hash_metadata": false
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/tmp/nats-sinks-test"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError, match="hash_payload or hash_metadata"):
+        load_config(path, env_overrides=False)
+
+
+def test_advisory_config_is_disabled_by_default(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*"
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/tmp/nats-sinks-test"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(path, env_overrides=False)
+
+    assert config.advisories.enabled is False
+    assert "$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES.*.*" in config.advisories.subjects
+
+
+def test_advisory_config_can_be_enabled_with_env_override(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*"
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/tmp/nats-sinks-test"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("NATS_SINKS_ADVISORIES_ENABLED", "true")
+
+    config = load_config(path)
+
+    assert config.advisories.enabled is True
+
+
+def test_advisory_config_rejects_non_advisory_subjects(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*"
+  },
+  "advisories": {
+    "enabled": true,
+    "subjects": ["orders.*"]
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/tmp/nats-sinks-test"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError, match="advisory subject"):
+        load_config(path, env_overrides=False)
+
+
+def test_advisory_config_rejects_duplicate_subjects(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*"
+  },
+  "advisories": {
+    "enabled": true,
+    "subjects": [
+      "$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES.*.*",
+      "$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES.*.*"
+    ]
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/tmp/nats-sinks-test"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError, match="duplicate"):
+        load_config(path, env_overrides=False)
+
+
+def test_pre_sink_policy_config_validates_subject_rules(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "orders-file-sink",
+    "subject": "orders.*"
+  },
+  "pre_sink_policy": {
+    "enabled": true,
+    "rules": [
+      {
+        "subject": "orders.*",
+        "require_priority": true,
+        "require_classification": true,
+        "required_labels": "orders;audit",
+        "require_mission_metadata": true,
+        "allowed_mission_metadata_keys": ["profile", "phase"],
+        "max_payload_bytes": 1048576
+      }
+    ]
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/tmp/nats-sinks-test"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(path, env_overrides=False)
+
+    assert config.pre_sink_policy.enabled
+    assert config.pre_sink_policy.rules[0].subject == "orders.*"
+    assert config.pre_sink_policy.rules[0].required_labels == ("orders", "audit")
+
+
+def test_size_policy_config_loads_documented_bounds(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*"
+  },
+  "size_policy": {
+    "enabled": true,
+    "max_payload_bytes": 1024,
+    "max_header_count": 16,
+    "max_header_name_bytes": 128,
+    "max_header_value_bytes": 512,
+    "max_headers_bytes": 4096,
+    "max_label_count": 8,
+    "max_label_bytes": 64,
+    "max_labels_bytes": 512,
+    "max_mission_metadata_bytes": 2048,
+    "max_standard_metadata_bytes": 8192,
+    "max_normalized_record_bytes": 16384,
+    "max_batch_messages": 32
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/tmp/nats-sinks-test"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(path, env_overrides=False)
+
+    assert config.size_policy.enabled is True
+    assert config.size_policy.max_payload_bytes == 1024
+    assert config.size_policy.max_batch_messages == 32
+
+
+def test_size_policy_rejects_inconsistent_aggregate_limits(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*"
+  },
+  "size_policy": {
+    "enabled": true,
+    "max_payload_bytes": 1024,
+    "max_normalized_record_bytes": 512
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/tmp/nats-sinks-test"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError, match=r"size_policy\.max_normalized_record_bytes"):
+        load_config(path, env_overrides=False)
+
+
+def test_enabled_pre_sink_policy_requires_explicit_rules(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "orders-file-sink",
+    "subject": "orders.*"
+  },
+  "pre_sink_policy": {
+    "enabled": true
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/tmp/nats-sinks-test"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError, match=r"pre_sink_policy\.enabled requires"):
+        load_config(path, env_overrides=False)
+
+
+def test_pre_sink_policy_rejects_noop_and_secret_like_key_rules(tmp_path: Path) -> None:
+    noop_path = tmp_path / "noop.json"
+    noop_path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "orders-file-sink",
+    "subject": "orders.*"
+  },
+  "pre_sink_policy": {
+    "enabled": true,
+    "rules": [{"subject": "orders.*"}]
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/tmp/nats-sinks-test"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+    secret_key_path = tmp_path / "secret-key.json"
+    secret_key_path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "orders-file-sink",
+    "subject": "orders.*"
+  },
+  "pre_sink_policy": {
+    "enabled": true,
+    "rules": [
+      {
+        "subject": "orders.*",
+        "allowed_mission_metadata_keys": ["profile", "api_key"]
+      }
+    ]
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/tmp/nats-sinks-test"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError, match="at least one check"):
+        load_config(noop_path, env_overrides=False)
+    with pytest.raises(ConfigurationError, match="secret-like names"):
+        load_config(secret_key_path, env_overrides=False)
+
+
 def test_delivery_retry_backoff_controls_are_validated(tmp_path: Path) -> None:
     path = tmp_path / "config.json"
     path.write_text(
@@ -342,6 +833,36 @@ def test_delivery_retry_backoff_cap_must_cover_base_delay(tmp_path: Path) -> Non
 
     with pytest.raises(ConfigurationError, match="retry_backoff_max_ms"):
         load_config(path, env_overrides=False)
+
+
+def test_dead_letter_ackterm_after_publish_is_explicit_config(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*"
+  },
+  "dead_letter": {
+    "enabled": true,
+    "subject": "orders.dlq",
+    "ack_term_after_publish": true
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/var/lib/nats-sinks/events"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(path, env_overrides=False)
+
+    assert config.dead_letter.ack_term_after_publish is True
 
 
 def test_delivery_priority_lanes_are_validated_and_normalized(tmp_path: Path) -> None:
@@ -753,3 +1274,180 @@ def test_message_metadata_env_overrides(monkeypatch: pytest.MonkeyPatch, tmp_pat
     assert config.message_metadata.priority.default == "normal"
     assert config.message_metadata.classification.default == "internal"
     assert config.message_metadata.labels.default == ("blue", "green")
+
+
+def test_consumer_management_defaults_to_create_if_missing(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*"
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/var/lib/nats-sinks/events"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(path, env_overrides=False)
+
+    assert config.consumer_management.mode == "create_if_missing"
+    assert config.consumer_management.filter_subjects == ()
+    assert config.consumer_management.deliver_policy == "all"
+    assert config.consumer_management.replay_policy == "instant"
+    assert config.consumer_management.backoff_seconds is None
+    assert config.consumer_management.headers_only is None
+    assert config.consumer_management.metadata == {}
+
+
+def test_consumer_management_rejects_unknown_mode(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*"
+  },
+  "consumer_management": {
+    "mode": "unsafe-update"
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/var/lib/nats-sinks/events"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError):
+        load_config(path, env_overrides=False)
+
+
+def test_consumer_management_env_override(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*"
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/var/lib/nats-sinks/events"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("NATS_SINKS_CONSUMER_MANAGEMENT_MODE", "bind_only")
+
+    config = load_config(path)
+
+    assert config.consumer_management.mode == "bind_only"
+
+
+def test_consumer_management_loads_richer_policy_fields(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.>"
+  },
+  "consumer_management": {
+    "mode": "create_if_missing",
+    "filter_subjects": ["orders.created", "orders.updated"],
+    "max_deliver": 5,
+    "backoff_seconds": [1, 5, 30],
+    "max_ack_pending": 500,
+    "max_waiting": 64,
+    "headers_only": true,
+    "num_replicas": 3,
+    "memory_storage": true,
+    "metadata": {
+      "component": "nats-sinks",
+      "purpose": "sink-worker"
+    }
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/var/lib/nats-sinks/events"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(path, env_overrides=False)
+
+    assert config.consumer_management.filter_subjects == ("orders.created", "orders.updated")
+    assert config.consumer_management.backoff_seconds == (1.0, 5.0, 30.0)
+    assert config.consumer_management.max_deliver == 5
+    assert config.consumer_management.max_ack_pending == 500
+    assert config.consumer_management.max_waiting == 64
+    assert config.consumer_management.headers_only is True
+    assert config.consumer_management.num_replicas == 3
+    assert config.consumer_management.memory_storage is True
+    assert config.consumer_management.metadata == {
+        "component": "nats-sinks",
+        "purpose": "sink-worker",
+    }
+
+
+@pytest.mark.parametrize(
+    ("consumer_management", "expected"),
+    [
+        ({"filter_subjects": ["orders.*", "orders.*"]}, "duplicate"),
+        ({"backoff_seconds": [1, 5, 30]}, "max_deliver"),
+        (
+            {"max_deliver": 5, "ack_wait_seconds": 30, "backoff_seconds": [1, 5]},
+            "overrides AckWait",
+        ),
+        ({"max_deliver": 2, "backoff_seconds": [1, 5, 30]}, "length"),
+        ({"metadata": {"secret_token": "value"}}, "secret"),
+    ],
+)
+def test_consumer_management_rejects_unsafe_policy_values(
+    consumer_management: dict[str, object],
+    expected: str,
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        json.dumps(
+            {
+                "nats": {
+                    "url": "nats://localhost:4222",
+                    "stream": "ORDERS",
+                    "consumer": "file-orders-sink",
+                    "subject": "orders.*",
+                },
+                "consumer_management": consumer_management,
+                "sink": {
+                    "type": "file",
+                    "directory": "/var/lib/nats-sinks/events",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError, match=expected):
+        load_config(path, env_overrides=False)

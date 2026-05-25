@@ -2,11 +2,11 @@
   "id": "message-authenticity-verification",
   "title": "[Feature]: Add optional message authenticity verification before sink writes",
   "area": "Core runtime and delivery semantics",
-  "priority": "P3 - backlog candidate",
-  "target_release": "unscheduled",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
   "labels": ["security", "nats"],
   "problem": "NATS authentication and TLS protect transport and broker access, but messages can still originate from compromised producers, misconfigured publishers, or internal systems that should not be trusted blindly. nats-sinks does not yet provide a destination-neutral way to verify message-level authenticity before durable persistence.",
-  "proposal": "Add optional message authenticity verification in the core before sink delivery. The first design should support allow-listed algorithms such as HMAC with SHA256 and a modern asymmetric signature option, with explicit key identifiers, key material loaded from secure runtime configuration, and strict failure behavior. Verification should cover the payload and selected metadata fields through a canonical representation.",
+  "proposal": "Add optional message authenticity verification in the core before sink delivery. The first implementation supports HMAC-SHA256 and Ed25519, explicit key identifiers, key material loaded from direct test-only base64 or preferred environment variables, and strict failure behavior. Verification covers the payload SHA-256 and selected allow-listed normalized metadata fields through a canonical JSON representation.",
   "users": "Security architects, platform teams, mission-support operators, and maintainers who need message-level authenticity in addition to broker authentication and transport encryption.",
   "delivery_semantics": "Verification failure is a permanent processing failure. If DLQ is enabled, the original message may be ACKed only after the verification failure has been published to DLQ. If DLQ publication fails, the original message must remain unacked for redelivery. Sinks should receive only verified messages when verification is required.",
   "security": "Cryptographic logic must use established libraries, constant-time comparison where applicable, allow-listed algorithms, nonces or signatures according to the selected scheme, and secure key loading. Keys must never be logged, stored in examples, passed through command-line arguments, or written to public issue comments.",
@@ -17,7 +17,7 @@
     "Tests prove invalid signatures do not reach sinks and do not ACK unless DLQ publication succeeds.",
     "Documentation explains the difference between transport authentication and message authenticity."
   ],
-  "tests": "Add unit tests for canonicalization, valid signatures, invalid signatures, missing signatures, unknown key identifiers, subject-aware policy, DLQ behavior, redaction, and sink isolation. Add property-based tests for malformed signature metadata if feasible.",
-  "documentation": "Update docs/security.md, docs/configuration.md, docs/architecture.md, docs/dead-letter-queues.md, docs/use-cases, ROADMAP.md, and CHANGELOG.md with threat model, configuration examples, and failure behavior.",
+  "tests": "Add unit tests for canonicalization, valid HMAC and Ed25519 signatures, invalid signatures, missing signatures, unknown key identifiers, subject-aware policy, DLQ behavior, redaction, sink isolation, metrics registration, and public API compatibility. Keep future property-based malformed-signature fuzzing as follow-up if the deterministic malformed-header coverage becomes insufficient.",
+  "documentation": "Update docs/message-authenticity.md, docs/security.md, docs/configuration.md, docs/architecture.md, docs/dead-letter-queues.md, docs/metrics.md, ROADMAP.md, README.md, and CHANGELOG.md with threat model, configuration examples, canonical document shape, metrics, and failure behavior.",
   "closeout": "Close after the release containing message authenticity verification is published. Include release tag, algorithms, test evidence, documentation links, and limitations."
 }

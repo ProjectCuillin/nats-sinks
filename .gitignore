@@ -176,6 +176,28 @@ venv.bak/
 # mkdocs documentation
 /site
 
+# Container and image build artifacts.
+# Commit Dockerfiles, Compose examples, and scripts, but never commit actual
+# container images, exported root filesystems, OCI image layouts, or saved image
+# archives produced by tools such as `docker save`, `podman save`, `skopeo`,
+# `oras`, or local image-build experiments.
+*.docker.tar
+*.docker.tar.gz
+*.image.tar
+*.image.tar.gz
+*.oci.tar
+*.oci.tar.gz
+*.container.tar
+*.container.tar.gz
+container-exports/
+container-images/
+docker-exports/
+docker-images/
+image-archives/
+oci-layout/
+oci-layouts/
+oci-images/
+
 # mypy
 .mypy_cache/
 .dmypy.json

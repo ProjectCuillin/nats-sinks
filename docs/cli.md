@@ -15,7 +15,12 @@ The project also ships an observability policy command named
 observability platforms. It can generate a disabled Prometheus policy from the
 core config, list metric names and subject hints, validate policy, and render
 policy-filtered Prometheus textfile output or run the optional native
-Prometheus HTTP endpoint.
+Prometheus HTTP endpoint. It can also export approved metrics to an
+OpenTelemetry Collector through OTLP/HTTP JSON, including the Elastic
+Observability and Grafana Alloy profiles, and approved aggregate metric events
+through Splunk HEC. It can also send approved best-effort datagrams to
+StatsD-compatible aggregators and RFC 5424-style messages to syslog
+pipelines.
 
 For readers new to this project, the CLI does not implement a separate
 delivery engine. It validates configuration, creates the selected sink, builds
@@ -32,9 +37,19 @@ nats-sink run config.json
 nats-sink validate config.json
 nats-sink show-effective-config config.json
 nats-sink test-sink config.json
+nats-sink stream-plan config.json
+nats-sink query-lineage config.json --field mission_id --value MISSION-ALPHA --dry-run
+nats-sink replay-spool spool-config.json target-config.json --dry-run
 nats-sink-metrics show .local/nats-sinks/metrics.json
 nats-sink-observe init-prometheus-policy config.json observability.prometheus.json
 nats-sink-observe prometheus-http .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
+nats-sink-observe otlp-export .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
+nats-sink-observe elastic-export .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
+nats-sink-observe grafana-alloy-config observability.prometheus.json
+nats-sink-observe grafana-alloy-export .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
+nats-sink-observe splunk-hec-export .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
+nats-sink-observe statsd-export .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
+nats-sink-observe syslog-export .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
 nats-sink-observe nats-monitoring-poll observability.prometheus.json --dry-run
 ```
 
@@ -73,6 +88,131 @@ Starts the configured sink and runs a health check when the sink supports it. Th
 nats-sink test-sink examples/file-basic/config.json
 ```
 
+### `nats-sink stream-plan`
+
+Generates an offline JetStream stream-management plan from the runtime JSON
+configuration. This command is deliberately separate from `nats-sink run`: it
+does not connect to NATS, does not create streams, does not update consumers,
+does not resolve credentials, and does not need NATS administrator
+permissions.
+
+Use it when an operator wants to review stream retention, discard policy,
+storage type, replica count, duplicate-window settings, and runtime versus
+administration permission boundaries before applying changes with the NATS CLI,
+Terraform, Ansible, or another approved platform process.
+
+```bash
+nats-sink stream-plan examples/file-basic/config.json \
+  --retention limits \
+  --discard old \
+  --storage file \
+  --replicas 3 \
+  --duplicate-window-seconds 600
+```
+
+Use JSON output for scripts and review artifacts:
+
+```bash
+nats-sink stream-plan examples/file-basic/config.json --format json
+```
+
+Example JSON excerpt:
+
+```json
+{
+  "stream": "ORDERS",
+  "subjects": ["orders.*"],
+  "durable_consumer": "file-orders-sink",
+  "recommended_stream_settings": {
+    "retention": "limits",
+    "discard": "old",
+    "storage": "file",
+    "replicas": 3,
+    "duplicate_window_seconds": 600
+  },
+  "runtime_permissions": [
+    "$JS.API.CONSUMER.MSG.NEXT.ORDERS.file-orders-sink",
+    "$JS.API.CONSUMER.INFO.ORDERS.file-orders-sink",
+    "$JS.ACK.ORDERS.file-orders-sink.>",
+    "_INBOX.>"
+  ]
+}
+```
+
+See [JetStream Stream Management Planning](stream-management.md) for the full
+operator guide and permission discussion.
+
+### `nats-sink query-lineage`
+
+Queries already persisted Oracle rows by a small set of allow-listed lineage
+fields. This command is read-only: it does not connect to NATS, does not ACK
+messages, does not write to Oracle, and does not alter sink state.
+
+Start with dry-run mode to validate the configured table, field, limit, and SQL
+shape without opening an Oracle connection:
+
+```bash
+nats-sink query-lineage examples/oracle-jetstream/config.json \
+  --field mission_id \
+  --value MISSION-ALPHA \
+  --limit 10 \
+  --format json \
+  --dry-run
+```
+
+The dry-run output prints bind names but not the lookup value:
+
+```json
+{
+  "field": "mission_id",
+  "table": "NATS_SINK_EVENTS",
+  "limit": 10,
+  "payload_included": false,
+  "binds": ["lineage_value"],
+  "sql": "select ... where json_value(MISSION_METADATA_JSON, '$.mission_id') = :lineage_value ... fetch first 10 rows only"
+}
+```
+
+Supported fields are `correlation_id`, `causation_id`, `mission_id`,
+`tasking_id`, `track_id`, `message_id`, and `subject`. Payload output is
+omitted by default. See [Lineage Query Helpers](lineage-query-helpers.md) for
+the security model, Oracle examples, and output reference.
+
+### `nats-sink replay-spool`
+
+Replays committed records from an encrypted edge spool into a final destination
+sink. The first argument must be a normal configuration file whose
+`sink.type` is `spool`. The second argument must be a normal configuration file
+for the target sink, such as `file` or `oracle`.
+
+```bash
+nats-sink replay-spool /etc/nats-sinks/spool.json /etc/nats-sinks/oracle.json --dry-run
+```
+
+Example dry-run output:
+
+```text
+Dry run complete; 128 committed spool record(s) eligible.
+```
+
+Replay a bounded number of records:
+
+```bash
+nats-sink replay-spool /etc/nats-sinks/spool.json /etc/nats-sinks/oracle.json --max-records 100
+```
+
+Example replay output:
+
+```text
+Replay complete: scanned=100 replayed=100 deleted=100 failed=0
+```
+
+Replay does not ACK JetStream messages. The original ACK already happened when
+the spool record was committed by `nats-sink run`. During replay, files are
+deleted only after the target sink returns success and the spool config keeps
+`delete_after_replay` enabled. See [Edge Spool Sink](spool-sink.md) for the
+full delivery and security model.
+
 ### `nats-sink run`
 
 Starts the JetStream runner. This command opens NATS and destination
@@ -93,7 +233,10 @@ configuration, `run` also writes a local metrics snapshot for
   "metrics": {
     "enabled": true,
     "namespace": "nats_sinks",
-    "snapshot_file": ".local/nats-sinks/metrics.json"
+    "snapshot_file": ".local/nats-sinks/metrics.json",
+    "event_freshness_enabled": true,
+    "event_stale_after_seconds": 300,
+    "event_future_skew_tolerance_seconds": 5
   }
 }
 ```
@@ -199,6 +342,12 @@ schema=nats_sinks.observability.policy.v1
 enabled=false
 namespace=nats_sinks
 prometheus_enabled=false
+otlp_enabled=false
+elastic_enabled=false
+grafana_alloy_enabled=false
+splunk_hec_enabled=false
+statsd_enabled=false
+syslog_enabled=false
 nats_server_monitoring_enabled=false
 nats_server_monitoring_prometheus_enabled=false
 allowed_metrics=0
@@ -257,8 +406,9 @@ nats-sink-observe prometheus-textfile \
 ```
 
 The command writes only a comment when the policy is disabled. See
-[Observability](observability.md) and [Prometheus Integration](prometheus.md)
-for service deployment guidance.
+[Observability](observability.md) for the sharing model and its
+[Prometheus Integration](prometheus.md) sub-page for service deployment
+guidance.
 
 ### `nats-sink-observe prometheus-http`
 
@@ -298,6 +448,260 @@ Serving Prometheus metrics on 127.0.0.1:9108/metrics
 Use this command as a separate service, not inside the sink worker, unless an
 embedding application deliberately accepts that coupling. The endpoint never
 ACKs messages and never connects to NATS or a destination sink.
+
+### `nats-sink-observe otlp-export`
+
+Exports policy-approved metrics to an OpenTelemetry Collector through
+OTLP/HTTP JSON. The command is disabled unless both the top-level
+observability policy and `otlp.enabled` are true. It reads only the local
+metrics snapshot and policy file; it does not connect to NATS, Oracle, file
+sink directories, DLQ subjects, or future destination backends.
+
+Dry-run mode prints the OTLP JSON request body without opening a network
+connection:
+
+```bash
+nats-sink-observe otlp-export \
+  /var/lib/nats-sink/metrics.json \
+  /etc/nats-sinks/observability.prometheus.json \
+  --dry-run
+```
+
+Example dry-run output:
+
+```json
+{"resourceMetrics":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"nats-sinks"}},{"key":"nats_sinks.namespace","value":{"stringValue":"nats_sinks"}}]},"scopeMetrics":[{"metrics":[{"description":"Raw JetStream messages fetched by the pull consumer.","name":"nats_sinks_messages_fetched_total","sum":{"aggregationTemporality":2,"dataPoints":[{"asDouble":256.0,"timeUnixNano":"1790000000000000000"}],"isMonotonic":true},"unit":"1"}],"scope":{"name":"nats-sinks.observability.otlp"}}]}]}
+```
+
+Live export uses the endpoint, timeout, retry, request-size, and optional
+header environment-variable settings from the policy:
+
+```bash
+nats-sink-observe otlp-export \
+  /var/lib/nats-sink/metrics.json \
+  /etc/nats-sinks/observability.prometheus.json
+```
+
+Example success output:
+
+```text
+OTLP export: attempted=true delivered=true attempts=1 status=200 message=OTLP export delivered
+```
+
+Example bounded failure output:
+
+```text
+OTLP export: attempted=true delivered=false attempts=3 status=none message=OTLP export failed with URLError
+```
+
+The output is intentionally sanitized. It does not print the collector URL,
+header values, payload bodies, subjects, table names, file paths, labels,
+classification values, or other sensitive deployment detail. Full connector
+guidance is documented in [OpenTelemetry OTLP Integration](otlp.md).
+
+### `nats-sink-observe elastic-export`
+
+Exports policy-approved metrics through the Elastic Observability OTLP profile.
+The command is disabled unless both the top-level observability policy and
+`elastic.enabled` are true. It uses the same local snapshot, allow and deny
+lists, stale-snapshot checks, timeout bounds, retry bounds, and redaction
+posture as the other observability connectors.
+
+Dry-run mode prints the Elastic-profiled OTLP JSON body without opening a
+network connection:
+
+```bash
+nats-sink-observe elastic-export \
+  /var/lib/nats-sink/metrics.json \
+  /etc/nats-sinks/observability.prometheus.json \
+  --dry-run
+```
+
+Example dry-run output:
+
+```json
+{"resourceMetrics":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"nats-sinks"}},{"key":"nats_sinks.namespace","value":{"stringValue":"nats_sinks"}},{"key":"data_stream.dataset","value":{"stringValue":"nats_sinks.metrics"}},{"key":"data_stream.namespace","value":{"stringValue":"default"}},{"key":"nats_sinks.observability.profile","value":{"stringValue":"elastic"}}]},"scopeMetrics":[{"metrics":[{"description":"Raw JetStream messages fetched by the pull consumer.","name":"nats_sinks_messages_fetched_total","sum":{"aggregationTemporality":2,"dataPoints":[{"asDouble":256.0,"timeUnixNano":"1790000000000000000"}],"isMonotonic":true},"unit":"1"}],"scope":{"name":"nats-sinks.observability.elastic"}}]}]}
+```
+
+Example success output:
+
+```text
+Elastic Observability export: attempted=true delivered=true attempts=1 status=200 message=Elastic Observability export delivered
+```
+
+The command is an observability connector profile, not a delivery feature. It
+does not ACK messages and does not write directly to Elasticsearch. Full
+connector guidance is documented in
+[Elastic Observability Profile](elastic-observability.md).
+
+### `nats-sink-observe grafana-alloy-config`
+
+Renders a minimal Grafana Alloy River configuration snippet from the
+observability policy. The snippet configures an Alloy OTLP receiver, batch
+processor, and OTLP HTTP exporter using environment-variable references for
+upstream Grafana settings.
+
+```bash
+nats-sink-observe grafana-alloy-config \
+  /etc/nats-sinks/observability.prometheus.json
+```
+
+Example output:
+
+```river
+otelcol.receiver.otlp "nats_sinks" {
+  http {
+    endpoint = "127.0.0.1:4318"
+  }
+
+  output {
+    metrics = [otelcol.processor.batch.nats_sinks_batch.input]
+  }
+}
+```
+
+The rendered config is a starter snippet for operator review. It does not
+start Alloy and does not validate a whole Alloy deployment.
+
+### `nats-sink-observe grafana-alloy-export`
+
+Exports policy-approved metrics to a Grafana Alloy OTLP receiver. The command
+is disabled unless both the top-level observability policy and
+`grafana_alloy.enabled` are true. It uses the same local snapshot, allow and
+deny lists, stale-snapshot checks, timeout bounds, retry bounds, request-size
+bounds, and redaction posture as the other observability connectors.
+
+Dry-run mode prints the Grafana Alloy-profiled OTLP JSON body without opening a
+network connection:
+
+```bash
+nats-sink-observe grafana-alloy-export \
+  /var/lib/nats-sink/metrics.json \
+  /etc/nats-sinks/observability.prometheus.json \
+  --dry-run
+```
+
+Example dry-run output:
+
+```json
+{"resourceMetrics":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"nats-sinks"}},{"key":"nats_sinks.namespace","value":{"stringValue":"nats_sinks"}},{"key":"nats_sinks.observability.profile","value":{"stringValue":"grafana_alloy"}},{"key":"telemetry.collector","value":{"stringValue":"grafana_alloy"}}]},"scopeMetrics":[{"metrics":[{"description":"Raw JetStream messages fetched by the pull consumer.","name":"nats_sinks_messages_fetched_total","sum":{"aggregationTemporality":2,"dataPoints":[{"asDouble":256.0,"timeUnixNano":"1790000000000000000"}],"isMonotonic":true},"unit":"1"}],"scope":{"name":"nats-sinks.observability.grafana_alloy"}}]}]}
+```
+
+Example success output:
+
+```text
+Grafana Alloy export: attempted=true delivered=true attempts=1 status=200 message=Grafana Alloy export delivered
+```
+
+The command is an observability connector profile, not a delivery feature. It
+does not ACK messages, manage Alloy, or hold downstream Grafana credentials.
+Full connector guidance is documented in
+[Grafana Alloy Profile](grafana-alloy.md).
+
+### `nats-sink-observe splunk-hec-export`
+
+Exports policy-approved aggregate metrics to Splunk HTTP Event Collector. The
+command is disabled unless both the top-level observability policy and
+`splunk_hec.enabled` are true. It uses the same local snapshot, allow and deny
+lists, stale-snapshot checks, timeout bounds, retry bounds, request-size
+bounds, and redaction posture as the other observability connectors.
+
+Dry-run mode prints the Splunk HEC JSON event body without opening a network
+connection or requiring the HEC token to be present:
+
+```bash
+nats-sink-observe splunk-hec-export \
+  /var/lib/nats-sink/metrics.json \
+  /etc/nats-sinks/observability.prometheus.json \
+  --dry-run
+```
+
+Example dry-run output:
+
+```json
+{"event":"metric","fields":{"metric_name:nats_sinks_messages_fetched_total":256,"nats_sinks_namespace":"nats_sinks","nats_sinks_observability_profile":"splunk_hec"},"host":"nats-sinks","source":"nats-sinks","sourcetype":"nats_sinks:metrics","time":1790000000.0}
+```
+
+Example success output:
+
+```text
+Splunk HEC export: attempted=true delivered=true attempts=1 status=200 message=Splunk HEC export delivered
+```
+
+The command is an observability connector, not a delivery feature. It does not
+ACK messages, write payloads to Splunk, or expose the HEC endpoint or token in
+result summaries. Full connector guidance is documented in
+[Splunk HEC Integration](splunk-hec.md).
+
+### `nats-sink-observe statsd-export`
+
+Exports policy-approved metrics to a StatsD-compatible UDP listener or Unix
+datagram socket. The command is disabled unless both the top-level
+observability policy and `statsd.enabled` are true. It uses the same local
+snapshot, allow and deny lists, stale-snapshot checks, timeout bounds, retry
+bounds, and redaction posture as the other observability connectors.
+
+Dry-run mode prints StatsD lines without opening a socket:
+
+```bash
+nats-sink-observe statsd-export \
+  /var/lib/nats-sink/metrics.json \
+  /etc/nats-sinks/observability.prometheus.json \
+  --dry-run
+```
+
+Example dry-run output:
+
+```text
+nats_sinks.messages_fetched_total:256|g
+nats_sinks.messages_acked_total:256|g
+```
+
+Example success output:
+
+```text
+StatsD export: attempted=true delivered=true attempts=1 datagrams=2 message=StatsD export delivered
+```
+
+The command is an observability connector, not a delivery feature. StatsD
+transport is best-effort, so successful local sending must not be treated as
+durable telemetry custody. Full connector guidance is documented in
+[StatsD Integration](statsd.md).
+
+### `nats-sink-observe syslog-export`
+
+Exports policy-approved metrics as RFC 5424-style syslog messages over UDP or
+a Unix datagram socket. The command is disabled unless both the top-level
+observability policy and `syslog.enabled` are true. It uses the same local
+snapshot, allow and deny lists, stale-snapshot checks, timeout bounds, retry
+bounds, and redaction posture as the other observability connectors.
+
+Dry-run mode prints syslog messages without opening a socket:
+
+```bash
+nats-sink-observe syslog-export \
+  /var/lib/nats-sink/metrics.json \
+  /etc/nats-sinks/observability.prometheus.json \
+  --dry-run
+```
+
+Example dry-run output:
+
+```text
+<134>1 2026-09-21T14:13:20.000Z - nats-sinks - metrics [nats_sinks metric="messages_fetched_total" kind="counter" value="256" namespace="nats_sinks" profile="syslog"] -
+<134>1 2026-09-21T14:13:20.000Z - nats-sinks - metrics [nats_sinks metric="messages_acked_total" kind="counter" value="256" namespace="nats_sinks" profile="syslog"] -
+```
+
+Example success output:
+
+```text
+Syslog export: attempted=true delivered=true attempts=1 messages=2 message=Syslog export delivered
+```
+
+The command is an observability connector, not a delivery feature. Syslog
+transport is best-effort, messages are bounded and sanitized, and successful
+local sending must not be treated as durable telemetry custody. Full connector
+guidance is documented in [Syslog Bridge](syslog.md).
 
 ### `nats-sink-observe nats-monitoring-poll`
 
@@ -388,6 +792,9 @@ input, `3` for stale snapshots when staleness is enforced, and `4` when `get`
 cannot find a metric without a default value.
 
 `nats-sink-observe` returns `0` on success, `2` for invalid configuration,
-policy, snapshot, textfile output errors, or disabled native endpoint startup,
-and `3` when an enabled Prometheus policy rejects a stale snapshot or a native
-HTTP dry-run returns an error response.
+policy, snapshot, textfile output errors, disabled native endpoint startup, or
+profile render errors, and `3` when an enabled Prometheus, OTLP, Elastic,
+Grafana Alloy, Splunk HEC, StatsD, or syslog export exhausts its bounded
+delivery attempts, a policy rejects a stale snapshot in connector-specific
+paths that use delivery-failure exit handling, or a native HTTP dry-run returns
+an error response.

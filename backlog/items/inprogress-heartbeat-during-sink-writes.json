@@ -1,0 +1,28 @@
+{
+  "id": "inprogress-heartbeat-during-sink-writes",
+  "title": "[Feature]: Add optional InProgress heartbeat during long sink writes",
+  "area": "Core runtime and delivery semantics",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["nats", "testing", "observability"],
+  "problem": "Long-running destination writes can exceed a JetStream consumer AckWait window even when the sink is healthy and actively working. That can cause premature redelivery while the original batch is still in progress. NATS supports InProgress acknowledgements to extend the AckWait window, but nats-sinks does not yet expose a safe runtime heartbeat around active sink writes.",
+  "proposal": "Add a disabled-by-default InProgress heartbeat in the core runner. When enabled, the runner should start a bounded background heartbeat for the raw messages in the active batch while sink.write_batch is still running. The heartbeat must call the client in-progress method only before final ACK, NAK, Term, or DLQ handling, and it must stop deterministically on sink success, sink failure, timeout, cancellation, or shutdown.",
+  "users": "Operators with large batches, slow but healthy database commits, edge links with variable latency, and maintainers tuning redelivery behavior without weakening commit-then-acknowledge.",
+  "delivery_semantics": "InProgress is advisory only. It must never mark a message as successful, never replace final ACK, never run after the final acknowledgement decision, and never hide a failed sink write. If the sink fails after one or more progress signals, the message must still follow temporary failure, permanent failure, DLQ, or redelivery policy.",
+  "security": "Heartbeat logs and metrics must avoid payloads, sensitive headers, private subjects, connection strings, and message IDs by default. Configuration must bound the interval, maximum heartbeats per message, and shutdown wait so a bad destination or compromised connection cannot create unbounded background work.",
+  "acceptance": [
+    "The feature is optional and disabled by default.",
+    "InProgress starts only while an active sink write is running.",
+    "InProgress stops before final ACK, NAK, Term, retry, DLQ, or shutdown completion.",
+    "Sink success still ACKs only after durable success.",
+    "Sink failure after progress signals still follows normal redelivery or DLQ behavior.",
+    "Tests cover heartbeat success, sink failure, heartbeat failure, bounded maximum count, cancellation, and shutdown."
+  ],
+  "tests": "Add mocked raw-message tests for in_progress ordering, no final ACK replacement, sink success, temporary failure, permanent failure with DLQ, heartbeat failures, cancellation, and shutdown. Run scripts/check.sh and targeted commit-then-ACK contract tests.",
+  "documentation": "Update in-progress evaluation, configuration, commit-then-acknowledge, operations, metrics, roadmap, and changelog documentation.",
+  "closeout": "Close after the release containing optional InProgress heartbeat support is published. Include release tag, tests, documentation, and limitations.",
+  "relationships": {
+    "related": ["#28"],
+    "blocked_by": ["backlog:inprogress-ackwait-policy-guardrails"]
+  }
+}

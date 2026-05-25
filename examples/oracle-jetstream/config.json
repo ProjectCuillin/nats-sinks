@@ -32,7 +32,23 @@
   },
   "metrics": {
     "enabled": false,
-    "namespace": "nats_sinks"
+    "namespace": "nats_sinks",
+    "event_freshness_enabled": true,
+    "event_stale_after_seconds": 300,
+    "event_future_skew_tolerance_seconds": 5
+  },
+  "size_policy": {
+    "enabled": false,
+    "max_payload_bytes": 16777216,
+    "max_header_count": 128,
+    "max_header_value_bytes": 8192,
+    "max_headers_bytes": 65536,
+    "max_label_count": 64,
+    "max_label_bytes": 128,
+    "max_mission_metadata_bytes": 8192,
+    "max_standard_metadata_bytes": 262144,
+    "max_normalized_record_bytes": 20971520,
+    "max_batch_messages": 10000
   },
   "message_metadata": {
     "priority": {
@@ -62,6 +78,17 @@
     "user": "app_user",
     "password_env": "ORACLE_PASSWORD",
     "table": "NATS_SINK_EVENTS",
+    "table_routes": [
+      {
+        "subject": "orders.by-id",
+        "table": "NATS_SINK_EVENTS_BY_ID",
+        "idempotency": {
+          "strategy": "message_id",
+          "columns": ["MESSAGE_ID"]
+        },
+        "merge_update_columns": ["PAYLOAD_JSON", "METADATA_JSON"]
+      }
+    ],
     "mode": "merge",
     "auto_create": false,
     "payload_mode": "json_or_envelope",

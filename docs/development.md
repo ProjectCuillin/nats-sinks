@@ -39,6 +39,65 @@ dependency manifests stay unchanged. Add new generator cases when a validator
 accepts external input, especially around configuration, NATS subject patterns,
 payload handling, metadata handling, or filesystem paths.
 
+## Hierarchical Branch Work
+
+Do not work directly on `main`. `main` is only for released code. Start normal
+work from the active release development branch, then create an issue branch
+for the specific feature or bug you are working on:
+
+```bash
+git switch main
+git pull --ff-only
+git switch -c release-v0.4.1
+git switch -c issue-123-short-description
+```
+
+If a defect is found while working on that issue, create a bug report and then
+create a bug branch from the active issue branch:
+
+```bash
+git switch issue-123-short-description
+git switch -c bug-456-short-description
+```
+
+Merge bug branches back into their issue branch after the regression test and
+fix are complete. Merge issue branches back into the release branch after local
+checks, documentation, changelog updates, and GitHub issue evidence are
+complete. Merge the release branch into `main` only when the maintainer
+explicitly decides to release. Branch pushes intentionally do not start the CI,
+docs, CodeQL, dependency-review, backlog-sync, or bug-sync workflows.
+Release pull requests into `main` are the exception: the lightweight pull
+request governance and dependency review checks run when the release PR is
+marked ready, reopened, or updated so branch protection can verify the latest
+release commit.
+
+Create or refresh the pull request locally when the branch is ready for review:
+
+```bash
+scripts/open-release-pr.sh --repo ProjectCuillin/nats-sinks --base release-v0.4.1
+```
+
+Use `--base issue-123-short-description` for a bug branch, `--base
+release-v0.4.1` for an issue branch, and `--base main` only for the final
+release pull request. The helper creates a draft pull request by default. When
+the release branch is ready for merge and release validation, mark the pull
+request ready and dispatch the validation workflows:
+
+```bash
+scripts/run-release-validation.sh --repo ProjectCuillin/nats-sinks
+```
+
+The pull request is the review boundary before `main`. Branch protection should
+require the release pull request governance check, dependency review, resolved
+conversations, and no direct pushes. In the current solo-maintainer model it
+must not require CODEOWNER approval or a second approving review, because
+GitHub blocks self-approval and that would deadlock releases. See
+[Hierarchical Branch Development And Release Workflow](branch-workflow.md).
+Before merging any pull request, use
+`python scripts/merge-pr-with-comment.py --pr <number> --comment-file <file>`
+with a sanitized `## Test Evidence` comment so the merge itself carries public
+validation context.
+
 ## Synthetic Test Harness
 
 For day-to-day development, use the synthetic harness when you need mission-like
@@ -69,6 +128,40 @@ Do not paste retained payload files, local paths, or live configuration into
 GitHub issues. For future sinks, add a small adapter that accepts the generated
 envelopes and returns a sanitized `SyntheticScenarioReport` rather than
 building a sink-specific generator from scratch.
+
+## Connector Development
+
+New sinks should be treated as connectors with a small public contract and a
+large responsibility: they must not return success until their destination
+success boundary has been crossed. Start with the generic framework before
+writing destination-specific code:
+
+1. Add or update the GitHub backlog issue with functional, non-functional,
+   security, documentation, and test requirements.
+2. Decide whether the sink is a first-party connector in this repository or an
+   optional third-party package discovered through the safe entry-point path.
+3. Implement a sink class that accepts `NatsEnvelope` objects and never sees raw
+   NATS client messages.
+4. Register a `SinkConnector` descriptor with a stable lowercase name,
+   production-readiness state, documentation pointer, and certification labels.
+5. Add a `SinkCertificationCase` and reusable helper coverage from
+   [Sink Certification](sink-certification.md). The helper assertion should
+   prove the sink-specific durable success boundary with a fake client, fake
+   connection, temporary directory, or other deterministic test double.
+6. Add public API compatibility tests when the sink exposes a documented import
+   path.
+7. Add deterministic fake-client unit tests before any live integration tests.
+8. Add integration or end-to-end scripts behind explicit markers and ignored
+   local config directories.
+
+First-party Oracle-family sinks, including proposed OCI Object Storage,
+Oracle MySQL, Oracle Berkeley DB, Oracle NoSQL Database, and OCI Streaming,
+should live in this repository unless governance decides otherwise. External
+connectors should use the `nats_sinks.sinks` entry-point group and should not be
+enabled in production without an explicit `plugins.allowed_sinks` entry and
+connector certification evidence. A sink can be experimental without
+certification, but it must not be described as production-ready until the
+certification page's required evidence is present.
 
 ## Documentation
 

@@ -3,21 +3,21 @@
   "title": "[Feature]: Evaluate ordered-consumer support for replay and inspection",
   "area": "Core runtime and delivery semantics",
   "priority": "P4 - research or design needed",
-  "target_release": "unscheduled",
-  "labels": ["nats"],
+  "target_release": "v0.4.1",
+  "labels": ["nats", "completed"],
   "problem": "Ordered consumers are useful for inspection or replay workflows, but they are not the same as durable production sink processing. Adding support without clear boundaries could confuse users about durability, ACK behavior, and redelivery semantics.",
-  "proposal": "Evaluate ordered-consumer support for explicit inspection or replay workflows that are clearly separated from production durable sink processing. If implemented, the feature should be opt-in, named carefully, and documented as not replacing durable pull consumers for production sink workers.",
+  "proposal": "Evaluate ordered-consumer support for explicit inspection or replay workflows that are clearly separated from production durable sink processing. The evaluation should document why ordered consumers are appropriate for stream inspection and analysis, why they should not replace durable pull consumers for production sink workers, and which follow-up features should be built separately.",
   "users": "Operators performing controlled replay, maintainers troubleshooting stream content, and users who need inspection tooling around nats-sinks.",
   "delivery_semantics": "Ordered-consumer workflows must not weaken production commit-then-ACK semantics. If they write to sinks, they must still use durable success before ACK, or they must be documented as inspection-only and not production sink processing.",
   "security": "Replay and inspection can expose sensitive payloads and metadata. Output must be redacted by default and must not log payloads unless explicitly enabled in a safe local context.",
   "acceptance": [
-    "Ordered-consumer support is evaluated with a clear production boundary.",
-    "Documentation explains when ordered consumers are appropriate.",
-    "Any implementation is opt-in and does not replace durable pull consumers.",
-    "Tests cover replay or inspection behavior without early ACKs.",
-    "Security guidance covers payload exposure risk."
+    "Research evaluates ordered-consumer support with a clear production boundary.",
+    "Documentation explains when ordered consumers are appropriate and when they are unsafe.",
+    "Recommended implementation work is split into separate feature requests.",
+    "Security guidance covers payload exposure risk.",
+    "The evaluation issue is closed with public findings and test evidence."
   ],
-  "tests": "Add unit and optional local NATS tests if implemented. Run scripts/check.sh.",
-  "documentation": "Update docs/architecture.md, docs/operations.md, docs/testing.md, docs/security.md, docs/nats-feature-gap-analysis.md, ROADMAP.md, and CHANGELOG.md.",
-  "closeout": "Close after released implementation or documented design decision. Include release tag or decision evidence, tests, and limitations."
+  "tests": "Run backlog manifest validation, Markdown link checks, and scripts/check.sh after the evaluation documentation and follow-up backlog items are in place.",
+  "documentation": "Update docs/ordered-consumer-evaluation.md, docs/architecture.md, docs/operations.md, docs/testing.md, docs/security.md, docs/nats-feature-gap-analysis.md, ROADMAP.md, docs/roadmap.md, and CHANGELOG.md.",
+  "closeout": "Close with documented decision evidence after the evaluation findings are posted and follow-up feature requests are created."
 }

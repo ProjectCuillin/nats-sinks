@@ -1,0 +1,28 @@
+{
+  "id": "oracle-mysql-auto-create-failure-pool-state",
+  "title": "[Bug]: Oracle MySQL startup keeps pool state after auto-create failure",
+  "area": "Oracle MySQL sink",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": ["mysql", "hardening", "testing"],
+  "summary": "Oracle MySQL startup left a connection pool reference in memory when auto-create schema setup failed.",
+  "observed": "A failed auto_create path could leave the sink with a non-null pool even though startup did not complete successfully.",
+  "expected": "Startup failure during auto-create must clear the pool reference.",
+  "reproduction": "Run the focused Oracle MySQL hardening regression test for auto-create failure pool cleanup.",
+  "failing_test": "tests/unit/test_bug_hunt_mysql_sink_hardening.py::test_mysql_start_clears_pool_when_auto_create_fails",
+  "impact": "A partially started sink can make follow-up lifecycle behavior ambiguous.",
+  "delivery_semantics": "The fix preserves fail-closed startup behavior before messages are acknowledged.",
+  "security": "Clearing partial runtime state avoids operating with an incompletely validated destination.",
+  "acceptance": [
+    "Oracle MySQL startup clears the pool reference when auto_create fails.",
+    "Successful startup still preserves the pool reference.",
+    "The focused regression test passes."
+  ],
+  "tests": "Run the focused Oracle MySQL hardening regression test and Oracle MySQL sink startup tests.",
+  "documentation": "No separate user documentation is required beyond release-note mention of the lifecycle fix.",
+  "closeout": "Close only after the release containing the lifecycle fix is published.",
+  "relationships": {
+    "related": ["#101"]
+  }
+}

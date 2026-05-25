@@ -24,9 +24,11 @@ from datetime import UTC, datetime
 from types import MappingProxyType
 from typing import Any
 
+from nats_sinks.core.custody import freeze_custody_metadata, thaw_custody_metadata
 from nats_sinks.core.errors import SerializationError
 from nats_sinks.core.message_metadata import (
     case_insensitive_header,
+    contains_ascii_control_characters,
     normalise_labels_value,
     normalise_metadata_value,
 )
@@ -39,6 +41,10 @@ from nats_sinks.core.payload import (
     PayloadStorageMode,
     load_standard_json,
     normalize_payload_for_json_storage,
+)
+from nats_sinks.core.security_labels import (
+    freeze_security_label_profile,
+    thaw_security_label_profile,
 )
 
 
@@ -61,6 +67,9 @@ def _normalise_headers(headers: Mapping[str, object] | None) -> Mapping[str, str
             continue
         rendered_key = _safe_text(key)
         if rendered_key is None:
+            continue
+        rendered_key = rendered_key.strip()
+        if not rendered_key or contains_ascii_control_characters(rendered_key):
             continue
         rendered: str | None
         if isinstance(value, (list, tuple)):
@@ -97,6 +106,8 @@ class NatsEnvelope:
     classification: str | None = None
     labels: tuple[str, ...] = field(default_factory=tuple)
     mission_metadata: Mapping[str, Any] | None = None
+    security_labels: Mapping[str, Any] | None = None
+    custody: Mapping[str, Any] | None = None
     reply: str | None = None
     domain: str | None = None
     received_at: datetime = field(default_factory=lambda: datetime.now(UTC))
@@ -126,6 +137,12 @@ class NatsEnvelope:
             "mission_metadata",
             freeze_mission_metadata(self.mission_metadata),
         )
+        object.__setattr__(
+            self,
+            "security_labels",
+            freeze_security_label_profile(self.security_labels),
+        )
+        object.__setattr__(self, "custody", freeze_custody_metadata(self.custody))
 
     def idempotency_key(self) -> str:
         """Return a stable best-effort idempotency key for this message."""
@@ -194,3 +211,26 @@ class NatsEnvelope:
         """
 
         return thaw_mission_metadata(self.mission_metadata)
+
+    def security_labels_for_json_storage(self) -> dict[str, Any] | None:
+        """Return the optional data-centric security label profile.
+
+        Security labels are normalized by the core and then frozen on the
+        envelope.  Sinks call this helper when serializing the structured
+        profile to Oracle JSON columns, file JSON records, or future backends.
+        The profile is metadata only; it does not replace authorization in the
+        destination system.
+        """
+
+        return thaw_security_label_profile(self.security_labels)
+
+    def custody_for_json_storage(self) -> dict[str, Any] | None:
+        """Return optional tamper-evident custody metadata for sink storage.
+
+        Custody metadata is computed by the core before sink delivery and then
+        frozen on the envelope.  Sinks call this helper to serialize the
+        evidence next to the destination record without mutating the envelope or
+        recomputing hashes with destination-specific behavior.
+        """
+
+        return thaw_custody_metadata(self.custody)

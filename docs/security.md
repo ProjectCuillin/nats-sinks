@@ -55,6 +55,39 @@ checks:
 This fail-closed behavior helps operators catch mistakes before a sink connects
 to NATS or acknowledges any JetStream message.
 
+## Sink Connector Supply Chain
+
+Sink connectors are code, not data. Loading a Python entry point imports and
+executes code from an installed distribution, so optional connector discovery is
+treated as a supply-chain trust decision.
+
+Secure defaults:
+
+- Oracle Database, FileSink, and SpoolSink are first-party built-in connectors
+  and do not require plugin discovery.
+- Optional third-party discovery is disabled by default.
+- When discovery is enabled, `plugins.allowed_sinks` must explicitly list each
+  external connector name.
+- The runtime never accepts module paths, class paths, or dynamic import names
+  from JSON configuration.
+- External connectors must return a typed `SinkConnector` descriptor and must
+  match the allow-listed entry-point name.
+- Production deployments should keep `plugins.require_production_ready=true`.
+
+Before enabling an external connector, review the package source, dependency
+tree, release history, license, maintainer posture, and certification evidence.
+Install it through normal package-management and change-control processes. Do
+not install connector packages dynamically at runtime, and do not grant the
+service account broader filesystem, network, database, or cloud permissions
+merely because a connector asks for them.
+
+Future Oracle-family sinks such as OCI Object Storage, Oracle MySQL,
+Oracle Berkeley DB, Oracle NoSQL Database, and OCI Streaming are expected to be
+first-party connectors in this repository unless project governance changes
+that posture. Palantir Foundry, Palantir Gotham, and other third-party platform
+connectors require the same connector certification evidence before production
+recommendation.
+
 ## Production Secure Development Baseline
 
 Every feature should be reviewed as a small threat model before implementation.
@@ -80,7 +113,8 @@ Use this baseline for code review and future releases:
   setup, sink selection, or policy evaluation is ambiguous.
 - Keep security-sensitive logic centralized and documented: configuration
   loading, TLS setup, credential resolution, SQL identifier validation, payload
-  encryption, log sanitization, redaction, DLQ shaping, and ACK decisions.
+  encryption, message authenticity verification, pre-sink policy enforcement,
+  log sanitization, redaction, DLQ shaping, and ACK decisions.
 - Use allow-list validation for enum values, formats, lengths, ranges, SQL
   identifiers, file extensions, URL schemes, sink names, route names, and NATS
   subject patterns.
@@ -96,12 +130,35 @@ Use this baseline for code review and future releases:
   secrets while retaining enough subject, stream, sequence, sink, and error
   category context for operators.
 - Treat observability output as an information-sharing boundary. Metrics,
-  timestamps, failure counters, duplicate counters, and write timings can
-  reveal operational tempo even without payloads. Use disabled-by-default
-  observability policies and allow lists before publishing to Prometheus or
-  any future monitoring platform. NATS server monitoring endpoint values must
-  also be selected with explicit endpoint and field allow lists before they are
-  stored locally or rendered for Prometheus.
+  timestamps, event freshness observations, source clock-skew values, failure
+  counters, duplicate counters, and write timings can reveal operational tempo
+  even without payloads. Use disabled-by-default observability policies and
+  allow lists before publishing to Prometheus,
+  OpenTelemetry Collectors, Splunk HEC, StatsD, syslog, NATS monitoring
+  snapshots, or any future monitoring platform. OTLP collector endpoints must
+  not contain credentials, non-loopback endpoints must use HTTPS, and optional
+  collector headers must be sourced from environment variables rather than
+  stored in policy JSON. Syslog export must be treated as redistribution to an
+  operational logging fabric, not as a private local debug stream.
+  NATS server monitoring endpoint values must also be selected with explicit
+  endpoint and field allow lists before they are stored locally or rendered for
+  Prometheus. JetStream advisories are also
+  treated as sensitive operational signals: the optional advisory observer is
+  disabled by default, subscribes only to configured advisory subjects, parses
+  bounded JSON payloads, and emits aggregate counters without exporting stream
+  names, consumer names, sequence numbers, or advisory payload bodies.
+- Treat local spool directories as protected custody locations. Spool records
+  are encrypted by default, but operators must still restrict filesystem
+  permissions, exclude spool paths from source control, monitor disk usage,
+  rotate keys with care, and avoid exposing directory listings because wrapper
+  metadata can still reveal record counts and rough priority ordering.
+- Treat read-only lineage helpers as an information-access boundary. Even when
+  they do not modify data, they can reveal operational relationships between
+  mission identifiers, tracks, tasking identifiers, subjects, and event timing.
+  Use least-privilege database accounts, bounded result limits, allow-listed
+  query fields, and redacted output. Do not paste raw lineage output containing
+  operational identifiers into public issues, tickets, CI logs, or shared
+  documentation.
 - Prefer least privilege for NATS accounts, Oracle users, service accounts,
   CI jobs, containers, cloud identities, filesystems, and documentation
   examples.
@@ -130,21 +187,96 @@ Dependency Graph and manifest-maintenance guidance is documented in
 guidance for pinned, hash-verified installs is documented in
 [Hash-Verified Installs](hash-verified-installs.md).
 Policy-controlled metric and selected NATS monitoring export is documented in
-[Observability](observability.md) and [Prometheus Integration](prometheus.md).
+[Observability](observability.md), with Prometheus-specific connector guidance
+kept in the [Prometheus Integration](prometheus.md) sub-page and
+OpenTelemetry-specific connector guidance kept in the
+[OpenTelemetry OTLP Integration](otlp.md) sub-page. Elastic, Grafana Alloy,
+Splunk HEC, StatsD, and syslog platform guidance is kept in their respective
+observability sub-pages so each sharing boundary has its own configuration and
+security review.
 The NATS server monitoring connector and delivery-boundary decision, including
 `/jsz` and `/healthz` handling, are documented in
 [NATS Server Monitoring Integration](nats-server-monitoring.md).
+JetStream advisory observation is documented in
+[Configuration](configuration.md#advisories) and
+[Metrics](metrics.md#jetstream-advisory-metrics). It is observational only and
+must not be granted broader NATS permissions than the configured advisory
+subjects require.
 NATS runtime account authorization templates are documented in
 [NATS Least-Privilege Permissions](nats-permissions.md).
 Kubernetes-specific deployment examples, including service accounts,
 security contexts, Secret references, NetworkPolicy guidance, and resource
 limits, are documented in [Kubernetes Deployment](kubernetes.md).
+Container image hardening guidance, including Oracle Linux slim image
+construction, non-root UID/GID `10001`, read-only root filesystem behavior,
+writable mount boundaries, OCI labels, vulnerability scanning expectations,
+and defence-oriented accreditation caveats, is documented in
+[Production Container Hardening](container-hardening.md).
 
 The detailed maintainer-requested control review is tracked in
 [Security Rule Review](security-rule-review.md). That page records the current
 status of all 316 secure-development guidance points as applied, already
 covered, partially covered, roadmap, or not applicable for the current package
 surface.
+
+## Pre-Sink Policy Gate
+
+The optional `size_policy` gate is the first general resource-control layer for
+message shape. When enabled, it bounds sink-bound payload bytes, header count,
+header lengths, label count, label lengths, mission metadata JSON size,
+standard metadata JSON size, approximate normalized record size, and accepted
+batch size before any sink write. It is intentionally sink-neutral so Oracle,
+file, and future sinks all receive the same protection. Rejections are
+permanent validation failures and follow the same DLQ-before-ACK rule as other
+pre-sink failures.
+
+Use `security_labels` when deployments need a structured data-centric security
+label profile with releasability, handling caveats, owner, originator, policy
+identifier, and retention category. The profile is validated before sink
+delivery and stored as JSON in Oracle and file outputs. It can inform policy
+decisions, but it is not an access-control mechanism by itself. Keep
+authorization in Oracle, the application, IAM, compartment policies, database
+views, VPD policies, or the destination platform that actually controls access.
+See [Data-Centric Security Label Profile](security-label-profile.md).
+
+Use `size_policy` for broad resource and abuse-case controls, then use
+`pre_sink_policy` for semantic requirements such as classification, required
+labels, encryption, or approved mission metadata keys. Detailed configuration
+is documented in [Configuration](configuration.md#size_policy), and operational
+tuning guidance is in [Message Sizing](message-sizing.md).
+
+The optional `pre_sink_policy` gate is a security and correctness control that
+runs after the core has built a validated `NatsEnvelope`, resolved generic
+metadata, validated mission metadata, and optionally encrypted the payload. It
+runs before any sink writes. This placement lets one destination-neutral policy
+protect Oracle, file, and future sinks without duplicating checks in every
+destination module.
+
+The gate is disabled by default. When enabled, it is fail-closed by default:
+subjects that do not match any rule are rejected unless an operator explicitly
+sets `unmatched_subject_action` to `allow`. Rules are intentionally simple and
+auditable. They can require priority, classification, labels, mission metadata,
+encrypted payloads, mission metadata root-key allow lists, and maximum
+sink-bound payload size.
+
+The policy engine does not execute Python code, templates, regular
+expressions, dynamic imports, or user-provided expressions. Rejections use
+sanitized reason codes and must not include payload bodies, credentials, table
+names, private network locators, or other sensitive values. A policy rejection
+is treated as a permanent validation failure: the message never reaches the
+sink, and if DLQ is configured the original JetStream message is ACKed or
+terminally acknowledged only after DLQ publication succeeds.
+
+Use the policy gate for deployment-wide controls such as:
+
+- requiring encrypted payloads for selected subjects,
+- requiring classification for restricted operational streams,
+- requiring labels that identify an audit lane or mission-support workflow,
+- rejecting mission metadata fields outside an approved root-key vocabulary,
+- bounding payload size before handing data to destination drivers.
+
+The full configuration reference is in
+[Configuration](configuration.md#pre_sink_policy).
 
 ## Payload Privacy
 
@@ -188,6 +320,77 @@ disabled rule intentionally leaves matching payloads unchanged. See
 [Payload Encryption](payload-encryption.md) for the full design and
 configuration reference.
 
+Optional message authenticity verification can prove that an approved producer
+signed the message body and selected metadata before the core passes the
+envelope to any sink. This is not the same as NATS authentication or TLS. NATS
+controls who can connect and publish; message authenticity checks whether a
+specific delivered event matches a configured producer signature policy.
+
+Authenticity rules are subject scoped, algorithm allow-listed, and fail closed
+by default. HMAC-SHA256 uses constant-time comparison for shared-secret
+deployments. Ed25519 lets the sink runtime hold only public verification key
+material while producers keep private signing keys. A verification rejection is
+a permanent pre-sink failure: the message never reaches Oracle, file, spool, or
+future sinks, and the original JetStream message is ACKed only after successful
+DLQ publication when DLQ is configured. See
+[Message Authenticity](message-authenticity.md).
+
+Optional tamper-evident custody metadata can help auditors detect unexpected
+changes to stored payload or metadata records. When enabled, the runner hashes
+the normalized payload and stable metadata before sink delivery and asks sinks
+to persist the resulting custody object next to the durable record. This is
+not encryption and not a digital signature. A hash can reveal that two
+messages carried the same payload or metadata shape, even when the payload body
+is encrypted.
+
+Use custody metadata only after reviewing the privacy tradeoff for the
+deployment. Protect persisted custody objects with the same access controls,
+backup rules, retention rules, and issue-comment hygiene used for the
+surrounding event data. The optional `key_id` field is a non-secret policy or
+future key-version identifier; never place key material, tokens, locations, or
+private operational detail in it. See
+[Tamper-Evident Custody Metadata](tamper-evident-custody.md).
+
+Headers-only delivery can reduce payload exposure to a sink process, but it is
+not a complete confidentiality control. Subjects, headers, stream metadata,
+sequence numbers, message size, priority, classification, labels, mission
+metadata, and DLQ records can remain sensitive. The headers-only design is
+tracked separately in
+[Headers-Only Delivery Evaluation](headers-only-delivery.md) so future support
+does not silently store omitted bodies as if producers sent empty payloads.
+
+Ordered-consumer inspection and replay planning can also expose sensitive
+stream content. Ordered inspection should be read-only, bounded, redacted by
+default, and separated from durable sink writes. Production replay into sinks
+should use durable pull consumers and commit-then-acknowledge rather than
+ordered inspection consumers. See
+[Ordered Consumer Evaluation](ordered-consumer-evaluation.md).
+
+Push-consumer support is not enabled today. If added later, it must be manual
+ACK only, bounded by explicit pending-message and pending-byte limits, and
+protected against unbounded callback intake. Flow-control errors, heartbeat
+events, callback exceptions, and queue saturation must be logged without
+payloads, credentials, private subject families, or sensitive metadata values.
+See [Push Consumer Evaluation](push-consumer-evaluation.md).
+
+Subject-aware observability is also not enabled today. NATS subjects can reveal
+mission, tenant, platform, environment, or routing structure, and per-subject
+metrics can create high-cardinality series. Any future subject-aware export
+must be disabled by default, use explicit subject-family allow lists, use
+stable low-cardinality labels, enforce caps, and fail closed for export without
+changing ACK behavior. See
+[Subject-Aware Observability Evaluation](subject-aware-observability-evaluation.md).
+
+Key rotation should use explicit `key_id` values. New runtime configuration
+encrypts with the active key, while authorized verification, replay, or
+migration tooling can use `PayloadKeyRegistry` to decrypt records written with
+old and new keys during the same retention window. nats-sinks does not import
+cloud secret-manager SDKs in the core package; retrieve key material through
+your approved platform mechanism and pass only the resolved base64 key or
+environment-variable reference into the configuration. Treat key identifiers as
+clear operational metadata and avoid names that disclose sensitive missions,
+networks, or customer details.
+
 ```mermaid
 flowchart LR
     Plain[Payload bytes] --> Encrypt[Core payload encryption]
@@ -217,12 +420,34 @@ Supported NATS client authentication modes in this release are documented in
 - use `nats.user` and `nats.password_env` for username/password authentication,
 - use the same client-side username/password configuration when the NATS server
   stores a bcrypted password hash,
+- use `nats.creds_file` for NATS credentials-file and decentralized JWT user
+  workflows,
+- use `nats.nkey_seed_file` for NKEY challenge authentication,
 - use `nats.tls_ca_file` to trust a local CA certificate for private or
-  self-signed NATS server certificates.
+  self-signed NATS server certificates, and
+- use `nats.tls_cert_file` with `nats.tls_key_file` when the deployment
+  requires a client certificate during the TLS handshake.
 
 Bcrypt is a server-side storage control. The client still needs the clear-text
 password to authenticate, so username/password and token authentication should
 use TLS in production.
+
+Credentials files, NKEY seed files, TLS private keys, and client certificate
+paths are treated as identity material. They must be mounted from a secret
+location, kept out of Git, excluded from issue comments, and protected with
+least-privilege file permissions. `nats-sinks` redacts those fields in
+effective configuration output and validates that path strings are not empty,
+not surrounded by whitespace, and do not contain control characters.
+
+WebSocket transport is supported with explicit guardrails. Prefer `wss://`,
+verify certificates, use `tls_ca_file` for private CAs, and reserve `ws://` for
+local labs or explicitly approved controlled networks. Do not place credentials
+in WebSocket URLs. Optional WebSocket headers must be bounded, validated, and
+redacted; sensitive header values such as `Authorization` or `Cookie` must come
+from environment variables through `nats.websocket_headers_env`. Assume that
+reverse proxies may log paths, headers, and client metadata, and review proxy
+retention before using WebSocket transport for sensitive event custody. See
+[WebSocket Connection Evaluation](websocket-connection-evaluation.md).
 
 Use least-privilege NATS subject permissions for the runtime account. A
 standard worker should be able to request from its configured pull consumer,
@@ -232,6 +457,33 @@ publish, broad subscribe, stream administration, or source-subject publish
 rights. See [NATS Least-Privilege Permissions](nats-permissions.md) for
 templates and validation checklists.
 
+Durable consumer creation and reconciliation are explicitly controlled by
+`consumer_management.mode`. The safest production posture is `bind_only` with a
+separate administrative identity creating or updating consumers. If
+`create_if_missing` or `reconcile` is enabled, grant only the narrow JetStream
+consumer-management permissions required for the configured stream and durable
+consumer. Do not give the sink worker account broad stream-management or
+account-management authority.
+
+Stream creation and retention planning are separate administrative concerns.
+The `nats-sink stream-plan` helper is safe to run with ordinary local access
+because it is offline: it does not connect to NATS, does not resolve
+credentials, and does not mutate streams. Treat its output as a review artifact
+for a separate NATS administrator or platform automation identity. That
+administrative identity may need permissions such as
+`$JS.API.STREAM.CREATE.<STREAM>` or `$JS.API.STREAM.UPDATE.<STREAM>`, but the
+long-running sink worker should not receive those grants by default. See
+[JetStream Stream Management Planning](stream-management.md).
+
+Richer consumer policy fields are also security-relevant. Multiple
+`filter_subjects` can widen what the worker receives, so nats-sinks requires
+each configured filter to stay within `nats.subject` and documents the NATS
+permission tradeoff for plural filters. Consumer `metadata` is bounded and
+rejects secret-looking keys, but it is still visible to operators with
+JetStream management access. Use it only for low-sensitivity labels such as
+component ownership or deployment purpose, never for credentials, payload
+fragments, mission details, private endpoints, or compartment names.
+
 ```mermaid
 flowchart LR
     Env[Secret environment variable] --> CLI[nats-sink]
@@ -240,8 +492,10 @@ flowchart LR
     NATS --> Hash[Server-side token or bcrypt verification]
 ```
 
-TLS certificate authentication, NKEY with challenge, and decentralized JWT
-authentication/authorization are roadmap items for future certified support.
+TLS certificate files, NKEY seed files, and NATS credentials files are
+supported client-side authentication inputs. The NATS operator must still
+certify server-side account resolvers, trust anchors, subject permissions, and
+identity-to-authorization policy for the target deployment.
 
 ## Oracle Security
 
@@ -251,6 +505,14 @@ For classified, restricted, or compartmented event stores, keep schema
 ownership separate from runtime ingestion. The sink runtime account should be
 able to insert or merge into the approved table shape, not administer the
 database or remove evidence of prior ingestion.
+
+When Oracle staging-table mode is enabled, apply the same least-privilege rule
+to both database objects. The runtime account needs only the permissions
+required to insert rows into the staging table, read the active batch from the
+staging table for the set-based merge, delete only its staged batch when
+`cleanup="delete_on_success"` is used, and insert or merge into the approved
+target table. It should not receive broad schema administration, drop-table, or
+unrelated data access permissions merely because staging is enabled.
 
 For Oracle Autonomous Database wallet/mTLS connections, treat the wallet files
 as secret runtime material. Do not commit `Wallet_*.zip`, `ewallet.pem`,
@@ -292,6 +554,14 @@ Do not point the file sink at a source-code directory, shared temporary
 directory, or path served directly by a web server. Keep generated output under
 an application data path such as `/var/lib/nats-sinks/events`, and apply your
 normal backup, retention, and access-control policies.
+
+For cross-domain handoff preparation, `nats-sinks` can help create reviewable
+records and package-shaped evidence, but it is not a cross-domain guard,
+certification boundary, release authority, data diode, or sanitizer. Keep
+transfer decisions in approved systems outside this package. If you use the
+[Cross-Domain Handoff Package](use-cases/defence/cross-domain-handoff-package.md)
+blueprint, enforce path normalization, bounded file counts, bounded payload
+sizes, and secret-free manifests before committing the package.
 
 ## Secure Failure Flow
 

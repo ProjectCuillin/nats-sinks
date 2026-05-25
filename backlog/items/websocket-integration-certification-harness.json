@@ -1,0 +1,39 @@
+{
+  "id": "websocket-integration-certification-harness",
+  "title": "[Feature]: Add WebSocket integration certification harness",
+  "area": "Testing",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": [
+    "nats",
+    "security",
+    "testing",
+    "documentation"
+  ],
+  "problem": "WebSocket transport cannot be called production-certified without a repeatable integration harness that proves connection setup, JetStream pull consumption, reconnect behavior, and commit-then-ACK ordering over ws:// and wss://.",
+  "proposal": "Add optional integration tests and scripts that start or connect to a NATS server with WebSocket enabled, validate ws:// local-lab behavior, validate wss:// with local CA trust, publish and consume test messages through the existing runner, and prove ACK-after-sink-success behavior remains unchanged. The local harness must be collision-safe: it should check whether standard NATS, monitoring, and WebSocket ports are already in use, allocate free alternative loopback ports when needed, write the selected ports into the generated temporary NATS config, and never stop or modify an unrelated NATS process that was already running before the test.",
+  "users": "Maintainers, release engineers, and operators who need evidence before approving WebSocket transport in production deployments.",
+  "delivery_semantics": "The harness must prove the same contract as TCP/TLS: sink success triggers ACK, sink failure does not ACK, DLQ publication happens before ACK, and reconnect or close events do not create early ACKs.",
+  "security": "The harness must not commit real server names, IP addresses, credentials, CA material, or proxy headers. Local generated certificates and credentials must be temporary by default and stored only under ignored directories when preserved for debugging.",
+  "acceptance": [
+    "A local WebSocket NATS test configuration is available for optional integration tests.",
+    "The local test harness detects occupied NATS, monitoring, and WebSocket ports and chooses free loopback alternatives instead of colliding with existing services.",
+    "The local test harness records the selected temporary ports in sanitized test output so failures can be diagnosed without exposing private infrastructure.",
+    "The local test harness never kills, reconfigures, or attaches to an unrelated pre-existing NATS process.",
+    "Tests cover ws:// local-lab transport.",
+    "Tests cover wss:// with a generated local CA or documented manual equivalent.",
+    "Tests prove commit-then-ACK behavior is unchanged over WebSocket transport.",
+    "Documentation explains how to run the tests without leaking secrets."
+  ],
+  "tests": "Add integration tests behind an explicit marker or environment variable, plus focused unit tests for certification helpers. Add unit tests for free-port discovery, occupied-port handling, generated config rendering, process ownership tracking, cleanup traps, and sanitized selected-port output. Add an integration scenario where a dummy listener occupies the default NATS and WebSocket ports so the harness proves it can choose alternatives. Run scripts/check.sh and the optional WebSocket integration script when local NATS infrastructure is available.",
+  "documentation": "Update testing, operations, NATS connection, security, and WebSocket evaluation documentation with commands, expected output, and troubleshooting notes.",
+  "closeout": "Close after the release containing the WebSocket certification harness is published. Include local test evidence and limitations.",
+  "relationships": {
+    "related": [
+      "#45"
+    ],
+    "blocked_by": [
+      "backlog:websocket-connection-configuration-guardrails"
+    ]
+  }
+}

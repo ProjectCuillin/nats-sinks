@@ -7,15 +7,16 @@ loss, unclear custody, and premature acknowledgement are operational risks.
 
 The examples are not new runtime modes. They use the generic framework,
 Oracle sink, file sink, DLQ, payload encryption, message metadata, mission
-metadata, metrics, and service deployment features that already exist in the
-package. This keeps `nats-sinks` useful for many domains instead of turning it
-into a one-purpose product.
+metadata, pre-sink policy enforcement, metrics, and service deployment
+features that already exist in the package. This keeps `nats-sinks` useful for
+many domains instead of turning it into a one-purpose product.
 
 ```mermaid
 flowchart LR
     JS[NATS JetStream] --> Core[nats-sinks core]
     Core --> Oracle[Oracle sink]
     Core --> File[File sink]
+    Core --> Policy[Pre-sink policy]
     Core --> DLQ[DLQ subject]
     Core --> Metrics[Local metrics snapshot]
     Examples[Operational examples] -. compose .-> Core
@@ -35,6 +36,8 @@ All examples share the same foundation:
 - JetStream messages are received through a bounded pull consumer.
 - The core normalizes messages into immutable `NatsEnvelope` objects.
 - Optional payload encryption happens before sink delivery.
+- Optional pre-sink policy can reject messages before sink delivery when
+  required metadata, encryption, or size controls are missing.
 - Sinks write payloads and metadata durably.
 - The core ACKs only after the sink reports durable success.
 - Permanent failures go to a DLQ only when DLQ publication succeeds.

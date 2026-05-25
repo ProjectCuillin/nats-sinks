@@ -1,0 +1,23 @@
+{
+  "id": "apache-druid-sink",
+  "title": "[Feature]: Evaluate an Apache Druid sink",
+  "area": "Future sink",
+  "priority": "P4 - research or design needed",
+  "target_release": "unscheduled",
+  "labels": ["sink-new", "security", "testing"],
+  "problem": "Oracle GoldenGate connectivity material lists Apache Druid. nats-sinks does not yet have a real-time analytics store sink for Druid.",
+  "proposal": "Research an Apache Druid sink using supported ingestion APIs or Kafka-compatible handoff. The design should determine whether nats-sinks should write directly to Druid, stage batch ingestion files, or rely on a future Kafka sink plus Druid ingestion tasks.",
+  "users": "Analytics teams that use Druid for operational dashboards, time-series exploration, or low-latency event analytics.",
+  "delivery_semantics": "Direct ACK-gated success requires durable Druid ingestion acceptance. If Druid ingestion is asynchronous, the connector must document whether ACK should be gated on staging, task submission, task success, or be treated as non-durable fan-out.",
+  "security": "Broker/coordinator endpoints, credentials, datasource names, and payloads must be redacted. HTTP calls need TLS verification, timeouts, and bounded retries.",
+  "acceptance": [
+    "Research selects direct Druid, staged ingestion, or Kafka-mediated integration.",
+    "The durable acceptance boundary is documented.",
+    "Configuration validates datasource, endpoints, batching, and retry options.",
+    "Unit tests use HTTP/client fakes and no network calls.",
+    "Documentation covers asynchronous ingestion limitations."
+  ],
+  "tests": "Add mocked API tests if implemented. Gate live Druid tests behind explicit environment variables.",
+  "documentation": "Add Druid evaluation and roadmap guidance.",
+  "closeout": "Close after research or implementation release."
+}

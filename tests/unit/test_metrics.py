@@ -38,9 +38,29 @@ def test_metric_specs_have_unique_names_and_kinds() -> None:
     assert len(names) == len(set(names))
     assert MetricNames.MESSAGES_FETCHED_TOTAL in names
     assert MetricNames.SINK_BATCH_WRITE_SECONDS in names
+    assert MetricNames.MESSAGES_TERMINATED_TOTAL in names
+    assert MetricNames.TERM_ERRORS_TOTAL in names
     assert MetricNames.PRIORITY_LANE_MESSAGES_TOTAL in names
     assert MetricNames.CURRENT_PRIORITY_LANES_ACTIVE in names
+    assert MetricNames.POLICY_MESSAGES_PASSED_TOTAL in names
+    assert MetricNames.POLICY_MESSAGES_REJECTED_TOTAL in names
+    assert MetricNames.POLICY_EVALUATION_ERRORS_TOTAL in names
+    assert MetricNames.SIZE_POLICY_MESSAGES_PASSED_TOTAL in names
+    assert MetricNames.SIZE_POLICY_MESSAGES_REJECTED_TOTAL in names
+    assert MetricNames.SIZE_POLICY_EVALUATION_ERRORS_TOTAL in names
+    assert MetricNames.MESSAGE_AUTHENTICITY_MESSAGES_PASSED_TOTAL in names
+    assert MetricNames.MESSAGE_AUTHENTICITY_MESSAGES_REJECTED_TOTAL in names
+    assert MetricNames.MESSAGE_AUTHENTICITY_EVALUATION_ERRORS_TOTAL in names
+    assert MetricNames.EVENT_AGE_AT_RECEIVE_SECONDS in names
+    assert MetricNames.EVENT_AGE_AT_STORE_SECONDS in names
+    assert MetricNames.EVENT_CREATION_TIMESTAMP_MISSING_TOTAL in names
+    assert MetricNames.EVENT_SOURCE_CLOCK_SKEW_SECONDS in names
     assert MetricNames.ORACLE_DUPLICATES_TOTAL in names
+    assert MetricNames.ORACLE_DUPLICATE_NOOP_TOTAL in names
+    assert MetricNames.ORACLE_MERGE_ROWS_TOTAL in names
+    assert MetricNames.ORACLE_MERGE_OUTCOME_UNKNOWN_TOTAL in names
+    assert MetricNames.JETSTREAM_ADVISORIES_RECEIVED_TOTAL in names
+    assert MetricNames.JETSTREAM_ADVISORY_MAX_DELIVER_TOTAL in names
     assert {spec.kind for spec in METRIC_SPECS} == {"counter", "histogram", "gauge"}
 
 
@@ -96,6 +116,23 @@ def test_metrics_config_validates_snapshot_file() -> None:
         MetricsConfig(snapshot_file="\n")
 
 
+def test_metrics_config_validates_freshness_thresholds() -> None:
+    config = MetricsConfig(
+        event_freshness_enabled=True,
+        event_stale_after_seconds=120.0,
+        event_future_skew_tolerance_seconds=10.0,
+    )
+
+    assert config.event_stale_after_seconds == 120.0
+    assert config.event_future_skew_tolerance_seconds == 10.0
+
+    with pytest.raises(ValueError, match="event_stale_after_seconds"):
+        MetricsConfig(event_stale_after_seconds=-1)
+
+    with pytest.raises(ValueError, match="event_future_skew_tolerance_seconds"):
+        MetricsConfig(event_future_skew_tolerance_seconds=-1)
+
+
 def test_in_memory_metrics_records_canonical_names_and_legacy_aliases() -> None:
     metrics = InMemoryMetrics()
 
@@ -120,6 +157,8 @@ def test_json_file_metrics_writes_sanitized_snapshot(tmp_path: Path) -> None:
 
     increment_metric(metrics, MetricNames.MESSAGES_PREPARED_TOTAL, 3)
     increment_metric(metrics, MetricNames.ORACLE_DUPLICATES_TOTAL, 1)
+    increment_metric(metrics, MetricNames.ORACLE_DUPLICATE_NOOP_TOTAL, 1)
+    increment_metric(metrics, MetricNames.ORACLE_MERGE_ROWS_TOTAL, 3)
     observe_metric(metrics, MetricNames.SINK_BATCH_WRITE_SECONDS, 0.5)
     set_metric_value(metrics, MetricNames.CURRENT_BATCH_MESSAGES, 3.0)
 
@@ -130,6 +169,8 @@ def test_json_file_metrics_writes_sanitized_snapshot(tmp_path: Path) -> None:
     assert snapshot["namespace"] == "mission_ops"
     assert row_by_name[MetricNames.MESSAGES_PREPARED_TOTAL].value == 3
     assert row_by_name[MetricNames.ORACLE_DUPLICATES_TOTAL].value == 1
+    assert row_by_name[MetricNames.ORACLE_DUPLICATE_NOOP_TOTAL].value == 1
+    assert row_by_name[MetricNames.ORACLE_MERGE_ROWS_TOTAL].value == 3
     assert MetricNames.LEGACY_MESSAGES_RECEIVED_TOTAL not in row_by_name
     assert row_by_name[f"{MetricNames.SINK_BATCH_WRITE_SECONDS}.count"].value == 1
     assert row_by_name[MetricNames.CURRENT_BATCH_MESSAGES].value == 3.0

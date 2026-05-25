@@ -1,0 +1,27 @@
+{
+  "id": "ordered-inspection-cli",
+  "title": "[Feature]: Add read-only ordered-consumer inspection CLI",
+  "area": "CLI",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["nats", "security", "testing", "documentation"],
+  "problem": "Operators and maintainers sometimes need to inspect a stream in order without creating or advancing a production durable sink consumer. NATS ordered consumers are designed for data inspection and analysis, but nats-sinks does not currently provide a safe read-only CLI wrapper with redacted output and explicit limits.",
+  "proposal": "Add a separate inspection command that uses an ordered consumer when the active NATS Python client supports it, or fails closed with a clear compatibility message when it does not. The command should be explicitly read-only, disabled for sink writes, bounded by message count and byte limits, redacted by default, and capable of writing sanitized JSONL inspection records for local troubleshooting.",
+  "users": "Operators troubleshooting stream content, maintainers validating stream order, and support engineers performing controlled non-production inspection without touching sink durable consumers.",
+  "delivery_semantics": "The ordered inspection command must not replace the production JetStreamSinkRunner. It must not ACK production durable work, must not write to sinks, and must not claim durable processing. Any sequence-gap or client recreation behavior must be surfaced as inspection metadata rather than treated as sink success.",
+  "security": "Inspection can expose payloads, subjects, headers, labels, classification, and operational tempo. Payload output must be disabled by default, subject and header output must be bounded, local files must stay inside an approved path, and public examples must not contain real network locators, credentials, or sensitive operational subjects.",
+  "acceptance": [
+    "The command is opt-in and clearly named as inspection-only.",
+    "Default output redacts payloads and sensitive headers.",
+    "Message count, byte count, and output path are bounded and validated.",
+    "The command fails closed when ordered-consumer support is unavailable in the client.",
+    "Tests cover redaction, limit validation, output shape, unsupported-client behavior, and no sink writes."
+  ],
+  "tests": "Add unit tests for CLI option validation, redacted rendering, JSONL output, capability detection, path safety, and no sink invocation. Add optional local NATS tests when the Python client exposes ordered-consumer support. Run scripts/check.sh.",
+  "documentation": "Update ordered-consumer evaluation, CLI, operations, testing, security, roadmap, and changelog documentation.",
+  "closeout": "Close after the release containing the ordered inspection CLI is published. Include release tag, tests, documentation, and limitations.",
+  "relationships": {
+    "related": ["#33"],
+    "blocked_by": ["backlog:ordered-consumer-client-compatibility"]
+  }
+}

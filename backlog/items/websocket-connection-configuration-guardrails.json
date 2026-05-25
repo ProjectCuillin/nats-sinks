@@ -1,0 +1,33 @@
+{
+  "id": "websocket-connection-configuration-guardrails",
+  "title": "[Feature]: Add WebSocket connection configuration guardrails",
+  "area": "Core runtime and delivery semantics",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": [
+    "nats",
+    "security",
+    "testing",
+    "documentation"
+  ],
+  "problem": "nats-sinks validates ws:// and wss:// schemes, and nats-py supports WebSocket transport, but the project does not yet provide certified WebSocket-specific configuration guardrails. Operators need a clear fail-closed model before using WebSocket transport in production.",
+  "proposal": "Add explicit WebSocket transport guardrails for URL scheme selection, mixed WebSocket and non-WebSocket seed URL rejection before nats-py connection attempts, wss:// TLS context construction with local CA support, production warnings for ws://, and redacted effective-configuration output. Keep transport selection separate from sink and ACK behavior.",
+  "users": "Operators in constrained network environments, security reviewers, and maintainers certifying NATS client transport modes.",
+  "delivery_semantics": "Transport validation must not change commit-then-acknowledge behavior. WebSocket transport must still deliver raw messages to the same runner loop, normalize envelopes, write sinks durably, and ACK only after success.",
+  "security": "Prefer wss:// for production, validate local CA paths, reject mixed transport lists before connecting, redact all connection details, and document proxy and TLS limitations. Do not allow credentials in URLs.",
+  "acceptance": [
+    "ws:// and wss:// behavior is explicitly documented as configured transport rather than incidental URL validation.",
+    "Mixed WebSocket and non-WebSocket seed URLs fail configuration validation before connection setup.",
+    "wss:// with tls_ca_file builds a verified TLS context.",
+    "ws:// is documented as local-lab or explicitly accepted controlled-network use only.",
+    "Commit-then-ACK contract tests remain unchanged."
+  ],
+  "tests": "Add unit tests for ws://, wss://, mixed transport lists, local CA context construction, redacted output, and unchanged nats-py option construction for normal nats:// and tls:// deployments. Run scripts/check.sh.",
+  "documentation": "Update docs/websocket-connection-evaluation.md, docs/nats-connections.md, docs/configuration.md, docs/security.md, docs/operations.md, docs/nats-feature-gap-analysis.md, ROADMAP.md, and CHANGELOG.md.",
+  "closeout": "Close after the release containing certified WebSocket configuration guardrails is published. Include tests, documentation, and known limitations.",
+  "relationships": {
+    "related": [
+      "#45"
+    ]
+  }
+}

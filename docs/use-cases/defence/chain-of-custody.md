@@ -4,7 +4,7 @@ Chain of custody is the ability to explain how an event moved from JetStream to
 a durable destination and which evidence proves that the sink committed it
 before acknowledging it. In `nats-sinks`, this evidence comes from the
 commit-then-acknowledge invariant, immutable envelope metadata, idempotent sink
-writes, and optional DLQ records.
+writes, optional tamper-evident custody hashes, and optional DLQ records.
 
 This blueprint supports audit and replay analysis. It does not turn
 `nats-sinks` into a targeting system, fire-control system, weapons-release
@@ -14,12 +14,15 @@ mechanism, rules-of-engagement engine, or autonomous decision platform.
 sequenceDiagram
     participant JS as JetStream
     participant Core as nats-sinks core
+    participant Custody as Custody evidence
     participant Sink as Destination sink
     participant Store as Durable store
     participant DLQ as Dead-letter stream
     participant Auditor as Auditor
 
     JS->>Core: deliver message
+    Core->>Custody: compute payload and metadata hashes
+    Custody-->>Core: attach custody object
     Core->>Sink: write_batch(envelope)
     alt durable write succeeds
         Sink->>Store: commit custody record
@@ -49,10 +52,18 @@ Useful chain-of-custody evidence includes:
 - receive timestamp;
 - store timestamp or database default timestamp;
 - sink mode and duplicate handling policy;
+- optional custody hashes such as `payload_hash`, `metadata_hash`,
+  `record_hash`, and `previous_record_hash`;
 - DLQ subject and error category when a permanent failure occurred;
 - metrics snapshot around the run.
 
 These fields should be captured without logging full payloads by default.
+
+Optional custody metadata is useful when an auditor needs to recompute evidence
+from a persisted Oracle row or file record. It should be described carefully:
+hashes can detect unexpected changes, but they are not encryption, not digital
+signatures, and not proof of who wrote the record. See
+[Tamper-Evident Custody Metadata](../../tamper-evident-custody.md).
 
 ## Idempotency Is Part Of Custody
 
@@ -101,6 +112,14 @@ contains both sink metadata and framework metadata:
   "idempotency_key": "MISSION_SYNTHETIC:42",
   "priority": "urgent",
   "classification": "NATO SECRET",
+  "custody": {
+    "schema": "nats_sinks.custody.v1",
+    "algorithm": "sha256",
+    "payload_hash": "hex-encoded-payload-hash",
+    "metadata_hash": "hex-encoded-metadata-hash",
+    "record_hash": "hex-encoded-record-hash",
+    "privacy": "hashes_are_not_encryption"
+  },
   "metadata": {
     "stream": "MISSION_SYNTHETIC",
     "stream_sequence": 42,
