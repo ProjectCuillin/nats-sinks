@@ -308,6 +308,13 @@ otherwise later. They should use the same connector descriptor and certification
 tests as Oracle Database and FileSink, but they do not need external plugin
 discovery.
 
+The repository already includes a local
+[Oracle MySQL test database container](oracle-mysql-test-container.md) so the
+future Oracle MySQL sink can be developed against a repeatable Oracle Linux 9
+slim based database target. That test container is infrastructure for future
+sink certification; it is not itself a sink connector and does not change the
+current production connector list.
+
 Optional third-party connector discovery is intentionally disabled by default.
 When enabled, it uses Python packaging entry points under the group
 `nats_sinks.sinks`, but it only loads names listed in `plugins.allowed_sinks`.

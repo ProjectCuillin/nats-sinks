@@ -129,6 +129,10 @@ The current release provides the following production-ready foundation:
   read-only-root-compatible runtime guidance, explicit writable paths, OCI
   labels, SBOM and vulnerability-scanning expectations, and careful defence
   accreditation caveats.
+- [Oracle MySQL test database container](oracle-mysql-test-container.md), a
+  local Oracle Linux 9 slim and Oracle MySQL 9.7.0 LTS test target for future
+  Oracle MySQL sink development, with random per-run credentials, loopback-only
+  exposure, cleanup by default, and deterministic unit tests.
 - `nats_sinks.oracle.OracleSink`, a production Oracle Database sink with
   connection pooling, idempotent `merge` and `insert_ignore` modes, Oracle
   Autonomous Database connection options for OCI deployments,

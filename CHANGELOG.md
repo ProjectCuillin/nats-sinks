@@ -75,6 +75,13 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   Docker asset tests, and detailed operator guidance for writable paths, SBOM
   evidence, vulnerability scanning, provenance, and defence-oriented
   accreditation caveats.
+- Added a hardened local Oracle MySQL test database container for issue #247,
+  including an Oracle Linux 9 slim based Dockerfile, explicit Oracle MySQL
+  9.7.0 LTS package selection, generated per-run test credentials,
+  loopback-only random port exposure, cleanup-by-default behavior, a Docker
+  smoke runner that verifies table creation plus one insert/read cycle, unit
+  tests for the container assets, and dedicated documentation for future
+  Oracle MySQL sink development.
 - Added guarded non-main pull request auto-approval tooling for ready issue,
   feature, and bug branches raised by the local workflow. The helper refuses
   release pull requests targeting `main`, can verify the expected PR author,
@@ -155,8 +162,9 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   variables for lookup values, validates configured tables and columns, omits
   payload output by default, and does not affect sink writes or ACK behavior.
 - Added a researched backlog item for a future Oracle MySQL sink, including
-  initial design direction for MySQL Connector/Python, idempotent upserts,
-  TLS, least-privilege access, test planning, and documentation scope.
+  initial design direction for Oracle MySQL Connector/Python, idempotent
+  upserts, TLS, least-privilege access, test planning, and documentation
+  scope.
 - Added a fail-closed pre-sink policy gate that runs after normalization,
   message metadata, mission metadata, and optional payload encryption but before
   any destination write. The gate supports subject-scoped requirements for
