@@ -18,6 +18,7 @@ configuration output, exceptions, metrics, or logs.
 from __future__ import annotations
 
 import os
+import re
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -27,6 +28,83 @@ from nats_sinks.core.payload import PayloadStorageMode
 
 MySqlWriteMode = Literal["insert", "insert_ignore", "upsert", "append"]
 IdempotencyStrategy = Literal["stream_sequence", "message_id", "payload_field"]
+
+_CONTROL_CHARACTER_NAMES = "control characters"
+_ASCII_CONTROL_CUTOFF = 32
+_ASCII_DELETE = 127
+_ENV_NAME_RE = re.compile(r"^[A-Z_][A-Z0-9_]{0,127}$")
+_POOL_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.:-]{0,127}$")
+
+
+def _contains_control_characters(value: str) -> bool:
+    """Return true when a config string contains unsafe control characters."""
+
+    return any(
+        ord(character) < _ASCII_CONTROL_CUTOFF or ord(character) == _ASCII_DELETE
+        for character in value
+    )
+
+
+def _validate_non_empty_public_text(value: str, *, field: str) -> str:
+    """Validate non-secret text before it reaches the Oracle MySQL driver."""
+
+    rendered = value.strip()
+    if not rendered:
+        raise ValueError(f"{field} must not be empty")
+    if _contains_control_characters(rendered):
+        raise ValueError(f"{field} must not contain {_CONTROL_CHARACTER_NAMES}")
+    return rendered
+
+
+def _validate_optional_secret_value(value: str | None, *, field: str) -> str | None:
+    """Reject empty or log-spoofing secret values without normalizing secrets."""
+
+    if value is None:
+        return None
+    if not value.strip():
+        raise ValueError(f"{field} must not be empty")
+    if _contains_control_characters(value):
+        raise ValueError(f"{field} must not contain {_CONTROL_CHARACTER_NAMES}")
+    return value
+
+
+def _validate_optional_env_name(value: str | None, *, field: str) -> str | None:
+    """Validate the environment-variable name used for secret lookup."""
+
+    if value is None:
+        return None
+    if value != value.strip() or not _ENV_NAME_RE.fullmatch(value):
+        raise ValueError(
+            f"{field} must be an uppercase environment variable name using letters, "
+            "numbers, and underscores"
+        )
+    return value
+
+
+def _validate_optional_path(value: str | None, *, field: str) -> str | None:
+    """Validate optional local TLS path fields as bounded plain strings."""
+
+    if value is None:
+        return None
+    rendered = value.strip()
+    if not rendered:
+        raise ValueError(f"{field} must not be empty")
+    if rendered != value or _contains_control_characters(value):
+        raise ValueError(f"{field} must not contain whitespace padding or control characters")
+    return value
+
+
+def _validate_optional_pool_name(value: str | None, *, field: str) -> str | None:
+    """Validate pool names accepted from public configuration."""
+
+    if value is None:
+        return None
+    if value != value.strip() or not _POOL_NAME_RE.fullmatch(value):
+        raise ValueError(
+            f"{field} must start with a letter and contain only letters, numbers, dots, "
+            "underscores, colons, or hyphens"
+        )
+    return value
 
 
 class MySqlIdempotencyConfig(BaseModel):
@@ -154,17 +232,45 @@ class MySqlSinkConfig(BaseModel):
     def validate_non_empty_text(cls, value: str) -> str:
         """Reject empty connection fields before a driver call is made."""
 
-        rendered = value.strip()
-        if not rendered:
-            raise ValueError("Oracle MySQL connection fields must not be empty")
-        return rendered
+        return _validate_non_empty_public_text(value, field="Oracle MySQL connection field")
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, value: str | None) -> str | None:
+        """Reject blank inline passwords and log-spoofing control characters."""
+
+        return _validate_optional_secret_value(value, field="sink.password")
+
+    @field_validator("password_env")
+    @classmethod
+    def validate_password_env(cls, value: str | None) -> str | None:
+        """Validate the password environment variable name before startup."""
+
+        return _validate_optional_env_name(value, field="sink.password_env")
+
+    @field_validator("ssl_ca", "ssl_cert", "ssl_key")
+    @classmethod
+    def validate_tls_path(cls, value: str | None, info: object) -> str | None:
+        """Reject empty TLS path strings and control characters."""
+
+        field_name = getattr(info, "field_name", "TLS path")
+        return _validate_optional_path(value, field=f"sink.{field_name}")
+
+    @field_validator("pool_name")
+    @classmethod
+    def validate_pool_name(cls, value: str | None) -> str | None:
+        """Validate optional Oracle MySQL Connector/Python pool names."""
+
+        return _validate_optional_pool_name(value, field="sink.pool_name")
 
     @model_validator(mode="after")
     def validate_secret_and_mode(self) -> MySqlSinkConfig:
         """Validate secret sources, TLS options, and mode-specific fields."""
 
-        if not self.password and not self.password_env:
+        if self.password is None and self.password_env is None:
             raise ValueError("either sink.password or sink.password_env must be configured")
+        if self.password is not None and self.password_env is not None:
+            raise ValueError("sink.password and sink.password_env cannot both be configured")
         if self.ssl_disabled and any((self.ssl_ca, self.ssl_cert, self.ssl_key)):
             raise ValueError("sink.ssl_disabled cannot be combined with TLS certificate options")
         if self.ssl_cert and not self.ssl_key:
@@ -195,4 +301,10 @@ class MySqlSinkConfig(BaseModel):
         password = os.getenv(self.password_env)
         if password is None:
             raise ConfigurationError(f"environment variable {self.password_env} is not set")
+        if not password.strip():
+            raise ConfigurationError(f"environment variable {self.password_env} must not be empty")
+        if _contains_control_characters(password):
+            raise ConfigurationError(
+                f"environment variable {self.password_env} must not contain control characters"
+            )
         return password

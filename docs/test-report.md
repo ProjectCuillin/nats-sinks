@@ -14,21 +14,18 @@ generated database passwords, or full raw logs from live systems.
 | Field | Value |
 | --- | --- |
 | Overall result | Pass |
-| Report generated | 2026-05-25 issue `#101` Oracle MySQL sink validation |
-| Project version | `0.4.0` post-release development for `v0.4.1` |
+| Report generated | 2026-05-25 release `v0.4.1` readiness validation |
+| Project version | `0.4.1` release candidate |
 | Python version | 3.12.4 |
-| Git revision checked | Branch `issue-101-oracle-mysql-sink`, base revision `f064e34` with local issue changes |
-| Live NATS details | Not used by the Oracle MySQL sink container test |
-| Live Oracle Database details | Not used by the Oracle MySQL sink container test |
+| Git revision checked | Branch `release-v0.4.1` with local release-candidate changes |
+| Live NATS details | Local disposable NATS server only; ports and process details redacted |
+| Live Oracle Database details | Environment-gated test table only; connection details redacted |
 | Live Oracle MySQL details | Local short-lived Docker container only; generated credentials, ports, container names, and container identifiers redacted |
 
-This refresh covered issue `#101`, adding a first-party Oracle MySQL sink to
-the same extensible sink framework used by the Oracle Database and file sinks.
-The implementation adds safe configuration validation, commit-before-success
-delivery semantics, optional table creation, idempotent write modes,
-subject-to-table routing, envelope-compatible payload handling, mission
-metadata support, metrics, documentation, Python import support, CLI registry
-support, and a repeatable local Oracle MySQL container end-to-end test.
+This refresh covered the full `v0.4.1` release candidate. It validated the core
+runtime, Oracle Database sink, Oracle MySQL sink, file sink, spool support,
+observability connectors, Docker assets, documentation builds, package build,
+SBOM generation, checksum generation, and release issue hygiene.
 
 ```mermaid
 flowchart LR
@@ -45,13 +42,13 @@ flowchart LR
 
 | Check | Result |
 | --- | --- |
-| Ruff format | Pass, `211 files already formatted` |
+| Ruff format | Pass, `212 files already formatted` |
 | Ruff lint | Pass |
 | Mypy | Pass, no issues in `85` source files |
-| Version metadata consistency | Pass for `0.4.0` |
+| Version metadata consistency | Pass for `0.4.1` |
 | Dependency manifests | Pass, manifest files up to date |
-| Backlog item validation | Pass, `141` backlog items validated |
-| Bug report validation | Pass, `67` bug report items validated |
+| Backlog item validation | Pass, `142` backlog items validated |
+| Bug report validation | Pass, `84` bug report items validated |
 | PyPI-facing Markdown links | Pass |
 | Secret scan | Pass, no high-confidence secret material found |
 | Bandit | Pass with reviewed `nosec` annotations for validated SQL identifier builders |
@@ -64,20 +61,21 @@ flowchart LR
 
 | Test Area | Command | Result |
 | --- | --- | --- |
-| Oracle MySQL sink focused unit tests | `python -m pytest tests/unit/test_mysql_sql.py tests/unit/test_mysql_mapping.py tests/unit/test_mysql_sink_contract.py tests/unit/test_bug_249_oracle_mysql_timeout.py tests/unit/test_oracle_mysql_test_container.py tests/unit/test_cli.py tests/unit/test_public_api.py tests/unit/test_sink_certification.py -q` | Pass, `64 passed` |
-| Oracle MySQL timeout regression | `python -m pytest tests/unit/test_bug_249_oracle_mysql_timeout.py tests/unit/test_mysql_sink_contract.py -q` | Pass, `12 passed` |
-| Oracle MySQL SQL annotation regression | `python -m pytest tests/unit/test_bug_250_mysql_sql_bandit_annotations.py tests/unit/test_mysql_sql.py -q` | Pass, `11 passed` |
+| Oracle MySQL sink hardening and regression tests | `scripts/check.sh` | Pass as part of the full unit suite, including the Oracle MySQL bug-hunt hardening tests |
 | Oracle MySQL container end-to-end test | `python scripts/run-mysql-sink-e2e.py` | Pass |
-| Main repository test suite | `scripts/check.sh` | Pass, `877 passed, 10 skipped` |
+| Local Docker/NATS/file-sink smoke test | `python scripts/run-docker-local-smoke.py` | Pass |
+| Oracle MySQL test container smoke test | `python scripts/run-oracle-mysql-container-smoke.py` | Pass |
+| WebSocket NATS end-to-end test | `scripts/run-websocket-e2e.sh` | Pass, `16` messages persisted |
+| Oracle Database live end-to-end test | `scripts/run-oracle-e2e.sh --table NATS_SINKS_E2E_EVENTS_V2 --message-count 64 --batch-size 64` | Pass, `1 passed` |
+| Main repository test suite | `scripts/check.sh` | Pass, `896 passed, 10 skipped` |
 | Encryption and sink contract subset | `scripts/check.sh` | Pass, `123 passed` |
 | Sink capability subset | `scripts/check.sh` | Pass, `105 passed` |
 | Documentation builds | `scripts/check.sh` | Pass for Read the Docs and GitHub Pages MkDocs builds |
 
 The skipped tests are the existing environment-gated live NATS and Oracle
-Database integration tests. They require explicit local services or environment
-flags and were not required for issue `#101`. The Oracle MySQL sink was tested
-through a short-lived local Oracle MySQL container created by the repository
-test runner.
+Database integration tests. Where release validation required live coverage,
+the dedicated local e2e scripts were run explicitly and their sensitive
+connection details were excluded from this report.
 
 ## Oracle MySQL Sink Evidence
 
@@ -114,18 +112,14 @@ container or volume remained active.
 
 ## Issues Found During Validation
 
-Two issues were found during implementation testing and handled through the
-repository bug workflow:
+The Oracle MySQL release hardening pass raised and repaired the managed GitHub
+bug reports `#253` through `#269`. The fixes cover configuration fail-closed
+behavior, identifier validation, TLS path validation, idempotency column
+validation, deterministic DDL naming, and cleanup-error handling. Each bug has
+public issue evidence, release labels, completed status, and regression coverage.
 
-- issue `#249`: the Oracle MySQL sink passed a fractional connection timeout to
-  the database driver; the sink now normalizes configured positive seconds to an
-  integer driver timeout while preserving user-facing configuration precision;
-- issue `#250`: one SQL builder suppression comment was not on the exact line
-  reported by Bandit; the annotation now sits on the validated SQL construction
-  line and a regression test protects the placement.
-
-Both bugs have dedicated regression tests and are marked for inclusion in
-`v0.4.1`.
+Issue `#224` was also updated with close-out evidence for the local Docker image
+and NATS Compose stack after the local Docker smoke test passed.
 
 ## Documentation Evidence
 

@@ -1,0 +1,28 @@
+{
+  "id": "oracle-mysql-duplicate-idempotency-column",
+  "title": "[Bug]: Oracle MySQL SQL builder accepts duplicate idempotency key columns",
+  "area": "Oracle MySQL sink",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": ["mysql", "hardening", "testing"],
+  "summary": "The Oracle MySQL SQL builder accepted duplicate idempotency key column entries.",
+  "observed": "A key column list could contain the same mapped column more than once.",
+  "expected": "Idempotency key columns must be unique.",
+  "reproduction": "Run the focused Oracle MySQL hardening regression test for duplicate idempotency key columns.",
+  "failing_test": "tests/unit/test_bug_hunt_mysql_sink_hardening.py::test_mysql_sql_rejects_duplicate_idempotency_key_columns",
+  "impact": "Duplicate key entries make the idempotency policy harder to review and can hide copy-and-paste mistakes.",
+  "delivery_semantics": "The fix preserves existing delivery behavior while rejecting ambiguous idempotency configuration.",
+  "security": "Explicit duplicate rejection supports auditable replay and duplicate-handling policy.",
+  "acceptance": [
+    "Oracle MySQL idempotency key columns reject duplicates.",
+    "Valid unique key column lists remain accepted.",
+    "The focused regression test passes."
+  ],
+  "tests": "Run the focused Oracle MySQL hardening regression test and the Oracle MySQL SQL tests.",
+  "documentation": "Document that idempotency columns must be unique.",
+  "closeout": "Close only after the release containing the SQL validation fix is published.",
+  "relationships": {
+    "related": ["#101"]
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "id": "oracle-mysql-unknown-idempotency-column",
+  "title": "[Bug]: Oracle MySQL SQL builder accepts unknown idempotency key columns",
+  "area": "Oracle MySQL sink",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": ["mysql", "hardening", "testing"],
+  "summary": "The Oracle MySQL SQL builder accepted idempotency key columns that were not present in the configured column mapping.",
+  "observed": "A write policy could declare a key column that the generated insert column list did not contain.",
+  "expected": "Idempotency key columns must reference columns in the active Oracle MySQL column mapping.",
+  "reproduction": "Run the focused Oracle MySQL hardening regression test for unknown idempotency key columns.",
+  "failing_test": "tests/unit/test_bug_hunt_mysql_sink_hardening.py::test_mysql_sql_rejects_unknown_idempotency_key_columns",
+  "impact": "Duplicate detection can be misconfigured silently until runtime or schema validation fails.",
+  "delivery_semantics": "The fix protects idempotency semantics by rejecting invalid key configuration before writes start.",
+  "security": "Clear idempotency validation prevents ambiguous replay handling in operational pipelines.",
+  "acceptance": [
+    "Oracle MySQL idempotency key columns must exist in the configured column mapping.",
+    "Valid default stream sequence keys remain accepted.",
+    "The focused regression test passes."
+  ],
+  "tests": "Run the focused Oracle MySQL hardening regression test and the Oracle MySQL SQL tests.",
+  "documentation": "Document that idempotency key columns must reference mapped columns.",
+  "closeout": "Close only after the release containing the SQL validation fix is published.",
+  "relationships": {
+    "related": ["#101"]
+  }
+}

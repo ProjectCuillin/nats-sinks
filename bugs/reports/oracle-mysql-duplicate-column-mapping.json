@@ -1,0 +1,28 @@
+{
+  "id": "oracle-mysql-duplicate-column-mapping",
+  "title": "[Bug]: Oracle MySQL SQL builder accepts duplicate column mappings",
+  "area": "Oracle MySQL sink",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": ["mysql", "hardening", "testing"],
+  "summary": "The Oracle MySQL SQL builder allowed multiple normalized fields to map to the same destination column.",
+  "observed": "A duplicate mapping could generate SQL with repeated column names.",
+  "expected": "Column mapping validation must reject duplicate destination columns.",
+  "reproduction": "Run the focused Oracle MySQL hardening regression test for duplicate column mappings.",
+  "failing_test": "tests/unit/test_bug_hunt_mysql_sink_hardening.py::test_mysql_sql_rejects_duplicate_column_mapping",
+  "impact": "Repeated destination columns can corrupt operator expectations and produce database-specific behavior.",
+  "delivery_semantics": "The fix rejects invalid SQL generation before runtime delivery work starts.",
+  "security": "Explicit mapping validation keeps data-to-column routing predictable and auditable.",
+  "acceptance": [
+    "Oracle MySQL column mappings reject duplicate destination columns.",
+    "The default column mapping remains valid.",
+    "The focused regression test passes."
+  ],
+  "tests": "Run the focused Oracle MySQL hardening regression test and the Oracle MySQL SQL tests.",
+  "documentation": "Document that mapped columns must be unique.",
+  "closeout": "Close only after the release containing the SQL validation fix is published.",
+  "relationships": {
+    "related": ["#101"]
+  }
+}

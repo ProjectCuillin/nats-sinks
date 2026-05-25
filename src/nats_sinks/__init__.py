@@ -274,4 +274,4 @@ __all__ = [
     "write_metrics_snapshot",
 ]
 
-__version__ = "0.4.0"
+__version__ = "0.4.1"

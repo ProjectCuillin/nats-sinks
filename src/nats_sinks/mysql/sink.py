@@ -256,10 +256,11 @@ class MySqlSink:
         except ImportError as exc:
             raise ConfigurationError("install nats-sinks[mysql] to use MySqlSink") from exc
 
+        pool_options = self._pool_options()
         try:
             self._pool = await asyncio.to_thread(
                 self._pooling.MySQLConnectionPool,
-                **self._pool_options(),
+                **pool_options,
             )
         except Exception as exc:
             raise self._translate_exception(
@@ -268,7 +269,11 @@ class MySqlSink:
             ) from exc
 
         if self.config.auto_create:
-            await self.ensure_schema()
+            try:
+                await self.ensure_schema()
+            except Exception:
+                self._pool = None
+                raise
 
     async def stop(self) -> None:
         """Release the Oracle MySQL pool reference.
@@ -665,13 +670,19 @@ class MySqlSink:
     def _close_cursor(cursor: Any) -> None:
         close = getattr(cursor, "close", None)
         if callable(close):
-            close()
+            try:
+                close()
+            except Exception:  # pragma: no cover - cleanup failure is log-only.
+                LOGGER.warning("Oracle MySQL cursor close failed", exc_info=True)
 
     @staticmethod
     def _close_connection(connection: Any) -> None:
         close = getattr(connection, "close", None)
         if callable(close):
-            close()
+            try:
+                close()
+            except Exception:  # pragma: no cover - cleanup failure is log-only.
+                LOGGER.warning("Oracle MySQL connection close failed", exc_info=True)
 
     def _translate_exception(
         self, exc: BaseException, context: str

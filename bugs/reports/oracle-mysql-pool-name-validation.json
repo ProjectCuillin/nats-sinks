@@ -1,0 +1,28 @@
+{
+  "id": "oracle-mysql-pool-name-validation",
+  "title": "[Bug]: Oracle MySQL sink accepts malformed pool names",
+  "area": "Oracle MySQL sink",
+  "severity": "low",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.1",
+  "labels": ["mysql", "hardening", "testing"],
+  "summary": "The Oracle MySQL sink did not validate configured connection pool names.",
+  "observed": "A pool name with spaces could be accepted and then delegated to Oracle MySQL Connector/Python.",
+  "expected": "Pool names must use a small allow-listed character set.",
+  "reproduction": "Run the focused Oracle MySQL hardening regression test for pool name validation.",
+  "failing_test": "tests/unit/test_bug_hunt_mysql_sink_hardening.py::test_mysql_config_rejects_invalid_pool_name",
+  "impact": "Invalid pool names can produce unclear driver errors and inconsistent local behavior.",
+  "delivery_semantics": "The fix is startup validation only and does not alter write behavior.",
+  "security": "Allow-listing operational identifiers keeps configuration surfaces simple and reviewable.",
+  "acceptance": [
+    "Oracle MySQL pool names reject spaces and unsupported characters.",
+    "Simple alphanumeric pool names with dots, underscores, colons, or hyphens remain accepted.",
+    "The focused regression test passes."
+  ],
+  "tests": "Run the focused Oracle MySQL hardening regression test and the Oracle MySQL unit test suite.",
+  "documentation": "Document the supported pool_name format.",
+  "closeout": "Close only after the release containing the validation fix is published.",
+  "relationships": {
+    "related": ["#101"]
+  }
+}

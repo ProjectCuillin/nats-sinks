@@ -12,6 +12,18 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Added
 
+- No unreleased changes yet.
+
+## [0.4.1] - 2026-05-25
+
+### Added
+
+- Added maintainer release guidance and a managed backlog item for a future
+  local-only post-release PyPI artifact validation harness. The planned harness
+  will install the latest released `nats-sinks` package from PyPI inside a
+  short-lived container, verify that the local checkout is not being imported,
+  run meaningful artifact smoke checks, and require GitHub bug reports for any
+  findings before fixes start.
 - Added the first-party Oracle MySQL sink for issue #101, including
   `nats_sinks.mysql.MySqlSink`, optional `nats-sinks[mysql]` dependency
   metadata, strict identifier validation, bound SQL values, TLS CA/client
@@ -307,6 +319,15 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Fixed
 
+- Fixed a set of Oracle MySQL sink hardening gaps found during focused
+  bug-hunt testing: conflicting password sources, blank password values,
+  malformed password environment names, empty resolved password variables,
+  connection-field control characters, empty TLS path strings, invalid pool
+  names, duplicate or dotted column mappings, unknown or duplicate idempotency
+  key columns, over-qualified table identifiers, max-length table DDL
+  constraint naming, startup error classification for missing secrets,
+  connection-pool cleanup after schema creation failure, and cleanup errors
+  masking committed writes or permanent schema errors.
 - Fixed Oracle MySQL sink connection-pool startup by normalizing positive
   fractional `connection_timeout` values to integer seconds before passing
   options to Oracle MySQL Connector/Python, with a regression test and

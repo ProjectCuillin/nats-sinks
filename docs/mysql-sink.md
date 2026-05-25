@@ -97,16 +97,16 @@ controlled first-run setup.
 | Field | Required | Default | Valid values | Description |
 | --- | --- | --- | --- | --- |
 | `type` | yes | `mysql` | `mysql` | Selects the Oracle MySQL sink. |
-| `host` | no | `127.0.0.1` | Non-empty hostname or IP literal. | Oracle MySQL server host. Do not place credentials in this field. |
+| `host` | no | `127.0.0.1` | Non-empty hostname or IP literal without control characters. | Oracle MySQL server host. Do not place credentials in this field. |
 | `port` | no | `3306` | `1` to `65535`. | Oracle MySQL TCP port. |
-| `database` | yes | none | Non-empty database name. | Database/schema used for sink tables. |
-| `user` | yes | none | Non-empty user name. | Runtime database account. Use least privilege. |
-| `password` | no | none | String. | Inline password for tests only. Prefer `password_env`. |
-| `password_env` | no | none | Environment variable name. | Runtime environment variable that contains the password. Required when `password` is not set. |
+| `database` | yes | none | Non-empty database name without control characters. | Database/schema used for sink tables. |
+| `user` | yes | none | Non-empty user name without control characters. | Runtime database account. Use least privilege. |
+| `password` | no | none | Non-empty string without control characters. | Inline password for tests only. Prefer `password_env`. Cannot be combined with `password_env`. |
+| `password_env` | no | none | Uppercase environment variable name using letters, numbers, and underscores. | Runtime environment variable that contains the password. Required when `password` is not set. Cannot be combined with `password`. The resolved value must be non-empty. |
 | `connection_timeout` | no | `10.0` | Positive seconds. | Timeout passed to Oracle MySQL Connector/Python. |
-| `ssl_ca` | no | none | Local file path. | CA certificate used to verify Oracle MySQL TLS certificates, including self-signed lab CAs. |
-| `ssl_cert` | no | none | Local file path. | Optional client certificate for mutual TLS. Requires `ssl_key`. |
-| `ssl_key` | no | none | Local file path. | Optional client private key for mutual TLS. Requires `ssl_cert`. |
+| `ssl_ca` | no | none | Non-empty local file path without padding or control characters. | CA certificate used to verify Oracle MySQL TLS certificates, including self-signed lab CAs. |
+| `ssl_cert` | no | none | Non-empty local file path without padding or control characters. | Optional client certificate for mutual TLS. Requires `ssl_key`. |
+| `ssl_key` | no | none | Non-empty local file path without padding or control characters. | Optional client private key for mutual TLS. Requires `ssl_cert`. |
 | `ssl_verify_identity` | no | `true` | `true` or `false`. | Enables hostname identity verification when TLS trust material is configured. Keep enabled in production. |
 | `ssl_disabled` | no | `false` | `true` or `false`. | Disables Oracle MySQL TLS options. Cannot be combined with certificate fields. |
 | `table` | no | `NATS_SINK_EVENTS` | Strict Oracle MySQL identifier or `database.table`. | Default destination table. |
@@ -115,12 +115,19 @@ controlled first-run setup.
 | `upsert_update_columns` | no | `null` | `null`, `[]`, or list of mapped column names. | Controls which non-key columns are updated when an `upsert` sees an existing key. `null` updates all non-key columns. `[]` leaves existing rows unchanged. |
 | `auto_create` | no | `false` | `true` or `false`. | Creates recommended tables at startup when explicitly enabled. |
 | `payload_mode` | no | `json_or_envelope` | `json_or_envelope`, `json_only`, `text_envelope`, `bytes_envelope`. | Controls how message bodies are normalized before storage in JSON columns. |
-| `payload_column` | no | none | Strict identifier. | Legacy shortcut for overriding `columns.payload`. |
-| `headers_column` | no | none | Strict identifier. | Legacy shortcut for overriding `columns.headers`. |
-| `columns` | no | Default mapping. | Column mapping object. | Maps normalized row fields to Oracle MySQL columns. |
-| `idempotency` | no | Stream sequence. | Idempotency object. | Defines duplicate-detection strategy and key columns. |
-| `pool_name` | no | Driver generated. | String accepted by connector. | Optional Oracle MySQL Connector/Python pool name. |
+| `payload_column` | no | none | Single strict column identifier. | Legacy shortcut for overriding `columns.payload`. |
+| `headers_column` | no | none | Single strict column identifier. | Legacy shortcut for overriding `columns.headers`. |
+| `columns` | no | Default mapping. | Column mapping object with unique single-column identifiers. | Maps normalized row fields to Oracle MySQL columns. Each mapped column must be unique so row values cannot be written to the wrong field. |
+| `idempotency` | no | Stream sequence. | Idempotency object whose key columns exist in `columns`. | Defines duplicate-detection strategy and key columns. Key columns cannot be duplicated. |
+| `pool_name` | no | Driver generated. | Starts with a letter; then letters, numbers, dots, underscores, colons, or hyphens. | Optional Oracle MySQL Connector/Python pool name. |
 | `pool_size` | no | `4` | `1` to `32`. | Connection pool size. |
+
+Oracle MySQL table identifiers may be either `table` or `database.table`.
+Column identifiers must be a single column name. The sink intentionally rejects
+dotted column names, duplicate mapped columns, duplicate idempotency columns,
+and idempotency columns that are not present in the configured mapping. This
+keeps generated SQL reviewable and prevents configuration mistakes from
+silently changing delivery semantics.
 
 ## Write Modes
 
@@ -202,6 +209,12 @@ Other strategies are available when publishers provide stable identifiers:
 For `upsert` and `insert_ignore`, the configured key columns must have a
 primary key or unique constraint in Oracle MySQL. Without that constraint,
 Oracle MySQL has no duplicate boundary to enforce.
+
+The key columns must reference mapped Oracle MySQL columns exactly. For
+example, if the mapping stores the NATS subject in `SUBJECT`, `SUBJECT` is a
+valid idempotency column and `EVENTS.SUBJECT` is not. This mirrors how bind
+parameters work: values are parameterized, while table and column identifiers
+are validated by allow list before SQL text is generated.
 
 ## Subject-To-Table Routing
 

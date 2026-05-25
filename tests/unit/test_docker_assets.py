@@ -102,6 +102,46 @@ def test_dockerignore_excludes_private_and_generated_paths() -> None:
     assert "*.p12" in ignored
 
 
+def test_container_image_artifacts_are_never_version_controlled() -> None:
+    """Generated image archives and OCI layouts must stay outside Git.
+
+    Dockerfiles, Compose files, and scripts are source artifacts. Built
+    containers are deployment artifacts and can contain operating-system layers,
+    dependency caches, generated state, or sensitive runtime files. The project
+    therefore ignores common image export formats both for Git and Docker build
+    contexts.
+    """
+
+    git_ignored = {
+        line.strip()
+        for line in (REPO_ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.startswith("#")
+    }
+    docker_ignored = {
+        line.strip()
+        for line in (REPO_ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.startswith("#")
+    }
+    required_git_patterns = {
+        "*.docker.tar",
+        "*.image.tar",
+        "*.oci.tar",
+        "*.container.tar",
+        "container-exports/",
+        "container-images/",
+        "docker-exports/",
+        "docker-images/",
+        "image-archives/",
+        "oci-layout/",
+        "oci-layouts/",
+        "oci-images/",
+    }
+    required_docker_patterns = {pattern.rstrip("/") for pattern in required_git_patterns}
+
+    assert required_git_patterns <= git_ignored
+    assert required_docker_patterns <= docker_ignored
+
+
 def test_docker_compose_stack_declares_nats_and_sink_services() -> None:
     """The local Compose example should connect the image to a NATS service."""
 
