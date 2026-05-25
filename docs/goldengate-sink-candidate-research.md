@@ -66,7 +66,7 @@ flowchart TD
 | OCI Object Storage / Oracle Object Storage | `oci-object-storage-sink` |
 | OCI Streaming / OCI Streaming with Apache Kafka | `oci-streaming-sink` and `kafka-sink` |
 | Oracle NoSQL | `oracle-nosql-database-sink` |
-| Oracle MySQL / HeatWave MySQL | `oracle-mysql-sink` |
+| Oracle MySQL / Oracle MySQL HeatWave | `oracle-mysql-sink` |
 | Oracle Berkeley DB | `oracle-berkeley-db-sink` |
 | Apache Kafka / Confluent Kafka | `kafka-sink` |
 | Amazon S3 | `s3-sink` |
@@ -139,8 +139,9 @@ Some GoldenGate entries are important but do not need a new issue at this time:
   OCI Streaming with Apache Kafka, and Pub/Sub Kafka compatibility mode are
   grouped under `managed-kafka-compatibility-profiles` plus the existing
   `kafka-sink`.
-- Amazon Aurora MySQL, Amazon RDS for MySQL, Azure Database for MySQL, Google
-  Cloud SQL for MySQL, and HeatWave variants are represented by
+- Amazon Aurora Oracle MySQL-compatible, Amazon RDS for Oracle MySQL-compatible,
+  Azure Database for Oracle MySQL-compatible, Google Cloud SQL for Oracle
+  MySQL-compatible, and Oracle MySQL HeatWave variants are represented by
   `oracle-mysql-sink` and `mariadb-sink` where appropriate.
 - PostgreSQL-compatible cloud variants are represented by `postgres-sink`,
   `oci-postgresql-sink-profile`, `azure-cosmosdb-sink-profiles`, and

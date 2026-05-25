@@ -174,6 +174,43 @@ The test creates a unique child directory under `NATS_SINKS_FILE_E2E_DIRECTORY`
 for each run. Keep that directory under `.local/` or another ignored location
 when retaining files.
 
+## Oracle MySQL Test Container
+
+The repository includes a local Oracle MySQL test database container for future
+Oracle MySQL sink development. This asset is intentionally separate from the
+production Oracle Database sink and does not implement an Oracle MySQL sink.
+It provides a clean local database backend that future sink tests can use for
+transactions, schema validation, duplicate handling, and throughput work.
+
+Run the deterministic asset tests without Docker:
+
+```bash
+python -m pytest tests/unit/test_oracle_mysql_test_container.py -q
+```
+
+Run the optional Docker smoke test when a local Docker daemon is available:
+
+```bash
+python scripts/run-oracle-mysql-container-smoke.py
+```
+
+Expected sanitized output:
+
+```text
+Oracle MySQL container smoke test passed with one verified test record.
+```
+
+The smoke test builds the Oracle Linux 9 slim based Oracle MySQL image, starts
+a fresh short-lived container with generated random credentials, waits for
+readiness, creates a test table, inserts and reads one row, and removes the
+container, Docker volume, and generated secret files by default. Use
+`--preserve-artifacts` only for local debugging and clean up preserved files
+under `.local/oracle-mysql-test/` afterward.
+
+See [Oracle MySQL Test Container](oracle-mysql-test-container.md) for the
+complete security model, runtime sequence, capability exception, and
+troubleshooting guidance.
+
 ## Local WebSocket End-To-End Test
 
 WebSocket transport has two layers of testing:

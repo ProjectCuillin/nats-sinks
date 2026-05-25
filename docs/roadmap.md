@@ -156,9 +156,12 @@
 - Native Oracle Cloud Infrastructure Object Storage sink design with
   deterministic object keys, OCI identity support, checksums, multipart upload,
   and least-privilege bucket guidance.
-- Oracle MySQL sink design for MySQL and MySQL HeatWave deployments, including
-  Connector/Python evaluation, transaction commit timing, idempotent upserts,
-  TLS verification, and least-privilege account guidance.
+- Oracle MySQL sink design for Oracle MySQL and Oracle MySQL HeatWave
+  deployments, including Oracle MySQL Connector/Python evaluation, transaction
+  commit timing, idempotent upserts, TLS verification, and least-privilege
+  account guidance. A local Oracle MySQL test database container is now
+  available as development infrastructure for this future sink, but the sink
+  itself remains backlog work.
 - Oracle Berkeley DB, Oracle NoSQL Database, and OCI Streaming sink evaluations
   as first-party Oracle-family connector candidates.
 - GoldenGate-inspired sink candidate tracking for additional Oracle-family

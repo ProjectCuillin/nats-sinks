@@ -179,6 +179,11 @@ used immediately:
   developer smoke testing with a temporary NATS JetStream service and the file
   sink. See
   [Local Docker Stack](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/docker.md).
+- A local Oracle MySQL test database container for future Oracle MySQL sink
+  development, based on Oracle Linux 9 slim and Oracle MySQL 9.7.0 LTS, with
+  random per-run credentials, loopback-only exposure, cleanup by default, and
+  deterministic asset tests. See
+  [Oracle MySQL Test Container](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/oracle-mysql-test-container.md).
 - A production container hardening baseline for the Oracle Linux slim image,
   including non-root UID/GID `10001`, read-only-root-compatible runtime
   guidance, OCI image labels, writable-path documentation, SBOM and
@@ -1107,7 +1112,8 @@ Phase 2:
   Oracle Berkeley DB, Oracle NoSQL Database, and OCI Streaming.
 - High-priority Palantir Foundry and Palantir Gotham connector evaluations
   with local contract mocks before any live certification claim.
-- Oracle MySQL sink design for MySQL and MySQL HeatWave deployments.
+- Oracle MySQL sink design for Oracle MySQL and Oracle MySQL HeatWave
+  deployments.
 - HTTP sink.
 - S3 sink design with deterministic object keys.
 - Native OCI Object Storage sink design with deterministic object keys,
