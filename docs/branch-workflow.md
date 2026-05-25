@@ -373,6 +373,12 @@ The workflow requires a repository secret named `NATS_SINKS_PR_BOT_TOKEN`. If
 the secret is not configured, the workflow exits successfully with a notice and
 does not create a pull request.
 
+The release pull request gate workflows are intentionally narrower than normal
+CI. `Pull Request Governance` and `Dependency Review` run when a pull request
+to `main` is marked ready, reopened, or updated. That keeps ordinary work
+branch pushes quiet while ensuring the final release pull request always has
+fresh required checks on its latest commit.
+
 ## Main Branch Protection
 
 GitHub branch protection is the hard enforcement layer. The repository should

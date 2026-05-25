@@ -66,6 +66,10 @@ checks, documentation, changelog updates, and GitHub issue evidence are
 complete. Merge the release branch into `main` only when the maintainer
 explicitly decides to release. Branch pushes intentionally do not start the CI,
 docs, CodeQL, dependency-review, backlog-sync, or bug-sync workflows.
+Release pull requests into `main` are the exception: the lightweight pull
+request governance and dependency review checks run when the release PR is
+marked ready, reopened, or updated so branch protection can verify the latest
+release commit.
 
 Create or refresh the pull request locally when the branch is ready for review:
 

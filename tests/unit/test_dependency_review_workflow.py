@@ -15,6 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "dependency-review.yml"
+PR_GOVERNANCE_WORKFLOW = ROOT / ".github" / "workflows" / "pr-governance.yml"
 
 
 def test_dependency_review_action_uses_node24_compatible_release() -> None:
@@ -34,3 +35,13 @@ def test_dependency_review_workflow_keeps_least_privilege_permissions() -> None:
 
     assert "contents: read" in workflow
     assert "pull-requests: read" in workflow
+
+
+def test_release_pr_gate_workflows_run_on_release_branch_updates() -> None:
+    """Release PR checks must refresh when the release branch gets a new commit."""
+
+    dependency_review = WORKFLOW.read_text(encoding="utf-8")
+    governance = PR_GOVERNANCE_WORKFLOW.read_text(encoding="utf-8")
+
+    assert "synchronize" in dependency_review
+    assert "synchronize" in governance

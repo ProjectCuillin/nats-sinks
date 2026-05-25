@@ -28,6 +28,9 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   requests remain gated by PR governance, dependency review, resolved
   conversations, and force-push/deletion protections without requiring
   impossible self-approval.
+- Updated release pull request gate workflows to run on release PR branch
+  updates, keeping ordinary branch pushes quiet while allowing branch
+  protection to see fresh required checks on the latest release commit.
 - Added the first-party Oracle MySQL sink for issue #101, including
   `nats_sinks.mysql.MySqlSink`, optional `nats-sinks[mysql]` dependency
   metadata, strict identifier validation, bound SQL values, TLS CA/client
