@@ -10,9 +10,11 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ## [Unreleased]
 
-### Added
+### Fixed
 
-- No unreleased changes yet.
+- Fixed GitHub CI compatibility with Ruff `PLW0108` by removing an unnecessary
+  connector entry-point sort lambda while preserving deterministic connector
+  loading behavior.
 
 ## [0.4.1] - 2026-05-25
 
