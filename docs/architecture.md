@@ -261,6 +261,14 @@ delivery can use the core ACK-gate helper to wait for every required target and
 to bound optional side copies without moving delivery semantics into
 destination modules.
 
+The route selector and ACK-gate helper are now covered by reusable fan-out
+certification tests. Those tests use synthetic route policies and operation
+plans to prove that a required target failure blocks ACK, optional targets are
+bounded, no-route behavior is explicit, and the documented NATO SECRET and
+NATO UNCLASS examples select the expected logical sink names. Future fan-out
+execution code must keep using that certification layer alongside
+destination-specific sink certification.
+
 Payload encryption is also part of the core, not a sink-specific responsibility.
 When enabled, the runner encrypts `NatsEnvelope.data` and passes a copied
 envelope to the sink. Metadata remains clear. This lets all sinks store the

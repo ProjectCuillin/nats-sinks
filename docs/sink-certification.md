@@ -147,6 +147,66 @@ Database and Oracle MySQL this can be a fake connection that records
 `commit()`. For the file sink this can be the presence and content of the
 atomically placed output file.
 
+## Fan-Out Routing Certification
+
+Routing and fan-out have a separate certification path because route selection
+is not the same thing as destination durability. The helper module
+`nats_sinks.testing` includes deterministic fan-out fixtures that prove:
+
+- one envelope selects the intended route and logical sink targets;
+- one-to-many fan-out de-duplicates targets in policy order;
+- ACK remains blocked until every required selected target succeeds;
+- optional targets use explicit, bounded wait and timeout behavior;
+- no-route policies are explicit (`reject`, `ignore`, or `default_route`);
+- logs and public evidence do not include payloads or destination secrets.
+
+Use these helpers when adding a new sink, changing routing policy, or building
+future fan-out execution code:
+
+```python
+from nats_sinks.testing import (
+    FanoutAckProbe,
+    FanoutCertificationCase,
+    FanoutOperationPlan,
+    certify_fanout_ack_order,
+    fanout_certification_envelope,
+    fanout_certification_policy,
+)
+
+
+async def test_required_target_blocks_ack_until_commit() -> None:
+    probe = FanoutAckProbe()
+    case = FanoutCertificationCase(
+        name="secret-route",
+        envelope=fanout_certification_envelope(),
+        policy=fanout_certification_policy(),
+        expected_routes=("nato_secret_sensor_audit",),
+        expected_targets=("oracle_secret", "file_audit"),
+    )
+
+    result = await certify_fanout_ack_order(
+        case,
+        (
+            FanoutOperationPlan("oracle_secret"),
+            FanoutOperationPlan("file_audit"),
+        ),
+        ack=probe.ack,
+    )
+
+    assert probe.called is True
+    assert result.ack_gate.required_committed == ("oracle_secret",)
+```
+
+The built-in fan-out policy is intentionally synthetic. It uses an urgent
+NATO SECRET sensor audit example that selects `oracle_secret` and optional
+`file_audit`, and a NATO UNCLASS variant that selects only `oracle_unclass`.
+Those names are public examples, not deployment guidance or real operational
+identifiers.
+
+Future fan-out execution code must continue to use these helpers alongside
+destination-specific sink certification. A route can be correct and still be
+unsafe if the selected sink returns success before its durable boundary.
+
 ## Built-In Sink Certification Status
 
 | Sink | Certification coverage |

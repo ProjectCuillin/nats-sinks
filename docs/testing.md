@@ -44,10 +44,43 @@ Unit tests cover:
 - AES-256-GCM and AES-256-CCM payload encryption,
 - payload decryption verification,
 - commit-then-ack ordering,
+- fan-out route selection and ACK-gate certification,
 - no ACK when payload encryption fails before sink delivery,
 - DLQ-before-ACK ordering,
 - no ACK on sink failure,
 - no payload logging by default.
+
+## Routing And Fan-Out Certification
+
+Routing and fan-out tests remain deterministic and local. They do not connect
+to NATS, Oracle Database, Oracle MySQL, or any other backend. The focused suite
+uses synthetic `NatsEnvelope` instances, route policies, and in-memory fan-out
+operation plans to prove that route selection and ACK gating behave correctly
+before future sink execution code is allowed to rely on them.
+
+Run the focused suite with:
+
+```bash
+pytest tests/unit/test_fanout_certification.py
+```
+
+The suite covers:
+
+- one-to-one routing to a single logical sink target;
+- one-to-many routing to required and optional targets;
+- required target failure after partial success, proving no synthetic ACK is
+  recorded;
+- optional target timeout, proving bounded wait behavior and payload-free logs;
+- no-route actions for `reject`, `ignore`, and `default_route`;
+- matching by subject, priority, classification, `labels_all`, `labels_any`,
+  `labels_none`, approved non-secret headers, and combined match sets;
+- `nats-sink validate` coverage for the documented named multi-sink example
+  and invalid route, sink, match, optional wait, and redaction scenarios.
+
+The same suite is part of `scripts/check-sinks.sh` and therefore part of the
+deterministic release readiness path. Live NATS-to-destination fan-out tests
+remain future work and must stay opt-in until a real fan-out execution sink or
+orchestration layer is implemented.
 
 Ordered-consumer support is currently documentation and backlog only. Future
 ordered-inspection tests should prove that inspection tooling is read-only,

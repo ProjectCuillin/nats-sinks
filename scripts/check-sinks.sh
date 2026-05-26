@@ -12,6 +12,7 @@ pytest \
   tests/unit/test_file_mapping.py \
   tests/unit/test_file_sink.py \
   tests/integration/test_file_sink_e2e.py \
+  tests/unit/test_fanout_certification.py \
   tests/unit/test_oracle_mapping.py \
   tests/unit/test_oracle_routing.py \
   tests/unit/test_sink_certification.py \
