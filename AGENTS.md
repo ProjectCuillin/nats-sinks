@@ -250,6 +250,10 @@ silent loss after an early ACK is not.
 - Keep live NATS authentication workflow tests behind explicit environment
   flags. Normal unit, smoke, and release-prep checks must not depend on real
   NATS identities, certificate files, or private endpoints.
+- Use the fan-out certification helpers for routing or fan-out changes. Tests
+  must prove route selection, required ACK blocking, optional timeout behavior,
+  no-route handling, and sanitized evidence before future delivery code relies
+  on a policy.
 - Use bind variables for values and strict allow-list validation for SQL
   identifiers.
 - Do not add dependencies without a clear reason and corresponding docs.

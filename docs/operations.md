@@ -517,6 +517,19 @@ configuration will show the optional `minimum_wait_ms` and `timeout_ms` values,
 including defaults. Treat optional timeout or failure log entries as evidence
 that the side copy was not guaranteed for that message.
 
+Before operating a new route policy or future fan-out sink in a release
+candidate, run the fan-out certification suite:
+
+```bash
+pytest tests/unit/test_fanout_certification.py
+```
+
+This suite verifies the route-selection matrix, required ACK blocking,
+optional timeout behavior, no-route policies, CLI validation, and redaction
+behavior without contacting live infrastructure. It complements, but does not
+replace, destination-specific Oracle Database, Oracle MySQL, file, or future
+sink certification.
+
 For mission and defence-style deployments, prefer a small number of readable
 routes based on normalized subject, priority, classification, labels, and
 mission-safe header hints. Avoid putting sensitive operation names, raw

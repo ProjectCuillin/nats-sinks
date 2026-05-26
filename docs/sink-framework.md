@@ -283,6 +283,13 @@ side effects, and when the JetStream ACK is allowed to happen. The reusable
 ACK-gate helper waits for required targets and records optional timeout or
 failure categories without exposing payloads or destination secrets.
 
+`tests/unit/test_fanout_certification.py` is the reusable certification surface
+for this boundary. It proves the documented NATO SECRET and NATO UNCLASS
+route examples, one-to-one selection, one-to-many selection, required failure
+before ACK, optional timeout before ACK release, no-route policies, CLI
+validation, and redaction behavior. New fan-out-capable sink work should add
+cases there or reuse the same helpers from `nats_sinks.testing`.
+
 The route policy uses exact bounded values and the existing NATS wildcard
 subject matcher. It does not load plugins, execute code, evaluate expressions,
 or use regular expressions supplied by configuration.

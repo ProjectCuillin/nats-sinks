@@ -763,6 +763,11 @@ Additional testing expectations:
   subjects, payloads, classifications, labels, and reports fake and sanitized.
   Do not add live service access to the harness itself; use separate
   integration wrappers gated by ignored local configuration.
+- Use the fan-out certification helpers when routing or fan-out behavior
+  changes. Prove one-to-one routing, one-to-many target selection, required
+  failure blocking ACK, optional timeout behavior, no-route policies, and
+  route matching by subject, priority, classification, labels, and approved
+  non-secret headers.
 - Sanitize test reports before committing. Do not include hostnames, usernames,
   passwords, wallet contents, certificates, tokens, or private payloads.
 - Do not mark live integration tests as passed unless they were actually run in

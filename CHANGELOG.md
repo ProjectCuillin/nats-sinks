@@ -32,6 +32,11 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   sink, reports route-to-target references, redacts secrets without hiding
   route target names such as `oracle_secret`, and can health-check one named
   sink with `--sink-name` or all named sinks with `--all-named-sinks`.
+- Added routing and fan-out certification tests for issue #135. The new
+  `nats_sinks.testing` helpers use synthetic envelopes and in-memory fan-out
+  operation plans to certify one-to-one routing, one-to-many target selection,
+  required ACK blocking, optional timeout behavior, no-route handling, CLI
+  validation, and redaction for future fan-out-capable sinks.
 - Added a local-only post-release PyPI artifact validation harness for issue
   #252. The script builds a short-lived Oracle Linux 9 slim validation
   container, installs `nats-sinks` from PyPI instead of the local checkout,

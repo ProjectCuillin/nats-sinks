@@ -9,6 +9,16 @@ mission-style metadata without requiring real operational subjects, payloads,
 credentials, or infrastructure locators.
 """
 
+from nats_sinks.testing.fanout_certification import (
+    FanoutAckProbe,
+    FanoutCertificationCase,
+    FanoutCertificationResult,
+    FanoutOperationPlan,
+    certify_fanout_ack_order,
+    certify_fanout_route_selection,
+    fanout_certification_envelope,
+    fanout_certification_policy,
+)
 from nats_sinks.testing.load_profile import (
     LoadPhaseTiming,
     LoadProfileOptions,
@@ -59,6 +69,10 @@ from nats_sinks.testing.websocket_harness import (
 
 __all__ = [
     "BenchmarkPhaseTiming",
+    "FanoutAckProbe",
+    "FanoutCertificationCase",
+    "FanoutCertificationResult",
+    "FanoutOperationPlan",
     "LoadPhaseTiming",
     "LoadProfileOptions",
     "LoadProfileReport",
@@ -76,11 +90,15 @@ __all__ = [
     "assert_sink_protocol_boundary",
     "build_oracle_benchmark_report",
     "certification_envelope",
+    "certify_fanout_ack_order",
+    "certify_fanout_route_selection",
     "certify_sink_duplicate_redelivery",
     "certify_sink_lifecycle",
     "certify_sink_write_success",
     "choose_loopback_port",
     "choose_websocket_harness_ports",
+    "fanout_certification_envelope",
+    "fanout_certification_policy",
     "generate_synthetic_scenario",
     "nats_server_command",
     "port_is_available",

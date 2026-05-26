@@ -3,8 +3,12 @@
   "title": "[Feature]: Add certification tests for routing and fan-out sink behavior",
   "area": "Testing",
   "priority": "P3 - backlog candidate",
-  "target_release": "unscheduled",
-  "labels": ["testing", "sink-new", "nats"],
+  "target_release": "v0.4.2",
+  "labels": [
+    "testing",
+    "sink-new",
+    "nats"
+  ],
   "problem": "Routing and fan-out will touch the core delivery invariant and every sink type. A small implementation bug could ACK too early, route to the wrong destination, hide optional sink failures, or fail to preserve idempotent redelivery. The project needs reusable certification tests that every current and future sink can run against routing and fan-out behavior.",
   "proposal": "Build a certification test suite for fan-out routing. The suite should include mock sinks for exact ACK-order tests, file sink smoke tests for real writes, Oracle sink contract tests using mocks, CLI validation tests, and optional live integration guidance. It should verify one-to-one routing, one-to-many routing, required child failure, optional child timeout, no-route policies, metadata-based matching, redelivery-safe duplicate behavior, and sanitized logging. The certification fixtures must include the documented sample where a NATO SECRET urgent sensor audit event routes to oracle_secret and file_audit, while a NATO UNCLASS urgent sensor audit event routes only to oracle_unclass.",
   "users": "Maintainers, sink implementers, release engineers, and external contributors adding new sink types or changing routing behavior.",
