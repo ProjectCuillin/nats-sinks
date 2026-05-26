@@ -203,8 +203,6 @@
 - Optional `InProgress` heartbeat during long-running sink writes.
 - InProgress metrics and an operator runbook for distinguishing slow active
   work from durable success.
-- Subject-aware observability policy model with disabled-by-default,
-  default-deny, bounded subject-family rules.
 - Bounded subject-family metric aggregation without raw subject export by
   default.
 - Subject-aware observability certification tests and operator runbook.

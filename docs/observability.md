@@ -19,6 +19,9 @@ Observability is documented as a small set of focused pages:
   sharing policy, and connector-neutral architecture.
 - [Metrics Snapshot And CLI](metrics.md): explains the local metrics recorder,
   `nats-sink-metrics`, metric names, snapshot files, and shell-friendly output.
+- [Subject-Aware Observability Evaluation](subject-aware-observability-evaluation.md):
+  explains the controlled subject-family policy model and why subject labels
+  remain disabled by default.
 - [Prometheus Integration](prometheus.md): explains the policy-controlled
   Prometheus textfile connector and optional native HTTP scrape endpoint.
 - [OpenTelemetry OTLP Integration](otlp.md): explains policy-controlled export
@@ -77,11 +80,13 @@ runtime:
 - observability connectors are isolated from core and sink logic so new
   platforms can be added without breaking sink APIs.
 
-Subject-aware observability has been evaluated as a future opt-in capability.
-It is not enabled today. The current policy may list configured subject
-patterns as disabled review hints, but exporters do not emit subject labels.
-That separation is intentional: subjects can reveal operational structure and
-can create expensive high-cardinality metric series. See
+Subject-aware observability now has a policy model, but subject-labeled export
+is still disabled by default and not used by the aggregate exporters. The policy
+can describe reviewed subject-family allow rules, stable labels, display modes,
+cardinality caps, and overflow behavior for future connectors. Exporters do not
+emit subject labels unless a connector explicitly implements that policy. That
+separation is intentional: subjects can reveal operational structure and can
+create expensive high-cardinality metric series. See
 [Subject-Aware Observability Evaluation](subject-aware-observability-evaluation.md).
 
 ## Architecture
@@ -228,6 +233,15 @@ Generated policies are disabled by default:
   "include_observations": false,
   "include_legacy": false,
   "subjects": [],
+  "subject_metrics": {
+    "enabled": false,
+    "default_action": "deny",
+    "max_subject_families": 20,
+    "overflow_action": "drop",
+    "overflow_label": "other",
+    "allow_raw_subjects": false,
+    "rules": []
+  },
   "prometheus": {
     "enabled": false,
     "output_file": "/var/lib/node_exporter/textfile_collector/nats_sinks.prom",
@@ -403,6 +417,13 @@ scalar JSON fields. It never exports the configured base URL, credentials, raw
 endpoint body, account names, subject names, stream names, consumer names, or
 topology fields unless an operator has selected those exact fields.
 
+The `subject_metrics` object is a policy model for future subject-family
+observability. It is disabled by default and uses default-deny rules. Current
+aggregate exporters do not add subject labels even when this block is enabled;
+they continue to export only the metric names allowed by the top-level policy.
+The block exists so future subject-aware connectors have a reviewed, bounded,
+and testable policy surface instead of inventing ad hoc subject labels.
+
 ## Policy Fields
 
 | Field | Default | Meaning |
@@ -417,6 +438,7 @@ topology fields unless an operator has selected those exact fields.
 | `include_observations` | `false` | Whether timing observations such as `sink_batch_write_seconds` may be exported. |
 | `include_legacy` | `false` | Whether legacy metric aliases may be exported. |
 | `subjects` | `[]` | Subject patterns discovered from the core config for operator review and future subject-aware metrics. Current exporters do not share these as labels. |
+| `subject_metrics` | object | Disabled-by-default subject-family policy model for future subject-aware observability. Current aggregate exporters ignore it for label rendering. |
 | `prometheus` | object | Prometheus connector settings. |
 | `otlp` | object | OpenTelemetry OTLP connector settings. |
 | `elastic` | object | Elastic Observability profile settings over the OTLP connector. |
@@ -429,6 +451,70 @@ topology fields unless an operator has selected those exact fields.
 The deny list wins over the allow list. This lets a broad allow rule such as
 `messages_*` be narrowed with a specific deny rule if a metric is not suitable
 for a particular environment.
+
+## Subject-Aware Policy Fields
+
+Subject-aware observability is controlled through the `subject_metrics` object.
+It is intentionally separate from `subjects`, which is only a list of disabled
+review hints discovered from the runtime configuration.
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `subject_metrics.enabled` | `false` | Enables evaluation of subject-family rules for future connectors. It does not enable subject labels in current aggregate exporters. |
+| `subject_metrics.default_action` | `deny` | Default action when no rule matches. This is fixed to `deny` so the model fails closed. |
+| `subject_metrics.max_subject_families` | `20` | Maximum number of allow rules, validated from `1` through `100`. |
+| `subject_metrics.overflow_action` | `drop` | Deterministic future overflow behavior. Valid values are `drop`, `aggregate_other`, and `fail_closed`. |
+| `subject_metrics.overflow_label` | `other` | Stable label for future `aggregate_other` overflow buckets. |
+| `subject_metrics.allow_raw_subjects` | `false` | Required before any allow rule may use `display_mode: "raw"`. Raw subject sharing should be treated as a reviewed exception. |
+| `subject_metrics.rules` | `[]` | Ordered subject-family rules. Deny rules take precedence over allow rules during evaluation. |
+
+Each rule accepts:
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `subject` | required | NATS subject pattern using the same wildcard grammar as runtime routing. |
+| `action` | `allow` | Either `allow` or `deny`. Allow rules require a stable operator label. |
+| `label` | `null` | Operator-chosen low-cardinality family label. It must be bounded, identifier-like, and must not look like a credential. |
+| `display_mode` | `label` | Future display mode. Valid values are `label`, `redacted`, `hash`, and `raw`. Hashing is deterministic but is not a confidentiality boundary. |
+| `allowed_metrics` | `[]` | Optional exact metric allow list for this subject family. Empty means the rule can apply to any otherwise-approved metric. |
+| `allowed_metric_patterns` | `[]` | Optional metric glob patterns for this subject family. |
+
+Example reviewed policy block:
+
+```json
+{
+  "subject_metrics": {
+    "enabled": true,
+    "default_action": "deny",
+    "max_subject_families": 20,
+    "overflow_action": "aggregate_other",
+    "overflow_label": "other",
+    "allow_raw_subjects": false,
+    "rules": [
+      {
+        "subject": "orders.*",
+        "action": "allow",
+        "label": "orders",
+        "display_mode": "label",
+        "allowed_metrics": [
+          "messages_fetched_total",
+          "messages_written_total",
+          "messages_failed_total"
+        ]
+      },
+      {
+        "subject": "orders.secret",
+        "action": "deny"
+      }
+    ]
+  }
+}
+```
+
+This example describes a future subject-family view for approved `orders.*`
+metrics while explicitly denying `orders.secret`. It does not make the current
+Prometheus, OTLP, Elastic, Grafana Alloy, Splunk HEC, StatsD, or syslog
+connectors emit subject labels.
 
 ## Prometheus Connector Fields
 
@@ -655,8 +741,8 @@ Fan-out metrics follow the same rule. Metrics such as
 `fanout_required_child_failure_total`, and
 `fanout_optional_child_timeout_total` are aggregate counters. They do not share
 child sink names, route names, subjects, classification values, labels, file
-paths, database names, or connection details unless a future policy explicitly
-allows a bounded, reviewed label set.
+paths, database names, or connection details unless a future connector
+explicitly implements the bounded, reviewed `subject_metrics` policy model.
 
 Example subject entry:
 
@@ -670,9 +756,25 @@ Example subject entry:
 }
 ```
 
-Future subject-aware connectors must document exactly which subject values are
-exported, how cardinality is bounded, and how sensitive subject names are
-approved.
+Example subject-aware policy block:
+
+```json
+{
+  "subject_metrics": {
+    "enabled": false,
+    "default_action": "deny",
+    "max_subject_families": 20,
+    "overflow_action": "drop",
+    "overflow_label": "other",
+    "allow_raw_subjects": false,
+    "rules": []
+  }
+}
+```
+
+Future subject-aware connectors must use this policy model and document exactly
+which subject values are exported, how cardinality is bounded, and how
+sensitive subject names are approved.
 
 ## Generating A Policy
 

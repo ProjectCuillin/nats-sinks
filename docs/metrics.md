@@ -89,9 +89,11 @@ from the runner and sinks so the main delivery process and any monitoring
 connector can run as different services with different permissions.
 
 The metrics snapshot is intentionally aggregate-only today. It does not include
-per-subject labels or per-subject series. Subject-aware observability has been
-evaluated for future work, but it needs explicit subject-family policy,
-cardinality caps, and certification tests before it can be enabled. See
+per-subject labels or per-subject series. The observability policy now includes
+a disabled-by-default `subject_metrics` model for reviewed subject-family rules,
+stable labels, cardinality caps, and overflow behavior. Current aggregate
+exporters do not emit subject labels from that policy block; subject-family
+export remains future connector work. See
 [Subject-Aware Observability Evaluation](subject-aware-observability-evaluation.md).
 
 ## Enabling The Snapshot Recorder
