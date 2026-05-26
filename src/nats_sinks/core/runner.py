@@ -373,13 +373,10 @@ class JetStreamSinkRunner:
         self._push_queue = asyncio.Queue(maxsize=self.push_consumer.pending_msgs_limit)
         self._push_accepting = True
 
-        async def _callback(raw_message: Any) -> None:
-            await self._handle_push_message(raw_message)
-
         self._subscription = await self._js.subscribe(
             self.subject,
             queue=self.push_consumer.deliver_group,
-            cb=_callback,
+            cb=self._push_subscription_callback,
             durable=self.consumer if self.durable else None,
             stream=self.stream,
             config=consumer_config,
@@ -401,6 +398,22 @@ class JetStreamSinkRunner:
         finally:
             self._push_accepting = False
             self._push_queue = None
+
+    async def _push_subscription_callback(self, raw_message: Any) -> None:
+        """Guard the NATS push callback so callback failure never implies success.
+
+        The callback only moves the raw message into the bounded internal queue.
+        It must never ACK on callback completion and it must not let an internal
+        scheduling error look like successful message handling to future
+        maintainers or test doubles.
+        """
+
+        try:
+            await self._handle_push_message(raw_message)
+        except Exception:
+            LOGGER.exception(
+                "JetStream push callback failed before sink processing; message was not ACKed"
+            )
 
     async def _handle_push_message(self, raw_message: Any) -> None:
         """Accept one push callback message without acknowledging it."""

@@ -3,7 +3,7 @@
   "title": "[Feature]: Add push-consumer delivery-contract and flow-control certification tests",
   "area": "Testing",
   "priority": "P3 - backlog candidate",
-  "target_release": "unscheduled",
+  "target_release": "v0.4.2",
   "labels": ["nats", "testing", "documentation"],
   "problem": "Push consumers introduce callback scheduling, server-initiated delivery, flow-control messages, idle heartbeats, client pending buffers, and queue-group behavior. Without focused certification tests, a push mode could regress ACK ordering, shutdown behavior, or memory bounds.",
   "proposal": "Add a dedicated test suite and operator evidence plan for push-consumer behavior. The suite should prove manual ACK ordering, no ACK on temporary failure, DLQ-before-ACK on permanent failure, bounded in-flight work, flow-control and heartbeat handling, graceful shutdown, and unchanged pull-mode behavior.",

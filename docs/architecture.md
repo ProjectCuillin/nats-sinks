@@ -223,7 +223,9 @@ that already standardize on server-initiated delivery. They add callback
 scheduling, client pending buffers, deliver subjects, flow-control messages,
 and more complex shutdown behavior, so pull consumers remain the production
 default. Push mode is manual-ACK only, bounded, and still routes messages
-through the same ACK-after-durable-success pipeline. See
+through the same ACK-after-durable-success pipeline. The certification tests
+exercise callback error containment, temporary failure, permanent DLQ,
+flow-control, heartbeat, overflow, and shutdown paths. See
 [Push Consumer Evaluation](push-consumer-evaluation.md).
 
 ## Extension Model

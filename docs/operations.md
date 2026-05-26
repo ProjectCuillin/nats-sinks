@@ -310,9 +310,12 @@ pull-consumer semantics with commit-then-acknowledge. See
 
 Push-consumer support is available only as an explicit opt-in mode. It is
 manual-ACK only, bounded by queue and pending-byte limits, and still uses the
-same commit-then-ACK sink pipeline as pull mode. Pull consumers remain the
-operational default because the worker controls when and how many messages are
-fetched. See [Push Consumer Evaluation](push-consumer-evaluation.md).
+same commit-then-ACK sink pipeline as pull mode. The certification tests cover
+temporary failures without ACK, DLQ-before-ACK permanent failures, callback
+exception containment, flow-control and heartbeat option propagation, queue
+overflow, and shutdown intake behavior. Pull consumers remain the operational
+default because the worker controls when and how many messages are fetched.
+See [Push Consumer Evaluation](push-consumer-evaluation.md).
 
 External metrics sharing should use the policy-controlled observability layer
 rather than ad hoc shell redirection or one-off scripts. The separate

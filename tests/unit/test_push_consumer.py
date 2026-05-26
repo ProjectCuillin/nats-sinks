@@ -12,13 +12,18 @@ from typing import Any
 import pytest
 from pydantic import ValidationError as PydanticValidationError
 
-from nats_sinks.core.config import ConsumerManagementConfig, DeliveryConfig, PushConsumerConfig
+from nats_sinks.core.config import (
+    ConsumerManagementConfig,
+    DeadLetterConfig,
+    DeliveryConfig,
+    PushConsumerConfig,
+)
 from nats_sinks.core.consumer_management import (
     build_push_consumer_config,
     detect_push_consumer_capabilities,
     ensure_jetstream_push_consumer,
 )
-from nats_sinks.core.errors import ConfigurationError
+from nats_sinks.core.errors import ConfigurationError, PermanentSinkError, TemporarySinkError
 from nats_sinks.core.runner import JetStreamSinkRunner
 from nats_sinks.sinks.base import Sink
 
@@ -30,9 +35,16 @@ class NotFoundError(Exception):
 class FakePushMessage:
     """Small raw NATS message double used by push-runner tests."""
 
-    def __init__(self, events: list[str], *, on_ack: object | None = None) -> None:
+    def __init__(
+        self,
+        events: list[str],
+        *,
+        on_ack: object | None = None,
+        on_nak: object | None = None,
+    ) -> None:
         self.events = events
         self.on_ack = on_ack
+        self.on_nak = on_nak
         self.subject = "orders.created"
         self.data = b'{"id": "push-1"}'
         self.headers = {}
@@ -57,6 +69,8 @@ class FakePushMessage:
         del delay
         self.events.append("nak")
         self.nacked = True
+        if callable(self.on_nak):
+            self.on_nak()
 
 
 class RecordingSink(Sink):
@@ -75,6 +89,25 @@ class RecordingSink(Sink):
             assert not self.message.acked
         self.events.append("write")
         self.events.append("commit")
+
+    async def stop(self) -> None:
+        return None
+
+
+class FailingSink(Sink):
+    """Sink double that fails after recording a write attempt."""
+
+    def __init__(self, events: list[str], error: Exception) -> None:
+        self.events = events
+        self.error = error
+
+    async def start(self) -> None:
+        return None
+
+    async def write_batch(self, messages: object) -> None:
+        del messages
+        self.events.append("write")
+        raise self.error
 
     async def stop(self) -> None:
         return None
@@ -119,6 +152,7 @@ class FakePushJetStream:
         self.existing = existing
         self.messages = messages or []
         self.added_configs: list[object] = []
+        self.published: list[tuple[str, bytes, dict[str, str]]] = []
         self.subscribe_options: dict[str, object] = {}
 
     async def consumer_info(self, stream: str, consumer: str) -> object:
@@ -164,6 +198,11 @@ class FakePushJetStream:
         for message in self.messages:
             await cb(message)
         return SimpleNamespace()
+
+    async def publish(self, subject: str, payload: bytes, headers: dict[str, str]) -> None:
+        self.published.append((subject, payload, headers))
+        for message in self.messages:
+            message.events.append("dlq")
 
 
 class PartialPushJetStream:
@@ -315,6 +354,37 @@ async def test_push_callback_uses_bounded_queue_without_ack() -> None:
 
 
 @pytest.mark.asyncio
+async def test_push_subscription_callback_contains_handler_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+    message = FakePushMessage(events)
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="orders-sink",
+        subject="orders.*",
+        sink=RecordingSink([]),
+        push_consumer=PushConsumerConfig(
+            enabled=True,
+            deliver_subject="_INBOX.nats_sinks.orders",
+        ),
+    )
+
+    async def _raise_callback_error(raw_message: object) -> None:
+        del raw_message
+        raise RuntimeError("callback scheduling failed")
+
+    monkeypatch.setattr(runner, "_handle_push_message", _raise_callback_error)
+
+    await runner._push_subscription_callback(message)
+
+    assert events == []
+    assert not message.acked
+    assert not message.nacked
+
+
+@pytest.mark.asyncio
 async def test_push_queue_overflow_naks_without_ack() -> None:
     first = FakePushMessage([])
     second_events: list[str] = []
@@ -378,6 +448,115 @@ async def test_push_run_acks_only_after_sink_commit() -> None:
     assert js.subscribe_options["manual_ack"] is True
     assert js.subscribe_options["pending_msgs_limit"] == 2
     assert js.subscribe_options["pending_bytes_limit"] == 2048
+
+
+@pytest.mark.asyncio
+async def test_push_run_does_not_ack_temporary_sink_failure() -> None:
+    events: list[str] = []
+    runner: JetStreamSinkRunner | None = None
+
+    def _stop_runner() -> None:
+        assert runner is not None
+        runner.request_stop()
+
+    message = FakePushMessage(events, on_nak=_stop_runner)
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="orders-sink",
+        subject="orders.*",
+        sink=FailingSink(events, TemporarySinkError("temporary outage")),
+        delivery=DeliveryConfig(batch_size=1, batch_timeout_ms=25),
+        consumer_management=ConsumerManagementConfig(mode="create_if_missing"),
+        push_consumer=PushConsumerConfig(
+            enabled=True,
+            deliver_subject="_INBOX.nats_sinks.orders",
+            pending_msgs_limit=2,
+        ),
+    )
+    runner._js = FakePushJetStream(messages=[message])
+
+    await runner.run()
+
+    assert events == ["write", "nak"]
+    assert not message.acked
+    assert message.nacked
+
+
+@pytest.mark.asyncio
+async def test_push_run_publishes_dlq_before_ack_on_permanent_failure() -> None:
+    events: list[str] = []
+    runner: JetStreamSinkRunner | None = None
+
+    def _stop_runner() -> None:
+        assert runner is not None
+        runner.request_stop()
+
+    message = FakePushMessage(events, on_ack=_stop_runner)
+    js = FakePushJetStream(messages=[message])
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="orders-sink",
+        subject="orders.*",
+        sink=FailingSink(events, PermanentSinkError("invalid payload")),
+        delivery=DeliveryConfig(batch_size=1, batch_timeout_ms=25),
+        consumer_management=ConsumerManagementConfig(mode="create_if_missing"),
+        dead_letter=DeadLetterConfig(enabled=True, subject="orders.dlq"),
+        push_consumer=PushConsumerConfig(
+            enabled=True,
+            deliver_subject="_INBOX.nats_sinks.orders",
+            pending_msgs_limit=2,
+        ),
+    )
+    runner._js = js
+
+    await runner.run()
+
+    assert events == ["write", "dlq", "ack"]
+    assert message.acked
+    assert js.published[0][0] == "orders.dlq"
+
+
+@pytest.mark.asyncio
+async def test_push_run_passes_flow_control_heartbeat_and_pending_limits() -> None:
+    events: list[str] = []
+    runner: JetStreamSinkRunner | None = None
+
+    def _stop_runner() -> None:
+        assert runner is not None
+        runner.request_stop()
+
+    message = FakePushMessage(events, on_ack=_stop_runner)
+    js = FakePushJetStream(messages=[message])
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="orders-sink",
+        subject="orders.*",
+        sink=RecordingSink(events, message),
+        delivery=DeliveryConfig(batch_size=1, batch_timeout_ms=25),
+        consumer_management=ConsumerManagementConfig(mode="create_if_missing"),
+        push_consumer=PushConsumerConfig(
+            enabled=True,
+            deliver_subject="_INBOX.nats_sinks.orders",
+            deliver_group="orders-workers",
+            pending_msgs_limit=3,
+            pending_bytes_limit=4096,
+            flow_control=True,
+            idle_heartbeat_seconds=2.5,
+        ),
+    )
+    runner._js = js
+
+    await runner.run()
+
+    assert events == ["write", "commit", "ack"]
+    assert js.subscribe_options["queue"] == "orders-workers"
+    assert js.subscribe_options["flow_control"] is True
+    assert js.subscribe_options["idle_heartbeat"] == 2.5
+    assert js.subscribe_options["pending_msgs_limit"] == 3
+    assert js.subscribe_options["pending_bytes_limit"] == 4096
 
 
 @pytest.mark.asyncio

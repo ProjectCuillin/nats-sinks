@@ -168,9 +168,11 @@ only after the sink reports durable success or after DLQ publication succeeds
 for permanent failures.
 
 Push mode is disabled by default and guarded by bounded callback intake plus
-pending message and byte limits. Additional delivery-contract, flow-control,
-heartbeat, and shutdown certification remains tracked separately. The
-evaluation and implementation split are documented in
+pending message and byte limits. Focused certification tests prove
+ACK-after-commit ordering, no ACK on temporary failure, DLQ-before-ACK on
+permanent failure, callback error containment, flow-control and heartbeat
+configuration propagation, and shutdown behavior. The evaluation and
+implementation split are documented in
 [Push Consumer Evaluation](push-consumer-evaluation.md).
 
 ## Non-Negotiable Invariant

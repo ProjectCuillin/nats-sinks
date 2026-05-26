@@ -19,6 +19,12 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   required `nats-py` push-subscribe capabilities, and routes accepted callback
   messages through the existing commit-then-ACK batch pipeline with bounded
   queue overflow handling.
+- Added push-consumer delivery-contract certification tests for issue #124.
+  The focused suite proves ACK-after-commit ordering, no ACK on temporary sink
+  failure, DLQ publication before original ACK on permanent failure, callback
+  exception containment, flow-control and idle-heartbeat option propagation,
+  queue overflow handling, cooperative shutdown behavior, and an environment-
+  gated live NATS integration path for disposable local servers.
 - Added the generic route-match policy selector for issue #138. The new
   disabled-by-default `routing` configuration can match normalized
   `NatsEnvelope` subject, priority, classification, labels, and approved

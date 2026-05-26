@@ -381,7 +381,8 @@ It is manual ACK only, bounded by explicit pending-message and pending-byte
 limits, and protected against unbounded callback intake. Flow-control errors,
 heartbeat events, callback exceptions, and queue saturation must be logged
 without payloads, credentials, private subject families, or sensitive metadata
-values. See [Push Consumer Evaluation](push-consumer-evaluation.md).
+values. The certification tests prove these controls without exposing real
+subjects or payloads. See [Push Consumer Evaluation](push-consumer-evaluation.md).
 
 Subject-aware observability has a disabled-by-default policy model, bounded
 prepared `labeled_metrics` rows, and a focused certification suite. NATS

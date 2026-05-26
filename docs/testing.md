@@ -92,9 +92,13 @@ contract and prove that replay never ACKs before durable sink success. See
 
 Push-consumer support is opt-in and covered by unit tests for default-disabled
 configuration, manual ACK enforcement, bounded callback intake, queue overflow,
-shutdown intake stop, and unchanged pull-mode behavior. Additional live
-delivery-contract, flow-control, heartbeat, and shutdown certification remains
-tracked separately. See [Push Consumer Evaluation](push-consumer-evaluation.md).
+shutdown intake stop, temporary failure without ACK, DLQ-before-ACK permanent
+failure handling, flow-control and idle-heartbeat option propagation, callback
+exception containment, and unchanged pull-mode behavior. Optional live NATS
+push-consumer certification is isolated behind
+`NATS_SINKS_PUSH_CONSUMER_INTEGRATION=1` so ordinary unit and release checks do
+not depend on a local server. See
+[Push Consumer Evaluation](push-consumer-evaluation.md).
 
 ## Bounded Property-Style Tests
 

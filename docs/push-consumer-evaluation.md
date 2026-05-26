@@ -12,8 +12,8 @@ The conclusion is deliberately conservative:
 - push support is gated by strict backpressure and shutdown controls,
 - push support must use manual acknowledgement only,
 - push support must never acknowledge before durable sink success,
-- deeper delivery-contract and flow-control certification remains a follow-up
-  item.
+- delivery-contract and flow-control certification exists in the unit suite,
+  while live NATS push-consumer testing remains explicitly environment-gated.
 
 ## Background
 
@@ -127,10 +127,14 @@ The evaluation split the work into three separately testable items:
 3. Push-consumer delivery-contract, shutdown, and flow-control certification
    tests.
 
-The first two items are implemented in the current development line. The
-third remains follow-up certification work so deeper flow-control, heartbeat,
-and live NATS scenarios can be tested without widening the runtime feature in
-one step.
+All three items are implemented in the current development line. The
+certification tests prove ACK-after-commit ordering, no ACK on temporary sink
+failure, DLQ publication before original ACK on permanent failure, bounded
+queue overflow behavior, callback exception containment, flow-control and
+idle-heartbeat option propagation, and cooperative shutdown. A live NATS
+push-consumer test is present but skipped unless
+`NATS_SINKS_PUSH_CONSUMER_INTEGRATION=1` is set, keeping normal release checks
+deterministic and free of external-service assumptions.
 
 ## Why Pull Remains Default
 
@@ -157,3 +161,31 @@ Push-consumer runtime behavior is available only when `push_consumer.enabled`
 is set to `true` and the required delivery subject is configured. Pull mode
 remains the default, and push delivery still uses the same sink write, DLQ, and
 ACK-after-durable-success pipeline as pull delivery.
+
+## Certification Evidence
+
+The focused certification suite is:
+
+```bash
+python -m pytest tests/unit/test_push_consumer.py tests/integration/test_push_consumer_integration.py -q
+```
+
+By default the live integration test is skipped:
+
+```text
+16 passed, 1 skipped
+```
+
+To run the optional live path, start a disposable NATS server with JetStream
+enabled and run:
+
+```bash
+NATS_SINKS_PUSH_CONSUMER_INTEGRATION=1 \
+NATS_SINKS_PUSH_CONSUMER_NATS_URL=nats://127.0.0.1:4222 \
+python -m pytest tests/integration/test_push_consumer_integration.py -q
+```
+
+The live test creates a unique stream, subject, durable push consumer, and
+deliver subject, writes one synthetic payload through the real NATS client, and
+then deletes the stream. It must be used only with local disposable
+infrastructure. Do not point it at production streams or operational subjects.
