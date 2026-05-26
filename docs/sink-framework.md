@@ -66,7 +66,7 @@ behavior only.
 The top-level `sinks` object is the shared configuration registry for multiple
 destination instances. It does not write messages by itself and it does not
 change ACK behavior. Its purpose is to give routing policy, CLI validation,
-redacted config output, health checks, and future fan-out execution one stable
+redacted config output, health checks, and active fan-out execution one stable
 set of names for destination instances.
 
 ```json
@@ -258,40 +258,42 @@ keeps sinks stable across NATS server versions and producer styles.
 
 ## Generic Route-Match Policy
 
-The core now includes a validated route-match policy and selector. The selector
-evaluates one normalized `NatsEnvelope` and returns logical sink target names
-based on subject, priority, classification, labels, and approved non-secret
-headers. It is intentionally selection-only: it does not fan out messages,
-open multiple sinks, commit destinations, or ACK JetStream. Route targets can
+The core now includes a validated route-match policy, selector, and active
+fan-out sink. The selector evaluates one normalized `NatsEnvelope` and returns
+logical sink target names based on subject, priority, classification, labels,
+and approved non-secret headers. The `fanout` sink binds those target names to
+named child sink instances, partitions the batch per selected child sink, and
+returns success only after required child sinks complete. Route targets can
 also carry ACK-gating policy. A plain target name is required by default; an
-object target can opt into bounded optional behavior for future fan-out
-delivery.
+object target can opt into bounded optional side-copy behavior.
 
 ```mermaid
 flowchart LR
     Env[NatsEnvelope] --> Selector[route-match selector]
     Policy[routing policy] --> Selector
     Selector --> Targets[logical target names]
-    Targets --> Future[future fan-out delivery]
+    Targets --> Fanout[FanoutSink]
+    Fanout --> Required[required child sinks]
+    Fanout --> Optional[optional child sinks]
 ```
 
 This separation matters for the sink framework. All destination modules still
 implement the same durable `write_batch` contract, and ACK behavior remains in
-the runner. A future fan-out implementation can use the selector output while
-still deciding which targets are commit-required, which targets are optional
-side effects, and when the JetStream ACK is allowed to happen. The reusable
-ACK-gate helper waits for required targets and records optional timeout or
-failure categories without exposing payloads or destination secrets.
+the runner. `FanoutSink` uses the selector output while deciding which targets
+are commit-required, which targets are optional side effects, and when the
+JetStream ACK is allowed to happen. The reusable ACK-gate helper waits for
+required targets and records optional timeout or failure categories without
+exposing payloads or destination secrets.
 
-Fan-out observability is kept separate from the ACK gate itself. Future
-delivery code should call the aggregate helpers in
-`nats_sinks.core.fanout_observability` to record route matches, selected child
-sink counts, required success or failure, optional success, optional failure,
-optional timeout, ACK-gate wait time, and fan-out batch duration. Those helpers
-record only counts and timings. They do not export route names, child sink
-names, subjects, classification values, labels, payload data, file paths, or
-database connection details unless a future explicit observability policy adds
-such sharing with bounded cardinality.
+Fan-out observability is kept separate from the ACK gate itself. `FanoutSink`
+calls the aggregate helpers in `nats_sinks.core.fanout_observability` to record
+route matches, selected child sink counts, required success or failure,
+optional success, optional failure, optional timeout, ACK-gate wait time, and
+fan-out batch duration. Those helpers record only counts and timings. They do
+not export route names, child sink names, subjects, classification values,
+labels, payload data, file paths, or database connection details unless a
+future explicit observability policy adds such sharing with bounded
+cardinality.
 
 `tests/unit/test_fanout_certification.py` is the reusable certification surface
 for this boundary. It proves the documented NATO SECRET and NATO UNCLASS

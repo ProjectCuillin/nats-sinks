@@ -1,7 +1,9 @@
 # Named Multi-Sink Configuration Example
 
 This example shows how to declare several named sink instances in one JSON
-configuration file while preserving the current single active runtime sink.
+configuration file. It keeps a normal active file sink for backwards-compatible
+single-sink operation while also preparing the same named targets that
+`sink.type: "fanout"` can dispatch to.
 
 Validate the configuration:
 
@@ -28,7 +30,6 @@ The `routing` section references only those names. It does not contain Oracle
 connection strings, Oracle users, password environment-variable names, or file
 paths. Destination-specific settings live under `sinks`.
 
-The top-level `sink` remains the active sink used by `nats-sink run` until
-multi-sink fan-out delivery is enabled in a future release. The named registry
-is already validated and reported by the CLI so teams can prepare route policy
-and destination definitions ahead of that delivery step.
+The top-level `sink` remains the active sink used by `nats-sink run` in this
+example. To run fan-out, change the active sink to `{"type": "fanout"}` or use
+the compact inline form in `examples/fanout/config.json`.

@@ -613,7 +613,7 @@ METRIC_SPECS: tuple[MetricSpec, ...] = (
     MetricSpec(
         MetricNames.FANOUT_ROUTE_MATCHES_TOTAL,
         "counter",
-        "Route policy entries matched by future fan-out delivery without exporting route names.",
+        "Route policy entries matched by fan-out delivery without exporting route names.",
     ),
     MetricSpec(
         MetricNames.FANOUT_MESSAGES_ROUTED_TOTAL,

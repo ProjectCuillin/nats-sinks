@@ -218,7 +218,7 @@ async def test_fanout_certification_required_failure_after_partial_success_block
     probe = FanoutAckProbe()
     events: list[str] = []
 
-    with pytest.raises(FanoutRequiredSinkError, match="oracle_backup"):
+    with pytest.raises(FanoutRequiredSinkError, match="required fan-out sink failed") as exc_info:
         await certify_fanout_ack_order(
             _case(
                 name="required-failure",
@@ -233,6 +233,7 @@ async def test_fanout_certification_required_failure_after_partial_success_block
             ack=probe.ack,
             events=events,
         )
+    assert exc_info.value.sink == "oracle_backup"
 
     assert probe.called is False
     assert "oracle_primary:committed" in events

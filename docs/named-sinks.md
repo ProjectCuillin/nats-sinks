@@ -2,7 +2,7 @@
 
 Named sinks let one configuration file declare several destination instances
 with stable operator-facing names. They are the configuration foundation for
-multi-sink routing and future fan-out delivery. A route can select
+multi-sink routing and active fan-out delivery. A route can select
 `oracle_secret`, `oracle_unclass`, `file_audit`, or any other declared name
 without embedding Oracle connection settings, file paths, or credentials inside
 the route itself.
@@ -12,10 +12,10 @@ using a single top-level `sink` object. The new top-level `sinks` object is a
 registry of additional named sink instances. The route-match policy references
 those names in `routing.routes[].targets`.
 
-Named sinks do not by themselves change ACK behavior. The active top-level
-`sink` is still the sink used by `nats-sink run` today. The named registry
-exists so configuration, validation, redaction, health checks, route reporting,
-and future fan-out execution all use one stable naming model.
+Named sinks do not by themselves change ACK behavior. Existing deployments keep
+using the active top-level `sink`. When that active sink is `{"type":
+"fanout"}`, the named registry becomes the set of child sinks that fan-out
+routes can select.
 
 ## Configuration Shape
 
@@ -59,9 +59,10 @@ and future fan-out execution all use one stable naming model.
 
 The sections have different responsibilities:
 
-- `sink` is the active runtime sink for the current single-sink runner.
+- `sink` is the active runtime sink. Use `{"type": "fanout"}` when routes
+  should dispatch to named child sinks.
 - `sinks` is the named registry used by route validation, redacted config
-  output, `test-sink --sink-name`, and future fan-out execution.
+  output, `test-sink --sink-name`, and fan-out execution.
 - `routing` contains match rules and target names only. It should not contain
   destination credentials, Oracle table definitions, file paths, or driver
   settings.
@@ -328,12 +329,13 @@ from cross-domain handoff preparation.
 
 ## Delivery Boundary
 
-Until multi-sink fan-out execution is enabled, `nats-sink run` writes to the
-single active `sink`. The named registry is still valuable now because it lets
-teams review and validate multi-destination policy ahead of fan-out delivery.
+With a normal active sink, `nats-sink run` writes to that one sink and the named
+registry is used for validation, redacted review, and health checks. With
+`sink.type: "fanout"`, `nats-sink run` evaluates the `routing` policy for each
+message and writes to the selected named child sinks.
 
-When fan-out execution is enabled in a future release, ACK behavior must remain
-explicit. Required targets will need durable success before ACK. Optional
-targets can define bounded wait policy, such as `minimum_wait_ms` and
-`timeout_ms`, so operators can decide which destinations are part of the ACK
-gate and which destinations are best-effort within an approved time window.
+ACK behavior remains explicit. Required targets need durable success before
+the fan-out sink returns success to the runner. Optional targets can define
+bounded wait policy, such as `minimum_wait_ms` and `timeout_ms`, so operators
+can decide which destinations are part of the ACK gate and which destinations
+are side copies within an approved time window.

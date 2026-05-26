@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""Aggregate observability helpers for future fan-out delivery.
+"""Aggregate observability helpers for fan-out delivery.
 
 Fan-out delivery can touch several child sinks for one NATS message. Operators
 need evidence about routing and ACK-gate outcomes, but that evidence must not

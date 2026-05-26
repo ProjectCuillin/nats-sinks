@@ -160,8 +160,8 @@ is not the same thing as destination durability. The helper module
 - no-route policies are explicit (`reject`, `ignore`, or `default_route`);
 - logs and public evidence do not include payloads or destination secrets.
 
-Use these helpers when adding a new sink, changing routing policy, or building
-future fan-out execution code:
+Use these helpers when adding a new sink, changing routing policy, or changing
+fan-out execution code:
 
 ```python
 from nats_sinks.testing import (
@@ -203,7 +203,7 @@ NATO SECRET sensor audit example that selects `oracle_secret` and optional
 Those names are public examples, not deployment guidance or real operational
 identifiers.
 
-Future fan-out execution code must continue to use these helpers alongside
+Fan-out execution code must continue to use these helpers alongside
 destination-specific sink certification. A route can be correct and still be
 unsafe if the selected sink returns success before its durable boundary.
 
@@ -211,6 +211,7 @@ unsafe if the selected sink returns success before its durable boundary.
 
 | Sink | Certification coverage |
 | --- | --- |
+| Fan-out | Unit tests cover one-to-one dispatch, one-to-many dispatch, required failure after partial success, optional timeout, no-route behavior, runner no-ACK behavior on required failure, and CLI validation for inline fan-out examples. |
 | Oracle Database | Unit contract tests cover commit-before-success, rollback on failure, duplicate-safe modes, payload normalization, metadata columns, encryption envelopes, error translation, and SQL identifier validation. Live Oracle tests are opt-in through ignored local environment files. |
 | Oracle MySQL | Unit contract tests cover commit-before-success, rollback on failure, duplicate-safe modes, payload normalization, metadata columns, TLS option validation, Oracle MySQL metrics, error translation, and SQL identifier validation. Container-backed e2e tests run against a short-lived Oracle MySQL test database. |
 | File | Unit and file e2e tests cover atomic file placement, duplicate handling, gzip compression, payload modes, encrypted payload envelopes, metadata preservation, path sanitization, health checks, and no ACK ownership. |

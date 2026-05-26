@@ -334,11 +334,13 @@ every policy concept into a fixed file-sink field. See
 [Data-Centric Security Label Profile](security-label-profile.md).
 
 The generic `routing` policy can name a file destination as a logical target,
-for example `file_secret_audit`. The current file sink still has one concrete
-`sink` configuration per running service. Future multi-sink fan-out work will
-bind logical target names to concrete file sink instances and will define which
-targets must commit before ACK. Until then, route matching is validation and
-selection logic only.
+for example `file_secret_audit`. When the active sink is `fanout`, that
+logical target binds to a named file sink instance. The file child sink keeps
+the normal file durability contract: it returns success only after the output
+file has been placed according to its configured duplicate, compression,
+atomic-write, and fsync settings. Required file targets must complete before
+ACK; optional file targets receive a bounded wait window for side-copy use
+cases.
 
 For broader file-based handoff, edge operation, classification, labels, and
 audit examples, see [Defence And Mission Support](use-cases/defence/index.md).

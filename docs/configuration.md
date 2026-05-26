@@ -320,14 +320,14 @@ The top-level sections are:
 | `metrics` | no | Metrics namespace, enablement flag, and optional local JSON snapshot path. |
 | `advisories` | no | Optional observation-only JetStream advisory subscription settings. Disabled by default and isolated from source-message ACK behavior. |
 | `message_metadata` | no | Optional priority, classification, and labels extraction defaults applied to every message before sink delivery. |
-| `routing` | no | Optional generic route-match policy that selects logical sink target names from subject, priority, classification, labels, and approved headers. Disabled by default and selection-only until fan-out delivery is enabled. |
+| `routing` | no | Optional generic route-match policy that selects logical sink target names from subject, priority, classification, labels, and approved headers. Used directly by `sink.type: "fanout"` and disabled by default for single-sink deployments. |
 | `message_authenticity` | no | Optional fail-closed message-level authenticity verification before payload encryption and sink delivery. Disabled by default. |
 | `custody` | no | Optional tamper-evident payload and metadata hashes computed by the core before sink delivery. Disabled by default. |
 | `encryption` | no | Optional core payload encryption before messages are passed to any sink. |
 | `size_policy` | no | Optional destination-neutral payload, header, metadata, label, record, and batch-size bounds evaluated before any sink write. Disabled by default. |
 | `pre_sink_policy` | no | Optional fail-closed validation gate evaluated after normalization and core payload transformation, but before any sink write. |
 | `plugins` | no | Optional allow-listed discovery for externally installed sink connectors. Disabled by default. Built-in Oracle, file, and spool sinks do not need this section. |
-| `sinks` | no | Optional registry of named sink instances used by route validation, redacted output, named health checks, and future multi-sink fan-out. See [Named Sinks And Routing](named-sinks.md). |
+| `sinks` | no | Optional registry of named sink instances used by route validation, redacted output, named health checks, and active multi-sink fan-out. See [Named Sinks And Routing](named-sinks.md). |
 | `sink` | yes | Destination-specific sink configuration. `sink.type` chooses the sink implementation. |
 
 The only supported `delivery.ack_policy` value is `after_sink_commit`, which
@@ -1083,10 +1083,9 @@ context without adding many fixed framework fields.
 ### `routing`
 
 The `routing` section defines a generic route-match policy. It is disabled by
-default and currently performs selection only: it evaluates a normalized
-`NatsEnvelope` and returns logical sink target names. It does not open those
-sinks, fan out a message, commit a destination, or ACK JetStream. The separate
-multi-sink fan-out work will use this policy layer as the safe selector.
+default for ordinary single-sink deployments. When the active sink is
+`fanout`, the policy evaluates each normalized `NatsEnvelope`, returns logical
+sink target names, and drives writes to the matching named child sinks.
 
 Route matching always uses normalized framework fields:
 
@@ -1156,22 +1155,24 @@ Example with two match sets for the same subject and label family:
 }
 ```
 
-The target names are logical sink names. A future fan-out configuration will
-bind names such as `oracle_secret`, `file_secret_audit`, and `oracle_unclass`
-to concrete sink instances. For example, `oracle_secret` might point at one
-Oracle Database schema, `oracle_unclass` at another Oracle Database table or
-database, and `file_secret_audit` at a controlled local file destination. The
-individual sink connection, table, filesystem, and durability settings remain
-in sink-specific configuration blocks such as [Oracle Sink](oracle-sink.md)
-and [File Sink](file-sink.md).
+The target names are logical sink names. When the active sink uses
+`"type": "fanout"`, those names bind to concrete child sink instances in the
+top-level `sinks` registry or in the compact inline `sink.sinks` form. For
+example, `oracle_secret` can point at one Oracle Database schema,
+`oracle_unclass` at another Oracle Database table or database, and
+`file_secret_audit` at a controlled local file destination. The individual
+sink connection, table, filesystem, and durability settings remain in
+sink-specific configuration blocks such as [Oracle Sink](oracle-sink.md) and
+[File Sink](file-sink.md).
 
 The route target list accepts either a string or an object. A string is the
 short form for a required target. Required targets are the safe default:
-future fan-out delivery must wait for every required target to durably complete
-before ACK. A target object can set `required` to `false` for an optional side
-copy. Optional targets are explicitly outside the required ACK contract. If an
-optional target has not committed before the ACK gate releases, the project
-must not claim that the optional copy is guaranteed.
+active fan-out delivery waits for every required target to durably complete
+before the fan-out sink returns success to the runner. A target object can set
+`required` to `false` for an optional side copy. Optional targets are
+explicitly outside the required ACK contract. If an optional target has not
+committed before the ACK gate releases, the project does not claim that the
+optional copy is guaranteed.
 
 Optional targets require `target_sink_types` so the loader can apply and show
 bounded per-sink-type defaults in the effective redacted configuration. The
@@ -1184,7 +1185,7 @@ and `timeout_ms` values lower than `minimum_wait_ms` are rejected by
 | --- | --- | --- | --- | --- |
 | `enabled` | no | `false` | `true` or `false`. | Enables route selection. Disabled policies select no targets. |
 | `mode` | no | `first` | `first` or `all`. | `first` selects the first matching route. `all` selects every matching route and de-duplicates target names while preserving route order. |
-| `no_match` | no | `reject` | `reject`, `ignore`, or `default_route`. | Explicit action returned when no route matches. Delivery behavior remains owned by future fan-out execution. |
+| `no_match` | no | `reject` | `reject`, `ignore`, or `default_route`. | Explicit action when no route matches. In active fan-out, `reject` raises a permanent sink failure, `ignore` drops the message from fan-out delivery, and `default_route` selects the configured fallback targets. |
 | `target_sink_types` | no | `{}` | Object mapping logical target names to `file`, `mysql`, `oracle`, or `spool`. | Required when optional route targets are configured. Used to validate target references and apply optional ACK-gate defaults. |
 | `default_targets` | no | `[]` | String, target object, or list of those values. | Fallback targets used only when `no_match` is `default_route`. |
 | `routes` | no | `[]` | List of route objects. | Ordered route definitions. Required when `enabled` is true. At most 128 routes. |
@@ -1214,6 +1215,85 @@ Optional target defaults:
 | `spool` | `100` | `1000` | Local spool side effects are normally fast and bounded. |
 | `oracle` | `1000` | `5000` | Network-backed transactional writes need a longer grace window. |
 | `mysql` | `1000` | `5000` | Oracle MySQL writes have similar network and transaction timing concerns. |
+
+### Active Fan-Out Sink
+
+Use `sink.type: "fanout"` when one NATS consumer should route each normalized
+message to one or more named child sinks. Existing single-sink configurations
+remain unchanged; fan-out is opt-in.
+
+The compact inline form keeps the child sinks and routes together:
+
+```json
+{
+  "sink": {
+    "type": "fanout",
+    "route_match_mode": "all",
+    "sinks": {
+      "oracle_secret": {
+        "type": "oracle",
+        "dsn": "oracle-primary-service",
+        "user": "app_user",
+        "password_env": "ORACLE_PRIMARY_PASSWORD",
+        "table": "SECRET_EVENTS"
+      },
+      "file_audit": {
+        "type": "file",
+        "directory": "var/lib/nats-sinks/audit"
+      },
+      "oracle_unclass": {
+        "type": "oracle",
+        "dsn": "oracle-unclass-service",
+        "user": "app_user",
+        "password_env": "ORACLE_UNCLASS_PASSWORD",
+        "table": "UNCLASS_EVENTS"
+      }
+    },
+    "routes": [
+      {
+        "name": "secret-sensor-audit",
+        "match": {
+          "subject": "nl.mod.clas.>",
+          "priority": ["urgent"],
+          "classification": ["NATO SECRET"],
+          "labels_all": ["sensor", "audit"]
+        },
+        "targets": [
+          {"sink": "oracle_secret", "required": true},
+          {"sink": "file_audit", "required": false, "minimum_wait_ms": 500}
+        ]
+      },
+      {
+        "name": "unclass-sensor-oracle",
+        "match": {
+          "subject": "nl.mod.clas.>",
+          "priority": ["urgent"],
+          "classification": ["NATO UNCLASS"],
+          "labels_all": ["sensor", "audit"]
+        },
+        "targets": [{"sink": "oracle_unclass", "required": true}]
+      }
+    ]
+  }
+}
+```
+
+`nats-sink validate` normalizes that compact form into the same internal
+top-level `sinks` and `routing` sections used by larger configuration files.
+Operators who prefer separation can declare `sink: {"type": "fanout"}`,
+top-level `sinks`, and top-level `routing` explicitly.
+
+The fan-out sink preserves the project ACK invariant. The runner still ACKs
+only after `FanoutSink.write_batch(...)` returns success. In the default
+required-target mode, that means every selected required child sink has
+returned durable success. Optional targets are started at the same time as
+required targets, observed for their bounded wait window, and then allowed to
+fail or time out without blocking the required ACK path.
+
+Fan-out is not an atomic distributed transaction across destinations. If one
+required child sink commits and another required child sink fails before ACK,
+the fan-out sink raises a temporary failure and JetStream redelivery remains
+possible. Keep idempotency enabled on every child sink.
 
 Match fields:
 

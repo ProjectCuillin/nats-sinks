@@ -54,14 +54,14 @@ Unit tests cover:
 
 Routing and fan-out tests remain deterministic and local. They do not connect
 to NATS, Oracle Database, Oracle MySQL, or any other backend. The focused suite
-uses synthetic `NatsEnvelope` instances, route policies, and in-memory fan-out
-operation plans to prove that route selection and ACK gating behave correctly
-before future sink execution code is allowed to rely on them.
+uses synthetic `NatsEnvelope` instances, route policies, in-memory fan-out
+operation plans, and the production `FanoutSink` to prove that route
+selection, child-sink dispatch, and ACK gating behave correctly.
 
 Run the focused suite with:
 
 ```bash
-pytest tests/unit/test_fanout_certification.py
+pytest tests/unit/test_fanout_certification.py tests/unit/test_fanout_sink.py
 ```
 
 The suite covers:
@@ -75,12 +75,13 @@ The suite covers:
 - matching by subject, priority, classification, `labels_all`, `labels_any`,
   `labels_none`, approved non-secret headers, and combined match sets;
 - `nats-sink validate` coverage for the documented named multi-sink example
-  and invalid route, sink, match, optional wait, and redaction scenarios.
+  and invalid route, sink, match, optional wait, fan-out, and redaction
+  scenarios.
 
 The same suite is part of `scripts/check-sinks.sh` and therefore part of the
 deterministic release readiness path. Live NATS-to-destination fan-out tests
-remain future work and must stay opt-in until a real fan-out execution sink or
-orchestration layer is implemented.
+remain opt-in because they need the same live destination credentials as the
+underlying child sinks.
 
 Ordered-consumer support is currently documentation and backlog only. Future
 ordered-inspection tests should prove that inspection tooling is read-only,

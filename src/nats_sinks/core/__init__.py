@@ -72,6 +72,7 @@ from nats_sinks.core.encryption import (
     is_encrypted_payload_envelope,
 )
 from nats_sinks.core.envelope import NatsEnvelope
+from nats_sinks.core.fanout_sink import FanoutSink
 from nats_sinks.core.freshness import record_event_freshness_metrics
 from nats_sinks.core.message_metadata import (
     DEFAULT_CLASSIFICATION_HEADER,
@@ -151,6 +152,7 @@ __all__ = [
     "FanoutAckGateError",
     "FanoutAckGateResult",
     "FanoutRequiredSinkError",
+    "FanoutSink",
     "FanoutTargetResult",
     "InMemoryMetrics",
     "JetStreamAdvisory",

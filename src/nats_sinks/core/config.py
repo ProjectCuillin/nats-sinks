@@ -430,8 +430,8 @@ def _normalize_sink_instance_name(value: object, *, source: str) -> str:
 
     Named sinks intentionally share the route-target grammar. That keeps
     operator-facing references stable across config validation, route reports,
-    and future fan-out execution without letting path-like or expression-like
-    values into the runtime model.
+    and fan-out execution without letting path-like or expression-like values
+    into the runtime model.
     """
 
     return _normalize_routing_name(value, source=source)
@@ -512,6 +512,67 @@ def _raw_routing_target_names(raw_routing: object) -> tuple[str, ...]:
             if isinstance(route, dict):
                 names.extend(_raw_route_target_names(route.get("targets")))
     return tuple(names)
+
+
+def _inline_fanout_routing_from_sink(
+    prepared_sink: dict[str, object],
+    raw_sinks: object,
+) -> dict[str, object] | None:
+    """Pop compact fan-out route fields from `sink` into a routing section."""
+
+    inline_fields = {
+        "routes": prepared_sink.pop("routes", None),
+        "route_match_mode": prepared_sink.pop("route_match_mode", None),
+        "no_match": prepared_sink.pop("no_match", None),
+        "default_targets": prepared_sink.pop("default_targets", None),
+        "target_sink_types": prepared_sink.pop("target_sink_types", None),
+    }
+    if not any(value is not None for value in inline_fields.values()):
+        return None
+
+    inline_routing: dict[str, object] = {"enabled": True}
+    field_map = {
+        "route_match_mode": "mode",
+        "no_match": "no_match",
+        "default_targets": "default_targets",
+        "target_sink_types": "target_sink_types",
+        "routes": "routes",
+    }
+    for source, target in field_map.items():
+        value = inline_fields[source]
+        if value is not None:
+            inline_routing[target] = value
+
+    if inline_fields["target_sink_types"] is None:
+        inferred = _infer_inline_fanout_target_sink_types(raw_sinks, inline_routing)
+        if inferred:
+            inline_routing["target_sink_types"] = inferred
+    return inline_routing
+
+
+def _infer_inline_fanout_target_sink_types(
+    raw_sinks: object,
+    raw_routing: object,
+) -> dict[str, str]:
+    """Infer ACK-gate sink types for compact fan-out configs."""
+
+    if not isinstance(raw_sinks, dict):
+        return {}
+    inferred_types: dict[str, str] = {}
+    for raw_name, raw_child_sink in raw_sinks.items():
+        if not isinstance(raw_name, str) or not isinstance(raw_child_sink, dict):
+            continue
+        raw_child_type = raw_child_sink.get("type")
+        if not isinstance(raw_child_type, str):
+            continue
+        child_type = raw_child_type.strip().lower()
+        if child_type in FANOUT_ACK_GATE_SINK_TYPES:
+            inferred_types[raw_name] = child_type
+    return {
+        target_name: inferred_types[target_name]
+        for target_name in _raw_routing_target_names(raw_routing)
+        if target_name in inferred_types
+    }
 
 
 def _validate_fanout_wait_ms(value: object, *, source: str, maximum: int) -> int | None:
@@ -2951,6 +3012,53 @@ class AppConfig(BaseModel):
     plugins: SinkPluginConfig = Field(default_factory=SinkPluginConfig)
     sinks: dict[str, SinkConfig] = Field(default_factory=dict)
     sink: SinkConfig
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_inline_fanout_config(cls, value: object) -> object:
+        """Translate the compact `sink.type=fanout` form into core sections.
+
+        The public fan-out example keeps child sinks and routes close together
+        under the active sink.  Internally, the framework already validates
+        named sinks and route policy as top-level sections.  This normalization
+        accepts the compact form while preserving one validation path for both
+        styles.
+        """
+
+        if not isinstance(value, dict):
+            return value
+        raw_sink = value.get("sink")
+        if not isinstance(raw_sink, dict):
+            return value
+        raw_type = raw_sink.get("type")
+        if not isinstance(raw_type, str) or raw_type.strip().lower() != "fanout":
+            return value
+
+        prepared = dict(value)
+        prepared_sink = dict(raw_sink)
+        inline_sinks = prepared_sink.pop("sinks", None)
+
+        if inline_sinks is not None:
+            if "sinks" in prepared:
+                raise ValueError(
+                    "sink.type fanout must not define both sink.sinks and top-level sinks"
+                )
+            prepared["sinks"] = inline_sinks
+
+        inline_routing = _inline_fanout_routing_from_sink(
+            prepared_sink,
+            prepared.get("sinks"),
+        )
+        if inline_routing is not None:
+            if "routing" in prepared:
+                raise ValueError(
+                    "sink.type fanout must not define both sink routing fields and "
+                    "top-level routing"
+                )
+            prepared["routing"] = inline_routing
+
+        prepared["sink"] = prepared_sink
+        return prepared
 
     @model_validator(mode="before")
     @classmethod

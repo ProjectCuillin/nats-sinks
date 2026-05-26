@@ -28,6 +28,7 @@ from pydantic import ValidationError as PydanticValidationError
 from nats_sinks import __version__
 from nats_sinks.core.config import AppConfig, SinkPluginConfig, load_config, redacted_config
 from nats_sinks.core.errors import ConfigurationError, NatsSinksError
+from nats_sinks.core.fanout_sink import FanoutSink
 from nats_sinks.core.logging import configure_logging
 from nats_sinks.core.metrics import JsonFileMetrics, MetricsRecorder
 from nats_sinks.core.nats_options import build_nats_connect_options
@@ -153,12 +154,45 @@ def _load_or_exit(config_path: Path) -> AppConfig:
 
 def _build_sink(config: AppConfig) -> Sink:
     raw_sink = _raw_sink_config(config)
+    if raw_sink.get("type") == "fanout":
+        return _build_fanout_sink(config, raw_sink)
     return _build_sink_from_raw(config, raw_sink)
 
 
 def _build_sink_from_raw(config: AppConfig, raw_sink: dict[str, Any]) -> Sink:
     sink_type = str(raw_sink.get("type", ""))
+    if sink_type == "fanout":
+        raise ConfigurationError("fanout can only be used as the active top-level sink")
     return _registry(config.plugins).create(sink_type, raw_sink)
+
+
+def _validate_fanout_config(config: AppConfig, raw_sink: dict[str, Any]) -> None:
+    """Validate the active fan-out sink without opening child destinations."""
+
+    extra_fields = sorted(set(raw_sink) - {"type"})
+    if extra_fields:
+        joined = ", ".join(extra_fields)
+        raise ConfigurationError(
+            "sink.type 'fanout' accepts only the 'type' field after config normalization; "
+            f"unexpected field(s): {joined}"
+        )
+    if not config.sinks:
+        raise ConfigurationError("sink.type 'fanout' requires named child sinks")
+    if not config.routing.enabled:
+        raise ConfigurationError("sink.type 'fanout' requires routing.enabled true")
+    if not config.routing.target_names():
+        raise ConfigurationError("sink.type 'fanout' routing must select at least one target")
+
+
+def _build_fanout_sink(config: AppConfig, raw_sink: dict[str, Any]) -> FanoutSink:
+    """Create the active fan-out sink and only the child sinks referenced by routes."""
+
+    _validate_fanout_config(config, raw_sink)
+    children: dict[str, Sink] = {}
+    for target_name in config.routing.target_names():
+        child_raw = _raw_named_sink_config(config, target_name)
+        children[target_name] = _build_sink_from_raw(config, child_raw)
+    return FanoutSink(children=children, routing=config.routing)
 
 
 def _validate_sink_config(
@@ -170,6 +204,11 @@ def _validate_sink_config(
     """Validate one sink instance through the registry without opening it."""
 
     try:
+        if raw_sink.get("type") == "fanout":
+            if label != "sink":
+                raise ConfigurationError(f"{label}: fanout may only be the active sink")
+            _validate_fanout_config(config, raw_sink)
+            return
         _build_sink_from_raw(config, raw_sink)
     except (ConfigurationError, PydanticValidationError) as exc:
         raise ConfigurationError(f"{label}: {exc}") from exc

@@ -387,11 +387,11 @@ Routes are evaluated in order, and the first matching route wins.
 Oracle `table_routes` are sink-local subject-to-table routing. They are
 separate from the generic top-level `routing` policy. The generic policy can
 select logical targets such as `oracle_secret` or `oracle_unclass` from
-subject, priority, classification, labels, and approved header hints, but it
-does not yet bind those target names to concrete Oracle sink instances or
-tables. Future fan-out delivery will make that binding explicit while keeping
-Oracle connection, table, idempotency, and column settings in Oracle-specific
-configuration.
+subject, priority, classification, labels, and approved header hints. When the
+active sink is `fanout`, those targets bind to named Oracle sink instances in
+the top-level `sinks` registry or compact inline `sink.sinks` form. Each child
+Oracle sink still owns its own connection, table, idempotency, staging, and
+column settings.
 
 Per-route overrides are intentionally conservative:
 

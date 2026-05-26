@@ -112,6 +112,7 @@ from nats_sinks.core.errors import (
     TemporarySinkError,
     ValidationError,
 )
+from nats_sinks.core.fanout_sink import FanoutSink
 from nats_sinks.core.message_metadata import (
     DEFAULT_CLASSIFICATION_HEADER,
     DEFAULT_LABELS_HEADER,
@@ -207,6 +208,7 @@ __all__ = [
     "FanoutAckGateError",
     "FanoutAckGateResult",
     "FanoutRequiredSinkError",
+    "FanoutSink",
     "FanoutTargetResult",
     "FileSink",
     "FlushableSink",
