@@ -149,6 +149,25 @@ public API for the feature. The implementation checks the active
 subscribing. If the option is unavailable or ambiguous, inspection stops with a
 configuration error instead of silently falling back to another delivery mode.
 
+The compatibility layer is intentionally narrow and fail-closed:
+
+- it checks only the public `JetStreamContext.subscribe` attribute used by the
+  NATS Python client;
+- it requires that attribute to be callable;
+- it inspects the public call signature for the `ordered_consumer` keyword;
+- it treats missing, partial, non-callable, or unreadable signatures as
+  unsupported;
+- it reports a short sanitized reason without printing server locations,
+  subjects, credentials, environment variables, dependency paths, or private
+  exception text.
+
+The helper does not use private NATS client internals, dynamic imports, or
+version-string guessing. That keeps the behavior reviewable: when a client
+supports the documented option, inspection may proceed; when support is absent
+or cannot be proven safely, the command stops before it creates a subscription.
+The production `JetStreamSinkRunner` is not part of this compatibility check
+and continues to use the durable pull-consumer path.
+
 ## Security Guidance
 
 Inspection and replay are sensitive operations. Even without payload output,
@@ -179,9 +198,10 @@ The evaluation recommended three separate follow-up items:
 2. Add a read-only ordered-consumer inspection CLI.
 3. Add durable replay-to-sinks guidance and tooling design.
 
-The first two items are now implemented by `nats-sink inspect-ordered`. The
-third remains deliberately separate because replay into destinations has
-different delivery semantics and must stay on durable pull consumers.
+The first two items are now implemented by `nats-sink inspect-ordered` and the
+ordered-consumer compatibility layer. The third remains deliberately separate
+because replay into destinations has different delivery semantics and must stay
+on durable pull consumers.
 
 This split prevents a useful inspection feature from accidentally weakening
 the durable sink runtime.

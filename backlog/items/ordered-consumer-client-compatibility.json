@@ -3,7 +3,7 @@
   "title": "[Feature]: Add ordered-consumer client compatibility and fail-closed capability checks",
   "area": "Core runtime and delivery semantics",
   "priority": "P3 - backlog candidate",
-  "target_release": "unscheduled",
+  "target_release": "v0.4.2",
   "labels": ["nats", "security", "testing"],
   "problem": "NATS ordered-consumer support varies by client API generation. The current nats-py runtime used by nats-sinks exposes ordinary subscribe and pull-subscribe helpers but does not expose an obvious high-level ordered-consumer helper through the imported JetStreamContext API. A future inspection feature needs compatibility detection before it can be production-quality.",
   "proposal": "Add a small compatibility layer that detects whether the installed NATS Python client supports ordered consumers through a documented public API. If support is absent or ambiguous, ordered inspection features must fail closed with a clear message. The layer should isolate client-version checks from delivery logic and should avoid dynamic imports or private API use unless a future design review explicitly approves and tests it.",
@@ -18,10 +18,9 @@
     "Documentation explains dependency and client-version limitations."
   ],
   "tests": "Add unit tests with fake client objects for supported, unsupported, partial, and exception-raising capability states. Run scripts/check.sh.",
-  "documentation": "Update ordered-consumer evaluation, dependency management, CLI, roadmap, and changelog documentation.",
+  "documentation": "Update ordered-consumer evaluation, dependency management, CLI, test-report, and changelog documentation.",
   "closeout": "Close after the release containing ordered-consumer compatibility checks is published. Include release tag, tests, documentation, and limitations.",
   "relationships": {
-    "related": ["#33"],
-    "blocks": ["backlog:ordered-inspection-cli"]
+    "related": ["#33", "#122"]
   }
 }

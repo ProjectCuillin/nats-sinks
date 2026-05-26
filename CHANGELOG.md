@@ -19,6 +19,11 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   headers by default, validates message, payload-byte, pending, timeout, and
   JSONL output-path limits, and documents that ordered inspection is not
   durable sink replay.
+- Added an explicit ordered-consumer client compatibility result for issue
+  #121. The inspection path now names supported, unsupported, non-callable,
+  partial, and ambiguous NATS client capability states through sanitized
+  fail-closed reasons while leaving the production durable pull runner
+  unchanged.
 - Added push-consumer guardrails and opt-in runner support for issues #123 and
   #125. The new `push_consumer` configuration is disabled by default, requires
   manual ACK, validates deliver subjects, deliver groups, pending message and

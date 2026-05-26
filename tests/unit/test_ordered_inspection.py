@@ -17,6 +17,7 @@ from nats_sinks.core.errors import ConfigurationError
 from nats_sinks.core.ordered_inspection import (
     OrderedInspectionOptions,
     collect_ordered_inspection_records,
+    detect_ordered_consumer_capability,
     ordered_consumer_supported,
     render_ordered_inspection_jsonl,
     resolve_inspection_output_path,
@@ -101,10 +102,71 @@ class FakeUnsupportedJetStream:
         _ = subject
 
 
+class FakeNonCallableSubscribeJetStream:
+    subscribe = object()
+
+
+class FakeAmbiguousSubscribe:
+    @property
+    def __signature__(self) -> object:
+        raise ValueError("private parser detail")
+
+    def __call__(self, subject: str) -> None:
+        _ = subject
+
+
+class FakeAmbiguousJetStream:
+    subscribe = FakeAmbiguousSubscribe()
+
+
 def test_ordered_consumer_capability_detection_is_fail_closed() -> None:
     assert ordered_consumer_supported(FakeOrderedJetStream([])) is True
     assert ordered_consumer_supported(FakeUnsupportedJetStream()) is False
+    assert ordered_consumer_supported(FakeNonCallableSubscribeJetStream()) is False
+    assert ordered_consumer_supported(FakeAmbiguousJetStream()) is False
     assert ordered_consumer_supported(object()) is False
+
+
+@pytest.mark.parametrize(
+    ("jetstream", "supported", "reason"),
+    [
+        (
+            FakeOrderedJetStream([]),
+            True,
+            "JetStream subscribe API exposes ordered_consumer",
+        ),
+        (
+            FakeUnsupportedJetStream(),
+            False,
+            "JetStream subscribe API does not expose ordered_consumer",
+        ),
+        (
+            FakeNonCallableSubscribeJetStream(),
+            False,
+            "JetStream subscribe attribute is not callable",
+        ),
+        (
+            FakeAmbiguousJetStream(),
+            False,
+            "JetStream subscribe signature is unavailable",
+        ),
+        (
+            object(),
+            False,
+            "JetStream context does not expose subscribe",
+        ),
+    ],
+)
+def test_ordered_consumer_capability_result_names_client_state(
+    jetstream: object,
+    supported: bool,
+    reason: str,
+) -> None:
+    result = detect_ordered_consumer_capability(jetstream)
+
+    assert result.supported is supported
+    assert result.checked_api == "JetStreamContext.subscribe"
+    assert result.reason == reason
 
 
 async def test_ordered_inspection_redacts_payload_and_sensitive_headers() -> None:
@@ -176,12 +238,31 @@ async def test_ordered_inspection_stops_before_payload_byte_limit() -> None:
 
 
 async def test_ordered_inspection_fails_closed_without_client_support() -> None:
-    with pytest.raises(ConfigurationError, match="ordered-consumer inspection requires"):
+    with pytest.raises(
+        ConfigurationError,
+        match="does not expose ordered_consumer",
+    ):
         await collect_ordered_inspection_records(
             FakeUnsupportedJetStream(),
             subject="orders.created",
             stream="ORDERS",
         )
+
+
+async def test_ordered_inspection_fails_closed_when_client_support_is_ambiguous() -> None:
+    with pytest.raises(ConfigurationError) as exc_info:
+        await collect_ordered_inspection_records(
+            FakeAmbiguousJetStream(),
+            subject="orders.created",
+            stream="ORDERS",
+        )
+
+    message = str(exc_info.value)
+    assert "ordered-consumer inspection requires" in message
+    assert "signature is unavailable" in message
+    assert "private parser detail" not in message
+    assert "orders.created" not in message
+    assert "ORDERS" not in message
 
 
 def test_ordered_inspection_output_path_must_stay_under_root(tmp_path: Path) -> None:

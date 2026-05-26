@@ -14,19 +14,22 @@ generated database passwords, or full raw logs from live systems.
 | Field | Value |
 | --- | --- |
 | Overall result | Pass |
-| Report generated | 2026-05-26 issue `#122` validation for upcoming `v0.4.2` development |
+| Report generated | 2026-05-26 issue `#121` validation for upcoming `v0.4.2` development |
 | Project version | `0.4.1` package metadata with `v0.4.2` development changes |
 | Python version | 3.12.4 |
-| Git revision checked | Branch `issue-122-ordered-inspection-cli` based on `release-v0.4.2` |
+| Git revision checked | Branch `issue-121-ordered-consumer-compatibility` based on `release-v0.4.2` |
 | Live NATS details | Environment-gated live tests skipped unless explicitly enabled |
 | Live Oracle Database details | Environment-gated live tests skipped unless explicitly enabled |
 | Live Oracle MySQL details | Environment-gated live tests skipped unless explicitly enabled |
 
-This refresh covered the read-only ordered-consumer inspection CLI for issue
-`#122`, plus a full local regression cycle for the current development branch.
-The new tests prove fail-closed ordered-consumer capability detection, redacted
-default output, explicit payload opt-in, message and payload-byte bounds,
-JSONL output-path validation, subscription cleanup, and the CLI contract that
+This refresh covered ordered-consumer client compatibility for issue `#121`,
+plus a full local regression cycle for the current development branch. The new
+tests prove supported, unsupported, non-callable, partial, missing, and
+ambiguous NATS client capability states, including sanitized fail-closed
+messages that do not echo subjects, stream names, or private exception text.
+The existing ordered-inspection tests continue to prove redacted default
+output, explicit payload opt-in, message and payload-byte bounds, JSONL
+output-path validation, subscription cleanup, and the CLI contract that
 inspection does not build or write a sink.
 
 ```mermaid
@@ -63,18 +66,18 @@ flowchart LR
 
 | Test Area | Command | Result |
 | --- | --- | --- |
-| Ordered-inspection focused subset | `python -m pytest tests/unit/test_ordered_inspection.py tests/unit/test_cli.py -q` | Pass, `22 passed` |
-| Main repository test suite | `scripts/check.sh` | Pass, `1047 passed, 11 skipped` |
+| Ordered-inspection focused subset | `python -m pytest tests/unit/test_ordered_inspection.py tests/unit/test_cli.py -q` | Pass, `28 passed` |
+| Main repository test suite | `scripts/check.sh` | Pass, `1053 passed, 11 skipped` |
 | Encryption and sink contract subset | `scripts/check.sh` | Pass, `123 passed` |
 | Sink capability subset | `scripts/check.sh` | Pass, `117 passed` |
 | Documentation builds | `scripts/check.sh` | Pass for Read the Docs and GitHub Pages MkDocs builds |
 | Example validation | `nats-sink validate examples/named-multi-sink/config.json` through unit/CLI coverage | Pass |
 
 The skipped tests are the existing environment-gated live NATS, Oracle
-Database, Oracle MySQL, and push-consumer integration tests. Issue `#122` adds
-the focused ordered-inspection layer. Pull mode remains the production default,
-and ordered inspection remains read-only troubleshooting rather than sink
-delivery or replay.
+Database, Oracle MySQL, and push-consumer integration tests. Issue `#121` adds
+the explicit ordered-consumer compatibility layer. Pull mode remains the
+production default, and ordered inspection remains read-only troubleshooting
+rather than sink delivery or replay.
 
 ## Ordered-Inspection Evidence
 
@@ -82,7 +85,12 @@ The new focused coverage verifies:
 
 - the command is explicitly named `inspect-ordered` and must be invoked
   separately from `run`;
-- unsupported `nats-py` ordered-consumer capability fails closed;
+- supported `nats-py` ordered-consumer capability is detected through the
+  public `JetStreamContext.subscribe` signature;
+- unsupported, partial, non-callable, missing, and ambiguous
+  ordered-consumer capability states fail closed;
+- fail-closed messages are sanitized and do not include subjects, stream
+  names, or private client exception details;
 - payloads and sensitive headers are redacted by default;
 - payload output requires `--include-payload`;
 - message count, payload-byte, pending-message, pending-byte, timeout, and
@@ -93,7 +101,7 @@ The new focused coverage verifies:
 
 ## Issues Found During Validation
 
-No new release-blocking issues were found during the `#122` validation cycle.
+No new release-blocking issues were found during the `#121` validation cycle.
 
 ## Documentation Evidence
 
@@ -121,6 +129,5 @@ The following public documentation was updated and built successfully:
 - [Named Multi-Sink Example](https://github.com/ProjectCuillin/nats-sinks/blob/main/examples/named-multi-sink/config.json)
 - [Documentation Home](index.md)
 
-The changelog, backlog metadata, CLI guide, security guidance, operations
-guide, testing guide, NATS feature-gap analysis, README, and ordered-consumer
-evaluation documentation were also updated for issue `#122`.
+The changelog, backlog metadata, CLI guide, dependency-management page, and
+ordered-consumer evaluation documentation were also updated for issue `#121`.
