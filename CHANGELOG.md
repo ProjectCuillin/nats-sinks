@@ -37,6 +37,14 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   operation plans to certify one-to-one routing, one-to-many target selection,
   required ACK blocking, optional timeout behavior, no-route handling, CLI
   validation, and redaction for future fan-out-capable sinks.
+- Added fan-out observability metrics and sanitized logging helpers for issue
+  #134. The new aggregate metrics cover route matches, routed and no-route
+  messages, selected child sink counts, required child success or failure,
+  optional child success, failure, or timeout, ACK eligibility, ACK blocking,
+  ACK-gate wait time, and fan-out batch duration, with `nats-sink-metrics`
+  CLI coverage and documentation that keeps subjects, sink names, labels,
+  classifications, payloads, and destination details out of metrics by
+  default.
 - Added a local-only post-release PyPI artifact validation harness for issue
   #252. The script builds a short-lived Oracle Linux 9 slim validation
   container, installs `nats-sinks` from PyPI instead of the local checkout,

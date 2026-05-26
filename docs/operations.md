@@ -246,11 +246,20 @@ then inspect that snapshot without connecting to NATS or a destination backend.
 ```bash
 nats-sink-metrics show .local/nats-sinks/metrics.json --format table
 nats-sink-metrics show .local/nats-sinks/metrics.json --metric "event_*" --metric "events_*"
+nats-sink-metrics show .local/nats-sinks/metrics.json --metric "fanout_*"
 nats-sink-metrics get .local/nats-sinks/metrics.json messages_failed_total --default 0
 ```
 
 The full CLI reference, Python hooks, shell examples, exit codes, and snapshot
 schema are documented in [Metrics](metrics.md).
+
+Future multi-sink fan-out delivery uses dedicated aggregate metrics such as
+`fanout_messages_routed_total`, `fanout_required_child_failure_total`,
+`fanout_optional_child_timeout_total`, and `fanout_ack_gate_wait_seconds`.
+Use these to distinguish "required custody failed, do not ACK" from "optional
+side copy timed out, required ACK gate released". They are counts and timing
+signals only; they do not include subjects, payloads, sink names,
+classification values, labels, or destination identifiers.
 
 Confirmed JetStream acknowledgement support has been evaluated for a future
 release, but it is not enabled today. If that option is implemented later, it

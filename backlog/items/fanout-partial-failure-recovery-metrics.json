@@ -3,7 +3,7 @@
   "title": "[Feature]: Add fan-out partial-failure recovery logging and metrics",
   "area": "Metrics and observability",
   "priority": "P3 - backlog candidate",
-  "target_release": "unscheduled",
+  "target_release": "v0.4.2",
   "labels": ["observability", "nats", "sink-new"],
   "problem": "When one message is routed to multiple sinks, operators need to understand which route matched, which child sinks were selected, which required sinks committed, which optional sinks timed out or failed, and whether the original JetStream message was ACKed. Without dedicated metrics and sanitized logs, partial fan-out failures are difficult to troubleshoot and can be mistaken for either full success or full loss.",
   "proposal": "Add fan-out-specific counters, gauges, and structured log events. Candidate metrics include routed messages, no-route messages, selected child sink count, required child success, required child failure, optional child success, optional child timeout, optional child failure, ACK-gate wait duration, and fan-out batch duration. The metrics model should integrate with nats-sink-metrics and the observability core while keeping subject and sink labels disabled by default unless an explicit policy permits them.",

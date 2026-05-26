@@ -556,6 +556,104 @@ Priority lane metrics are useful for answering operational questions such as:
 For the scheduling model and configuration details, read
 [Priority-Aware Processing Lanes](priority-lanes.md).
 
+## Fan-Out Metrics
+
+Fan-out metrics are emitted by the reusable route-selection and ACK-gate
+observability helpers that future multi-sink delivery uses. They are
+aggregate-only and deliberately payload-free. The helpers count how many route
+policy entries matched, how many messages selected child sinks, how many child
+sinks were selected, whether required sinks succeeded or failed, whether
+optional sinks succeeded, failed, or timed out, and whether the original
+JetStream message became eligible for ACK.
+
+The fan-out metrics do not expose route names, sink instance names, NATS
+subjects, classification values, labels, message IDs, file paths, database
+names, or payload fields. If a deployment later wants subject-aware or
+sink-aware external export, that must be approved through an explicit
+observability policy with bounded cardinality.
+
+The fan-out metric suffixes are:
+
+| Metric suffix | Type | Meaning |
+| --- | --- | --- |
+| `fanout_route_matches_total` | counter | Matched route policy entries without exporting route names. |
+| `fanout_messages_routed_total` | counter | Messages with at least one selected child sink target. |
+| `fanout_messages_no_route_total` | counter | Messages rejected or ignored because no child sink target was selected. |
+| `fanout_child_sinks_selected_total` | counter | Selected child sink operations across routed messages. |
+| `current_fanout_child_sinks_selected` | gauge | Child sink targets selected for the latest evaluated message. |
+| `fanout_required_child_success_total` | counter | Required child sink operations that committed before ACK. |
+| `fanout_required_child_failure_total` | counter | Required child sink operations that failed and blocked ACK. |
+| `fanout_optional_child_success_total` | counter | Optional child sink operations that completed before the ACK gate released. |
+| `fanout_optional_child_failure_total` | counter | Optional child sink operations that failed without blocking required ACK. |
+| `fanout_optional_child_timeout_total` | counter | Optional child sink operations that exceeded their bounded ACK wait window. |
+| `fanout_messages_acked_total` | counter | Fan-out messages whose original JetStream message became eligible for ACK. |
+| `fanout_messages_ack_blocked_total` | counter | Fan-out messages whose original ACK was blocked by required failure. |
+| `fanout_ack_gate_wait_seconds` | observation | Seconds spent waiting at the fan-out ACK gate. |
+| `fanout_batch_seconds` | observation | Seconds spent processing a fan-out batch across selected child sinks. |
+
+Show only fan-out rows:
+
+```bash
+nats-sink-metrics show .local/nats-sinks/metrics.json \
+  --format shell \
+  --metric "fanout_*" \
+  --metric "current_fanout_*"
+```
+
+Example output:
+
+```text
+CURRENT_FANOUT_CHILD_SINKS_SELECTED=2
+FANOUT_ACK_GATE_WAIT_SECONDS_COUNT=1
+FANOUT_ACK_GATE_WAIT_SECONDS_MAX=0.125
+FANOUT_CHILD_SINKS_SELECTED_TOTAL=2
+FANOUT_MESSAGES_ACKED_TOTAL=1
+FANOUT_MESSAGES_ROUTED_TOTAL=1
+FANOUT_OPTIONAL_CHILD_TIMEOUT_TOTAL=1
+FANOUT_REQUIRED_CHILD_SUCCESS_TOTAL=1
+```
+
+Prometheus text output from the local CLI keeps the same aggregate posture:
+
+```bash
+nats-sink-metrics show .local/nats-sinks/metrics.json \
+  --format prometheus \
+  --metric "fanout_*" \
+  --namespace mission_ops
+```
+
+Example output:
+
+```text
+# HELP mission_ops_fanout_messages_routed_total Messages with at least one selected fan-out child sink target.
+# TYPE mission_ops_fanout_messages_routed_total counter
+mission_ops_fanout_messages_routed_total 1
+# HELP mission_ops_fanout_ack_gate_wait_seconds Elapsed seconds spent waiting at the fan-out ACK gate.
+# TYPE mission_ops_fanout_ack_gate_wait_seconds summary
+mission_ops_fanout_ack_gate_wait_seconds_count 1
+mission_ops_fanout_ack_gate_wait_seconds_sum 0.125
+```
+
+Python test harnesses and future fan-out delivery code can use the helper
+module directly:
+
+```python
+from nats_sinks.core.fanout_observability import record_fanout_ack_gate_result
+
+summary = record_fanout_ack_gate_result(
+    metrics,
+    ack_gate_result,
+    ack_wait_seconds=0.125,
+    batch_seconds=0.250,
+)
+assert summary.messages_acked == 1
+```
+
+Structured fan-out logs are human-readable and intentionally sanitized. A
+required failure log says that the original message remains unacknowledged; an
+optional timeout log says that the ACK gate released with optional issues. The
+logs include counts and outcome categories, not payloads or child sink names.
+
 ## Oracle Duplicate And Conflict Metrics
 
 Oracle duplicate/conflict metrics are emitted by `OracleSink` when a write path
@@ -861,6 +959,11 @@ nats_connection_reconnected_total
 nats_connection_closed_total
 nats_discovered_servers_total
 nats_async_errors_total
+fanout_route_matches_total
+fanout_messages_routed_total
+fanout_required_child_success_total
+fanout_optional_child_timeout_total
+fanout_ack_gate_wait_seconds
 last_sink_success_epoch_seconds
 current_batch_messages
 ```
@@ -1095,6 +1198,20 @@ The preferred metric suffixes are:
 | `priority_lane_defaulted_total` | counter | Messages routed to the default priority lane because priority was missing or unknown. |
 | `priority_lane_rejected_total` | counter | Messages rejected because priority metadata violated the priority-lane policy. |
 | `current_priority_lanes_active` | gauge | Number of configured priority lanes represented in the active scheduled batch. |
+| `fanout_route_matches_total` | counter | Route policy entries matched by fan-out delivery without exposing route names. |
+| `fanout_messages_routed_total` | counter | Messages with at least one selected fan-out child sink target. |
+| `fanout_messages_no_route_total` | counter | Messages rejected or ignored because routing selected no fan-out targets. |
+| `fanout_child_sinks_selected_total` | counter | Selected fan-out child sink operations across routed messages. |
+| `current_fanout_child_sinks_selected` | gauge | Child sink targets selected for the latest evaluated message. |
+| `fanout_required_child_success_total` | counter | Required fan-out child sink operations that committed before ACK. |
+| `fanout_required_child_failure_total` | counter | Required fan-out child sink operations that failed and blocked ACK. |
+| `fanout_optional_child_success_total` | counter | Optional fan-out child sink operations that completed before the ACK gate released. |
+| `fanout_optional_child_failure_total` | counter | Optional fan-out child sink operations that failed without blocking required ACK. |
+| `fanout_optional_child_timeout_total` | counter | Optional fan-out child sink operations that exceeded their bounded ACK wait window. |
+| `fanout_messages_acked_total` | counter | Fan-out messages whose original JetStream message became eligible for ACK. |
+| `fanout_messages_ack_blocked_total` | counter | Fan-out messages whose original ACK was blocked by required failure. |
+| `fanout_ack_gate_wait_seconds` | observation | Seconds spent waiting at the fan-out ACK gate. |
+| `fanout_batch_seconds` | observation | Seconds spent processing a fan-out batch across selected child sinks. |
 | `oracle_conflicts_total` | counter | Oracle write conflicts observed by OracleSink, such as duplicate-key conflicts. |
 | `oracle_duplicates_total` | counter | Oracle rows identified as duplicate prior processing through idempotent handling. |
 | `oracle_duplicate_ignored_total` | counter | Oracle duplicate rows safely ignored by `insert_ignore` mode. |

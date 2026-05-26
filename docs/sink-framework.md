@@ -283,6 +283,16 @@ side effects, and when the JetStream ACK is allowed to happen. The reusable
 ACK-gate helper waits for required targets and records optional timeout or
 failure categories without exposing payloads or destination secrets.
 
+Fan-out observability is kept separate from the ACK gate itself. Future
+delivery code should call the aggregate helpers in
+`nats_sinks.core.fanout_observability` to record route matches, selected child
+sink counts, required success or failure, optional success, optional failure,
+optional timeout, ACK-gate wait time, and fan-out batch duration. Those helpers
+record only counts and timings. They do not export route names, child sink
+names, subjects, classification values, labels, payload data, file paths, or
+database connection details unless a future explicit observability policy adds
+such sharing with bounded cardinality.
+
 `tests/unit/test_fanout_certification.py` is the reusable certification surface
 for this boundary. It proves the documented NATO SECRET and NATO UNCLASS
 route examples, one-to-one selection, one-to-many selection, required failure

@@ -650,6 +650,14 @@ be sensitive, and unbounded labels can damage Prometheus performance. The
 `subjects` array is therefore an operator review aid and a future extension
 point, not a promise that subject labels will be exported today.
 
+Fan-out metrics follow the same rule. Metrics such as
+`fanout_messages_routed_total`, `fanout_child_sinks_selected_total`,
+`fanout_required_child_failure_total`, and
+`fanout_optional_child_timeout_total` are aggregate counters. They do not share
+child sink names, route names, subjects, classification values, labels, file
+paths, database names, or connection details unless a future policy explicitly
+allows a bounded, reviewed label set.
+
 Example subject entry:
 
 ```json

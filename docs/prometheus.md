@@ -243,6 +243,38 @@ nats_sinks_event_age_at_receive_seconds_count 256
 nats_sinks_event_age_at_receive_seconds_max 12.428
 ```
 
+Fan-out metrics can be shared the same way when a deployment needs evidence
+about multi-destination custody without exposing route or sink details:
+
+```json
+{
+  "enabled": true,
+  "allowed_metrics": [
+    "fanout_messages_routed_total",
+    "fanout_required_child_success_total",
+    "fanout_required_child_failure_total",
+    "fanout_optional_child_timeout_total",
+    "fanout_messages_acked_total",
+    "fanout_messages_ack_blocked_total",
+    "fanout_ack_gate_wait_seconds"
+  ],
+  "prometheus": {
+    "enabled": true
+  }
+}
+```
+
+Prometheus receives only the approved aggregate names:
+
+```text
+# HELP nats_sinks_fanout_required_child_failure_total Required fan-out child sink operations that failed and blocked ACK.
+# TYPE nats_sinks_fanout_required_child_failure_total counter
+nats_sinks_fanout_required_child_failure_total 1
+# HELP nats_sinks_fanout_ack_gate_wait_seconds Elapsed seconds spent waiting at the fan-out ACK gate.
+# TYPE nats_sinks_fanout_ack_gate_wait_seconds summary
+nats_sinks_fanout_ack_gate_wait_seconds_count 4
+```
+
 ## Enable The Native HTTP Endpoint
 
 Use the native endpoint only when a direct scrape target is operationally
