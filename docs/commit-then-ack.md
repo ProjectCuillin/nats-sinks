@@ -66,10 +66,10 @@ If the destination commit succeeds and the process exits before ACK, JetStream m
 
 ## Multi-Sink ACK Gates
 
-Future fan-out delivery can select more than one logical sink target for the
-same message. The same safety rule still applies: JetStream may be ACKed only
-after every required target has durably completed. Route targets are required
-by default.
+Fan-out delivery can select more than one logical sink target for the same
+message. The same safety rule still applies: JetStream may be ACKed only after
+every selected required target has durably completed. Route targets are
+required by default.
 
 Optional targets are different. They are opt-in side effects with a bounded
 `minimum_wait_ms` and `timeout_ms` policy. The ACK gate gives those optional

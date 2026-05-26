@@ -55,7 +55,7 @@ async def test_fanout_ack_gate_waits_for_required_and_records_optional_success()
 
 @pytest.mark.asyncio
 async def test_fanout_ack_gate_required_failure_blocks_ack() -> None:
-    with pytest.raises(FanoutRequiredSinkError, match="required sink 'oracle_primary' failed"):
+    with pytest.raises(FanoutRequiredSinkError, match="required fan-out sink failed"):
         await wait_for_fanout_ack_gate(
             {
                 "oracle_primary": _fail_after(0.0),

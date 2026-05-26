@@ -16,7 +16,7 @@ from their own projects, extension modules, tests, or operational tooling.
 The most important top-level imports are:
 
 ```python
-from nats_sinks import JetStreamSinkRunner, NatsEnvelope, Sink
+from nats_sinks import FanoutSink, JetStreamSinkRunner, NatsEnvelope, Sink
 from nats_sinks.file import FileSink
 from nats_sinks.mysql import MySqlSink
 from nats_sinks.oracle import OracleSink
@@ -55,6 +55,7 @@ The tests also cover:
 - routing and ACK-gate helpers such as `RoutingMatchPolicyConfig`,
   `RouteTargetConfig`, `select_route_targets`, and
   `wait_for_fanout_ack_gate`,
+- the production fan-out orchestration sink `FanoutSink`,
 - payload normalization helpers,
 - metrics classes and helpers such as `MetricNames`, `InMemoryMetrics`,
   `JsonFileMetrics`, `load_metrics_snapshot`, and

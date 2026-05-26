@@ -505,19 +505,18 @@ redeliverable for JetStream consumer policy, including externally configured
 the system aligned with the project rule: commit first, ACK last, design for
 redelivery.
 
-## Route-Match Policy Operations
+## Route-Match And Fan-Out Operations
 
-The `routing` policy is an operator-reviewed selector for future multi-sink
-delivery. Treat it as control-plane configuration: validate it with
-`nats-sink validate`, keep route names stable, and use non-secret header hints
-such as `Nats-Sinks-Route` rather than matching on credentials, tokens, or raw
-payload values.
+The `routing` policy is an operator-reviewed selector for active multi-sink
+fan-out delivery when `sink.type` is `fanout`. Treat it as control-plane
+configuration: validate it with `nats-sink validate`, keep route names stable,
+and use non-secret header hints such as `Nats-Sinks-Route` rather than
+matching on credentials, tokens, or raw payload values.
 
 Route matching is fail-closed by default. `no_match: "reject"` returns an
-explicit reject action to future delivery code when no route matches.
+explicit permanent sink failure when no route matches in active fan-out.
 `default_route` must name fallback targets explicitly, and `ignore` should be
-reserved for reviewed cases where an unmatched message is expected. The policy
-does not change ACK timing or write to multiple destinations by itself.
+reserved for reviewed cases where an unmatched message is expected.
 
 Route targets are required by default. Optional route targets are allowed only
 when the target object sets `required` to `false` and the policy can resolve a
@@ -526,18 +525,24 @@ configuration will show the optional `minimum_wait_ms` and `timeout_ms` values,
 including defaults. Treat optional timeout or failure log entries as evidence
 that the side copy was not guaranteed for that message.
 
-Before operating a new route policy or future fan-out sink in a release
-candidate, run the fan-out certification suite:
+Fan-out is at-least-once across selected destinations, not an atomic
+distributed transaction. If one required child sink commits and another
+required child sink fails before ACK, the fan-out sink raises a temporary
+failure and JetStream redelivery remains possible. Keep each child sink's
+idempotency strategy enabled and test redelivery before production use.
+
+Before operating a new route policy or fan-out sink in a release candidate,
+run the fan-out certification suite:
 
 ```bash
-pytest tests/unit/test_fanout_certification.py
+pytest tests/unit/test_fanout_certification.py tests/unit/test_fanout_sink.py
 ```
 
 This suite verifies the route-selection matrix, required ACK blocking,
 optional timeout behavior, no-route policies, CLI validation, and redaction
 behavior without contacting live infrastructure. It complements, but does not
-replace, destination-specific Oracle Database, Oracle MySQL, file, or future
-sink certification.
+replace, destination-specific Oracle Database, Oracle MySQL, file, spool, or
+future sink certification.
 
 For mission and defence-style deployments, prefer a small number of readable
 routes based on normalized subject, priority, classification, labels, and

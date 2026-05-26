@@ -156,12 +156,12 @@ The current release provides the following production-ready foundation:
   connectors.
 - A named multi-sink configuration registry that lets one JSON file declare
   several Oracle Database, Oracle MySQL, file, or spool sink instances for
-  route validation, redacted review, named health checks, and future fan-out
+  route validation, redacted review, named health checks, and active fan-out
   execution.
-- A disabled-by-default generic route-match policy selector that can match
-  normalized subject, priority, classification, labels, and approved non-secret
-  headers to logical target names and bounded ACK-gating policy for future
-  fan-out delivery.
+- A disabled-by-default generic route-match policy selector and opt-in
+  `fanout` sink that can match normalized subject, priority, classification,
+  labels, and approved non-secret headers to logical target names and bounded
+  ACK-gating policy for multi-sink delivery.
 - Tests and documentation for the commit-then-acknowledge invariant across the
   core runtime and both production sinks.
 
@@ -227,7 +227,7 @@ operations without hunting through a long flat list.
 - [Sink Framework](sink-framework.md): understand how future sinks fit into the
   package without breaking the public API.
 - [Configuration](configuration.md#routing): review the generic route-match
-  policy selector for future multi-sink routing.
+  policy selector and active fan-out sink configuration.
 - [Idempotency](idempotency.md), [Dead Letter Queues](dead-letter-queues.md),
   [Message Sizing](message-sizing.md), and [Performance](performance.md):
   understand delivery behavior under duplicate, malformed, large, or high-rate

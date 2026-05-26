@@ -1,14 +1,13 @@
 # SPDX-FileCopyrightText: 2026 Johan Louwers <louwersj@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
 
-"""Reusable ACK-gating helpers for future fan-out delivery.
+"""Reusable ACK-gating helpers for fan-out delivery.
 
-The current production runner writes one message batch to one configured sink.
-Fan-out delivery will need a shared rule for deciding when JetStream may be
-ACKed after several child sinks have been selected.  This module keeps that
-decision small, explicit, and testable: required child sinks must complete
-successfully, while optional child sinks get a bounded grace window and must not
-block ACK forever.
+Fan-out delivery needs a shared rule for deciding when JetStream may be ACKed
+after several child sinks have been selected. This module keeps that decision
+small, explicit, and testable: required child sinks must complete successfully,
+while optional child sinks get a bounded grace window and must not block ACK
+forever.
 """
 
 from __future__ import annotations
@@ -32,7 +31,7 @@ class FanoutRequiredSinkError(FanoutAckGateError):
     """Raised when a required selected sink fails before ACK is allowed."""
 
     def __init__(self, sink: str, cause: BaseException) -> None:
-        super().__init__(f"required sink {sink!r} failed before ACK")
+        super().__init__("required fan-out sink failed before ACK")
         self.sink = sink
         self.__cause__ = cause
 
@@ -91,8 +90,9 @@ async def wait_for_fanout_ack_gate(
     the same chance to make progress as required custody sinks.  ACK is allowed
     only after every required operation has succeeded.  Optional operations are
     then observed for their configured `minimum_wait_ms`, capped by
-    `timeout_ms`, and cancelled if they are still pending.  The returned result
-    contains sink names and outcome categories only; it never includes payloads,
+    `timeout_ms`, and cancelled if they are still pending. The returned result
+    contains internal sink identifiers and outcome categories only; it never
+    includes payloads, subjects, headers, classification values, labels,
     connection strings, file paths, or exception messages.
     """
 
@@ -120,7 +120,7 @@ async def wait_for_fanout_ack_gate(
                 if logger is not None:
                     logger.warning(
                         "fan-out required sink failed before ACK",
-                        extra={"sink": target.sink, "required": True},
+                        extra={"required": True},
                     )
                 raise FanoutRequiredSinkError(target.sink, exc) from exc
             required_results.append(
@@ -189,7 +189,7 @@ async def _observe_optional_target(
         if logger is not None:
             logger.warning(
                 "fan-out optional sink failed before ACK gate released",
-                extra={"sink": target.sink, "required": False, "error_type": type(exc).__name__},
+                extra={"required": False, "error_type": type(exc).__name__},
             )
         return FanoutTargetResult(
             sink=target.sink,
@@ -213,9 +213,10 @@ def _log_optional_timeout(logger: logging.Logger | None, sink: str) -> None:
 
     if logger is None:
         return
+    _ = sink
     logger.warning(
         "fan-out optional sink did not complete before ACK gate released",
-        extra={"sink": sink, "required": False},
+        extra={"required": False},
     )
 
 

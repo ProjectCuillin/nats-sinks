@@ -1,9 +1,9 @@
 # Routing Match Policy Example
 
-This example validates the generic route-match policy introduced for future
-multi-sink routing. The policy evaluates normalized `NatsEnvelope` metadata and
-returns logical target names. It does not yet execute multi-sink fan-out by
-itself.
+This example validates the generic route-match policy used by active fan-out
+routing. The policy evaluates normalized `NatsEnvelope` metadata and returns
+logical target names. Use `sink.type: "fanout"` when those target names should
+be written to named child sinks by one running service.
 
 Validate the example:
 
@@ -22,6 +22,5 @@ The example contains two routes for the same subject family and labels:
 
 The actual Oracle and file sink instances behind those logical names can be
 declared in the top-level `sinks` registry, as shown in
-`examples/named-multi-sink/config.json`. Until fan-out delivery is enabled,
-this example remains a validation and documentation fixture for the shared
-route-selection model.
+`examples/named-multi-sink/config.json`, or in the compact inline fan-out form
+shown in `examples/fanout/config.json`.

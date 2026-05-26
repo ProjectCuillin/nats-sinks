@@ -251,23 +251,22 @@ dependency extra, registry entry, tests, and destination-specific documentation.
 The core `NatsEnvelope`, `Sink` protocol, commit-then-acknowledge ordering, and
 existing Oracle configuration should remain compatible.
 
-Generic route matching is also part of the core, but it is still
-selection-only. The `routing` configuration can evaluate subject, priority,
-classification, labels, and approved header hints against a normalized
-`NatsEnvelope` and return logical target names plus ACK-gating policy for those
-targets. It does not call sinks, create fan-out work, or ACK JetStream by
-itself. That keeps the future multi-sink routing design additive: fan-out
-delivery can use the core ACK-gate helper to wait for every required target and
-to bound optional side copies without moving delivery semantics into
+Generic route matching and fan-out orchestration are also part of the core.
+The `routing` configuration evaluates subject, priority, classification,
+labels, and approved header hints against a normalized `NatsEnvelope` and
+returns logical target names plus ACK-gating policy for those targets. The
+active `fanout` sink binds those target names to named child sinks, writes the
+selected message subsets, waits for every required child sink, and bounds
+optional side copies without moving JetStream acknowledgement ownership into
 destination modules.
 
-The route selector and ACK-gate helper are now covered by reusable fan-out
-certification tests. Those tests use synthetic route policies and operation
-plans to prove that a required target failure blocks ACK, optional targets are
-bounded, no-route behavior is explicit, and the documented NATO SECRET and
-NATO UNCLASS examples select the expected logical sink names. Future fan-out
-execution code must keep using that certification layer alongside
-destination-specific sink certification.
+The route selector, ACK-gate helper, and production fan-out sink are covered
+by reusable fan-out certification tests. Those tests use synthetic route
+policies and operation plans to prove that a required target failure blocks
+ACK, optional targets are bounded, no-route behavior is explicit, and the
+documented NATO SECRET and NATO UNCLASS examples select the expected logical
+sink names. Destination-specific sink certification still applies to every
+child sink.
 
 Payload encryption is also part of the core, not a sink-specific responsibility.
 When enabled, the runner encrypts `NatsEnvelope.data` and passes a copied

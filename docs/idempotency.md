@@ -128,12 +128,12 @@ raises before durable success, the core leaves the message eligible for
 redelivery. If a permanent failure is sent to a DLQ, the original message is
 ACKed only after DLQ publication succeeds.
 
-Future fan-out delivery adds another boundary to review. Required route targets
+Fan-out delivery adds another boundary to review. Required route targets
 remain part of the formal commit-then-ACK path and therefore need normal
-idempotency guarantees. Optional route targets are explicitly best-effort side
-copies unless they complete before the ACK gate releases. Optional targets
-should still be idempotent, but operators must not use an optional target as
-the only durable record for business or mission state.
+idempotency guarantees. Optional route targets are explicitly side copies
+unless they complete before the ACK gate releases. Optional targets should
+still be idempotent, but operators must not use an optional target as the only
+durable record for business or mission state.
 
 ## Roadmap
 

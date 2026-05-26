@@ -16,9 +16,8 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   disabled-by-default `routing` configuration can match normalized
   `NatsEnvelope` subject, priority, classification, labels, and approved
   non-secret headers, validates NATO SECRET and NATO UNCLASS examples through
-  `nats-sink validate`, exposes public selector helpers, and documents that
-  the feature is selection-only until the separate multi-sink fan-out delivery
-  work is implemented.
+  `nats-sink validate`, and exposes public selector helpers for active
+  fan-out delivery.
 - Added optional ACK-gating policy primitives for issue #137. Route targets
   are required by default, optional target objects can define bounded
   `minimum_wait_ms` and `timeout_ms` behavior, per-sink-type defaults are
@@ -36,7 +35,7 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   `nats_sinks.testing` helpers use synthetic envelopes and in-memory fan-out
   operation plans to certify one-to-one routing, one-to-many target selection,
   required ACK blocking, optional timeout behavior, no-route handling, CLI
-  validation, and redaction for future fan-out-capable sinks.
+  validation, and redaction for fan-out-capable sinks.
 - Added fan-out observability metrics and sanitized logging helpers for issue
   #134. The new aggregate metrics cover route matches, routed and no-route
   messages, selected child sink counts, required child success or failure,
@@ -45,6 +44,15 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   CLI coverage and documentation that keeps subjects, sink names, labels,
   classifications, payloads, and destination details out of metrics by
   default.
+- Added the production fan-out sink orchestration layer for issue #133. The
+  new active `sink.type: "fanout"` mode binds route-selected logical targets
+  to named child sinks, dispatches each normalized envelope to one or more
+  required or optional destinations, blocks runner ACK when any required child
+  sink fails after partial success, supports bounded optional side-copy waits,
+  validates the compact inline NATO SECRET and NATO UNCLASS example through
+  `nats-sink validate`, and documents that fan-out is at-least-once and
+  idempotent rather than an atomic distributed transaction across
+  destinations.
 - Added a local-only post-release PyPI artifact validation harness for issue
   #252. The script builds a short-lived Oracle Linux 9 slim validation
   container, installs `nats-sinks` from PyPI instead of the local checkout,

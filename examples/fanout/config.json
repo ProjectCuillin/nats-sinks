@@ -1,0 +1,76 @@
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "MISSION",
+    "consumer": "fanout-mission-sink",
+    "subject": "nl.mod.clas.>",
+    "durable": true
+  },
+  "delivery": {
+    "batch_size": 64,
+    "batch_timeout_ms": 1000
+  },
+  "sink": {
+    "type": "fanout",
+    "route_match_mode": "all",
+    "sinks": {
+      "oracle_secret": {
+        "type": "oracle",
+        "dsn": "oracle-primary-service",
+        "user": "app_user",
+        "password_env": "ORACLE_PRIMARY_PASSWORD",
+        "table": "SECRET_EVENTS"
+      },
+      "file_audit": {
+        "type": "file",
+        "directory": "var/lib/nats-sinks/audit",
+        "duplicate_policy": "skip_existing",
+        "fsync": true
+      },
+      "oracle_unclass": {
+        "type": "oracle",
+        "dsn": "oracle-unclass-service",
+        "user": "app_user",
+        "password_env": "ORACLE_UNCLASS_PASSWORD",
+        "table": "UNCLASS_EVENTS"
+      }
+    },
+    "routes": [
+      {
+        "name": "secret-sensor-audit",
+        "match": {
+          "subject": "nl.mod.clas.>",
+          "priority": ["urgent"],
+          "classification": ["NATO SECRET"],
+          "labels_all": ["sensor", "audit"]
+        },
+        "targets": [
+          {
+            "sink": "oracle_secret",
+            "required": true
+          },
+          {
+            "sink": "file_audit",
+            "required": false,
+            "minimum_wait_ms": 500
+          }
+        ]
+      },
+      {
+        "name": "unclass-sensor-oracle",
+        "match": {
+          "subject": "nl.mod.clas.>",
+          "priority": ["urgent"],
+          "classification": ["NATO UNCLASS"],
+          "labels_all": ["sensor", "audit"]
+        },
+        "targets": [
+          {
+            "sink": "oracle_unclass",
+            "required": true
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -558,13 +558,13 @@ For the scheduling model and configuration details, read
 
 ## Fan-Out Metrics
 
-Fan-out metrics are emitted by the reusable route-selection and ACK-gate
-observability helpers that future multi-sink delivery uses. They are
-aggregate-only and deliberately payload-free. The helpers count how many route
-policy entries matched, how many messages selected child sinks, how many child
-sinks were selected, whether required sinks succeeded or failed, whether
-optional sinks succeeded, failed, or timed out, and whether the original
-JetStream message became eligible for ACK.
+Fan-out metrics are emitted by the production `FanoutSink` through the reusable
+route-selection and ACK-gate observability helpers. They are aggregate-only and
+deliberately payload-free. The helpers count how many route policy entries
+matched, how many messages selected child sinks, how many child sinks were
+selected, whether required sinks succeeded or failed, whether optional sinks
+succeeded, failed, or timed out, and whether the original JetStream message
+became eligible for ACK.
 
 The fan-out metrics do not expose route names, sink instance names, NATS
 subjects, classification values, labels, message IDs, file paths, database
@@ -634,7 +634,7 @@ mission_ops_fanout_ack_gate_wait_seconds_count 1
 mission_ops_fanout_ack_gate_wait_seconds_sum 0.125
 ```
 
-Python test harnesses and future fan-out delivery code can use the helper
+Python test harnesses and embedded fan-out delivery code can use the helper
 module directly:
 
 ```python

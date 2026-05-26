@@ -102,11 +102,12 @@ used immediately:
 - Optional core size policy enforcement that can bound sink-bound payload
   bytes, normalized headers, labels, mission metadata, standard metadata,
   approximate record size, and accepted batch size before any sink write.
-- Optional generic route-match policy validation and selection for future
-  multi-sink fan-out. Policies can match normalized subject, priority,
-  classification, labels, and approved non-secret headers, returning logical
-  target names and bounded ACK-gating policy without changing current sink
-  writes or ACK timing.
+- Optional generic route-match policy and production fan-out sink
+  orchestration. Policies can match normalized subject, priority,
+  classification, labels, and approved non-secret headers, then route one
+  message to one or more named child sinks such as two Oracle Database targets,
+  two Oracle tables represented as separate sink instances, an Oracle Database
+  sink plus a file audit copy, or multiple file destinations.
 - `nats_sinks.oracle.OracleSink`, the production Oracle Database sink with
   connection pooling, Oracle Autonomous Database connection options, `merge`
   and `insert_ignore` idempotent modes, optional high-throughput staging-table
@@ -131,8 +132,13 @@ used immediately:
   connectors.
 - A named multi-sink configuration registry that lets one JSON file declare
   several Oracle Database, Oracle MySQL, file, or spool sink instances for
-  route validation, redacted review, named health checks, and future fan-out
+  route validation, redacted review, named health checks, and active fan-out
   execution.
+- The active `fanout` sink type, which dispatches each normalized envelope to
+  the selected child sinks and returns success only after every required target
+  has durably completed. Optional targets have bounded wait controls and are
+  useful for side copies where operators do not want to delay the primary ACK
+  path indefinitely.
 - Basic metrics counters and timing observations for fetched, prepared,
   written, ACKed, NAKed, failed, DLQ, sink write, ACK error, active batch, and
   event freshness behavior. Freshness metrics cover event age at receive and

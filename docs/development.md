@@ -148,7 +148,7 @@ writing destination-specific code:
    [Sink Certification](sink-certification.md). The helper assertion should
    prove the sink-specific durable success boundary with a fake client, fake
    connection, temporary directory, or other deterministic test double.
-6. If the sink can be selected through named routing or future fan-out, add
+6. If the sink can be selected through named routing or active fan-out, add
    fan-out certification cases from `nats_sinks.testing` to prove target
    selection, required ACK blocking, optional timeout behavior, and sanitized
    evidence.
