@@ -83,6 +83,30 @@ The script chooses free localhost ports for the NATS client and monitoring
 ports, which avoids collisions with another NATS server already running on the
 developer machine.
 
+## Post-Release PyPI Artifact Container
+
+The project also includes a local post-release validation script that builds a
+temporary Oracle Linux 9 slim based container and installs the public PyPI
+artifact inside it:
+
+```bash
+python scripts/run-pypi-release-container-validation.py --version 0.4.1
+```
+
+This container is not a deployment image and is not pushed to a registry. It is
+a maintainer QA tool that proves the published package can be installed and
+used without importing from the local source tree. The script removes the
+temporary image and container by default and writes only a sanitized report
+under `.local/pypi-release-validation/reports/`.
+
+The validation container runs with a read-only root filesystem, all Linux
+capabilities dropped, `no-new-privileges`, a writable `/tmp` tmpfs, and a
+bind-mounted validator script. The `/tmp` tmpfs is executable because the
+script creates a short-lived Python virtual environment there and normal
+Python dependencies may include native extension wheels. It keeps source-code
+mounts out of the Python import path so the check exercises the same artifact
+that external users receive from PyPI.
+
 ## Manual Compose Workflow
 
 You can also run the stack manually:

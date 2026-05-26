@@ -10,6 +10,15 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ## [Unreleased]
 
+### Added
+
+- Added a local-only post-release PyPI artifact validation harness for issue
+  #252. The script builds a short-lived Oracle Linux 9 slim validation
+  container, installs `nats-sinks` from PyPI instead of the local checkout,
+  verifies CLI/import/config/FileSink/metrics behavior, supports explicit
+  versions and optional extras, and writes sanitized local reports under
+  `.local/pypi-release-validation/`.
+
 ### Fixed
 
 - Fixed GitHub CI compatibility with Ruff `PLW0108` by removing an unnecessary

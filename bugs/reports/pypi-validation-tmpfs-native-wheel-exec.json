@@ -1,0 +1,29 @@
+{
+  "id": "pypi-validation-tmpfs-native-wheel-exec",
+  "title": "[Bug]: PyPI artifact validation container cannot load native Python wheels from tmpfs",
+  "area": "Packaging and release",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.2",
+  "labels": ["release", "testing", "deployment", "security"],
+  "summary": "The local PyPI artifact validation container installs the published package into a temporary virtual environment, but native Python wheels may fail to load when the temporary filesystem is not explicitly executable.",
+  "observed": "During the issue #252 container test, the package installed from PyPI successfully, then the import smoke check failed while loading the native pydantic-core extension from the validation virtual environment.",
+  "expected": "The validation container should support normal Python packages that include native extension wheels while preserving its short-lived and least-privilege runtime model.",
+  "reproduction": "Run the local PyPI artifact validation script against the latest public package in a Docker environment where the validation virtual environment is created under the container temporary filesystem.",
+  "failing_test": "The local command `python scripts/run-pypi-release-container-validation.py --version latest` produced a sanitized failure report showing that the install passed and the import smoke check failed while loading a native extension.",
+  "impact": "The post-release artifact validation harness can report a false failure for valid PyPI artifacts that depend on native wheels. This blocks reliable release evidence for issue #252.",
+  "delivery_semantics": "This bug does not affect NATS delivery or sink ACK behavior. It affects only the local post-release validation harness.",
+  "security": "The fix must remain local-only, keep the validation container short-lived, keep source-tree mounts out of the import path, avoid secrets in reports, and grant only the minimum filesystem execution needed for Python native wheels.",
+  "acceptance": [
+    "The validation container can import the installed PyPI package when dependencies include native Python extension wheels.",
+    "The validation container remains read-only except for the temporary filesystem used for the virtual environment and validation files.",
+    "Generated reports remain sanitized and local-only.",
+    "Focused unit tests cover the container tmpfs runtime option used by the validation harness."
+  ],
+  "tests": "Add or update unit coverage for the validation container run command and rerun the local PyPI artifact validation container test.",
+  "documentation": "Update the post-release validation documentation if the runtime model needs to mention executable temporary storage for native Python wheels.",
+  "closeout": "Close after the validation harness imports the PyPI artifact successfully inside the short-lived container and test evidence is posted.",
+  "relationships": {
+    "related": ["#252"]
+  }
+}

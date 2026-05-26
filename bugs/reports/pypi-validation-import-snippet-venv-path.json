@@ -1,0 +1,29 @@
+{
+  "id": "pypi-validation-import-snippet-venv-path",
+  "title": "[Bug]: PyPI artifact validation import snippet references wrapper-only venv variable",
+  "area": "Packaging and release",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.2",
+  "labels": ["release", "testing", "deployment"],
+  "summary": "The generated PyPI artifact validation script runs an isolated Python import smoke check with `python -c`, but the snippet references a wrapper variable that is not defined inside that isolated interpreter.",
+  "observed": "After the validation container installed the public package, the import smoke check failed with a `NameError` because the inline import snippet referenced the validation virtual environment variable from the outer script scope.",
+  "expected": "The isolated import smoke snippet should embed the expected virtual environment path as data so it can verify the installed module path without relying on wrapper-local variables.",
+  "reproduction": "Run the local PyPI artifact validation script against the latest public package after the temporary filesystem supports native Python wheels.",
+  "failing_test": "A focused unit test should inspect the generated validator script and prove that the import smoke snippet embeds the virtual environment path as literal data for the isolated interpreter.",
+  "impact": "The post-release artifact validation harness cannot complete its public package import check, so maintainers cannot rely on the new issue #252 QA evidence.",
+  "delivery_semantics": "This bug does not affect NATS delivery or sink ACK behavior. It affects only the local post-release validation harness.",
+  "security": "The fix must keep source-tree isolation intact and must not mount the repository into the validation import path.",
+  "acceptance": [
+    "The generated import smoke snippet does not reference wrapper-only variables inside the isolated interpreter.",
+    "The generated import smoke snippet still verifies that `nats_sinks` imports from the validation virtual environment.",
+    "The live PyPI artifact validation container proceeds past the import smoke check.",
+    "Focused unit tests cover the generated import snippet behavior."
+  ],
+  "tests": "Add a focused unit test for the generated validator script and rerun the local PyPI artifact validation container.",
+  "documentation": "No public documentation change is expected beyond issue #252 evidence unless the validation behavior changes for users.",
+  "closeout": "Close after the generated validator imports the PyPI artifact successfully inside the isolated container process and test evidence is posted.",
+  "relationships": {
+    "related": ["#252", "#272"]
+  }
+}
