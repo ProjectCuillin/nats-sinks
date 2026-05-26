@@ -98,6 +98,9 @@
   `create_if_missing`, and `reconcile` modes, plus safe drift validation for
   delivery-sensitive settings such as filter subject, ACK policy, AckWait,
   MaxDeliver, MaxAckPending, and headers-only state.
+- Opt-in bounded manual-ACK push-consumer mode with fail-closed configuration,
+  guarded callback intake, flow-control and idle-heartbeat propagation, and
+  delivery-contract certification tests.
 - Encrypted edge spool-and-forward sink for disconnected operation, with
   bounded local custody, deterministic duplicate handling, priority-aware
   replay, and explicit forwarding into a final destination sink.
@@ -214,7 +217,6 @@
 - Sink certification tests.
 - Helm chart.
 - Advanced observability.
-- Push-consumer delivery-contract and flow-control certification tests.
 - Ordered-consumer client compatibility checks.
 - Read-only ordered-consumer inspection CLI, clearly separated from production
   durable sink processing.

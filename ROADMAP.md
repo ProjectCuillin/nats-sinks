@@ -115,6 +115,9 @@ release, and closed only after the containing release is published.
   `create_if_missing`, and `reconcile` modes, plus safe drift validation for
   delivery-sensitive settings such as filter subject, ACK policy, AckWait,
   MaxDeliver, MaxAckPending, and headers-only state.
+- Opt-in bounded manual-ACK push-consumer mode with fail-closed configuration,
+  guarded callback intake, flow-control and idle-heartbeat propagation, and
+  delivery-contract certification tests.
 - Richer durable pull-consumer policy configuration for plural filter subjects,
   server-side BackOff, MaxWaiting, consumer replicas, memory-storage state, and
   bounded low-sensitivity consumer metadata.
@@ -237,9 +240,6 @@ release, and closed only after the containing release is published.
 - Sink certification tests.
 - Helm chart.
 - Advanced observability.
-- Push-consumer capability and configuration guardrails.
-- Opt-in bounded push-consumer runner mode.
-- Push-consumer delivery-contract and flow-control certification tests.
 - Ordered-consumer client compatibility checks.
 - Read-only ordered-consumer inspection CLI, clearly separated from production
   durable sink processing.
