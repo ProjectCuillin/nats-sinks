@@ -12,11 +12,13 @@ The conclusion is intentionally conservative:
   production posture,
 - subject-aware export should be controlled by a reviewed, opt-in policy model,
 - raw subjects should not become labels by default,
-- any future subject-aware feature must be bounded, fail closed, and unable to
+- any subject-aware feature must be bounded, fail closed, and unable to
   influence ACK behavior, sink writes, retries, or DLQ handling.
 
-The current release adds the policy model. It does not yet add subject-labeled
-metric export.
+The current release adds the policy model and a bounded prepared metric-series
+format. Subject-labeled export remains disabled unless an operator enables a
+reviewed policy and a safe aggregation path emits prepared `labeled_metrics`
+rows.
 
 ## Background
 
@@ -92,8 +94,8 @@ The safe default is therefore no subject sharing.
 
 The subject-aware policy is separate from the current aggregate metric allow
 list. It makes operators state exactly what they intend to share and how it
-should be represented. Current exporters do not use this block for label
-rendering yet; it is the reviewed model future connectors must use.
+should be represented. Exporters render subject-family labels only from
+prepared `labeled_metrics` rows that were built from this reviewed policy.
 
 Example policy shape:
 
@@ -180,6 +182,7 @@ reviewable as separate changes.
 
 ## Current Status
 
-This release adds the disabled-by-default subject-aware policy model. It
-validates subject-family rules, operator labels, display modes, cardinality
-caps, and overflow behavior. Subject-aware metric export is not enabled yet.
+This release adds the disabled-by-default subject-aware policy model and the
+bounded `labeled_metrics` snapshot extension. Subject-family rows are prepared
+from approved policy decisions and stable family labels rather than from raw
+subject strings. Existing aggregate counters remain unchanged.

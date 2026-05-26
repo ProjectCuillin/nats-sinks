@@ -88,12 +88,12 @@ External sharing should go through the observability policy layer described in
 from the runner and sinks so the main delivery process and any monitoring
 connector can run as different services with different permissions.
 
-The metrics snapshot is intentionally aggregate-only today. It does not include
-per-subject labels or per-subject series. The observability policy now includes
-a disabled-by-default `subject_metrics` model for reviewed subject-family rules,
-stable labels, cardinality caps, and overflow behavior. Current aggregate
-exporters do not emit subject labels from that policy block; subject-family
-export remains future connector work. See
+The default metrics snapshot is aggregate-only. It does not include per-subject
+labels or per-subject series unless a separate, reviewed subject-family
+aggregation step attaches prepared `labeled_metrics` rows. That extension is
+disabled unless the `subject_metrics` policy model explicitly allows a subject
+family, gives it a stable label, and keeps it within cardinality bounds. Raw
+subjects are not exported by default. See
 [Subject-Aware Observability Evaluation](subject-aware-observability-evaluation.md).
 
 ## Enabling The Snapshot Recorder
@@ -152,12 +152,29 @@ A metrics snapshot is UTF-8 JSON with a small, versioned schema:
       "max": 1.034210,
       "last": 0.901234
     }
-  }
+  },
+  "labeled_metrics": [
+    {
+      "kind": "counter",
+      "name": "messages_written_total",
+      "value": 128,
+      "labels": {
+        "subject_family": "orders"
+      }
+    }
+  ]
 }
 ```
 
 Observations are summarized instead of storing raw arrays. This keeps the
 snapshot bounded and avoids writing unbounded timing history to disk.
+
+`labeled_metrics` is optional and absent from ordinary aggregate snapshots. It
+is reserved for prepared low-cardinality series, such as reviewed
+`subject_family` counters. Exporters read those prepared rows rather than
+deriving labels from raw NATS subjects. The snapshot loader validates the row
+count, known metric names, row kinds, finite values, and bounded label names and
+values before any connector can render them.
 
 The snapshot should not contain secrets or payload bodies. It can still reveal
 operational tempo, failure rates, and batch sizes, so store it in a local path

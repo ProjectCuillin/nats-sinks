@@ -80,13 +80,14 @@ runtime:
 - observability connectors are isolated from core and sink logic so new
   platforms can be added without breaking sink APIs.
 
-Subject-aware observability now has a policy model, but subject-labeled export
-is still disabled by default and not used by the aggregate exporters. The policy
-can describe reviewed subject-family allow rules, stable labels, display modes,
-cardinality caps, and overflow behavior for future connectors. Exporters do not
-emit subject labels unless a connector explicitly implements that policy. That
-separation is intentional: subjects can reveal operational structure and can
-create expensive high-cardinality metric series. See
+Subject-aware observability now has a policy model and a bounded prepared
+series format. Subject-family export is still disabled by default and is not
+derived directly from raw NATS subjects. The policy can describe reviewed
+subject-family allow rules, stable labels, display modes, cardinality caps, and
+overflow behavior. Exporters render subject-family labels only from prepared
+`labeled_metrics` rows. That separation is intentional: subjects can reveal
+operational structure and can create expensive high-cardinality metric series.
+See
 [Subject-Aware Observability Evaluation](subject-aware-observability-evaluation.md).
 
 ## Architecture
@@ -417,12 +418,12 @@ scalar JSON fields. It never exports the configured base URL, credentials, raw
 endpoint body, account names, subject names, stream names, consumer names, or
 topology fields unless an operator has selected those exact fields.
 
-The `subject_metrics` object is a policy model for future subject-family
-observability. It is disabled by default and uses default-deny rules. Current
-aggregate exporters do not add subject labels even when this block is enabled;
-they continue to export only the metric names allowed by the top-level policy.
-The block exists so future subject-aware connectors have a reviewed, bounded,
-and testable policy surface instead of inventing ad hoc subject labels.
+The `subject_metrics` object is the policy model for subject-family
+observability. It is disabled by default and uses default-deny rules. Exporters
+do not add subject labels from raw NATS subjects; they render subject-family
+labels only from prepared `labeled_metrics` rows that have already passed this
+policy. Aggregate metrics continue to export only the metric names allowed by
+the top-level policy.
 
 ## Policy Fields
 
@@ -437,8 +438,8 @@ and testable policy surface instead of inventing ad hoc subject labels.
 | `denied_metric_patterns` | `[]` | Glob patterns to suppress even if an allow rule matches. |
 | `include_observations` | `false` | Whether timing observations such as `sink_batch_write_seconds` may be exported. |
 | `include_legacy` | `false` | Whether legacy metric aliases may be exported. |
-| `subjects` | `[]` | Subject patterns discovered from the core config for operator review and future subject-aware metrics. Current exporters do not share these as labels. |
-| `subject_metrics` | object | Disabled-by-default subject-family policy model for future subject-aware observability. Current aggregate exporters ignore it for label rendering. |
+| `subjects` | `[]` | Subject patterns discovered from the core config for operator review. These hints are not exported as labels. |
+| `subject_metrics` | object | Disabled-by-default subject-family policy model. Prepared labeled rows are exported only when this policy explicitly allows them. |
 | `prometheus` | object | Prometheus connector settings. |
 | `otlp` | object | OpenTelemetry OTLP connector settings. |
 | `elastic` | object | Elastic Observability profile settings over the OTLP connector. |
@@ -460,11 +461,11 @@ review hints discovered from the runtime configuration.
 
 | Field | Default | Meaning |
 | --- | --- | --- |
-| `subject_metrics.enabled` | `false` | Enables evaluation of subject-family rules for future connectors. It does not enable subject labels in current aggregate exporters. |
+| `subject_metrics.enabled` | `false` | Enables evaluation of subject-family rules for prepared labeled metric rows. It does not derive labels directly from raw subjects. |
 | `subject_metrics.default_action` | `deny` | Default action when no rule matches. This is fixed to `deny` so the model fails closed. |
-| `subject_metrics.max_subject_families` | `20` | Maximum number of allow rules, validated from `1` through `100`. |
-| `subject_metrics.overflow_action` | `drop` | Deterministic future overflow behavior. Valid values are `drop`, `aggregate_other`, and `fail_closed`. |
-| `subject_metrics.overflow_label` | `other` | Stable label for future `aggregate_other` overflow buckets. |
+| `subject_metrics.max_subject_families` | `20` | Maximum number of subject-family labels kept in one aggregation pass, validated from `1` through `100`. |
+| `subject_metrics.overflow_action` | `drop` | Deterministic overflow behavior. Valid values are `drop`, `aggregate_other`, and `fail_closed`. |
+| `subject_metrics.overflow_label` | `other` | Stable label for `aggregate_other` overflow buckets. |
 | `subject_metrics.allow_raw_subjects` | `false` | Required before any allow rule may use `display_mode: "raw"`. Raw subject sharing should be treated as a reviewed exception. |
 | `subject_metrics.rules` | `[]` | Ordered subject-family rules. Deny rules take precedence over allow rules during evaluation. |
 
@@ -511,10 +512,36 @@ Example reviewed policy block:
 }
 ```
 
-This example describes a future subject-family view for approved `orders.*`
-metrics while explicitly denying `orders.secret`. It does not make the current
-Prometheus, OTLP, Elastic, Grafana Alloy, Splunk HEC, StatsD, or syslog
-connectors emit subject labels.
+This example describes a subject-family view for approved `orders.*` metrics
+while explicitly denying `orders.secret`. Exporters render only prepared
+`labeled_metrics` rows that have already been mapped to the approved family
+label. They must not inspect raw NATS subjects themselves.
+
+Prepared subject-family rows use the optional metrics snapshot
+`labeled_metrics` section:
+
+```json
+{
+  "labeled_metrics": [
+    {
+      "kind": "counter",
+      "name": "messages_written_total",
+      "value": 128,
+      "labels": {
+        "subject_family": "orders"
+      }
+    }
+  ]
+}
+```
+
+The row says only that the reviewed `orders` family contributed `128` events
+to `messages_written_total`. It does not include the raw subject
+`orders.created`, message IDs, payloads, classifications, file paths, table
+names, endpoint URLs, or credentials. Prometheus renders this as a
+`subject_family` label, OTLP renders it as a data-point attribute, StatsD folds
+it into a bounded metric name component, Splunk HEC folds it into the metric
+field name, and syslog renders it as a structured-data parameter.
 
 ## Prometheus Connector Fields
 

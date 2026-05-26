@@ -68,6 +68,8 @@ The tests also cover:
   `NatsServerMonitoringPolicy`, `SubjectAwareObservabilityPolicy`,
   `SubjectAwareRule`, `SubjectAwareDecision`,
   `evaluate_subject_observability_policy`,
+  `SubjectFamilyAggregationResult`, `aggregate_subject_family_counter`,
+  `attach_labeled_metric_rows`,
   `collect_nats_monitoring_snapshot`,
   `render_otlp_metrics_json`, `export_otlp_metrics`,
   `render_elastic_otlp_metrics_json`,

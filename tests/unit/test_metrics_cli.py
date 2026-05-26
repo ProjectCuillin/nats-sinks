@@ -14,9 +14,17 @@ from nats_sinks.core.metrics import (
     JsonFileMetrics,
     MetricNames,
     increment_metric,
+    metrics_snapshot,
     observe_metric,
     set_metric_value,
+    write_metrics_snapshot,
 )
+from nats_sinks.observability.policy import ObservabilityPolicy
+from nats_sinks.observability.subject_family import (
+    aggregate_subject_family_counter,
+    attach_labeled_metric_rows,
+)
+from nats_sinks.testing import certification_envelope
 
 runner = CliRunner()
 
@@ -145,6 +153,46 @@ def test_metrics_cli_show_prometheus(tmp_path: Path) -> None:
     assert "mission_ops_sink_batch_write_seconds_count 2" in result.stdout
     assert "mission_ops_event_age_at_receive_seconds_count 1" in result.stdout
     assert "mission_ops_fanout_ack_gate_wait_seconds_count 1" in result.stdout
+
+
+def test_metrics_cli_shows_prepared_subject_family_rows(tmp_path: Path) -> None:
+    policy = ObservabilityPolicy(
+        subject_metrics={
+            "enabled": True,
+            "rules": [{"subject": "orders.*", "label": "orders"}],
+        }
+    )
+    result_rows = aggregate_subject_family_counter(
+        (
+            certification_envelope(subject="orders.created"),
+            certification_envelope(subject="orders.updated"),
+        ),
+        policy,
+        metric_name=MetricNames.MESSAGES_WRITTEN_TOTAL,
+    )
+    snapshot = attach_labeled_metric_rows(
+        metrics_snapshot(
+            counters={MetricNames.MESSAGES_WRITTEN_TOTAL: 2},
+            gauges={},
+            observations={},
+            namespace="mission_ops",
+        ),
+        result_rows.rows,
+    )
+    path = tmp_path / "metrics.json"
+    write_metrics_snapshot(snapshot, path)
+
+    table = runner.invoke(app, ["show", str(path), "--metric", "messages_written_total"])
+    assert table.exit_code == 0
+    assert "subject_family=orders" in table.stdout
+
+    prometheus = runner.invoke(
+        app,
+        ["show", str(path), "--format", "prometheus", "--metric", "messages_written_total"],
+    )
+    assert prometheus.exit_code == 0
+    assert 'mission_ops_messages_written_total{subject_family="orders"} 2' in prometheus.stdout
+    assert "orders.created" not in prometheus.stdout
 
 
 def test_metrics_cli_filters_freshness_metrics(tmp_path: Path) -> None:

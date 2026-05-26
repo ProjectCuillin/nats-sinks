@@ -93,12 +93,18 @@ def _metric_name(row: MetricRow, policy: ObservabilityPolicy) -> str:
 
 
 def _data_point(row: MetricRow, *, time_unix_nano: str) -> dict[str, object]:
-    """Build one OTLP NumberDataPoint without labels or sensitive attributes."""
+    """Build one OTLP NumberDataPoint with prepared low-cardinality attributes."""
 
-    return {
+    point: dict[str, object] = {
         "timeUnixNano": time_unix_nano,
         "asDouble": row.value,
     }
+    if row.labels:
+        point["attributes"] = [
+            {"key": key, "value": {"stringValue": value}}
+            for key, value in sorted(row.labels.items())
+        ]
+    return point
 
 
 def _row_to_otlp_metric(

@@ -60,6 +60,12 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   redacted, hash, and explicitly reviewed raw display modes, and provides a
   fail-closed evaluator for future connectors without changing current
   aggregate metric export or delivery behavior.
+- Added bounded subject-family metric aggregation for issue #126. The new
+  prepared `labeled_metrics` snapshot rows map approved subjects to reviewed
+  `subject_family` labels, keep aggregate counters unchanged, enforce
+  deterministic overflow handling, and let Prometheus, OTLP-backed profiles,
+  Splunk HEC, StatsD, and syslog render only low-cardinality approved family
+  labels instead of raw subjects.
 - Added a local-only post-release PyPI artifact validation harness for issue
   #252. The script builds a short-lived Oracle Linux 9 slim validation
   container, installs `nats-sinks` from PyPI instead of the local checkout,

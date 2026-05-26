@@ -46,6 +46,23 @@ def _format_number(value: float) -> str:
     return f"{value:.12g}"
 
 
+def _escape_label_value(value: str) -> str:
+    """Escape a Prometheus label value."""
+
+    return value.replace("\\", "\\\\").replace("\n", "\\n").replace('"', '\\"')
+
+
+def _label_suffix(row: MetricRow) -> str:
+    """Render optional low-cardinality labels for prepared metric rows."""
+
+    if not row.labels:
+        return ""
+    rendered = ",".join(
+        f'{name}="{_escape_label_value(value)}"' for name, value in sorted(row.labels.items())
+    )
+    return f"{{{rendered}}}"
+
+
 def _base_metric_name(row: MetricRow) -> str:
     """Return the canonical metric name for policy checks.
 
@@ -70,6 +87,8 @@ def _matches_any(value: str, patterns: list[str]) -> bool:
 def _is_allowed(row: MetricRow, policy: ObservabilityPolicy) -> bool:
     """Apply allow-list and deny-list decisions for one flattened metric row."""
 
+    if row.labels and not policy.subject_metrics.enabled:
+        return False
     if row.kind == "observation" and not policy.include_observations:
         return False
 
@@ -146,7 +165,7 @@ def render_prometheus_textfile(
                 if policy.prometheus.include_type:
                     lines.append(f"# TYPE {metric_name} summary")
                 emitted.add(metric_name)
-            lines.append(f"{metric_name}_{stat} {_format_number(row.value)}")
+            lines.append(f"{metric_name}_{stat}{_label_suffix(row)} {_format_number(row.value)}")
             continue
 
         metric_name = qualified_metric_name(row.name, namespace=namespace)
@@ -156,7 +175,7 @@ def render_prometheus_textfile(
             if policy.prometheus.include_type:
                 lines.append(f"# TYPE {metric_name} {row.kind}")
             emitted.add(metric_name)
-        lines.append(f"{metric_name} {_format_number(row.value)}")
+        lines.append(f"{metric_name}{_label_suffix(row)} {_format_number(row.value)}")
     return "\n".join(lines) + "\n"
 
 
