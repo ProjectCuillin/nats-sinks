@@ -107,6 +107,9 @@
 - Richer durable pull-consumer policy configuration for plural filter subjects,
   server-side BackOff, MaxWaiting, consumer replicas, memory-storage state, and
   bounded low-sensitivity consumer metadata.
+- Durable replay-to-sinks guidance and tooling design based on durable pull
+  consumers, explicit replay boundaries, dry-run evidence, redacted reporting,
+  idempotency review, and no-early-ACK test expectations.
 - Least-privilege NATS permissions templates for runtime workers, DLQ publish
   rights, optional consumer management, and advisory readers.
 - Advanced JetStream topology guidance for mirrors, sources, subject
@@ -217,8 +220,6 @@
 - Sink certification tests.
 - Helm chart.
 - Advanced observability.
-- Durable replay-to-sinks guidance and tooling design based on durable pull
-  consumers rather than ordered inspection consumers.
 - Payload-presence metadata and sink certification for headers-only
   metadata-only workflows.
 - Stream management helpers for retention, discard, storage, replicas, and

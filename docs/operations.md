@@ -201,6 +201,30 @@ That command reconstructs the original `NatsEnvelope` from encrypted local
 custody and calls the target sink. Spool files are deleted only after the
 target sink returns success and `delete_after_replay` is enabled.
 
+## Durable Replay To Sinks
+
+Replay from JetStream into a sink is a write-capable recovery workflow. Treat
+it differently from ordered inspection. Ordered consumers are useful for
+bounded, read-only stream analysis, but replaying to Oracle Database, Oracle
+MySQL, files, fan-out routes, or future sinks must use durable pull consumers
+with the same commit-then-ACK behavior as the normal runner.
+
+Before replaying retained events, operators should review:
+
+- stream and subject scope;
+- start sequence or start time;
+- maximum message count and batch size;
+- sink idempotency mode and duplicate behavior;
+- DLQ behavior for permanent failures;
+- dry-run evidence and redacted reporting requirements;
+- least-privilege NATS permissions for the replay identity.
+
+The durable replay design is documented in
+[Durable Replay To Sinks](durable-replay-to-sinks.md). It defines the
+non-negotiable replay contract: never ACK before durable sink success, never
+use ordered inspection consumers for production sink writes, and never publish
+payloads or credentials in replay evidence.
+
 ## Logging
 
 The package uses standard Python logging. Payload logging is disabled by

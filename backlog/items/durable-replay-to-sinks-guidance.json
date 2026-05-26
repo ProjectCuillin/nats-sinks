@@ -3,7 +3,7 @@
   "title": "[Feature]: Add durable replay-to-sinks guidance and tooling design",
   "area": "Operations and deployment",
   "priority": "P3 - backlog candidate",
-  "target_release": "unscheduled",
+  "target_release": "v0.4.2",
   "labels": ["nats", "documentation", "testing"],
   "problem": "Users may hear 'ordered consumer' and assume it is the right tool for replaying historical events into production sinks. That is unsafe for nats-sinks because production sink writes require durable pull-consumer semantics, explicit ACK behavior, idempotency, and controlled replay boundaries.",
   "proposal": "Add a dedicated durable replay-to-sinks design that explains how to replay to Oracle, file, and future sinks using durable pull consumers, explicit start sequence or time policies, idempotent sink keys, bounded batches, and dry-run validation. This work should be separate from ordered inspection tooling and should avoid using ordered consumers for production sink writes.",
@@ -18,7 +18,7 @@
     "Tests or future test design cover no early ACK, idempotency, and bounded replay."
   ],
   "tests": "Add design-level tests or future unit-test requirements for replay configuration validation, redacted report generation, no early ACK, and idempotent duplicate handling. Run scripts/check.sh when implemented.",
-  "documentation": "Update ordered-consumer evaluation, operations, testing, sink framework, roadmap, and changelog documentation.",
+  "documentation": "Update durable replay, ordered-consumer evaluation, operations, testing, sink framework, roadmap, test-report, and changelog documentation.",
   "closeout": "Close after the release containing durable replay-to-sinks guidance or tooling design is published. Include release tag, docs, tests, and limitations.",
   "relationships": {
     "related": ["#33", "backlog:jetstream-consumer-policy-configuration"]

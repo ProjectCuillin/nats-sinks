@@ -37,6 +37,7 @@ nav:
       - InProgress Evaluation: in-progress-evaluation.md
       - Push Consumer Evaluation: push-consumer-evaluation.md
       - Ordered Consumer Evaluation: ordered-consumer-evaluation.md
+      - Durable Replay To Sinks: durable-replay-to-sinks.md
       - Headers-Only Delivery Evaluation: headers-only-delivery.md
       - Feature Gap Analysis: nats-feature-gap-analysis.md
   - Sinks:
