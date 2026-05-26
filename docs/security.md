@@ -147,6 +147,9 @@ Use this baseline for code review and future releases:
   disabled by default, subscribes only to configured advisory subjects, parses
   bounded JSON payloads, and emits aggregate counters without exporting stream
   names, consumer names, sequence numbers, or advisory payload bodies.
+  Fan-out metrics must remain aggregate by default: do not export route names,
+  child sink names, classification values, labels, file paths, or destination
+  identifiers without a reviewed allow-list policy.
 - Treat local spool directories as protected custody locations. Spool records
   are encrypted by default, but operators must still restrict filesystem
   permissions, exclude spool paths from source control, monitor disk usage,

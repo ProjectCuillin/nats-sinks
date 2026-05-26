@@ -157,6 +157,20 @@ class MetricNames:
     MYSQL_DUPLICATE_NOOP_TOTAL = "mysql_duplicate_noop_total"
     MYSQL_UPSERT_ROWS_TOTAL = "mysql_upsert_rows_total"
     MYSQL_UPSERT_OUTCOME_UNKNOWN_TOTAL = "mysql_upsert_outcome_unknown_total"
+    FANOUT_ROUTE_MATCHES_TOTAL = "fanout_route_matches_total"
+    FANOUT_MESSAGES_ROUTED_TOTAL = "fanout_messages_routed_total"
+    FANOUT_MESSAGES_NO_ROUTE_TOTAL = "fanout_messages_no_route_total"
+    FANOUT_CHILD_SINKS_SELECTED_TOTAL = "fanout_child_sinks_selected_total"
+    CURRENT_FANOUT_CHILD_SINKS_SELECTED = "current_fanout_child_sinks_selected"
+    FANOUT_REQUIRED_CHILD_SUCCESS_TOTAL = "fanout_required_child_success_total"
+    FANOUT_REQUIRED_CHILD_FAILURE_TOTAL = "fanout_required_child_failure_total"
+    FANOUT_OPTIONAL_CHILD_SUCCESS_TOTAL = "fanout_optional_child_success_total"
+    FANOUT_OPTIONAL_CHILD_FAILURE_TOTAL = "fanout_optional_child_failure_total"
+    FANOUT_OPTIONAL_CHILD_TIMEOUT_TOTAL = "fanout_optional_child_timeout_total"
+    FANOUT_MESSAGES_ACKED_TOTAL = "fanout_messages_acked_total"
+    FANOUT_MESSAGES_ACK_BLOCKED_TOTAL = "fanout_messages_ack_blocked_total"
+    FANOUT_ACK_GATE_WAIT_SECONDS = "fanout_ack_gate_wait_seconds"
+    FANOUT_BATCH_SECONDS = "fanout_batch_seconds"
     LAST_SINK_SUCCESS_EPOCH_SECONDS = "last_sink_success_epoch_seconds"
     CURRENT_BATCH_MESSAGES = "current_batch_messages"
 
@@ -595,6 +609,76 @@ METRIC_SPECS: tuple[MetricSpec, ...] = (
         MetricNames.MYSQL_UPSERT_OUTCOME_UNKNOWN_TOTAL,
         "counter",
         "Oracle MySQL upsert rows where insert-versus-match outcome is not reliably exposed.",
+    ),
+    MetricSpec(
+        MetricNames.FANOUT_ROUTE_MATCHES_TOTAL,
+        "counter",
+        "Route policy entries matched by future fan-out delivery without exporting route names.",
+    ),
+    MetricSpec(
+        MetricNames.FANOUT_MESSAGES_ROUTED_TOTAL,
+        "counter",
+        "Messages with at least one selected fan-out child sink target.",
+    ),
+    MetricSpec(
+        MetricNames.FANOUT_MESSAGES_NO_ROUTE_TOTAL,
+        "counter",
+        "Messages rejected or ignored because routing selected no fan-out targets.",
+    ),
+    MetricSpec(
+        MetricNames.FANOUT_CHILD_SINKS_SELECTED_TOTAL,
+        "counter",
+        "Selected fan-out child sink operations across routed messages.",
+    ),
+    MetricSpec(
+        MetricNames.CURRENT_FANOUT_CHILD_SINKS_SELECTED,
+        "gauge",
+        "Number of fan-out child sink targets selected for the latest evaluated message.",
+    ),
+    MetricSpec(
+        MetricNames.FANOUT_REQUIRED_CHILD_SUCCESS_TOTAL,
+        "counter",
+        "Required fan-out child sink operations that committed before ACK.",
+    ),
+    MetricSpec(
+        MetricNames.FANOUT_REQUIRED_CHILD_FAILURE_TOTAL,
+        "counter",
+        "Required fan-out child sink operations that failed and blocked ACK.",
+    ),
+    MetricSpec(
+        MetricNames.FANOUT_OPTIONAL_CHILD_SUCCESS_TOTAL,
+        "counter",
+        "Optional fan-out child sink operations that completed before the ACK gate released.",
+    ),
+    MetricSpec(
+        MetricNames.FANOUT_OPTIONAL_CHILD_FAILURE_TOTAL,
+        "counter",
+        "Optional fan-out child sink operations that failed without blocking required ACK.",
+    ),
+    MetricSpec(
+        MetricNames.FANOUT_OPTIONAL_CHILD_TIMEOUT_TOTAL,
+        "counter",
+        "Optional fan-out child sink operations that exceeded their bounded ACK wait window.",
+    ),
+    MetricSpec(
+        MetricNames.FANOUT_MESSAGES_ACKED_TOTAL,
+        "counter",
+        "Fan-out messages whose original JetStream message became eligible for ACK.",
+    ),
+    MetricSpec(
+        MetricNames.FANOUT_MESSAGES_ACK_BLOCKED_TOTAL,
+        "counter",
+        "Fan-out messages whose original JetStream ACK was blocked by required failure.",
+    ),
+    MetricSpec(
+        MetricNames.FANOUT_ACK_GATE_WAIT_SECONDS,
+        "histogram",
+        "Elapsed seconds spent waiting at the fan-out ACK gate.",
+    ),
+    MetricSpec(
+        MetricNames.FANOUT_BATCH_SECONDS,
+        "histogram",
+        "Elapsed seconds spent processing a fan-out batch across selected child sinks.",
     ),
     MetricSpec(
         MetricNames.LAST_SINK_SUCCESS_EPOCH_SECONDS,

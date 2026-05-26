@@ -14,19 +14,20 @@ generated database passwords, or full raw logs from live systems.
 | Field | Value |
 | --- | --- |
 | Overall result | Pass |
-| Report generated | 2026-05-26 issue `#135` validation for upcoming `v0.4.2` development |
+| Report generated | 2026-05-26 issue `#134` validation for upcoming `v0.4.2` development |
 | Project version | `0.4.1` package metadata with `v0.4.2` development changes |
 | Python version | 3.12.4 |
-| Git revision checked | Branch `issue-135-fanout-certification-tests` based on `release-v0.4.2` |
+| Git revision checked | Branch `issue-134-fanout-observability` based on `release-v0.4.2` |
 | Live NATS details | Environment-gated live tests skipped unless explicitly enabled |
 | Live Oracle Database details | Environment-gated live tests skipped unless explicitly enabled |
 | Live Oracle MySQL details | Environment-gated live tests skipped unless explicitly enabled |
 
-This refresh covered fan-out routing certification tests for issue `#135` and
-a full local regression cycle for the current development branch. The new
-certification helpers use synthetic envelopes and in-memory fan-out operation
-plans to prove route selection, required ACK blocking, optional timeout
-behavior, no-route handling, CLI validation, and redaction behavior without
+This refresh covered fan-out observability metrics and sanitized logging for
+issue `#134` and a full local regression cycle for the current development
+branch. The new tests use synthetic route selections and ACK-gate results to
+prove aggregate metrics for route matches, selected child sinks, required
+success or failure, optional success, failure, or timeout, ACK eligibility,
+ACK blocking, timing observations, CLI display, and payload-free logs without
 contacting live infrastructure.
 
 ```mermaid
@@ -35,7 +36,8 @@ flowchart LR
     Policy --> Targets[Logical target names]
     Targets --> AckGate[ACK gate]
     AckGate --> Commit[Required targets committed]
-    Tests[Fan-out certification tests] --> Report[Sanitized latest report]
+    Metrics[Fan-out metrics helpers] --> Report[Sanitized latest report]
+    CLI[nats-sink-metrics] --> Report
     Docs[Documentation builds] --> Report
 ```
 
@@ -43,9 +45,9 @@ flowchart LR
 
 | Check | Result |
 | --- | --- |
-| Ruff format | Pass, `222 files already formatted` |
+| Ruff format | Pass, `224 files already formatted` |
 | Ruff lint | Pass |
-| Mypy | Pass, no issues in `88` source files |
+| Mypy | Pass, no issues in `89` source files |
 | Version metadata consistency | Pass for `0.4.1` |
 | Dependency manifests | Pass, manifest files up to date |
 | Backlog item validation | Pass, `142` backlog items validated |
@@ -62,44 +64,42 @@ flowchart LR
 
 | Test Area | Command | Result |
 | --- | --- | --- |
-| Fan-out focused tests | `python -m pytest tests/unit/test_fanout_certification.py tests/unit/test_fanout_ack_gate.py tests/unit/test_routing_policy.py tests/unit/test_named_sinks.py tests/unit/test_public_api.py -q` | Pass, `70 passed` |
-| Main repository test suite | `scripts/check.sh` | Pass, `975 passed, 10 skipped` |
+| Fan-out focused tests | `python -m pytest tests/unit/test_fanout_observability.py tests/unit/test_fanout_certification.py tests/unit/test_metrics.py tests/unit/test_metrics_cli.py tests/unit/test_public_api.py -q` | Pass, `54 passed` |
+| Main repository test suite | `scripts/check.sh` | Pass, `982 passed, 10 skipped` |
 | Encryption and sink contract subset | `scripts/check.sh` | Pass, `123 passed` |
 | Sink capability subset | `scripts/check.sh` | Pass, `117 passed` |
 | Documentation builds | `scripts/check.sh` | Pass for Read the Docs and GitHub Pages MkDocs builds |
 | Example validation | `nats-sink validate examples/named-multi-sink/config.json` through unit/CLI coverage | Pass |
 
 The skipped tests are the existing environment-gated live NATS, Oracle
-Database, and Oracle MySQL integration tests. Issue `#135` adds deterministic
-certification helpers and tests only; it does not alter live single-sink
-delivery code, so no new credentialed live test was required for this specific
-feature.
+Database, and Oracle MySQL integration tests. Issue `#134` adds aggregate
+fan-out observability helpers and metrics contract tests only; it does not
+alter live single-sink delivery code, so no new credentialed live test was
+required for this specific feature.
 
-## Fan-Out Certification Evidence
+## Fan-Out Observability Evidence
 
 The new unit coverage verifies:
 
-- the documented NATO SECRET route selects `oracle_secret` and optional
-  `file_audit`;
-- the documented NATO UNCLASS route selects only `oracle_unclass`;
-- subject, priority, classification, `labels_all`, `labels_any`, `labels_none`,
-  approved non-secret headers, and combined match sets;
-- one-to-one route selection and one-to-many fan-out target selection;
-- required target failure after another required target commits, with no
-  synthetic ACK recorded;
-- optional target timeout, bounded ACK release, and payload-free warning logs;
-- no-route handling for `reject`, `ignore`, and `default_route`;
-- `nats-sink validate` coverage for valid fan-out-style configuration and
-  invalid route, sink, match, optional wait, and redaction scenarios;
-- public `nats_sinks.testing` imports for reusable fan-out certification
-  helpers.
+- matched route selections increment aggregate route and child sink counters;
+- no-route selections increment no-route counters without logging subjects or
+  target names;
+- required success, required failure, optional success, optional failure, and
+  optional timeout categories are counted separately;
+- ACK eligibility and ACK blocking are visible as separate counters;
+- ACK-gate wait time and fan-out batch duration are captured as observations;
+- `nats-sink-metrics` table, shell, names, and Prometheus output can display
+  the new `fanout_*` metrics;
+- structured logs explain partial fan-out outcomes without payloads, sink
+  names, route names, subjects, labels, or classification values;
+- broken external metrics recorders do not escape from the helper and cannot
+  change the delivery decision.
 
 ## Issues Found During Validation
 
-No new product bugs were found during issue `#135` validation. The first full
-check identified a scanner false positive on the public `oracle_secret`
-example target name; the line now has a narrow `nosec B105` annotation with a
-local rationale and the full `scripts/check.sh` cycle passes.
+No new product bugs were found during issue `#134` validation. The first full
+check stopped on formatting for the new fan-out observability test file. Ruff
+formatting was applied, then the full `scripts/check.sh` cycle passed.
 
 ## Documentation Evidence
 
@@ -113,6 +113,9 @@ The following public documentation was updated and built successfully:
 - [Development](development.md)
 - [Architecture](architecture.md)
 - [Operations](operations.md)
+- [Metrics](metrics.md)
+- [Observability](observability.md)
+- [Prometheus Integration](prometheus.md)
 - [Named Sinks And Routing](named-sinks.md)
 - [Idempotency](idempotency.md)
 - [Security](security.md)
@@ -121,5 +124,5 @@ The following public documentation was updated and built successfully:
 - [Named Multi-Sink Example](https://github.com/ProjectCuillin/nats-sinks/blob/main/examples/named-multi-sink/config.json)
 - [Documentation Home](index.md)
 
-The changelog, backlog metadata, public API compatibility tests, CLI validation
-test, and tracked named multi-sink example were also updated for issue `#136`.
+The changelog, backlog metadata, metrics contract tests, metrics CLI tests, and
+fan-out observability tests were also updated for issue `#134`.

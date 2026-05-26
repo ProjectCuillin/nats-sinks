@@ -61,6 +61,10 @@ def test_metric_specs_have_unique_names_and_kinds() -> None:
     assert MetricNames.ORACLE_MERGE_OUTCOME_UNKNOWN_TOTAL in names
     assert MetricNames.JETSTREAM_ADVISORIES_RECEIVED_TOTAL in names
     assert MetricNames.JETSTREAM_ADVISORY_MAX_DELIVER_TOTAL in names
+    assert MetricNames.FANOUT_MESSAGES_ROUTED_TOTAL in names
+    assert MetricNames.FANOUT_REQUIRED_CHILD_FAILURE_TOTAL in names
+    assert MetricNames.FANOUT_ACK_GATE_WAIT_SECONDS in names
+    assert MetricNames.CURRENT_FANOUT_CHILD_SINKS_SELECTED in names
     assert {spec.kind for spec in METRIC_SPECS} == {"counter", "histogram", "gauge"}
 
 
@@ -159,8 +163,12 @@ def test_json_file_metrics_writes_sanitized_snapshot(tmp_path: Path) -> None:
     increment_metric(metrics, MetricNames.ORACLE_DUPLICATES_TOTAL, 1)
     increment_metric(metrics, MetricNames.ORACLE_DUPLICATE_NOOP_TOTAL, 1)
     increment_metric(metrics, MetricNames.ORACLE_MERGE_ROWS_TOTAL, 3)
+    increment_metric(metrics, MetricNames.FANOUT_MESSAGES_ROUTED_TOTAL, 1)
+    increment_metric(metrics, MetricNames.FANOUT_CHILD_SINKS_SELECTED_TOTAL, 2)
     observe_metric(metrics, MetricNames.SINK_BATCH_WRITE_SECONDS, 0.5)
+    observe_metric(metrics, MetricNames.FANOUT_ACK_GATE_WAIT_SECONDS, 0.125)
     set_metric_value(metrics, MetricNames.CURRENT_BATCH_MESSAGES, 3.0)
+    set_metric_value(metrics, MetricNames.CURRENT_FANOUT_CHILD_SINKS_SELECTED, 2.0)
 
     snapshot = load_metrics_snapshot(path)
     rows = metric_rows_from_snapshot(snapshot)
@@ -171,9 +179,13 @@ def test_json_file_metrics_writes_sanitized_snapshot(tmp_path: Path) -> None:
     assert row_by_name[MetricNames.ORACLE_DUPLICATES_TOTAL].value == 1
     assert row_by_name[MetricNames.ORACLE_DUPLICATE_NOOP_TOTAL].value == 1
     assert row_by_name[MetricNames.ORACLE_MERGE_ROWS_TOTAL].value == 3
+    assert row_by_name[MetricNames.FANOUT_MESSAGES_ROUTED_TOTAL].value == 1
+    assert row_by_name[MetricNames.FANOUT_CHILD_SINKS_SELECTED_TOTAL].value == 2
     assert MetricNames.LEGACY_MESSAGES_RECEIVED_TOTAL not in row_by_name
     assert row_by_name[f"{MetricNames.SINK_BATCH_WRITE_SECONDS}.count"].value == 1
+    assert row_by_name[f"{MetricNames.FANOUT_ACK_GATE_WAIT_SECONDS}.count"].value == 1
     assert row_by_name[MetricNames.CURRENT_BATCH_MESSAGES].value == 3.0
+    assert row_by_name[MetricNames.CURRENT_FANOUT_CHILD_SINKS_SELECTED].value == 2.0
 
 
 def test_load_metrics_snapshot_rejects_duplicate_keys(tmp_path: Path) -> None:
