@@ -115,6 +115,14 @@ it cannot complete the durable write, it raises a framework error. Sinks must
 not ACK, NAK, terminate, or in-progress JetStream messages because sinks receive
 `NatsEnvelope` objects rather than raw `nats-py` messages.
 
+The same contract applies to replay workflows. A future durable replay runner
+should still call `write_batch` and should still ACK only after the selected
+sink or required fan-out targets return durable success. Replay tooling must
+not add a separate sink API, bypass idempotency, or use ordered inspection
+consumers for production writes. See
+[Durable Replay To Sinks](durable-replay-to-sinks.md) for the replay design
+boundary and required test evidence.
+
 ## Standard Payload Normalization
 
 NATS message bodies are bytes. The core framework does not assume that a

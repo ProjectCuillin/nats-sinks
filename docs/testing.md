@@ -89,7 +89,17 @@ and payload-byte limits, JSONL output-path validation, unsubscribe cleanup, and
 the CLI contract that no sink is built or written. Durable replay-to-sinks
 tests should stay on the normal commit-then-acknowledge contract and prove
 that replay never ACKs before durable sink success. See
-[Ordered Consumer Evaluation](ordered-consumer-evaluation.md).
+[Ordered Consumer Evaluation](ordered-consumer-evaluation.md) and
+[Durable Replay To Sinks](durable-replay-to-sinks.md).
+
+The durable replay design is covered by a documentation guardrail test. That
+test keeps the page in the MkDocs navigation and checks that public guidance
+continues to mention durable pull consumers, no early ACK, start sequence or
+start time boundaries, maximum message limits, dry-run behavior, redacted
+reports, idempotency review, and future tests for duplicate replay and DLQ
+handling. When replay becomes executable tooling, those documentation checks
+must be complemented by runner-level tests that use fake messages and fake
+sinks to prove the same behavior in code.
 
 Push-consumer support is opt-in and covered by unit tests for default-disabled
 configuration, manual ACK enforcement, bounded callback intake, queue overflow,

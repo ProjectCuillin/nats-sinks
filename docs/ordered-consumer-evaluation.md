@@ -141,6 +141,10 @@ Durable replay-to-sinks should require:
 - least-privilege NATS permissions,
 - commit-then-acknowledge tests.
 
+The durable replay guidance is now documented separately in
+[Durable Replay To Sinks](durable-replay-to-sinks.md). That page is the
+operator-facing design boundary for future write-capable replay tooling.
+
 ## Python Client Consideration
 
 Ordered-consumer support depends on the NATS Python client exposing a stable
@@ -199,15 +203,16 @@ The evaluation recommended three separate follow-up items:
 3. Add durable replay-to-sinks guidance and tooling design.
 
 The first two items are now implemented by `nats-sink inspect-ordered` and the
-ordered-consumer compatibility layer. The third remains deliberately separate
-because replay into destinations has different delivery semantics and must stay
-on durable pull consumers.
+ordered-consumer compatibility layer. The third is now documented as a
+separate durable replay-to-sinks design because replay into destinations has
+different delivery semantics and must stay on durable pull consumers.
 
 This split prevents a useful inspection feature from accidentally weakening
 the durable sink runtime.
 
 ## Current Status
 
-The read-only inspection CLI and fail-closed client compatibility check are
-implemented. Durable replay-to-sinks remains separate future work and should
-continue to use durable pull consumers with commit-then-acknowledge semantics.
+The read-only inspection CLI, fail-closed client compatibility check, and
+durable replay-to-sinks design guidance are implemented. Future write-capable
+replay tooling should continue to use durable pull consumers with
+commit-then-acknowledge semantics.

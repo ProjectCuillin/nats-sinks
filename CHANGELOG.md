@@ -12,6 +12,12 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Added
 
+- Added durable replay-to-sinks guidance and tooling design for issue #120.
+  The new documentation separates ordered inspection from write-capable replay,
+  requires durable pull consumers and commit-then-ACK behavior for replay into
+  sinks, documents start sequence, start time, subject scope, maximum message,
+  dry-run, redacted report, and idempotency review boundaries, and adds a
+  documentation guardrail test for the replay contract.
 - Added the read-only ordered-consumer inspection CLI for issue #122. The new
   `nats-sink inspect-ordered` command uses the installed `nats-py`
   ordered-consumer API when available, fails closed when client support is
