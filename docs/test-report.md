@@ -14,39 +14,38 @@ generated database passwords, or full raw logs from live systems.
 | Field | Value |
 | --- | --- |
 | Overall result | Pass |
-| Report generated | 2026-05-26 issue `#127` validation for upcoming `v0.4.2` development |
+| Report generated | 2026-05-26 issues `#123` and `#125` validation for upcoming `v0.4.2` development |
 | Project version | `0.4.1` package metadata with `v0.4.2` development changes |
 | Python version | 3.12.4 |
-| Git revision checked | Branch `issue-127-subject-observability-certification` based on `release-v0.4.2` |
+| Git revision checked | Branch `issue-123-125-push-consumer-mode` based on `release-v0.4.2` |
 | Live NATS details | Environment-gated live tests skipped unless explicitly enabled |
 | Live Oracle Database details | Environment-gated live tests skipped unless explicitly enabled |
 | Live Oracle MySQL details | Environment-gated live tests skipped unless explicitly enabled |
 
-This refresh covered the subject-aware observability certification harness and
-operator runbook for issue `#127`, plus a full local regression cycle for the
-current development branch. The new tests prove that subject-aware observability
-is disabled by default, that approved subject families can be exported without
-leaking raw subjects, that malformed policy fails closed, that overflow behavior
-stays bounded, and that observability connector failures remain isolated from
-delivery decisions.
+This refresh covered the push-consumer configuration guardrails for issue
+`#123` and the opt-in bounded push-consumer runner mode for issue `#125`, plus
+a full local regression cycle for the current development branch. The new tests
+prove that push mode is disabled by default, that manual ACK is required, that
+deliver subjects and groups are validated, that pending message and byte limits
+are bounded, that callback intake uses a bounded queue, that overflow does not
+ACK, and that accepted push messages still ACK only after sink commit.
 
 ```mermaid
 flowchart LR
-    Messages[Synthetic envelopes] --> Policy[Reviewed subject policy]
-    Policy --> Certification[Certification harness]
-    Certification --> Snapshot[Sanitized labeled_metrics rows]
-    Snapshot --> Exporters[Prometheus / OTLP / StatsD / syslog / Splunk HEC]
-    Snapshot --> CLI[nats-sink-metrics]
-    Certification --> Delivery[Delivery non-interference probe]
-    Exporters --> Report[Sanitized latest report]
-    Docs[Runbook and docs builds] --> Report
+    PushConfig[push_consumer config] --> Guardrails[Fail-closed validation]
+    Guardrails --> Callback[Manual-ACK push callback]
+    Callback --> Queue[Bounded runner queue]
+    Queue --> Pipeline[Existing batch pipeline]
+    Pipeline --> Sink[Durable sink commit]
+    Sink --> Ack[ACK after commit]
+    Docs[Configuration and push evaluation docs] --> Report[Sanitized latest report]
 ```
 
 ## Core And Repository Validation
 
 | Check | Result |
 | --- | --- |
-| Ruff format | Pass, `230 files already formatted` |
+| Ruff format | Pass, `231 files already formatted` |
 | Ruff lint | Pass |
 | Mypy | Pass, no issues in `92` source files |
 | Version metadata consistency | Pass for `0.4.1` |
@@ -65,48 +64,42 @@ flowchart LR
 
 | Test Area | Command | Result |
 | --- | --- | --- |
-| Subject-aware observability certification focused tests | `python -m pytest tests/unit/test_subject_observability_certification.py tests/unit/test_subject_family_observability.py tests/unit/test_observability_policy.py tests/unit/test_metrics_cli.py tests/unit/test_public_api.py -q` | Pass, `60 passed` |
-| Subject-aware observability regression tests | `python -m pytest tests/unit/test_subject_observability_certification.py tests/unit/test_subject_family_observability.py tests/unit/test_metrics.py tests/unit/test_metrics_cli.py tests/unit/test_observability_policy.py tests/unit/test_observability_cli.py tests/unit/test_prometheus_observability.py tests/unit/test_otlp_observability.py tests/unit/test_elastic_observability.py tests/unit/test_grafana_alloy_observability.py tests/unit/test_splunk_hec_observability.py tests/unit/test_statsd_observability.py tests/unit/test_syslog_observability.py tests/unit/test_public_api.py -q` | Pass, `183 passed` |
-| Main repository test suite | `scripts/check.sh` | Pass, `1021 passed, 10 skipped` |
+| Push-consumer focused tests | `python -m pytest tests/unit/test_push_consumer.py tests/unit/test_consumer_management.py tests/unit/test_public_api.py -q` | Pass, `30 passed` |
+| Unit test suite | `python -m pytest tests/unit -q` | Pass, `1028 passed` |
+| Main repository test suite | `scripts/check.sh` | Pass, `1033 passed, 10 skipped` |
 | Encryption and sink contract subset | `scripts/check.sh` | Pass, `123 passed` |
 | Sink capability subset | `scripts/check.sh` | Pass, `117 passed` |
 | Documentation builds | `scripts/check.sh` | Pass for Read the Docs and GitHub Pages MkDocs builds |
 | Example validation | `nats-sink validate examples/named-multi-sink/config.json` through unit/CLI coverage | Pass |
 
 The skipped tests are the existing environment-gated live NATS, Oracle
-Database, and Oracle MySQL integration tests. Issue `#127` adds certification
-helpers and documentation only. It does not change message delivery, ACK
-behavior, retries, DLQ behavior, sink writes, or idempotency behavior.
+Database, and Oracle MySQL integration tests. Issues `#123` and `#125` add
+opt-in push-consumer delivery support. Pull mode remains the default, and push
+mode reuses the existing message delivery, retries, DLQ-before-ACK, sink write,
+and idempotency contract.
 
-## Subject-Aware Observability Certification Evidence
+## Push-Consumer Guardrail Evidence
 
 The new unit coverage verifies:
 
-- subject-aware observability remains disabled until explicitly configured;
-- approved subject families produce bounded, stable labels;
-- raw subjects are not exposed in connector output;
-- denied subjects do not create exported subject-family rows;
-- overflow behavior can aggregate to a reviewed fallback label;
-- malformed policy is rejected through the same runtime validation boundary;
-- Prometheus, OTLP, StatsD, syslog, Splunk HEC, and `nats-sink-metrics` render
-  the same sanitized snapshot contract;
-- the certification helper includes a delivery non-interference probe proving
-  observability code does not ACK, NACK, publish DLQ messages, or write sinks;
-- certification data uses synthetic subjects, documentation endpoints, and
-  neutral environment marker names only.
+- push-consumer mode remains disabled until explicitly configured;
+- `push_consumer.manual_ack=false` is rejected when push mode is enabled;
+- `push_consumer.deliver_subject` is required and cannot contain wildcards;
+- `push_consumer.deliver_group` is validated through an allow-list;
+- partial or unsupported `nats-py` push-subscribe capability surfaces fail
+  closed;
+- `consumer_management.max_ack_pending` cannot exceed the push pending message
+  limit;
+- callback intake queues messages without ACKing;
+- queue overflow NAKs without ACKing when the default overflow action is used;
+- push-runner ACK happens only after the sink records durable commit;
+- shutdown stops new callback intake before draining accepted messages.
 
 ## Issues Found During Validation
 
-Two release-blocking validation issues were found and fixed during issue `#127`
-development:
-
-- GitHub issue `#284`: the certification helper initially built
-  `ObservabilityPolicy` from plain dictionaries in a way that failed mypy. The
-  helper now constructs policies through the runtime validation boundary with a
-  typed wrapper.
-- GitHub issue `#285`: the certification helper initially used a synthetic HEC
-  environment marker that looked like credential material to Bandit. The helper
-  now avoids secret-looking literal assignments without suppressing the scanner.
+No new release-blocking issues were found during the `#123` and `#125`
+validation cycle. The only local correction was formatting
+`src/nats_sinks/core/consumer_management.py` before rerunning the full gate.
 
 ## Documentation Evidence
 
@@ -120,6 +113,7 @@ The following public documentation was updated and built successfully:
 - [Development](development.md)
 - [Architecture](architecture.md)
 - [Operations](operations.md)
+- [Push Consumer Evaluation](push-consumer-evaluation.md)
 - [Metrics](metrics.md)
 - [Observability](observability.md)
 - [Subject-Aware Observability Evaluation](subject-aware-observability-evaluation.md)
@@ -133,6 +127,7 @@ The following public documentation was updated and built successfully:
 - [Named Multi-Sink Example](https://github.com/ProjectCuillin/nats-sinks/blob/main/examples/named-multi-sink/config.json)
 - [Documentation Home](index.md)
 
-The changelog, backlog metadata, public API contract tests, metrics CLI tests,
-observability connector tests, security guidance, and subject-aware
-observability documentation were also updated for issue `#127`.
+The changelog, backlog metadata, public API contract tests, configuration
+guide, security guidance, operations guide, NATS feature-gap analysis, and
+push-consumer evaluation documentation were also updated for issues `#123` and
+`#125`.

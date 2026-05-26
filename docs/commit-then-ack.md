@@ -163,14 +163,15 @@ The evaluation and recommended implementation split are documented in
 
 JetStream push consumers deliver messages to a delivery subject instead of
 waiting for the client to fetch a bounded batch. That does not change the ACK
-rule. A future push runner mode must use manual acknowledgement only and must
-ACK only after the sink reports durable success or after DLQ publication
-succeeds for permanent failures.
+rule. The opt-in push runner mode uses manual acknowledgement only and ACKs
+only after the sink reports durable success or after DLQ publication succeeds
+for permanent failures.
 
-Push mode is not enabled today. It needs bounded callback intake, pending
-message and byte limits, flow-control and heartbeat handling, and shutdown
-tests before it can be production-ready. The evaluation and implementation
-split are documented in [Push Consumer Evaluation](push-consumer-evaluation.md).
+Push mode is disabled by default and guarded by bounded callback intake plus
+pending message and byte limits. Additional delivery-contract, flow-control,
+heartbeat, and shutdown certification remains tracked separately. The
+evaluation and implementation split are documented in
+[Push Consumer Evaluation](push-consumer-evaluation.md).
 
 ## Non-Negotiable Invariant
 

@@ -115,7 +115,14 @@ MAX_CONSUMER_BACKOFF_SECONDS = 604_800
 MAX_CONSUMER_METADATA_KEYS = 32
 MAX_CONSUMER_METADATA_KEY_LENGTH = 128
 MAX_CONSUMER_METADATA_VALUE_LENGTH = 512
+MAX_PUSH_PENDING_MESSAGES = 1_000_000
+DEFAULT_PUSH_PENDING_MESSAGES = 1024
+MAX_PUSH_PENDING_BYTES = 268_435_456
+DEFAULT_PUSH_PENDING_BYTES = 67_108_864
+MAX_PUSH_IDLE_HEARTBEAT_SECONDS = 3600
+MAX_PUSH_DRAIN_TIMEOUT_MS = 600_000
 CONSUMER_METADATA_KEY_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.:/-]{0,127}$")
+PUSH_DELIVER_GROUP_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,127}$")
 PRIORITY_LANE_NAME_RE = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
 PRE_SINK_POLICY_MISSION_KEY_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.:-]{0,127}$")
 WEBSOCKET_HEADER_NAME_RE = re.compile(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,128}$")
@@ -1064,6 +1071,87 @@ class ConsumerManagementConfig(BaseModel):
                 raise ValueError(
                     "consumer_management.backoff_seconds length must be less than or equal "
                     "to max_deliver"
+                )
+        return self
+
+
+class PushConsumerConfig(BaseModel):
+    """Explicit opt-in settings for JetStream push-consumer delivery.
+
+    Push delivery runs callbacks from the NATS client, so it has a different
+    risk profile than the default pull loop.  The framework therefore keeps it
+    disabled by default and validates every delivery-sensitive setting before
+    the runner subscribes.  Manual ACK is mandatory because ACK decisions must
+    remain in the core commit-then-acknowledge pipeline.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    deliver_subject: str | None = None
+    deliver_group: str | None = None
+    manual_ack: bool = True
+    pending_msgs_limit: int = Field(
+        default=DEFAULT_PUSH_PENDING_MESSAGES,
+        ge=1,
+        le=MAX_PUSH_PENDING_MESSAGES,
+    )
+    pending_bytes_limit: int = Field(
+        default=DEFAULT_PUSH_PENDING_BYTES,
+        ge=1024,
+        le=MAX_PUSH_PENDING_BYTES,
+    )
+    queue_overflow_action: Literal["nak", "leave_unacked"] = "nak"
+    flow_control: bool = False
+    idle_heartbeat_seconds: float | None = Field(
+        default=None,
+        gt=0,
+        le=MAX_PUSH_IDLE_HEARTBEAT_SECONDS,
+    )
+    drain_timeout_ms: int = Field(default=30_000, ge=0, le=MAX_PUSH_DRAIN_TIMEOUT_MS)
+
+    @field_validator("deliver_subject", mode="before")
+    @classmethod
+    def validate_deliver_subject(cls, value: object) -> str | None:
+        """Validate the private NATS subject used for push delivery."""
+
+        if value is None:
+            return None
+        try:
+            subject = validate_subject_pattern(value)
+        except ConfigurationError as exc:
+            raise ValueError("push_consumer.deliver_subject must be a valid NATS subject") from exc
+        if "*" in subject or ">" in subject:
+            raise ValueError("push_consumer.deliver_subject must not contain wildcards")
+        return subject
+
+    @field_validator("deliver_group", mode="before")
+    @classmethod
+    def validate_deliver_group(cls, value: object) -> str | None:
+        """Validate the optional queue-style delivery group name."""
+
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ValueError("push_consumer.deliver_group must be a string")
+        group = value.strip()
+        if group != value or not PUSH_DELIVER_GROUP_RE.fullmatch(group):
+            raise ValueError(
+                "push_consumer.deliver_group must start with a letter or digit and contain "
+                "only letters, digits, '.', '_', ':', '/', or '-'"
+            )
+        return group
+
+    @model_validator(mode="after")
+    def validate_push_mode_safety(self) -> PushConsumerConfig:
+        """Fail closed for any push setting that could weaken ACK safety."""
+
+        if self.enabled:
+            if not self.manual_ack:
+                raise ValueError("push_consumer.manual_ack must be true when push mode is enabled")
+            if self.deliver_subject is None:
+                raise ValueError(
+                    "push_consumer.deliver_subject is required when push mode is enabled"
                 )
         return self
 
@@ -2993,6 +3081,7 @@ class AppConfig(BaseModel):
 
     nats: NatsConfig
     consumer_management: ConsumerManagementConfig = Field(default_factory=ConsumerManagementConfig)
+    push_consumer: PushConsumerConfig = Field(default_factory=PushConsumerConfig)
     delivery: DeliveryConfig = Field(default_factory=DeliveryConfig)
     dead_letter: DeadLetterConfig = Field(default_factory=DeadLetterConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)

@@ -53,9 +53,10 @@ repository documentation after it has been published from `main`.
 
 The current release provides the following production-ready foundation:
 
-- `JetStreamSinkRunner`, a pull-based JetStream runtime with bounded batches,
-  backpressure controls, graceful shutdown, DLQ support, safe ACK behavior, and
-  clear error handling.
+- `JetStreamSinkRunner`, a default pull-based JetStream runtime with bounded
+  batches, an optional bounded manual-ACK push-consumer mode, backpressure
+  controls, graceful shutdown, DLQ support, safe ACK behavior, and clear error
+  handling.
 - `NatsEnvelope`, an immutable message representation that gives sinks payload,
   headers, JetStream metadata, normalized priority/classification/labels fields,
   optional data-centric security labels, timestamps, and idempotency keys

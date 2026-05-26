@@ -3,7 +3,7 @@
   "title": "[Feature]: Add opt-in bounded push-consumer runner mode",
   "area": "Core runtime and delivery semantics",
   "priority": "P3 - backlog candidate",
-  "target_release": "unscheduled",
+  "target_release": "v0.4.2",
   "labels": ["nats", "testing", "documentation"],
   "problem": "Some deployments standardize on JetStream push consumers, but nats-sinks currently only uses pull consumers. A push mode could help those deployments, but only if the runner can preserve bounded in-flight work, graceful shutdown, retry behavior, DLQ-before-ACK handling, and ACK-after-durable-success semantics.",
   "proposal": "Add an explicit opt-in push-consumer runner mode after the capability and configuration guardrails exist. The mode should subscribe with manual acknowledgement, enqueue messages into a bounded internal queue, form bounded batches for the existing processing path, stop accepting new messages during shutdown, and reuse the same commit-then-ACK processing pipeline used by pull mode.",

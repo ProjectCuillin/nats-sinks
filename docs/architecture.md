@@ -218,12 +218,12 @@ replacement for durable pull consumers when writing to Oracle, files, or
 future sinks. See [Ordered Consumer Evaluation](ordered-consumer-evaluation.md)
 for the evaluation and follow-up tooling split.
 
-Push consumers have also been evaluated as a possible future runner mode. They
-can be useful for deployments that already standardize on server-initiated
-delivery, but they add callback scheduling, client pending buffers, deliver
-subjects, flow-control messages, and more complex shutdown behavior. Pull
-consumers remain the production default until a push mode can prove the same
-bounded backpressure and ACK-after-durable-success behavior. See
+Push consumers are available as an explicit opt-in runner mode for deployments
+that already standardize on server-initiated delivery. They add callback
+scheduling, client pending buffers, deliver subjects, flow-control messages,
+and more complex shutdown behavior, so pull consumers remain the production
+default. Push mode is manual-ACK only, bounded, and still routes messages
+through the same ACK-after-durable-success pipeline. See
 [Push Consumer Evaluation](push-consumer-evaluation.md).
 
 ## Extension Model

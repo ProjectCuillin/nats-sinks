@@ -50,9 +50,10 @@ repository Pages source is set to `GitHub Actions`.
 The current release is focused on a small production-ready surface that can be
 used immediately:
 
-- `JetStreamSinkRunner` for pull-based JetStream consumption with bounded
-  batches, commit-then-acknowledge processing, DLQ handling, graceful shutdown,
-  logging hooks, basic metrics hooks, and safe redelivery behavior.
+- `JetStreamSinkRunner` for default pull-based JetStream consumption with
+  bounded batches, optional manual-ACK push-consumer mode,
+  commit-then-acknowledge processing, DLQ handling, graceful shutdown, logging
+  hooks, basic metrics hooks, and safe redelivery behavior.
 - `NatsEnvelope`, the immutable internal representation passed to sinks instead
   of raw NATS client messages.
 - Core-normalized message metadata fields for `priority`, `classification`,
@@ -1180,7 +1181,8 @@ Phase 3:
 - Helm chart.
 - Additional advanced observability connectors and bounded subject-aware metric
   policies.
-- Push and ordered consumer evaluation where compatible with project semantics.
+- Push-consumer delivery-contract and flow-control certification tests, plus
+  ordered consumer evaluation where compatible with project semantics.
 - Stream management helpers beyond the current topology guidance.
 - Future sink certification tests.
 

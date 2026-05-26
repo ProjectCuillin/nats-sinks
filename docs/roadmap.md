@@ -214,8 +214,6 @@
 - Sink certification tests.
 - Helm chart.
 - Advanced observability.
-- Push-consumer capability and configuration guardrails.
-- Opt-in bounded push-consumer runner mode.
 - Push-consumer delivery-contract and flow-control certification tests.
 - Ordered-consumer client compatibility checks.
 - Read-only ordered-consumer inspection CLI, clearly separated from production

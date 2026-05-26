@@ -616,6 +616,7 @@ def run(
             sink=sink,
             delivery=loaded.delivery,
             consumer_management=loaded.consumer_management,
+            push_consumer=loaded.push_consumer,
             dead_letter=loaded.dead_letter,
             message_metadata=loaded.message_metadata,
             message_authenticity=loaded.message_authenticity,

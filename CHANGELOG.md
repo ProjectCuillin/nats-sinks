@@ -12,6 +12,13 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Added
 
+- Added push-consumer guardrails and opt-in runner support for issues #123 and
+  #125. The new `push_consumer` configuration is disabled by default, requires
+  manual ACK, validates deliver subjects, deliver groups, pending message and
+  byte limits, rejects pull-only `max_waiting` settings in push mode, detects
+  required `nats-py` push-subscribe capabilities, and routes accepted callback
+  messages through the existing commit-then-ACK batch pipeline with bounded
+  queue overflow handling.
 - Added the generic route-match policy selector for issue #138. The new
   disabled-by-default `routing` configuration can match normalized
   `NatsEnvelope` subject, priority, classification, labels, and approved
