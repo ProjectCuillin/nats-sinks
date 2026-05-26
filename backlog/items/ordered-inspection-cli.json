@@ -3,7 +3,7 @@
   "title": "[Feature]: Add read-only ordered-consumer inspection CLI",
   "area": "CLI",
   "priority": "P3 - backlog candidate",
-  "target_release": "unscheduled",
+  "target_release": "v0.4.2",
   "labels": ["nats", "security", "testing", "documentation"],
   "problem": "Operators and maintainers sometimes need to inspect a stream in order without creating or advancing a production durable sink consumer. NATS ordered consumers are designed for data inspection and analysis, but nats-sinks does not currently provide a safe read-only CLI wrapper with redacted output and explicit limits.",
   "proposal": "Add a separate inspection command that uses an ordered consumer when the active NATS Python client supports it, or fails closed with a clear compatibility message when it does not. The command should be explicitly read-only, disabled for sink writes, bounded by message count and byte limits, redacted by default, and capable of writing sanitized JSONL inspection records for local troubleshooting.",
@@ -21,7 +21,6 @@
   "documentation": "Update ordered-consumer evaluation, CLI, operations, testing, security, roadmap, and changelog documentation.",
   "closeout": "Close after the release containing the ordered inspection CLI is published. Include release tag, tests, documentation, and limitations.",
   "relationships": {
-    "related": ["#33"],
-    "blocked_by": ["backlog:ordered-consumer-client-compatibility"]
+    "related": ["#33"]
   }
 }

@@ -369,11 +369,13 @@ tracked separately in
 [Headers-Only Delivery Evaluation](headers-only-delivery.md) so future support
 does not silently store omitted bodies as if producers sent empty payloads.
 
-Ordered-consumer inspection and replay planning can also expose sensitive
-stream content. Ordered inspection should be read-only, bounded, redacted by
-default, and separated from durable sink writes. Production replay into sinks
-should use durable pull consumers and commit-then-acknowledge rather than
-ordered inspection consumers. See
+Ordered-consumer inspection can expose sensitive stream content even when
+payloads are hidden, because subjects, headers, sequence numbers, priority,
+classification, labels, and timing can reveal operational context. The
+`nats-sink inspect-ordered` command is read-only, bounded, redacted by default,
+and separated from durable sink writes. Production replay into sinks should use
+durable pull consumers and commit-then-acknowledge rather than ordered
+inspection consumers. See
 [Ordered Consumer Evaluation](ordered-consumer-evaluation.md).
 
 Push-consumer support is disabled by default and must be explicitly enabled.

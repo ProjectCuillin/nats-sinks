@@ -217,9 +217,6 @@
 - Sink certification tests.
 - Helm chart.
 - Advanced observability.
-- Ordered-consumer client compatibility checks.
-- Read-only ordered-consumer inspection CLI, clearly separated from production
-  durable sink processing.
 - Durable replay-to-sinks guidance and tooling design based on durable pull
   consumers rather than ordered inspection consumers.
 - Payload-presence metadata and sink certification for headers-only

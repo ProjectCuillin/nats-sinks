@@ -12,6 +12,13 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Added
 
+- Added the read-only ordered-consumer inspection CLI for issue #122. The new
+  `nats-sink inspect-ordered` command uses the installed `nats-py`
+  ordered-consumer API when available, fails closed when client support is
+  missing, never builds or writes a sink, redacts payloads and sensitive
+  headers by default, validates message, payload-byte, pending, timeout, and
+  JSONL output-path limits, and documents that ordered inspection is not
+  durable sink replay.
 - Added push-consumer guardrails and opt-in runner support for issues #123 and
   #125. The new `push_consumer` configuration is disabled by default, requires
   manual ACK, validates deliver subjects, deliver groups, pending message and

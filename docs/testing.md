@@ -83,11 +83,12 @@ deterministic release readiness path. Live NATS-to-destination fan-out tests
 remain opt-in because they need the same live destination credentials as the
 underlying child sinks.
 
-Ordered-consumer support is currently documentation and backlog only. Future
-ordered-inspection tests should prove that inspection tooling is read-only,
-bounded, redacted by default, and unable to call sink writes. Future durable
-replay-to-sinks tests should stay on the normal commit-then-acknowledge
-contract and prove that replay never ACKs before durable sink success. See
+Ordered-consumer inspection has focused unit coverage for fail-closed client
+capability detection, redacted default output, explicit payload opt-in, message
+and payload-byte limits, JSONL output-path validation, unsubscribe cleanup, and
+the CLI contract that no sink is built or written. Durable replay-to-sinks
+tests should stay on the normal commit-then-acknowledge contract and prove
+that replay never ACKs before durable sink success. See
 [Ordered Consumer Evaluation](ordered-consumer-evaluation.md).
 
 Push-consumer support is opt-in and covered by unit tests for default-disabled

@@ -18,6 +18,7 @@ configuration.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 from pathlib import Path
 from typing import Annotated, Any
@@ -32,6 +33,23 @@ from nats_sinks.core.fanout_sink import FanoutSink
 from nats_sinks.core.logging import configure_logging
 from nats_sinks.core.metrics import JsonFileMetrics, MetricsRecorder
 from nats_sinks.core.nats_options import build_nats_connect_options
+from nats_sinks.core.ordered_inspection import (
+    DEFAULT_MAX_HEADER_VALUE_BYTES,
+    DEFAULT_MAX_HEADERS,
+    DEFAULT_MAX_MESSAGES,
+    DEFAULT_MAX_PAYLOAD_BYTES,
+    DEFAULT_OUTPUT_ROOT,
+    DEFAULT_PENDING_BYTES,
+    DEFAULT_PENDING_MESSAGES,
+    DEFAULT_TIMEOUT_SECONDS,
+    OrderedInspectionOptions,
+    collect_ordered_inspection_records,
+    render_ordered_inspection_jsonl,
+    render_ordered_inspection_text,
+    resolve_inspection_output_path,
+    validate_ordered_inspection_options,
+    write_ordered_inspection_jsonl,
+)
 from nats_sinks.core.runner import JetStreamSinkRunner
 from nats_sinks.core.stream_management import (
     StreamManagementOptions,
@@ -348,6 +366,29 @@ def _metrics_recorder(config: AppConfig) -> MetricsRecorder | None:
     )
 
 
+async def _connect_nats_for_inspection(options: dict[str, Any]) -> Any:
+    """Open a NATS connection for inspection-only CLI commands.
+
+    The helper exists so tests can inject a fake connection and prove that the
+    inspection command does not construct or call any sink.
+    """
+
+    import nats  # noqa: PLC0415 - keep the runtime client import lazy.
+
+    return await nats.connect(**options)
+
+
+async def _close_nats_connection(connection: Any) -> None:
+    """Close a NATS connection when the client exposes a close method."""
+
+    close = getattr(connection, "close", None)
+    if close is None or not callable(close):
+        return
+    result = close()
+    if inspect.isawaitable(result):
+        await result
+
+
 @app.callback()
 def main(
     version: Annotated[
@@ -579,6 +620,155 @@ def query_lineage(
         typer.echo(json.dumps(result.to_dict(), indent=2, sort_keys=False, allow_nan=False))
     else:
         typer.echo(render_lineage_result_text(result))
+
+
+@app.command("inspect-ordered")
+def inspect_ordered(
+    config: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    max_messages: Annotated[
+        int,
+        typer.Option(
+            "--max-messages",
+            help="Maximum ordered inspection records to emit, from 1 to 1000.",
+        ),
+    ] = DEFAULT_MAX_MESSAGES,
+    max_payload_bytes: Annotated[
+        int,
+        typer.Option(
+            "--max-payload-bytes",
+            help="Maximum total payload bytes to inspect before stopping.",
+        ),
+    ] = DEFAULT_MAX_PAYLOAD_BYTES,
+    include_payload: Annotated[
+        bool,
+        typer.Option(
+            "--include-payload",
+            help="Include payload data in sanitized JSON output. Disabled by default.",
+        ),
+    ] = False,
+    timeout_seconds: Annotated[
+        float,
+        typer.Option(
+            "--timeout-seconds",
+            help="Per-message wait time before ending inspection when no message arrives.",
+        ),
+    ] = DEFAULT_TIMEOUT_SECONDS,
+    output_format: Annotated[
+        str,
+        typer.Option("--format", help="Output format: text or jsonl."),
+    ] = "text",
+    output: Annotated[
+        Path | None,
+        typer.Option(
+            "--output",
+            help=(
+                "Optional JSONL file name or path under --output-root for sanitized "
+                "inspection records."
+            ),
+        ),
+    ] = None,
+    output_root: Annotated[
+        Path,
+        typer.Option(
+            "--output-root",
+            help="Approved local root for --output JSONL files.",
+        ),
+    ] = DEFAULT_OUTPUT_ROOT,
+    pending_messages: Annotated[
+        int,
+        typer.Option("--pending-messages", help="Bounded client pending message limit."),
+    ] = DEFAULT_PENDING_MESSAGES,
+    pending_bytes: Annotated[
+        int,
+        typer.Option("--pending-bytes", help="Bounded client pending byte limit."),
+    ] = DEFAULT_PENDING_BYTES,
+    max_headers: Annotated[
+        int,
+        typer.Option("--max-headers", help="Maximum headers to include in sanitized output."),
+    ] = DEFAULT_MAX_HEADERS,
+    max_header_value_bytes: Annotated[
+        int,
+        typer.Option(
+            "--max-header-value-bytes",
+            help="Maximum UTF-8 bytes per non-sensitive header value in output.",
+        ),
+    ] = DEFAULT_MAX_HEADER_VALUE_BYTES,
+) -> None:
+    """Inspect stream messages through a read-only ordered consumer.
+
+    This command is for bounded troubleshooting and analysis. It does not build
+    a sink, does not write destination records, and does not ACK production
+    durable work. If the installed NATS Python client does not expose ordered
+    consumer support, the command fails closed with a compatibility message.
+    """
+
+    loaded = _load_or_exit(config)
+    normalized_format = output_format.strip().casefold()
+    if normalized_format not in {"text", "jsonl"}:
+        typer.echo("Inspection configuration error: --format must be text or jsonl", err=True)
+        raise typer.Exit(2)
+
+    try:
+        options = OrderedInspectionOptions(
+            max_messages=max_messages,
+            max_payload_bytes=max_payload_bytes,
+            include_payload=include_payload,
+            timeout_seconds=timeout_seconds,
+            pending_messages=pending_messages,
+            pending_bytes=pending_bytes,
+            max_headers=max_headers,
+            max_header_value_bytes=max_header_value_bytes,
+        )
+        validate_ordered_inspection_options(options)
+        resolved_output = (
+            resolve_inspection_output_path(output, output_root=output_root)
+            if output is not None
+            else None
+        )
+    except ConfigurationError as exc:
+        typer.echo(f"Inspection configuration error: {exc}", err=True)
+        raise typer.Exit(2) from exc
+
+    async def _inspect() -> Any:
+        connection = await _connect_nats_for_inspection(_nats_options(loaded))
+        try:
+            jetstream = connection.jetstream()
+            return await collect_ordered_inspection_records(
+                jetstream,
+                subject=loaded.nats.subject,
+                stream=loaded.nats.stream,
+                options=options,
+                message_metadata=loaded.message_metadata,
+                mission_metadata=loaded.mission_metadata,
+                security_labels=loaded.security_labels,
+            )
+        finally:
+            await _close_nats_connection(connection)
+
+    try:
+        result = asyncio.run(_inspect())
+    except ConfigurationError as exc:
+        typer.echo(f"Inspection configuration error: {exc}", err=True)
+        raise typer.Exit(2) from exc
+    except NatsSinksError as exc:
+        typer.echo(f"Inspection failed: {exc}", err=True)
+        raise typer.Exit(1) from exc
+    except Exception as exc:
+        typer.echo(f"Unexpected inspection failure: {type(exc).__name__}", err=True)
+        raise typer.Exit(1) from exc
+
+    if resolved_output is not None:
+        write_ordered_inspection_jsonl(result.records, resolved_output)
+
+    if normalized_format == "jsonl":
+        rendered = render_ordered_inspection_jsonl(result.records)
+        if rendered:
+            typer.echo(rendered)
+        return
+
+    typer.echo(render_ordered_inspection_text(result))
+    if resolved_output is not None:
+        typer.echo(f"JSONL inspection records written to {resolved_output}")
 
 
 @app.command()
