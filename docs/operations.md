@@ -295,7 +295,11 @@ success. See
 JetStream `InProgress` support has also been evaluated for future long-running
 sink writes. It is not enabled today. If implemented, it should be treated as a
 bounded heartbeat around active work, not as a success signal. See
-[InProgress Evaluation](in-progress-evaluation.md).
+[InProgress Evaluation](in-progress-evaluation.md). Stable InProgress metric
+names and operator guidance are available in the
+[InProgress Metrics Runbook](inprogress-metrics-runbook.md), including shell
+and Prometheus examples that keep payloads, subjects, destinations, and
+classification details out of observability output.
 
 Optional JetStream advisory observation is available for deployments that need
 server-side delivery signals such as maximum-delivery, NAK, terminal

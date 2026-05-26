@@ -14,8 +14,9 @@ The conclusion is deliberately cautious:
 - it requires guardrails around the effective consumer `AckWait` and `BackOff`
   policy before it should be considered production-ready.
 
-The current release documents the evaluation and creates follow-up backlog
-items. It does not yet expose a runtime `InProgress` configuration option.
+The current release documents the evaluation and provides the stable
+InProgress metrics contract and operator runbook. It does not yet expose a
+runtime `InProgress` configuration option.
 
 ## Background
 
@@ -166,7 +167,8 @@ The evaluation recommends three separate implementation items:
 
 1. Add AckWait and BackOff guardrails for InProgress support.
 2. Add optional InProgress heartbeat during long sink writes.
-3. Add InProgress metrics and an operator runbook.
+3. Add InProgress metrics and an operator runbook. This metric and runbook
+   layer is now available, while the runtime heartbeat remains separate.
 
 This split matters. Timing policy, runtime heartbeats, and observability have
 different risks and deserve separate review.
@@ -201,20 +203,24 @@ Suggested validation rules:
 
 ## Metrics Direction
 
-Future metrics should be low-cardinality and should never include payloads or
-private deployment details.
+The stable metric contract is low-cardinality and never includes payloads,
+subjects, credentials, private deployment details, classification values,
+labels, message IDs, table names, or file paths.
 
 | Metric suffix | Type | Meaning |
 | --- | --- | --- |
-| `in_progress_attempts_total` | counter | Progress signals attempted. |
-| `in_progress_success_total` | counter | Progress signals sent successfully. |
-| `in_progress_errors_total` | counter | Progress signal calls that failed. |
-| `in_progress_max_count_reached_total` | counter | Messages or batches that reached the configured heartbeat limit. |
-| `in_progress_active_batches` | gauge | Active batches currently under a progress heartbeat. |
-| `message_in_progress_seconds` | observation | Elapsed time spent sending progress signals. |
+| `in_progress_attempts_total` | counter | Progress heartbeats attempted while sink work is active. |
+| `in_progress_successes_total` | counter | Progress heartbeats accepted by the client path; not sink success. |
+| `in_progress_failures_total` | counter | Progress heartbeat calls that failed before the final ACK decision. |
+| `in_progress_max_heartbeats_reached_total` | counter | Batches that reached the configured heartbeat limit. |
+| `current_in_progress_batches_active` | gauge | Active batches currently under heartbeat supervision. |
+| `in_progress_heartbeat_seconds` | observation | Elapsed time spent sending heartbeat operations. |
 
 These metrics should be readable through `nats-sink-metrics` and shared
 externally only through explicit observability policies.
+
+Operator interpretation is documented in the
+[InProgress Metrics Runbook](inprogress-metrics-runbook.md).
 
 ## Operational Guidance
 

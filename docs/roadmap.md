@@ -35,6 +35,9 @@
 - Event freshness and staleness metrics for aggregate event age at receive and
   store time, missing or malformed creation timestamps, stale events, and
   positive source clock skew.
+- Stable InProgress metric names, metrics CLI rendering, Prometheus text
+  rendering, and an operator runbook for distinguishing slow active work from
+  durable sink success.
 - Local JSON metrics snapshots and the `nats-sink-metrics` inspection CLI for
   table, JSON, JSONL, shell, names, and Prometheus text output.
 - Observability core with disabled-by-default sharing policies and a
@@ -211,8 +214,6 @@
   success followed by ACK confirmation failure.
 - AckWait and BackOff guardrails for optional `InProgress` handling.
 - Optional `InProgress` heartbeat during long-running sink writes.
-- InProgress metrics and an operator runbook for distinguishing slow active
-  work from durable success.
 ## Phase 3
 
 - External connector marketplace guidance, certification evidence, and

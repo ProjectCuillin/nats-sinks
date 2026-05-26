@@ -19,6 +19,9 @@ Observability is documented as a small set of focused pages:
   sharing policy, and connector-neutral architecture.
 - [Metrics Snapshot And CLI](metrics.md): explains the local metrics recorder,
   `nats-sink-metrics`, metric names, snapshot files, and shell-friendly output.
+- [InProgress Metrics Runbook](inprogress-metrics-runbook.md): explains the
+  stable progress-heartbeat metric family, safe alerting, and why progress
+  signals are not durable success or ACK events.
 - [Subject-Aware Observability Evaluation](subject-aware-observability-evaluation.md):
   explains the controlled subject-family policy model and why subject labels
   remain disabled by default.
@@ -82,6 +85,10 @@ runtime:
 - external sharing is disabled until an explicit policy enables it,
 - observability connectors are isolated from core and sink logic so new
   platforms can be added without breaking sink APIs.
+- InProgress metrics remain aggregate timing and count signals. They must not
+  be used as success signals, and they must not export subjects, payloads,
+  destination names, labels, classification values, or private deployment
+  details.
 
 Subject-aware observability now has a policy model and a bounded prepared
 series format. Subject-family export is still disabled by default and is not
