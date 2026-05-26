@@ -20,9 +20,10 @@ certified support in the sink framework.
 
 `nats-sinks` currently supports:
 
-- pull-based JetStream consumption,
+- pull-based JetStream consumption by default and explicit opt-in push
+  consumption when configured,
 - one stream, one consumer, and one configured subject filter per runner,
-- durable or ephemeral pull subscription selection,
+- durable or ephemeral subscription selection,
 - bounded batch fetches,
 - normalized `NatsEnvelope` objects,
 - commit-then-acknowledge processing,
@@ -111,9 +112,9 @@ Current gap details:
 | Multiple FilterSubjects | Consumers can filter on multiple subjects. | `consumer_management.filter_subjects` supports bounded plural filters that must remain within `nats.subject`; Oracle table routing still happens after delivery. | Implemented for durable pull consumers |
 | HeadersOnly delivery | Consumers can deliver only headers and expose the omitted body size through a NATS header. | `consumer_management.headers_only` can create, reconcile, or validate the server setting. Payload-presence metadata and sink/DLQ certification remain tracked separately. | Partially implemented |
 | Consumer metadata | Consumers support user metadata. | `consumer_management.metadata` supports bounded low-sensitivity string metadata and rejects secret-looking keys. | Implemented for durable pull consumers |
-| Push consumers | NATS supports push delivery to a subject, optional queue-style deliver groups, `MaxAckPending`, FlowControl, and IdleHeartbeat. | Evaluated in [Push Consumer Evaluation](push-consumer-evaluation.md). Not enabled in runtime; follow-up work is split into capability/config guardrails, an opt-in bounded push runner mode, and push delivery-contract certification tests. Pull remains the default. | Phase 3 |
+| Push consumers | NATS supports push delivery to a subject, optional queue-style deliver groups, `MaxAckPending`, FlowControl, and IdleHeartbeat. | `push_consumer` provides an explicit opt-in bounded manual-ACK runner mode with fail-closed configuration guardrails. Pull remains the default, and deeper push delivery-contract/flow-control certification remains tracked separately. | Partially implemented |
 | Ordered consumers | NATS supports ordered consumers for inspection and analysis workflows. | Evaluated in [Ordered Consumer Evaluation](ordered-consumer-evaluation.md). Not enabled in runtime; follow-up work is split into client compatibility checks, a read-only inspection CLI, and durable replay-to-sinks guidance that keeps production writes on durable pull consumers. | Phase 3 |
-| Queue-style push subscriptions | Push delivery can use queue groups. | Not supported. Pull consumers are preferred for sink work. | Phase 3 |
+| Queue-style push subscriptions | Push delivery can use queue groups. | Supported only through explicit `push_consumer.deliver_group` configuration in opt-in push mode. Pull consumers remain preferred for sink work. | Partially implemented |
 | Consumer replicas and memory storage | Consumer state can have replica and memory options. | `consumer_management.num_replicas` and `consumer_management.memory_storage` can create, reconcile, or validate these settings when explicitly configured. | Implemented for durable pull consumers |
 
 ## JetStream ACK And Redelivery Gaps

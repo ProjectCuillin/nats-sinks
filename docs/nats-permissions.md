@@ -15,11 +15,13 @@ examples, or support tickets.
 
 ## Why Permissions Matter
 
-`nats-sinks` is deliberately conservative about delivery semantics. The core
-runtime fetches messages from a pull-based JetStream consumer, hands normalized
-`NatsEnvelope` objects to a sink, waits for the sink to complete durable work,
-and only then ACKs JetStream. NATS permissions should support that flow without
-granting broad account access.
+`nats-sinks` is deliberately conservative about delivery semantics. The
+default runtime fetches messages from a pull-based JetStream consumer, hands
+normalized `NatsEnvelope` objects to a sink, waits for the sink to complete
+durable work, and only then ACKs JetStream. The optional push-consumer mode
+uses the same ACK rule with a bounded manual-ACK callback queue. NATS
+permissions should support the chosen flow without granting broad account
+access.
 
 ```mermaid
 sequenceDiagram

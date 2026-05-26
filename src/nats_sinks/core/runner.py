@@ -19,6 +19,7 @@ through idempotent sink behavior.
 
 from __future__ import annotations
 
+import asyncio
 import inspect
 import logging
 import time
@@ -43,11 +44,16 @@ from nats_sinks.core.config import (
     MetricsConfig,
     MissionMetadataConfig,
     PreSinkPolicyConfig,
+    PushConsumerConfig,
     SecurityLabelProfileConfig,
     SizePolicyConfig,
 )
 from nats_sinks.core.consumer import envelope_from_nats_message
-from nats_sinks.core.consumer_management import ensure_jetstream_consumer
+from nats_sinks.core.consumer_management import (
+    build_push_consumer_config,
+    ensure_jetstream_consumer,
+    ensure_jetstream_push_consumer,
+)
 from nats_sinks.core.custody import attach_custody_metadata
 from nats_sinks.core.dlq import build_dead_letter_payload
 from nats_sinks.core.encryption import PayloadEncryptor, PayloadTransformer
@@ -92,7 +98,7 @@ async def _maybe_await(value: object) -> None:
 
 
 class JetStreamSinkRunner:
-    """Pull messages from JetStream, write through a sink, then ACK last."""
+    """Consume JetStream messages, write through a sink, then ACK last."""
 
     def __init__(
         self,
@@ -105,6 +111,7 @@ class JetStreamSinkRunner:
         durable: bool = True,
         delivery: DeliveryConfig | None = None,
         consumer_management: ConsumerManagementConfig | None = None,
+        push_consumer: PushConsumerConfig | None = None,
         dead_letter: DeadLetterConfig | None = None,
         message_metadata: MessageMetadataConfig | None = None,
         message_authenticity: MessageAuthenticityConfig | None = None,
@@ -130,6 +137,7 @@ class JetStreamSinkRunner:
         self.durable = durable
         self.delivery = delivery or DeliveryConfig()
         self.consumer_management = consumer_management or ConsumerManagementConfig()
+        self.push_consumer = push_consumer or PushConsumerConfig()
         self.retry_policy = RetryPolicy(
             max_retries=self.delivery.max_retries,
             backoff_ms=self.delivery.retry_backoff_ms,
@@ -160,6 +168,8 @@ class JetStreamSinkRunner:
         self._js = jetstream
         self._nc = nats_connection
         self._subscription: Any | None = None
+        self._push_queue: asyncio.Queue[Any] | None = None
+        self._push_accepting = False
         self._advisory_monitor: JetStreamAdvisoryMonitor | None = None
         self._stop_requested = False
 
@@ -197,6 +207,7 @@ class JetStreamSinkRunner:
         """Request cooperative shutdown."""
 
         self._stop_requested = True
+        self._push_accepting = False
 
     async def _start_advisory_monitor(self) -> None:
         """Start the optional observational JetStream advisory monitor."""
@@ -281,50 +292,153 @@ class JetStreamSinkRunner:
         return _callback
 
     async def run(self) -> None:
-        """Run the pull-consumer loop until stopped."""
+        """Run the configured consumer loop until stopped."""
 
         await self.start()
         try:
             if self._js is None:
                 raise ConfigurationError("JetStream context is not available")
-            await ensure_jetstream_consumer(
-                self._js,
-                stream=self.stream,
-                durable_name=self.consumer,
-                subject=self.subject,
-                durable=self.durable,
-                config=self.consumer_management,
-            )
-            self._subscription = await self._js.pull_subscribe(
-                self.subject,
-                durable=self.consumer if self.durable else None,
-                stream=self.stream,
-            )
-            timeout = self.delivery.batch_timeout_ms / 1000
-            while not self._stop_requested:
+            if self.push_consumer.enabled:
+                await self._run_push_consumer_loop()
+            else:
+                await self._run_pull_consumer_loop()
+        finally:
+            await self.stop()
+
+    async def _run_pull_consumer_loop(self) -> None:
+        """Run the default bounded pull-consumer loop."""
+
+        if self._js is None:
+            raise ConfigurationError("JetStream context is not available")
+        await ensure_jetstream_consumer(
+            self._js,
+            stream=self.stream,
+            durable_name=self.consumer,
+            subject=self.subject,
+            durable=self.durable,
+            config=self.consumer_management,
+        )
+        self._subscription = await self._js.pull_subscribe(
+            self.subject,
+            durable=self.consumer if self.durable else None,
+            stream=self.stream,
+        )
+        timeout = self.delivery.batch_timeout_ms / 1000
+        while not self._stop_requested:
+            try:
+                # `batch_size` is an upper bound, not a requirement to wait
+                # forever for a full batch.  The nats-py pull fetch returns
+                # a partial list when messages are available but the fetch
+                # expires before the requested count is reached.  Processing
+                # that partial list keeps low-volume streams from waiting
+                # indefinitely while still bounding peak batch size.
+                fetch_started = time.perf_counter()
+                raw_messages = await self._subscription.fetch(
+                    self.delivery.batch_size,
+                    timeout=timeout,
+                )
+                observe_metric(
+                    self.metrics,
+                    MetricNames.NATS_FETCH_SECONDS,
+                    time.perf_counter() - fetch_started,
+                )
+            except TimeoutError:
+                continue
+            if raw_messages:
+                await self.process_raw_batch(raw_messages)
+
+    async def _run_push_consumer_loop(self) -> None:
+        """Run the opt-in bounded push-consumer loop."""
+
+        if self._js is None:
+            raise ConfigurationError("JetStream context is not available")
+        if not self.durable:
+            raise ConfigurationError("push_consumer requires nats.durable=true")
+        await ensure_jetstream_push_consumer(
+            self._js,
+            stream=self.stream,
+            durable_name=self.consumer,
+            subject=self.subject,
+            durable=self.durable,
+            consumer_management=self.consumer_management,
+            push_consumer=self.push_consumer,
+        )
+        consumer_config = build_push_consumer_config(
+            stream=self.stream,
+            durable_name=self.consumer,
+            subject=self.subject,
+            consumer_management=self.consumer_management,
+            push_consumer=self.push_consumer,
+        )
+        self._push_queue = asyncio.Queue(maxsize=self.push_consumer.pending_msgs_limit)
+        self._push_accepting = True
+
+        async def _callback(raw_message: Any) -> None:
+            await self._handle_push_message(raw_message)
+
+        self._subscription = await self._js.subscribe(
+            self.subject,
+            queue=self.push_consumer.deliver_group,
+            cb=_callback,
+            durable=self.consumer if self.durable else None,
+            stream=self.stream,
+            config=consumer_config,
+            manual_ack=True,
+            flow_control=self.push_consumer.flow_control,
+            idle_heartbeat=self.push_consumer.idle_heartbeat_seconds,
+            pending_msgs_limit=self.push_consumer.pending_msgs_limit,
+            pending_bytes_limit=self.push_consumer.pending_bytes_limit,
+        )
+        timeout = self.delivery.batch_timeout_ms / 1000
+        try:
+            while not self._stop_requested or not self._push_queue.empty():
                 try:
-                    # `batch_size` is an upper bound, not a requirement to wait
-                    # forever for a full batch.  The nats-py pull fetch returns
-                    # a partial list when messages are available but the fetch
-                    # expires before the requested count is reached.  Processing
-                    # that partial list keeps low-volume streams from waiting
-                    # indefinitely while still bounding peak batch size.
-                    fetch_started = time.perf_counter()
-                    raw_messages = await self._subscription.fetch(
-                        self.delivery.batch_size,
-                        timeout=timeout,
-                    )
-                    observe_metric(
-                        self.metrics,
-                        MetricNames.NATS_FETCH_SECONDS,
-                        time.perf_counter() - fetch_started,
-                    )
+                    raw_messages = await self._next_push_batch(wait_seconds=timeout)
                 except TimeoutError:
                     continue
                 if raw_messages:
                     await self.process_raw_batch(raw_messages)
         finally:
-            await self.stop()
+            self._push_accepting = False
+            self._push_queue = None
+
+    async def _handle_push_message(self, raw_message: Any) -> None:
+        """Accept one push callback message without acknowledging it."""
+
+        queue = self._push_queue
+        if not self._push_accepting or queue is None:
+            await self._reject_push_message(raw_message, reason="push runner is draining")
+            return
+        try:
+            queue.put_nowait(raw_message)
+        except asyncio.QueueFull:
+            await self._reject_push_message(raw_message, reason="push queue is full")
+
+    async def _reject_push_message(self, raw_message: Any, *, reason: str) -> None:
+        """Safely reject push messages that cannot enter the bounded queue."""
+
+        LOGGER.warning(
+            "JetStream push message was not accepted by the bounded runner queue: %s",
+            reason,
+        )
+        if self.push_consumer.queue_overflow_action != "nak":
+            return
+        await self._nak_all([raw_message], delay=self.retry_policy.backoff_seconds(1))
+
+    async def _next_push_batch(self, *, wait_seconds: float) -> list[Any]:
+        """Return the next available bounded push batch."""
+
+        queue = self._push_queue
+        if queue is None:
+            return []
+        first = await asyncio.wait_for(queue.get(), timeout=wait_seconds)
+        batch = [first]
+        while len(batch) < self.delivery.batch_size:
+            try:
+                batch.append(queue.get_nowait())
+            except asyncio.QueueEmpty:
+                break
+        return batch
 
     async def process_raw_batch(  # noqa: PLR0911, PLR0912, PLR0915
         self,

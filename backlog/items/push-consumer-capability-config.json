@@ -3,7 +3,7 @@
   "title": "[Feature]: Add push-consumer capability and configuration guardrails",
   "area": "Core runtime and delivery semantics",
   "priority": "P3 - backlog candidate",
-  "target_release": "unscheduled",
+  "target_release": "v0.4.2",
   "labels": ["nats", "security", "testing", "documentation"],
   "problem": "Push-consumer support requires a separate set of NATS client capabilities and consumer settings. Without fail-closed validation, a future push mode could accidentally run with auto-ACK behavior, unsafe pending buffers, missing flow-control support, or ambiguous client-version behavior.",
   "proposal": "Add a push-consumer capability and configuration layer that validates the installed nats-py API, requires manual acknowledgement, validates deliver subject and optional deliver group values, bounds client pending message and byte limits, and makes FlowControl and IdleHeartbeat handling explicit. The layer should be separate from the production pull runner and should fail closed when required support is absent.",

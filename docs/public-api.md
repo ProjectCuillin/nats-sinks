@@ -45,6 +45,9 @@ The tests also cover:
   `ensure_jetstream_consumer`, `detect_consumer_drift`, and
   `build_consumer_config`, including the richer durable pull-consumer policy
   fields for filter subjects, BackOff, replicas, memory storage, and metadata,
+- push-consumer guardrail helpers such as `PushConsumerConfig`,
+  `ensure_jetstream_push_consumer`, `detect_push_consumer_capabilities`, and
+  `build_push_consumer_config` for explicit manual-ACK push mode,
 - JetStream advisory helpers such as `JetStreamAdvisoryConfig`,
   `JetStreamAdvisoryMonitor`, `parse_jetstream_advisory`, and
   `observe_jetstream_advisory_message`,

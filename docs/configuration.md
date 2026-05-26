@@ -668,15 +668,62 @@ Permission guidance:
 
 ### `delivery`
 
-The `delivery` section controls how the core runner fetches, writes, retries,
-and ACKs messages. It is destination-neutral: Oracle, file, and future sinks all
-receive batches according to these settings.
+### `push_consumer`
 
-Current releases use pull consumers only. Push-consumer support has been
-evaluated for a future explicit runner mode, but it is not a configuration
-option yet because it needs separate manual-ACK, pending-limit, flow-control,
-heartbeat, shutdown, and certification guardrails. See
-[Push Consumer Evaluation](push-consumer-evaluation.md).
+The `push_consumer` section enables the opt-in JetStream push delivery mode.
+It is disabled by default. Pull consumers remain the recommended production
+default because the runner controls when work is fetched. Push mode exists for
+deployments that already standardize on server-initiated delivery and can
+provision a dedicated delivery subject.
+
+Push mode is still commit-then-acknowledge: callback delivery never means
+success. The runner enqueues callback messages into a bounded queue, writes
+them through the same sink batch pipeline as pull mode, and ACKs only after the
+sink commits or after permanent failures have been preserved in DLQ.
+
+```json
+{
+  "push_consumer": {
+    "enabled": true,
+    "deliver_subject": "_INBOX.nats_sinks.orders",
+    "deliver_group": "orders-workers",
+    "manual_ack": true,
+    "pending_msgs_limit": 1024,
+    "pending_bytes_limit": 67108864,
+    "queue_overflow_action": "nak",
+    "flow_control": false,
+    "idle_heartbeat_seconds": null,
+    "drain_timeout_ms": 30000
+  }
+}
+```
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `enabled` | no | `false` | Boolean. | Enables push delivery. Keep disabled unless the deployment has reviewed push-consumer behavior and permissions. |
+| `deliver_subject` | yes when enabled | `null` | Concrete NATS subject without wildcards. | Delivery subject used by the push consumer. Required so the route is explicit and reviewable. |
+| `deliver_group` | no | `null` | Letters, digits, `.`, `_`, `:`, `/`, `-`, up to 128 characters. | Optional queue-style delivery group. When set, the runner subscribes as a queue push subscriber. |
+| `manual_ack` | no | `true` | Must be `true` when enabled. | Fail-closed guardrail. Auto-ACK would break commit-then-acknowledge and is rejected. |
+| `pending_msgs_limit` | no | `1024` | Integer `1` to `1000000`. | Client-side maximum queued messages accepted from the NATS push subscription. Also used as default server-side `MaxAckPending` when `consumer_management.max_ack_pending` is not set. |
+| `pending_bytes_limit` | no | `67108864` | Integer `1024` to `268435456`. | Client-side pending byte limit for the NATS subscription. |
+| `queue_overflow_action` | no | `nak` | `nak` or `leave_unacked`. | What the runner does when the bounded callback queue is full or already draining. `nak` asks JetStream to redeliver after the configured retry backoff. |
+| `flow_control` | no | `false` | Boolean. | Passes JetStream push flow-control intent to `nats-py`. Startup fails closed if the installed client does not expose the required option. |
+| `idle_heartbeat_seconds` | no | `null` | Float greater than `0` and at most `3600`. | Optional push idle heartbeat interval. Startup fails closed if the client cannot configure it. |
+| `drain_timeout_ms` | no | `30000` | Integer `0` to `600000`. | Reserved shutdown budget for push-drain certification and future operational tooling. Current shutdown stops new intake and drains accepted messages cooperatively. |
+
+When push mode is enabled, `consumer_management.max_waiting` is rejected
+because it is a pull-only setting. If `consumer_management.max_ack_pending` is
+set, it must be less than or equal to `push_consumer.pending_msgs_limit` so the
+server cannot keep more unacknowledged work outstanding than the runner has
+accepted into its bounded queue. The current push runner also requires
+`nats.durable=true` so redelivery, drift checks, and operational ownership stay
+explicit.
+
+### `delivery`
+
+The `delivery` section controls how the core runner fetches or drains, writes,
+retries, and ACKs messages. It is destination-neutral: Oracle, file, and future
+sinks all receive batches according to these settings.
 
 | Field | Required | Default | Valid values | Description |
 | --- | --- | --- | --- | --- |
