@@ -23,6 +23,11 @@
     "enabled": true,
     "mode": "first",
     "no_match": "reject",
+    "target_sink_types": {
+      "oracle_secret": "oracle",
+      "file_secret_audit": "file",
+      "oracle_unclass": "oracle"
+    },
     "routes": [
       {
         "name": "nato_secret_sensor_audit",
@@ -38,7 +43,15 @@
             }
           ]
         },
-        "targets": ["oracle_secret", "file_secret_audit"]
+        "targets": [
+          "oracle_secret",
+          {
+            "sink": "file_secret_audit",
+            "required": false,
+            "minimum_wait_ms": 250,
+            "timeout_ms": 1000
+          }
+        ]
       },
       {
         "name": "nato_unclass_sensor_audit",

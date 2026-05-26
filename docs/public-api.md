@@ -52,6 +52,9 @@ The tests also cover:
 - pre-sink policy configuration and evaluation helpers such as
   `PreSinkPolicyConfig`, `PreSinkPolicyRuleConfig`,
   `PolicyViolationError`, and `evaluate_pre_sink_policy`,
+- routing and ACK-gate helpers such as `RoutingMatchPolicyConfig`,
+  `RouteTargetConfig`, `select_route_targets`, and
+  `wait_for_fanout_ack_gate`,
 - payload normalization helpers,
 - metrics classes and helpers such as `MetricNames`, `InMemoryMetrics`,
   `JsonFileMetrics`, `load_metrics_snapshot`, and

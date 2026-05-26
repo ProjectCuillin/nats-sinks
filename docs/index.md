@@ -155,7 +155,8 @@ The current release provides the following production-ready foundation:
   connectors.
 - A disabled-by-default generic route-match policy selector that can match
   normalized subject, priority, classification, labels, and approved non-secret
-  headers to logical target names for future fan-out delivery.
+  headers to logical target names and bounded ACK-gating policy for future
+  fan-out delivery.
 - Tests and documentation for the commit-then-acknowledge invariant across the
   core runtime and both production sinks.
 

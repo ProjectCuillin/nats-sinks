@@ -153,6 +153,15 @@ MAX_ROUTING_TARGETS = 64
 MAX_ROUTING_MATCH_VALUES = 64
 MAX_ROUTING_HEADERS = 16
 MAX_ROUTING_VALUE_LENGTH = 512
+MAX_FANOUT_OPTIONAL_WAIT_MS = 60_000
+MAX_FANOUT_OPTIONAL_TIMEOUT_MS = 300_000
+FANOUT_ACK_GATE_SINK_TYPES = frozenset({"file", "mysql", "oracle", "spool"})
+FANOUT_OPTIONAL_ACK_DEFAULTS: dict[str, dict[str, int]] = {
+    "file": {"minimum_wait_ms": 100, "timeout_ms": 1_000},
+    "mysql": {"minimum_wait_ms": 1_000, "timeout_ms": 5_000},
+    "oracle": {"minimum_wait_ms": 1_000, "timeout_ms": 5_000},
+    "spool": {"minimum_wait_ms": 100, "timeout_ms": 1_000},
+}
 ROUTING_SENSITIVE_HEADER_NAMES = frozenset(
     {
         "authorization",
@@ -415,29 +424,55 @@ def _normalize_routing_name(value: object, *, source: str) -> str:
     return rendered
 
 
-def _normalize_route_targets(value: object, *, source: str) -> tuple[str, ...]:
-    """Normalize one route's logical sink target list."""
+def _normalize_route_target_configs(
+    value: object,
+    *,
+    source: str,
+) -> tuple[RouteTargetConfig, ...]:
+    """Normalize one route's logical sink target policy list."""
 
+    raw_targets: list[object]
     if isinstance(value, str):
+        raw_targets = [value]
+    elif isinstance(value, dict):
         raw_targets = [value]
     elif isinstance(value, (list, tuple, set, frozenset)):
         raw_targets = list(value)
     else:
-        raise ValueError(f"{source} must be a string or list of strings")
+        raise ValueError(f"{source} must be a string, object, or list of targets")
     if not raw_targets:
         raise ValueError(f"{source} must contain at least one target")
     if len(raw_targets) > MAX_ROUTING_TARGETS:
         raise ValueError(f"{source} supports at most {MAX_ROUTING_TARGETS} names")
 
-    normalized: list[str] = []
+    normalized: list[RouteTargetConfig] = []
     seen: set[str] = set()
     for item in raw_targets:
-        target = _normalize_routing_name(item, source=f"{source} entry")
-        if target in seen:
-            raise ValueError(f"{source} contains duplicate target {target!r}")
-        seen.add(target)
+        if isinstance(item, str):
+            target = RouteTargetConfig(sink=item)
+        elif isinstance(item, dict):
+            target = RouteTargetConfig.model_validate(item)
+        else:
+            raise ValueError(f"{source} entries must be strings or target objects")
+        if target.sink in seen:
+            raise ValueError(f"{source} contains duplicate target {target.sink!r}")
+        seen.add(target.sink)
         normalized.append(target)
     return tuple(normalized)
+
+
+def _validate_fanout_wait_ms(value: object, *, source: str, maximum: int) -> int | None:
+    """Validate bounded wait settings without accepting implicit coercion."""
+
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{source} must be an integer number of milliseconds")
+    if value < 0:
+        raise ValueError(f"{source} must not be negative")
+    if value > maximum:
+        raise ValueError(f"{source} must not exceed {maximum} milliseconds")
+    return value
 
 
 def _validate_routing_header_name(value: object, *, source: str) -> str:
@@ -2533,6 +2568,69 @@ class RouteMatchConfig(BaseModel):
         return self
 
 
+class RouteTargetConfig(BaseModel):
+    """One logical sink target selected by a routing policy.
+
+    A plain string target in JSON is normalized to this model with
+    `required=true`.  Operators must opt in explicitly before any target is
+    treated as optional for ACK-gating.  Wait values are only valid on optional
+    targets and are completed from per-sink-type defaults by the parent routing
+    policy when omitted.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    sink: str
+    required: bool = True
+    minimum_wait_ms: int | None = None
+    timeout_ms: int | None = None
+
+    @field_validator("sink")
+    @classmethod
+    def validate_sink(cls, value: str) -> str:
+        """Validate logical sink target names used by fan-out policy."""
+
+        return _normalize_routing_name(value, source="routing target sink")
+
+    @field_validator("minimum_wait_ms", mode="before")
+    @classmethod
+    def validate_minimum_wait(cls, value: object) -> int | None:
+        """Validate the optional-target grace period before ACK may proceed."""
+
+        return _validate_fanout_wait_ms(
+            value,
+            source="routing target minimum_wait_ms",
+            maximum=MAX_FANOUT_OPTIONAL_WAIT_MS,
+        )
+
+    @field_validator("timeout_ms", mode="before")
+    @classmethod
+    def validate_timeout(cls, value: object) -> int | None:
+        """Validate the optional-target hard timeout."""
+
+        return _validate_fanout_wait_ms(
+            value,
+            source="routing target timeout_ms",
+            maximum=MAX_FANOUT_OPTIONAL_TIMEOUT_MS,
+        )
+
+    @model_validator(mode="after")
+    def validate_ack_gate_shape(self) -> RouteTargetConfig:
+        """Fail closed when wait policy is attached to a required target."""
+
+        if self.required:
+            if self.minimum_wait_ms is not None or self.timeout_ms is not None:
+                raise ValueError("routing target wait policy is only valid when required is false")
+            return self
+        if (
+            self.minimum_wait_ms is not None
+            and self.timeout_ms is not None
+            and self.timeout_ms < self.minimum_wait_ms
+        ):
+            raise ValueError("routing target timeout_ms must be at least minimum_wait_ms")
+        return self
+
+
 class RoutePolicyRouteConfig(BaseModel):
     """One named route and the logical sink targets it selects."""
 
@@ -2540,7 +2638,7 @@ class RoutePolicyRouteConfig(BaseModel):
 
     name: str
     match: RouteMatchConfig
-    targets: tuple[str, ...]
+    targets: tuple[RouteTargetConfig, ...]
 
     @field_validator("name")
     @classmethod
@@ -2551,10 +2649,10 @@ class RoutePolicyRouteConfig(BaseModel):
 
     @field_validator("targets", mode="before")
     @classmethod
-    def normalize_targets(cls, value: object) -> tuple[str, ...]:
+    def normalize_targets(cls, value: object) -> tuple[RouteTargetConfig, ...]:
         """Validate selected logical sink names without loading those sinks."""
 
-        return _normalize_route_targets(value, source="routing route targets")
+        return _normalize_route_target_configs(value, source="routing route targets")
 
 
 class RoutingMatchPolicyConfig(BaseModel):
@@ -2571,17 +2669,49 @@ class RoutingMatchPolicyConfig(BaseModel):
     enabled: bool = False
     mode: Literal["first", "all"] = "first"
     no_match: Literal["reject", "default_route", "ignore"] = "reject"
-    default_targets: tuple[str, ...] = Field(default_factory=tuple)
+    target_sink_types: dict[str, Literal["file", "mysql", "oracle", "spool"]] = Field(
+        default_factory=dict
+    )
+    default_targets: tuple[RouteTargetConfig, ...] = Field(default_factory=tuple)
     routes: tuple[RoutePolicyRouteConfig, ...] = Field(default_factory=tuple)
+
+    @field_validator("target_sink_types", mode="before")
+    @classmethod
+    def normalize_target_sink_types(
+        cls, value: object
+    ) -> dict[str, Literal["file", "mysql", "oracle", "spool"]]:
+        """Validate the target-to-sink-type map used for ACK-gating defaults."""
+
+        if value is None:
+            return {}
+        if not isinstance(value, dict):
+            raise ValueError("routing.target_sink_types must be an object")
+        normalized: dict[str, Literal["file", "mysql", "oracle", "spool"]] = {}
+        seen: set[str] = set()
+        for raw_name, raw_type in value.items():
+            name = _normalize_routing_name(raw_name, source="routing target_sink_types name")
+            if name in seen:
+                raise ValueError(f"routing.target_sink_types contains duplicate target {name!r}")
+            if not isinstance(raw_type, str):
+                raise ValueError("routing.target_sink_types values must be strings")
+            sink_type = raw_type.strip().casefold()
+            if sink_type not in FANOUT_ACK_GATE_SINK_TYPES:
+                allowed = ", ".join(sorted(FANOUT_ACK_GATE_SINK_TYPES))
+                raise ValueError(
+                    f"routing.target_sink_types values must be one of these sink types: {allowed}"
+                )
+            seen.add(name)
+            normalized[name] = cast("Literal['file', 'mysql', 'oracle', 'spool']", sink_type)
+        return normalized
 
     @field_validator("default_targets", mode="before")
     @classmethod
-    def normalize_default_targets(cls, value: object) -> tuple[str, ...]:
+    def normalize_default_targets(cls, value: object) -> tuple[RouteTargetConfig, ...]:
         """Validate fallback logical sink names for no-match handling."""
 
         if value is None:
             return ()
-        return _normalize_route_targets(value, source="routing default_targets")
+        return _normalize_route_target_configs(value, source="routing default_targets")
 
     @field_validator("routes", mode="after")
     @classmethod
@@ -2609,7 +2739,51 @@ class RoutingMatchPolicyConfig(BaseModel):
             raise ValueError("routing.no_match default_route requires default_targets")
         if self.no_match != "default_route" and self.default_targets:
             raise ValueError("routing.default_targets is only valid with no_match default_route")
+        self._apply_ack_gate_defaults()
         return self
+
+    def _all_route_targets(self) -> tuple[RouteTargetConfig, ...]:
+        """Return all configured route and default targets for validation."""
+
+        targets: list[RouteTargetConfig] = list(self.default_targets)
+        for route in self.routes:
+            targets.extend(route.targets)
+        return tuple(targets)
+
+    def _apply_ack_gate_defaults(self) -> None:
+        """Apply fail-closed ACK-gating defaults to optional route targets."""
+
+        if not self.enabled and not self.default_targets:
+            return
+
+        all_targets = self._all_route_targets()
+        referenced_target_names = {target.sink for target in all_targets}
+        if self.target_sink_types:
+            unknown = sorted(
+                name for name in referenced_target_names if name not in self.target_sink_types
+            )
+            if unknown:
+                joined = ", ".join(unknown)
+                raise ValueError(
+                    f"routing target_sink_types must include every routed target; missing {joined}"
+                )
+
+        for target in all_targets:
+            if target.required:
+                continue
+            sink_type = self.target_sink_types.get(target.sink)
+            if sink_type is None:
+                raise ValueError(
+                    "routing optional target policies require routing.target_sink_types "
+                    f"for target {target.sink!r}"
+                )
+            defaults = FANOUT_OPTIONAL_ACK_DEFAULTS[sink_type]
+            if target.minimum_wait_ms is None:
+                target.minimum_wait_ms = defaults["minimum_wait_ms"]
+            if target.timeout_ms is None:
+                target.timeout_ms = defaults["timeout_ms"]
+            if target.timeout_ms < target.minimum_wait_ms:
+                raise ValueError("routing target timeout_ms must be at least minimum_wait_ms")
 
 
 class SinkConfig(BaseModel):

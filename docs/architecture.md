@@ -251,13 +251,15 @@ dependency extra, registry entry, tests, and destination-specific documentation.
 The core `NatsEnvelope`, `Sink` protocol, commit-then-acknowledge ordering, and
 existing Oracle configuration should remain compatible.
 
-Generic route matching is also part of the core, but it is selection-only. The
-`routing` configuration can evaluate subject, priority, classification, labels,
-and approved header hints against a normalized `NatsEnvelope` and return
-logical target names. It does not call sinks, create fan-out work, or change ACK
-timing by itself. That keeps the future multi-sink routing design additive:
-fan-out delivery can decide which targets are commit-required and which are
-best-effort without moving delivery semantics into destination modules.
+Generic route matching is also part of the core, but it is still
+selection-only. The `routing` configuration can evaluate subject, priority,
+classification, labels, and approved header hints against a normalized
+`NatsEnvelope` and return logical target names plus ACK-gating policy for those
+targets. It does not call sinks, create fan-out work, or ACK JetStream by
+itself. That keeps the future multi-sink routing design additive: fan-out
+delivery can use the core ACK-gate helper to wait for every required target and
+to bound optional side copies without moving delivery semantics into
+destination modules.
 
 Payload encryption is also part of the core, not a sink-specific responsibility.
 When enabled, the runner encrypts `NatsEnvelope.data` and passes a copied

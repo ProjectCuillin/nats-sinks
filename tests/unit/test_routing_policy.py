@@ -11,10 +11,13 @@ from pathlib import Path
 import pytest
 
 from nats_sinks.core.config import (
+    FANOUT_OPTIONAL_ACK_DEFAULTS,
     ConfigurationError,
     RoutePolicyRouteConfig,
+    RouteTargetConfig,
     RoutingMatchPolicyConfig,
     load_config,
+    redacted_config,
 )
 from nats_sinks.core.envelope import NatsEnvelope
 from nats_sinks.core.routing_policy import select_route_targets
@@ -53,9 +56,13 @@ def _policy(*routes: RoutePolicyRouteConfig, mode: str = "first") -> RoutingMatc
 def _route(
     name: str,
     match: dict[str, object],
-    targets: tuple[str, ...] = ("oracle_primary",),
+    targets: object = ("oracle_primary",),
 ) -> RoutePolicyRouteConfig:
     return RoutePolicyRouteConfig(name=name, match=match, targets=targets)
+
+
+def _target_names(targets: tuple[RouteTargetConfig, ...]) -> tuple[str, ...]:
+    return tuple(target.sink for target in targets)
 
 
 @pytest.mark.parametrize(
@@ -280,8 +287,92 @@ def test_route_match_policy_load_config_accepts_documented_nato_example(tmp_path
     config = load_config(path, env_overrides=False)
 
     assert config.routing.enabled is True
-    assert config.routing.routes[0].targets == ("oracle_secret", "file_secret_audit")
-    assert config.routing.routes[1].targets == ("oracle_unclass",)
+    assert _target_names(config.routing.routes[0].targets) == ("oracle_secret", "file_secret_audit")
+    assert _target_names(config.routing.routes[1].targets) == ("oracle_unclass",)
+
+
+def test_route_targets_are_required_by_default() -> None:
+    route = _route("route_alpha", {"subject": "mission.>"}, targets=("oracle_primary",))
+
+    assert route.targets[0].sink == "oracle_primary"
+    assert route.targets[0].required is True
+    assert route.targets[0].minimum_wait_ms is None
+    assert route.targets[0].timeout_ms is None
+
+
+def test_route_policy_applies_explicit_optional_ack_gate_values() -> None:
+    policy = RoutingMatchPolicyConfig(
+        enabled=True,
+        target_sink_types={"oracle_secret": "oracle", "file_audit": "file"},
+        routes=(
+            _route(
+                "route_alpha",
+                {"subject": "mission.>"},
+                targets=(
+                    "oracle_secret",
+                    {
+                        "sink": "file_audit",
+                        "required": False,
+                        "minimum_wait_ms": 250,
+                        "timeout_ms": 2_000,
+                    },
+                ),
+            ),
+        ),
+    )
+
+    selection = select_route_targets(_envelope(), policy)
+
+    assert selection.targets == ("oracle_secret", "file_audit")
+    assert selection.target_policies[0].required is True
+    assert selection.target_policies[1].required is False
+    assert selection.target_policies[1].minimum_wait_ms == 250
+    assert selection.target_policies[1].timeout_ms == 2_000
+
+
+@pytest.mark.parametrize("sink_type", sorted(FANOUT_OPTIONAL_ACK_DEFAULTS))
+def test_route_policy_applies_sink_type_optional_ack_gate_defaults(sink_type: str) -> None:
+    target_name = f"{sink_type}_optional"
+    policy = RoutingMatchPolicyConfig(
+        enabled=True,
+        target_sink_types={target_name: sink_type},
+        routes=(
+            _route(
+                "route_alpha",
+                {"subject": "mission.>"},
+                targets=({"sink": target_name, "required": False},),
+            ),
+        ),
+    )
+
+    target = policy.routes[0].targets[0]
+
+    assert target.required is False
+    assert target.minimum_wait_ms == FANOUT_OPTIONAL_ACK_DEFAULTS[sink_type]["minimum_wait_ms"]
+    assert target.timeout_ms == FANOUT_OPTIONAL_ACK_DEFAULTS[sink_type]["timeout_ms"]
+
+
+def test_route_policy_redacted_config_shows_effective_optional_defaults(tmp_path: Path) -> None:
+    path = _write_config(
+        tmp_path,
+        {
+            "enabled": True,
+            "target_sink_types": {"file_audit": "file"},
+            "routes": [
+                {
+                    "name": "route_alpha",
+                    "match": {"subject": "mission.>"},
+                    "targets": [{"sink": "file_audit", "required": False}],
+                }
+            ],
+        },
+    )
+
+    config = load_config(path, env_overrides=False)
+    target = redacted_config(config)["routing"]["routes"][0]["targets"][0]
+
+    assert target["minimum_wait_ms"] == FANOUT_OPTIONAL_ACK_DEFAULTS["file"]["minimum_wait_ms"]
+    assert target["timeout_ms"] == FANOUT_OPTIONAL_ACK_DEFAULTS["file"]["timeout_ms"]
 
 
 @pytest.mark.parametrize(
@@ -365,6 +456,119 @@ def test_route_match_policy_load_config_accepts_documented_nato_example(tmp_path
                 ],
             },
             "must not match secret-bearing header",
+        ),
+        (
+            {
+                "enabled": True,
+                "target_sink_types": {"file_a": "file"},
+                "routes": [
+                    {
+                        "name": "route_a",
+                        "match": {"subject": "mission.>"},
+                        "targets": [
+                            {
+                                "sink": "file_a",
+                                "required": False,
+                                "minimum_wait_ms": -1,
+                                "timeout_ms": 1_000,
+                            }
+                        ],
+                    }
+                ],
+            },
+            "minimum_wait_ms",
+        ),
+        (
+            {
+                "enabled": True,
+                "target_sink_types": {"file_a": "file"},
+                "routes": [
+                    {
+                        "name": "route_a",
+                        "match": {"subject": "mission.>"},
+                        "targets": [
+                            {
+                                "sink": "file_a",
+                                "required": False,
+                                "minimum_wait_ms": 61_000,
+                                "timeout_ms": 61_000,
+                            }
+                        ],
+                    }
+                ],
+            },
+            "must not exceed 60000 milliseconds",
+        ),
+        (
+            {
+                "enabled": True,
+                "target_sink_types": {"file_a": "file"},
+                "routes": [
+                    {
+                        "name": "route_a",
+                        "match": {"subject": "mission.>"},
+                        "targets": [
+                            {
+                                "sink": "file_a",
+                                "required": False,
+                                "minimum_wait_ms": 2_000,
+                                "timeout_ms": 1_000,
+                            }
+                        ],
+                    }
+                ],
+            },
+            "timeout_ms must be at least minimum_wait_ms",
+        ),
+        (
+            {
+                "enabled": True,
+                "target_sink_types": {"oracle_a": "oracle"},
+                "routes": [
+                    {"name": "route_a", "match": {"subject": "mission.>"}, "targets": ["file_a"]}
+                ],
+            },
+            "missing file_a",
+        ),
+        (
+            {
+                "enabled": True,
+                "routes": [
+                    {
+                        "name": "route_a",
+                        "match": {"subject": "mission.>"},
+                        "targets": [{"sink": "file_a", "required": False}],
+                    }
+                ],
+            },
+            "optional target policies require routing.target_sink_types",
+        ),
+        (
+            {
+                "enabled": True,
+                "target_sink_types": {"file_a": "observability"},
+                "routes": [
+                    {
+                        "name": "route_a",
+                        "match": {"subject": "mission.>"},
+                        "targets": [{"sink": "file_a", "required": False}],
+                    }
+                ],
+            },
+            "values must be one of these sink types",
+        ),
+        (
+            {
+                "enabled": True,
+                "routes": [
+                    {
+                        "name": "route_a",
+                        "match": {"subject": "mission.>"},
+                        "targets": [{"sink": "file_a", "minimum_wait_ms": 10, "timeout_ms": 100}],
+                    }
+                ],
+            },
+            "wait policy is only valid when required is false",
         ),
     ],
 )
