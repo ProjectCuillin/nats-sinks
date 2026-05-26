@@ -64,6 +64,26 @@ sequenceDiagram
 
 If the destination commit succeeds and the process exits before ACK, JetStream may redeliver. This is acceptable. The sink must use idempotency controls to treat the duplicate safely.
 
+## Multi-Sink ACK Gates
+
+Future fan-out delivery can select more than one logical sink target for the
+same message. The same safety rule still applies: JetStream may be ACKed only
+after every required target has durably completed. Route targets are required
+by default.
+
+Optional targets are different. They are opt-in side effects with a bounded
+`minimum_wait_ms` and `timeout_ms` policy. The ACK gate gives those optional
+targets a controlled chance to finish, but it does not wait forever. If an
+optional target has not committed before the ACK gate releases, the required
+delivery path may still ACK and the optional copy must be treated as not
+guaranteed.
+
+This distinction is important for audit language. A required Oracle Database
+sink can be part of the formal custody path. An optional diagnostic file copy,
+secondary archive, or non-critical side copy is best-effort unless it completed
+before ACK. Operators should use optional targets only when that trade-off is
+acceptable and documented.
+
 ## Permanent Failure With DLQ
 
 ```mermaid

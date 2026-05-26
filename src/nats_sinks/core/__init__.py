@@ -14,6 +14,13 @@ as Postgres, HTTP, file, S3, and Kafka easier to certify against the same
 contract.
 """
 
+from nats_sinks.core.ack_gate import (
+    FanoutAckGateError,
+    FanoutAckGateResult,
+    FanoutRequiredSinkError,
+    FanoutTargetResult,
+    wait_for_fanout_ack_gate,
+)
 from nats_sinks.core.advisory import (
     DEFAULT_ADVISORY_SUBJECTS,
     JetStreamAdvisory,
@@ -34,10 +41,12 @@ from nats_sinks.core.authenticity import (
     hmac_sha256_signature_b64,
 )
 from nats_sinks.core.config import (
+    FANOUT_OPTIONAL_ACK_DEFAULTS,
     MetricsConfig,
     RouteHeaderMatchConfig,
     RouteMatchConfig,
     RoutePolicyRouteConfig,
+    RouteTargetConfig,
     RoutingMatchPolicyConfig,
 )
 from nats_sinks.core.consumer_management import (
@@ -129,6 +138,7 @@ __all__ = [
     "DEFAULT_PRIORITY_HEADER",
     "DEFAULT_SECURITY_LABELS_HEADER",
     "ENCRYPTED_PAYLOAD_KEY",
+    "FANOUT_OPTIONAL_ACK_DEFAULTS",
     "LEGACY_METRIC_ALIASES",
     "MESSAGE_AUTHENTICITY_SCHEMA",
     "METRIC_SPECS",
@@ -138,6 +148,10 @@ __all__ = [
     "SUPPORTED_MESSAGE_AUTHENTICITY_ALGORITHMS",
     "ConsumerDrift",
     "ConsumerManagementResult",
+    "FanoutAckGateError",
+    "FanoutAckGateResult",
+    "FanoutRequiredSinkError",
+    "FanoutTargetResult",
     "InMemoryMetrics",
     "JetStreamAdvisory",
     "JetStreamAdvisoryMonitor",
@@ -161,6 +175,7 @@ __all__ = [
     "RouteMatchConfig",
     "RoutePolicyRouteConfig",
     "RouteSelection",
+    "RouteTargetConfig",
     "RoutingMatchPolicyConfig",
     "SizePolicyEvaluation",
     "SizePolicyViolation",
@@ -196,5 +211,6 @@ __all__ = [
     "select_route_targets",
     "validate_advisory_subject",
     "validate_metric_namespace",
+    "wait_for_fanout_ack_gate",
     "write_metrics_snapshot",
 ]

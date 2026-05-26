@@ -19,6 +19,12 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   `nats-sink validate`, exposes public selector helpers, and documents that
   the feature is selection-only until the separate multi-sink fan-out delivery
   work is implemented.
+- Added optional ACK-gating policy primitives for issue #137. Route targets
+  are required by default, optional target objects can define bounded
+  `minimum_wait_ms` and `timeout_ms` behavior, per-sink-type defaults are
+  applied and visible in redacted effective config, and the new core ACK-gate
+  helper records optional success, failure, or timeout without weakening the
+  commit-then-ACK rule for required targets.
 - Added a local-only post-release PyPI artifact validation harness for issue
   #252. The script builds a short-lived Oracle Linux 9 slim validation
   container, installs `nats-sinks` from PyPI instead of the local checkout,

@@ -510,6 +510,13 @@ explicit reject action to future delivery code when no route matches.
 reserved for reviewed cases where an unmatched message is expected. The policy
 does not change ACK timing or write to multiple destinations by itself.
 
+Route targets are required by default. Optional route targets are allowed only
+when the target object sets `required` to `false` and the policy can resolve a
+known sink type through `target_sink_types`. The effective redacted
+configuration will show the optional `minimum_wait_ms` and `timeout_ms` values,
+including defaults. Treat optional timeout or failure log entries as evidence
+that the side copy was not guaranteed for that message.
+
 For mission and defence-style deployments, prefer a small number of readable
 routes based on normalized subject, priority, classification, labels, and
 mission-safe header hints. Avoid putting sensitive operation names, raw

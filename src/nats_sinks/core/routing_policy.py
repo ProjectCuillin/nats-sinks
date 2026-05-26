@@ -18,6 +18,7 @@ from typing import Literal
 from nats_sinks.core.config import (
     RouteMatchConfig,
     RoutePolicyRouteConfig,
+    RouteTargetConfig,
     RoutingMatchPolicyConfig,
 )
 from nats_sinks.core.envelope import NatsEnvelope
@@ -34,6 +35,7 @@ class RouteSelection:
     matched_routes: tuple[str, ...]
     targets: tuple[str, ...]
     action: NoMatchAction
+    target_policies: tuple[RouteTargetConfig, ...] = ()
 
     @property
     def matched(self) -> bool:
@@ -82,15 +84,20 @@ def route_matches_envelope(route: RoutePolicyRouteConfig, envelope: NatsEnvelope
     return _headers_match(match, envelope)
 
 
-def _append_targets(existing: list[str], targets: tuple[str, ...]) -> None:
-    """Append target names once while preserving policy order."""
+def _append_targets(
+    existing_names: list[str],
+    existing_policies: list[RouteTargetConfig],
+    targets: tuple[RouteTargetConfig, ...],
+) -> None:
+    """Append target policies once while preserving policy order."""
 
-    seen = set(existing)
+    seen = set(existing_names)
     for target in targets:
-        if target in seen:
+        if target.sink in seen:
             continue
-        existing.append(target)
-        seen.add(target)
+        existing_names.append(target.sink)
+        existing_policies.append(target)
+        seen.add(target.sink)
 
 
 def select_route_targets(
@@ -111,11 +118,12 @@ def select_route_targets(
 
     matched_routes: list[str] = []
     selected_targets: list[str] = []
+    selected_target_policies: list[RouteTargetConfig] = []
     for route in policy.routes:
         if not route_matches_envelope(route, envelope):
             continue
         matched_routes.append(route.name)
-        _append_targets(selected_targets, route.targets)
+        _append_targets(selected_targets, selected_target_policies, route.targets)
         if policy.mode == "first":
             break
 
@@ -124,13 +132,15 @@ def select_route_targets(
             matched_routes=tuple(matched_routes),
             targets=tuple(selected_targets),
             action="matched",
+            target_policies=tuple(selected_target_policies),
         )
 
     if policy.no_match == "default_route":
         return RouteSelection(
             matched_routes=(),
-            targets=policy.default_targets,
+            targets=tuple(target.sink for target in policy.default_targets),
             action="default_route",
+            target_policies=policy.default_targets,
         )
     return RouteSelection(matched_routes=(), targets=(), action=policy.no_match)
 

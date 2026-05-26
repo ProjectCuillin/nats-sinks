@@ -381,6 +381,13 @@ stable low-cardinality labels, enforce caps, and fail closed for export without
 changing ACK behavior. See
 [Subject-Aware Observability Evaluation](subject-aware-observability-evaluation.md).
 
+Route target ACK-gating also follows fail-closed defaults. Every selected
+target is required unless configuration explicitly marks it optional. Optional
+targets require a known sink type, bounded wait values, and sanitized logging.
+Those logs contain sink names and outcome categories only. They must not include
+payloads, credentials, connection strings, raw file paths, private subjects, or
+sensitive classification and label values.
+
 Key rotation should use explicit `key_id` values. New runtime configuration
 encrypts with the active key, while authorized verification, replay, or
 migration tooling can use `PayloadKeyRegistry` to decrypt records written with

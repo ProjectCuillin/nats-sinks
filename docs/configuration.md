@@ -141,6 +141,11 @@ runtime sections and add destination-specific fields inside the `sink` object.
     "enabled": false,
     "mode": "first",
     "no_match": "reject",
+    "target_sink_types": {
+      "oracle_secret": "oracle",
+      "file_secret_audit": "file",
+      "oracle_unclass": "oracle"
+    },
     "default_targets": [],
     "routes": [
       {
@@ -157,7 +162,15 @@ runtime sections and add destination-specific fields inside the `sink` object.
             }
           ]
         },
-        "targets": ["oracle_secret", "file_secret_audit"]
+        "targets": [
+          "oracle_secret",
+          {
+            "sink": "file_secret_audit",
+            "required": false,
+            "minimum_wait_ms": 250,
+            "timeout_ms": 1000
+          }
+        ]
       },
       {
         "name": "nato_unclass_sensor_audit",
@@ -1027,6 +1040,11 @@ Example with two match sets for the same subject and label family:
     "enabled": true,
     "mode": "first",
     "no_match": "reject",
+    "target_sink_types": {
+      "oracle_secret": "oracle",
+      "file_secret_audit": "file",
+      "oracle_unclass": "oracle"
+    },
     "routes": [
       {
         "name": "nato_secret_sensor_audit",
@@ -1042,7 +1060,15 @@ Example with two match sets for the same subject and label family:
             }
           ]
         },
-        "targets": ["oracle_secret", "file_secret_audit"]
+        "targets": [
+          "oracle_secret",
+          {
+            "sink": "file_secret_audit",
+            "required": false,
+            "minimum_wait_ms": 250,
+            "timeout_ms": 1000
+          }
+        ]
       },
       {
         "name": "nato_unclass_sensor_audit",
@@ -1068,12 +1094,28 @@ individual sink connection, table, filesystem, and durability settings remain
 in sink-specific configuration blocks such as [Oracle Sink](oracle-sink.md)
 and [File Sink](file-sink.md).
 
+The route target list accepts either a string or an object. A string is the
+short form for a required target. Required targets are the safe default:
+future fan-out delivery must wait for every required target to durably complete
+before ACK. A target object can set `required` to `false` for an optional side
+copy. Optional targets are explicitly outside the required ACK contract. If an
+optional target has not committed before the ACK gate releases, the project
+must not claim that the optional copy is guaranteed.
+
+Optional targets require `target_sink_types` so the loader can apply and show
+bounded per-sink-type defaults in the effective redacted configuration. The
+currently recognized sink types are `file`, `mysql`, `oracle`, and `spool`.
+Unknown target references, unknown sink types, negative waits, excessive waits,
+and `timeout_ms` values lower than `minimum_wait_ms` are rejected by
+`nats-sink validate`.
+
 | Field | Required | Default | Valid values | Description |
 | --- | --- | --- | --- | --- |
 | `enabled` | no | `false` | `true` or `false`. | Enables route selection. Disabled policies select no targets. |
 | `mode` | no | `first` | `first` or `all`. | `first` selects the first matching route. `all` selects every matching route and de-duplicates target names while preserving route order. |
 | `no_match` | no | `reject` | `reject`, `ignore`, or `default_route`. | Explicit action returned when no route matches. Delivery behavior remains owned by future fan-out execution. |
-| `default_targets` | no | `[]` | String or list of logical target names. | Fallback targets used only when `no_match` is `default_route`. |
+| `target_sink_types` | no | `{}` | Object mapping logical target names to `file`, `mysql`, `oracle`, or `spool`. | Required when optional route targets are configured. Used to validate target references and apply optional ACK-gate defaults. |
+| `default_targets` | no | `[]` | String, target object, or list of those values. | Fallback targets used only when `no_match` is `default_route`. |
 | `routes` | no | `[]` | List of route objects. | Ordered route definitions. Required when `enabled` is true. At most 128 routes. |
 
 Route fields:
@@ -1082,7 +1124,25 @@ Route fields:
 | --- | --- | --- | --- | --- |
 | `name` | yes | none | Starts with a letter; then letters, digits, `.`, `_`, `:`, or `-`; at most 128 characters. | Stable route identifier for operator output, tests, and future metrics. |
 | `match` | yes | none | Match object. | At least one criterion is required. |
-| `targets` | yes | none | String or list of logical target names. | Logical sink targets selected by the route. At most 64 targets. Duplicate names are rejected. |
+| `targets` | yes | none | String, target object, or list of those values. | Logical sink targets selected by the route. At most 64 targets. Duplicate names are rejected. |
+
+Target object fields:
+
+| Target field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `sink` | yes | none | Logical target name. | Name of the future child sink selected by the route. |
+| `required` | no | `true` | `true` or `false`. | Required targets must complete before ACK. Optional targets get only a bounded grace window. |
+| `minimum_wait_ms` | no | Per sink type. | Integer `0` to `60000`. | Grace period for an optional target before ACK may proceed. Only valid when `required` is `false`. |
+| `timeout_ms` | no | Per sink type. | Integer `0` to `300000`; must be at least `minimum_wait_ms`. | Hard cap for an optional target attempt. Only valid when `required` is `false`. |
+
+Optional target defaults:
+
+| Sink type | Default `minimum_wait_ms` | Default `timeout_ms` | Rationale |
+| --- | ---: | ---: | --- |
+| `file` | `100` | `1000` | Local file side copies should not block the main custody path for long. |
+| `spool` | `100` | `1000` | Local spool side effects are normally fast and bounded. |
+| `oracle` | `1000` | `5000` | Network-backed transactional writes need a longer grace window. |
+| `mysql` | `1000` | `5000` | Oracle MySQL writes have similar network and transaction timing concerns. |
 
 Match fields:
 

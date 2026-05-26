@@ -18,6 +18,13 @@ framework users may construct sinks, but ACK decisions remain in the core
 runner and are never delegated to destination code.
 """
 
+from nats_sinks.core.ack_gate import (
+    FanoutAckGateError,
+    FanoutAckGateResult,
+    FanoutRequiredSinkError,
+    FanoutTargetResult,
+    wait_for_fanout_ack_gate,
+)
 from nats_sinks.core.advisory import (
     DEFAULT_ADVISORY_SUBJECTS,
     JetStreamAdvisory,
@@ -38,6 +45,7 @@ from nats_sinks.core.authenticity import (
     hmac_sha256_signature_b64,
 )
 from nats_sinks.core.config import (
+    FANOUT_OPTIONAL_ACK_DEFAULTS,
     ConsumerManagementConfig,
     CustodyConfig,
     EncryptionConfig,
@@ -59,6 +67,7 @@ from nats_sinks.core.config import (
     RouteHeaderMatchConfig,
     RouteMatchConfig,
     RoutePolicyRouteConfig,
+    RouteTargetConfig,
     RoutingMatchPolicyConfig,
     SecurityLabelProfileConfig,
     SecurityLabelRuleConfig,
@@ -176,6 +185,7 @@ __all__ = [
     "DEFAULT_PRIORITY_HEADER",
     "DEFAULT_SECURITY_LABELS_HEADER",
     "ENCRYPTED_PAYLOAD_KEY",
+    "FANOUT_OPTIONAL_ACK_DEFAULTS",
     "MESSAGE_AUTHENTICITY_SCHEMA",
     "METRIC_SPECS",
     "MISSION_METADATA_PROFILE_VERSION",
@@ -194,6 +204,10 @@ __all__ = [
     "DestinationUnavailableError",
     "EncryptionConfig",
     "EncryptionRuleConfig",
+    "FanoutAckGateError",
+    "FanoutAckGateResult",
+    "FanoutRequiredSinkError",
+    "FanoutTargetResult",
     "FileSink",
     "FlushableSink",
     "HealthCheckableSink",
@@ -236,6 +250,7 @@ __all__ = [
     "RouteMatchConfig",
     "RoutePolicyRouteConfig",
     "RouteSelection",
+    "RouteTargetConfig",
     "RoutingMatchPolicyConfig",
     "SchemaAwareSink",
     "SecurityLabelProfileConfig",
@@ -287,6 +302,7 @@ __all__ = [
     "route_matches_envelope",
     "select_route_targets",
     "validate_advisory_subject",
+    "wait_for_fanout_ack_gate",
     "write_metrics_snapshot",
 ]
 
