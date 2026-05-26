@@ -22,6 +22,9 @@ Observability is documented as a small set of focused pages:
 - [Subject-Aware Observability Evaluation](subject-aware-observability-evaluation.md):
   explains the controlled subject-family policy model and why subject labels
   remain disabled by default.
+- [Subject-Aware Observability Runbook](subject-aware-observability-runbook.md):
+  gives operators and connector authors the certification checklist, synthetic
+  examples, and "do not enable" guidance for subject-family metrics.
 - [Prometheus Integration](prometheus.md): explains the policy-controlled
   Prometheus textfile connector and optional native HTTP scrape endpoint.
 - [OpenTelemetry OTLP Integration](otlp.md): explains policy-controlled export
@@ -72,8 +75,8 @@ runtime:
 - payload bodies, decrypted data, secrets, tokens, private keys, full
   connection strings, NATS credentials, Oracle DSNs, table names, file paths,
   classification values, labels, and subjects must not be exported by default,
-- exported metrics must be low-cardinality unless a future connector clearly
-  documents a bounded label strategy,
+- exported metrics must be low-cardinality, and subject-family labels require
+  the documented `subject_metrics` policy plus prepared `labeled_metrics` rows,
 - event freshness metrics must remain aggregate-only because event age, stale
   counts, and source clock skew can reveal operational tempo,
 - external sharing is disabled until an explicit policy enables it,
@@ -87,8 +90,8 @@ subject-family allow rules, stable labels, display modes, cardinality caps, and
 overflow behavior. Exporters render subject-family labels only from prepared
 `labeled_metrics` rows. That separation is intentional: subjects can reveal
 operational structure and can create expensive high-cardinality metric series.
-See
-[Subject-Aware Observability Evaluation](subject-aware-observability-evaluation.md).
+See [Subject-Aware Observability Evaluation](subject-aware-observability-evaluation.md)
+and [Subject-Aware Observability Runbook](subject-aware-observability-runbook.md).
 
 ## Architecture
 
@@ -758,18 +761,20 @@ The policy generator copies subject patterns from the core configuration:
 - message-metadata subject rules,
 - Oracle subject-to-table routing rules.
 
-Current core metrics are intentionally not subject-labeled. Subject names can
-be sensitive, and unbounded labels can damage Prometheus performance. The
-`subjects` array is therefore an operator review aid and a future extension
-point, not a promise that subject labels will be exported today.
+Core metrics remain aggregate by default. Subject names can be sensitive, and
+unbounded labels can damage monitoring platforms. The `subjects` array is
+therefore an operator review aid, not a label source. Subject-family labels are
+rendered only from prepared `labeled_metrics` rows that passed the
+`subject_metrics` policy.
 
 Fan-out metrics follow the same rule. Metrics such as
 `fanout_messages_routed_total`, `fanout_child_sinks_selected_total`,
 `fanout_required_child_failure_total`, and
 `fanout_optional_child_timeout_total` are aggregate counters. They do not share
 child sink names, route names, subjects, classification values, labels, file
-paths, database names, or connection details unless a future connector
-explicitly implements the bounded, reviewed `subject_metrics` policy model.
+paths, database names, or connection details unless a reviewed connector
+explicitly consumes prepared rows from the bounded `subject_metrics` policy
+model.
 
 Example subject entry:
 
@@ -799,9 +804,10 @@ Example subject-aware policy block:
 }
 ```
 
-Future subject-aware connectors must use this policy model and document exactly
-which subject values are exported, how cardinality is bounded, and how
-sensitive subject names are approved.
+Subject-aware connectors must use this policy model and document exactly which
+family labels are exported, how cardinality is bounded, and how sensitive
+subject names are kept out of rendered output. The certification runbook
+describes the release evidence expected for this boundary.
 
 ## Generating A Policy
 
@@ -1026,8 +1032,9 @@ Treat observability configuration as production policy:
 - export the smallest useful metric set,
 - allow freshness metrics only when event-age and clock-skew timing are approved
   for the deployment,
-- avoid subject labels unless a future connector explicitly supports bounded,
-  approved subject-aware metrics,
+- avoid subject-family labels unless the reviewed `subject_metrics` policy,
+  prepared `labeled_metrics` rows, and certification runbook checks are in
+  place,
 - keep metrics snapshots and textfiles out of git,
 - make `/etc/nats-sinks/observability.prometheus.json` writable only by root or
   a controlled configuration-management process,

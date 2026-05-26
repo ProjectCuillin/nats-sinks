@@ -274,6 +274,38 @@ See [Oracle MySQL Sink](mysql-sink.md) for sink configuration and
 container security model, runtime sequence, capability exception, and
 troubleshooting guidance.
 
+## Subject-Aware Observability Certification
+
+Subject-aware observability has its own focused certification suite because
+subject-family labels can expose operational routing structure or create
+high-cardinality metric sets. The tests use synthetic subjects only and prove
+disabled-by-default behavior, allow and deny handling, malformed policy
+rejection, cardinality caps, overflow behavior, sanitized connector output, and
+delivery non-interference.
+
+Run the focused suite with:
+
+```bash
+python -m pytest tests/unit/test_subject_observability_certification.py -q
+```
+
+The reusable helper is available for connector authors:
+
+```python
+from nats_sinks.testing import run_subject_observability_certification
+
+
+def test_subject_observability_contract() -> None:
+    report = run_subject_observability_certification()
+
+    assert report.raw_subject_leaks == ()
+    assert report.delivery_probe_before == report.delivery_probe_after
+```
+
+See the
+[Subject-Aware Observability Runbook](subject-aware-observability-runbook.md)
+before enabling subject-family metrics in an operator policy.
+
 ## Local PyPI Artifact Container Validation
 
 After a release has been published to PyPI, maintainers can run a local

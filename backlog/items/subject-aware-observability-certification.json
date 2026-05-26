@@ -3,7 +3,7 @@
   "title": "[Feature]: Add subject-aware observability certification tests and runbook",
   "area": "Testing",
   "priority": "P3 - backlog candidate",
-  "target_release": "unscheduled",
+  "target_release": "v0.4.2",
   "labels": ["observability", "security", "testing", "documentation"],
   "problem": "Subject-aware observability can leak sensitive routing structure and can create high-cardinality metric sets. A production feature needs certification tests and operator guidance before it can be enabled safely.",
   "proposal": "Add a focused certification suite and runbook for subject-aware observability. The suite should prove disabled-by-default behavior, allow/deny handling, cardinality caps, overflow behavior, sanitized output, malformed policy rejection, connector parity, and delivery non-interference.",

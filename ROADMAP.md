@@ -56,6 +56,9 @@ release, and closed only after the containing release is published.
   and raw-subject sharing disabled unless explicitly reviewed.
 - Bounded subject-family metric aggregation through prepared `labeled_metrics`
   snapshot rows, with raw subject export disabled by default.
+- Subject-aware observability certification tests and operator runbook proving
+  disabled defaults, sanitized connector output, cardinality controls, and
+  delivery non-interference for prepared subject-family metrics.
 - Policy-controlled Prometheus textfile connector for node_exporter, designed
   to run as a separate Linux service from the sink worker.
 - Optional native Prometheus HTTP scrape endpoint, designed as a separate
@@ -229,7 +232,6 @@ release, and closed only after the containing release is published.
 - Optional `InProgress` heartbeat during long-running sink writes.
 - InProgress metrics and an operator runbook for distinguishing slow active
   work from durable success.
-- Subject-aware observability certification tests and operator runbook.
 ## Phase 3
 
 - External connector marketplace guidance, certification evidence, and

@@ -306,6 +306,9 @@ operations without hunting through a long flat list.
   RFC 5424-style messages to syslog pipelines.
 - [NATS Server Monitoring](nats-server-monitoring.md): understand why endpoints
   such as `/jsz` and `/healthz` stay outside the delivery worker.
+- [Subject-Aware Observability Runbook](subject-aware-observability-runbook.md):
+  certify disabled defaults, sanitized subject-family labels, connector parity,
+  and delivery non-interference before enabling subject-aware export.
 - [Future Observability Connectors](observability-connectors.md): review the
   shared connector contract and the staged connector backlog for Datadog, OCI
   Monitoring, CloudWatch, Azure Monitor, and other future

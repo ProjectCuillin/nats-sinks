@@ -83,6 +83,8 @@ The tests also cover:
 - sink extension points such as `Sink`, `HealthCheckableSink`,
   `SchemaAwareSink`, `FlushableSink`, `SinkRegistry`, `SinkConnector`,
   `load_entry_point_connectors`, and `normalize_connector_name`,
+- testing helpers such as `run_subject_observability_certification` for
+  reusable subject-aware observability release evidence,
 - production sink package exports for `nats_sinks.file`, `nats_sinks.mysql`,
   and `nats_sinks.oracle`,
 - documented configuration helpers such as `load_config` and
@@ -186,6 +188,24 @@ from nats_sinks.testing import (
 These helpers are release-tested so future sink packages can share the same
 baseline evidence without copying internal test code. See
 [Sink Certification](sink-certification.md).
+
+Subject-aware observability certification helpers are also part of the
+documented testing surface:
+
+```python
+from nats_sinks.testing import run_subject_observability_certification
+
+
+def test_subject_observability_contract() -> None:
+    report = run_subject_observability_certification()
+
+    assert report.raw_subject_leaks == ()
+    assert report.delivery_probe_before == report.delivery_probe_after
+```
+
+These helpers use synthetic subjects and prepared `labeled_metrics` rows to
+prove connector behavior without exposing real subject names. See
+[Subject-Aware Observability Runbook](subject-aware-observability-runbook.md).
 
 ## Breaking Changes
 
