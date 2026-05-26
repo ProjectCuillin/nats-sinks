@@ -56,6 +56,10 @@ from nats_sinks.core.config import (
     PreSinkPolicyRuleConfig,
     PriorityLaneConfig,
     PriorityLanesConfig,
+    RouteHeaderMatchConfig,
+    RouteMatchConfig,
+    RoutePolicyRouteConfig,
+    RoutingMatchPolicyConfig,
     SecurityLabelProfileConfig,
     SecurityLabelRuleConfig,
     SinkPluginConfig,
@@ -133,6 +137,11 @@ from nats_sinks.core.payload import (
     normalize_payload_for_json_storage,
 )
 from nats_sinks.core.policy import PolicyEvaluation, PolicyViolation, evaluate_pre_sink_policy
+from nats_sinks.core.routing_policy import (
+    RouteSelection,
+    route_matches_envelope,
+    select_route_targets,
+)
 from nats_sinks.core.runner import JetStreamSinkRunner
 from nats_sinks.core.security_labels import (
     DEFAULT_SECURITY_LABELS_HEADER,
@@ -223,6 +232,11 @@ __all__ = [
     "PriorityLaneConfig",
     "PriorityLanesConfig",
     "RetryExhaustedError",
+    "RouteHeaderMatchConfig",
+    "RouteMatchConfig",
+    "RoutePolicyRouteConfig",
+    "RouteSelection",
+    "RoutingMatchPolicyConfig",
     "SchemaAwareSink",
     "SecurityLabelProfileConfig",
     "SecurityLabelRuleConfig",
@@ -270,6 +284,8 @@ __all__ = [
     "parse_security_label_header",
     "qualified_metric_name",
     "replay_spool_to_sink",
+    "route_matches_envelope",
+    "select_route_targets",
     "validate_advisory_subject",
     "write_metrics_snapshot",
 ]

@@ -224,6 +224,32 @@ trace headers, schedule headers, or republish headers. The metadata snapshot
 stores what is present and uses `null` or absence for what is not present. This
 keeps sinks stable across NATS server versions and producer styles.
 
+## Generic Route-Match Policy
+
+The core now includes a validated route-match policy and selector. The selector
+evaluates one normalized `NatsEnvelope` and returns logical sink target names
+based on subject, priority, classification, labels, and approved non-secret
+headers. It is intentionally selection-only: it does not fan out messages,
+open multiple sinks, commit destinations, or ACK JetStream.
+
+```mermaid
+flowchart LR
+    Env[NatsEnvelope] --> Selector[route-match selector]
+    Policy[routing policy] --> Selector
+    Selector --> Targets[logical target names]
+    Targets --> Future[future fan-out delivery]
+```
+
+This separation matters for the sink framework. All destination modules still
+implement the same durable `write_batch` contract, and ACK behavior remains in
+the runner. A future fan-out implementation can use the selector output while
+still deciding which targets are commit-required, which targets are best-effort,
+and when the JetStream ACK is allowed to happen.
+
+The route policy uses exact bounded values and the existing NATS wildcard
+subject matcher. It does not load plugins, execute code, evaluate expressions,
+or use regular expressions supplied by configuration.
+
 ## Lifecycle
 
 ```mermaid

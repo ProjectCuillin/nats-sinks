@@ -33,7 +33,13 @@ from nats_sinks.core.authenticity import (
     evaluate_message_authenticity,
     hmac_sha256_signature_b64,
 )
-from nats_sinks.core.config import MetricsConfig
+from nats_sinks.core.config import (
+    MetricsConfig,
+    RouteHeaderMatchConfig,
+    RouteMatchConfig,
+    RoutePolicyRouteConfig,
+    RoutingMatchPolicyConfig,
+)
 from nats_sinks.core.consumer_management import (
     ConsumerDrift,
     ConsumerManagementResult,
@@ -95,6 +101,11 @@ from nats_sinks.core.payload import (
 )
 from nats_sinks.core.policy import PolicyEvaluation, PolicyViolation, evaluate_pre_sink_policy
 from nats_sinks.core.priority import PriorityLaneAssignment, order_by_priority_lanes
+from nats_sinks.core.routing_policy import (
+    RouteSelection,
+    route_matches_envelope,
+    select_route_targets,
+)
 from nats_sinks.core.runner import JetStreamSinkRunner
 from nats_sinks.core.security_labels import (
     DEFAULT_SECURITY_LABELS_HEADER,
@@ -146,6 +157,11 @@ __all__ = [
     "PolicyEvaluation",
     "PolicyViolation",
     "PriorityLaneAssignment",
+    "RouteHeaderMatchConfig",
+    "RouteMatchConfig",
+    "RoutePolicyRouteConfig",
+    "RouteSelection",
+    "RoutingMatchPolicyConfig",
     "SizePolicyEvaluation",
     "SizePolicyViolation",
     "SubjectPayloadEncryptor",
@@ -176,6 +192,8 @@ __all__ = [
     "parse_security_label_header",
     "qualified_metric_name",
     "record_event_freshness_metrics",
+    "route_matches_envelope",
+    "select_route_targets",
     "validate_advisory_subject",
     "validate_metric_namespace",
     "write_metrics_snapshot",

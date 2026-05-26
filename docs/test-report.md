@@ -14,30 +14,25 @@ generated database passwords, or full raw logs from live systems.
 | Field | Value |
 | --- | --- |
 | Overall result | Pass |
-| Report generated | 2026-05-26 issue `#252` validation for upcoming `v0.4.2` development |
+| Report generated | 2026-05-26 issue `#138` validation for upcoming `v0.4.2` development |
 | Project version | `0.4.1` package metadata with `v0.4.2` development changes |
 | Python version | 3.12.4 |
-| Git revision checked | Branch `issue-252-pypi-release-artifact-container-validation` based on `release-v0.4.2` |
-| Live NATS details | Local disposable NATS server only; ports and process details redacted |
-| Live Oracle Database details | Environment-gated test table only; connection details redacted |
-| Live Oracle MySQL details | Local short-lived Docker container only; generated credentials, ports, container names, and container identifiers redacted |
-| PyPI artifact details | Public `nats-sinks` artifact installed inside short-lived Oracle Linux validation containers; image tags, container names, and raw logs redacted |
+| Git revision checked | Branch `issue-138-routing-match-policy` based on `release-v0.4.2` |
+| Live NATS details | Environment-gated live tests skipped unless explicitly enabled |
+| Live Oracle Database details | Environment-gated live tests skipped unless explicitly enabled |
+| Live Oracle MySQL details | Environment-gated live tests skipped unless explicitly enabled |
 
-This refresh covered the issue `#252` post-release PyPI artifact validation
-harness and a full local regression cycle for the current development branch.
-It validated the core runtime, Oracle Database sink, Oracle MySQL sink, file
-sink, spool support, observability connectors, Docker assets, documentation
-builds, package build, SBOM generation, checksum generation, release issue
-hygiene, and the new Oracle Linux based PyPI artifact validation container.
+This refresh covered the generic route-match policy selector for issue `#138`
+and a full local regression cycle for the current development branch. The new
+policy validates subject, priority, classification, label, and approved header
+matching without changing sink delivery or JetStream ACK behavior.
 
 ```mermaid
 flowchart LR
-    NATS[NATS JetStream message] --> Core[nats-sinks core envelope and metadata]
-    Core --> MySQL[Oracle MySQL sink]
-    MySQL --> Commit[Database commit]
-    Commit --> Ack[Message may be acknowledged]
-    MySQL --> Metrics[Sink metrics]
-    Tests[Unit and container e2e tests] --> Report[Sanitized latest report]
+    Env[NatsEnvelope] --> Policy[Routing match policy]
+    Policy --> Targets[Logical target names]
+    Targets --> Future[Future fan-out delivery]
+    Tests[Unit and CLI validation tests] --> Report[Sanitized latest report]
     Docs[Documentation builds] --> Report
 ```
 
@@ -45,9 +40,9 @@ flowchart LR
 
 | Check | Result |
 | --- | --- |
-| Ruff format | Pass, `215 files already formatted` |
+| Ruff format | Pass, `217 files already formatted` |
 | Ruff lint | Pass |
-| Mypy | Pass, no issues in `85` source files |
+| Mypy | Pass, no issues in `86` source files |
 | Version metadata consistency | Pass for `0.4.1` |
 | Dependency manifests | Pass, manifest files up to date |
 | Backlog item validation | Pass, `142` backlog items validated |
@@ -64,110 +59,51 @@ flowchart LR
 
 | Test Area | Command | Result |
 | --- | --- | --- |
-| Oracle MySQL sink hardening and regression tests | `scripts/check.sh` | Pass as part of the full unit suite, including the Oracle MySQL bug-hunt hardening tests |
-| Oracle MySQL container end-to-end test | `python scripts/run-mysql-sink-e2e.py` | Pass |
-| Local Docker/NATS/file-sink smoke test | `python scripts/run-docker-local-smoke.py` | Pass |
-| Oracle MySQL test container smoke test | `python scripts/run-oracle-mysql-container-smoke.py` | Pass |
-| WebSocket NATS end-to-end test | `scripts/run-websocket-e2e.sh` | Pass, `16` messages persisted |
-| Oracle Database live end-to-end test | `scripts/run-oracle-e2e.sh --table NATS_SINKS_E2E_EVENTS_V2 --message-count 64 --batch-size 64` | Pass, `1 passed` |
-| PyPI artifact validation container, latest | `python scripts/run-pypi-release-container-validation.py --version latest` | Pass, installed public `0.4.1` artifact |
-| PyPI artifact validation container, explicit with extras | `python scripts/run-pypi-release-container-validation.py --version 0.4.1 --extras crypto,mysql` | Pass, installed public `0.4.1` artifact |
-| Main repository test suite | `scripts/check.sh` | Pass, `910 passed, 10 skipped` |
+| Route policy focused tests | `python -m pytest tests/unit/test_routing_policy.py tests/unit/test_cli.py::test_cli_validates_routing_match_policy_example tests/unit/test_public_api.py -q` | Pass, `28 passed` |
+| Config, route policy, CLI, and public API subset | `python -m pytest tests/unit/test_config.py tests/unit/test_routing_policy.py tests/unit/test_cli.py tests/unit/test_public_api.py -q` | Pass, `90 passed` |
+| Main repository test suite | `scripts/check.sh` | Pass, `932 passed, 10 skipped` |
 | Encryption and sink contract subset | `scripts/check.sh` | Pass, `123 passed` |
 | Sink capability subset | `scripts/check.sh` | Pass, `105 passed` |
 | Documentation builds | `scripts/check.sh` | Pass for Read the Docs and GitHub Pages MkDocs builds |
+| Example validation | `nats-sink validate examples/routing-match-policy/config.json` through unit/CLI coverage | Pass |
 
-The skipped tests are the existing environment-gated live NATS and Oracle
-Database integration tests. Where release validation required live coverage,
-the dedicated local e2e scripts were run explicitly and their sensitive
-connection details were excluded from this report.
+The skipped tests are the existing environment-gated live NATS, Oracle
+Database, and Oracle MySQL integration tests. Issue `#138` changes only the
+validated route selector and does not alter live sink delivery code, so no new
+live credentialed test was required for this specific feature.
 
-## Oracle MySQL Sink Evidence
+## Route-Match Policy Evidence
 
-The optional local Oracle MySQL sink end-to-end test was executed with the local
-Docker daemon:
+The new unit coverage verifies:
 
-```bash
-python scripts/run-mysql-sink-e2e.py
-```
-
-Sanitized result:
-
-```text
-Oracle MySQL sink container e2e test passed.
-```
-
-The test verified:
-
-- a fresh Oracle MySQL test container with generated credentials;
-- loopback-only random host-port exposure;
-- automatic test table creation through the Oracle MySQL sink;
-- commit-before-success processing;
-- JSON payload persistence;
-- non-JSON payload envelope persistence;
-- empty-message handling;
-- priority, classification, labels, mission metadata, and security labels;
-- subject-to-table routing;
-- duplicate handling through idempotency configuration;
-- cleanup of the container, Docker volume, and generated secret files by
-  default.
-
-Docker cleanup was checked after the run. No `nats-sinks` Oracle MySQL test
-container or volume remained active.
-
-## PyPI Artifact Validation Evidence
-
-The new local post-release artifact harness was executed against the public
-PyPI package:
-
-```bash
-python scripts/run-pypi-release-container-validation.py --version latest
-python scripts/run-pypi-release-container-validation.py --version 0.4.1 --extras crypto,mysql
-```
-
-Sanitized result:
-
-```text
-PyPI artifact validation status: passed
-Requested version: latest
-Installed version: 0.4.1
-```
-
-The explicit-version run also passed with the optional `crypto` and `mysql`
-extras. Sanitized local JSON reports were written under
-`.local/pypi-release-validation/reports/`; they are intentionally ignored by
-Git and not copied into this public report.
+- subject-only, priority-only, classification-only, `labels_all`,
+  `labels_any`, `labels_none`, header-only, and combined route matches;
+- missing metadata, empty labels, repeated labels, absent headers, disabled
+  routing, no-match `reject`, `ignore`, and `default_route` behavior;
+- `mode: "first"` and `mode: "all"` selection, including target
+  de-duplication in policy order;
+- fail-closed configuration validation for malformed subject patterns, unknown
+  match operators, excessive value counts, empty match objects, ambiguous
+  default-route settings, and secret-bearing header names;
+- the documented NATO SECRET and NATO UNCLASS example routes.
 
 ## Issues Found During Validation
 
-The issue `#252` validation raised and repaired managed GitHub bug reports
-`#272` and `#273`. The fixes cover executable temporary storage for native
-Python wheels in the validation container and literal virtual-environment path
-handling in the isolated import smoke snippet. Both bugs have public issue
-evidence, release labels, completed status, checked Acceptance Criteria, and
-regression coverage.
-
-Previously completed release-hardening issues remain covered by the full
-regression suite, including Oracle MySQL hardening bugs `#253` through `#269`.
+No new bugs were found during issue `#138` validation. The only early failure
+was formatting-only and was corrected before rerunning `scripts/check.sh`.
 
 ## Documentation Evidence
 
-The following documentation was updated and built successfully:
+The following public documentation was updated and built successfully:
 
-- [Oracle MySQL Sink](mysql-sink.md)
-- [Oracle MySQL Test Container](oracle-mysql-test-container.md)
+- [README](https://github.com/ProjectCuillin/nats-sinks/blob/main/README.md)
 - [Configuration](configuration.md)
-- [Docker](docker.md)
-- [Release](release.md)
-- [Publishing](publishing.md)
-- [Metrics](metrics.md)
-- [Public API](public-api.md)
-- [Python Usage](python-usage.md)
-- [Sink Certification](sink-certification.md)
 - [Sink Framework](sink-framework.md)
-- [Testing](testing.md)
-- [Roadmap](roadmap.md)
+- [Architecture](architecture.md)
+- [Operations](operations.md)
+- [File Sink](file-sink.md)
+- [Oracle Sink](oracle-sink.md)
+- [Documentation Home](index.md)
 
-The README, changelog, MkDocs navigation, example configuration, dependency
-manifest, public API checks, sink certification checks, and CLI registry tests
-were also updated for issue `#101`.
+The changelog, backlog metadata, public API compatibility tests, CLI validation
+test, and tracked route policy example were also updated for issue `#138`.

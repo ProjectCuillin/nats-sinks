@@ -153,6 +153,9 @@ The current release provides the following production-ready foundation:
   connector descriptors, explicit registry resolution, public connector metadata, and
   disabled-by-default allow-listed entry-point discovery for reviewed external
   connectors.
+- A disabled-by-default generic route-match policy selector that can match
+  normalized subject, priority, classification, labels, and approved non-secret
+  headers to logical target names for future fan-out delivery.
 - Tests and documentation for the commit-then-acknowledge invariant across the
   core runtime and both production sinks.
 
@@ -217,6 +220,8 @@ operations without hunting through a long flat list.
   invariant before implementing or operating any sink.
 - [Sink Framework](sink-framework.md): understand how future sinks fit into the
   package without breaking the public API.
+- [Configuration](configuration.md#routing): review the generic route-match
+  policy selector for future multi-sink routing.
 - [Idempotency](idempotency.md), [Dead Letter Queues](dead-letter-queues.md),
   [Message Sizing](message-sizing.md), and [Performance](performance.md):
   understand delivery behavior under duplicate, malformed, large, or high-rate

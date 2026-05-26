@@ -496,6 +496,27 @@ redeliverable for JetStream consumer policy, including externally configured
 the system aligned with the project rule: commit first, ACK last, design for
 redelivery.
 
+## Route-Match Policy Operations
+
+The `routing` policy is an operator-reviewed selector for future multi-sink
+delivery. Treat it as control-plane configuration: validate it with
+`nats-sink validate`, keep route names stable, and use non-secret header hints
+such as `Nats-Sinks-Route` rather than matching on credentials, tokens, or raw
+payload values.
+
+Route matching is fail-closed by default. `no_match: "reject"` returns an
+explicit reject action to future delivery code when no route matches.
+`default_route` must name fallback targets explicitly, and `ignore` should be
+reserved for reviewed cases where an unmatched message is expected. The policy
+does not change ACK timing or write to multiple destinations by itself.
+
+For mission and defence-style deployments, prefer a small number of readable
+routes based on normalized subject, priority, classification, labels, and
+mission-safe header hints. Avoid putting sensitive operation names, raw
+coordinates, personnel data, or secrets into route names or target names
+because these values may appear in local configuration reviews and issue
+evidence.
+
 ## Priority Lanes
 
 Priority-aware processing lanes can be enabled when mixed-urgency events are

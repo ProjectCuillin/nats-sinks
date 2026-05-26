@@ -102,6 +102,10 @@ used immediately:
 - Optional core size policy enforcement that can bound sink-bound payload
   bytes, normalized headers, labels, mission metadata, standard metadata,
   approximate record size, and accepted batch size before any sink write.
+- Optional generic route-match policy validation and selection for future
+  multi-sink fan-out. Policies can match normalized subject, priority,
+  classification, labels, and approved non-secret headers, returning logical
+  target names without changing sink writes or ACK timing.
 - `nats_sinks.oracle.OracleSink`, the production Oracle Database sink with
   connection pooling, Oracle Autonomous Database connection options, `merge`
   and `insert_ignore` idempotent modes, optional high-throughput staging-table
@@ -770,6 +774,7 @@ does not connect to NATS or modify stream state. See
 nats-sink --help
 nats-sink validate examples/file-basic/config.json
 nats-sink test-sink examples/file-basic/config.json
+nats-sink validate examples/routing-match-policy/config.json
 nats-sink validate examples/oracle-jetstream/config.json
 nats-sink show-effective-config examples/oracle-jetstream/config.json
 nats-sink stream-plan examples/oracle-jetstream/config.json

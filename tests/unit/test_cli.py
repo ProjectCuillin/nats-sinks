@@ -52,6 +52,16 @@ def test_cli_validates_file_sink_config(tmp_path: Path) -> None:
     assert "Active sink: file" in result.output
 
 
+def test_cli_validates_routing_match_policy_example() -> None:
+    config = Path(__file__).resolve().parents[2] / "examples/routing-match-policy/config.json"
+
+    result = CliRunner().invoke(app, ["validate", str(config)])
+
+    assert result.exit_code == 0
+    assert "Configuration is valid." in result.output
+    assert "Active sink: file" in result.output
+
+
 def test_cli_file_sink_test_succeeds_without_network(tmp_path: Path) -> None:
     config = tmp_path / "file-config.json"
     output_dir = tmp_path / "events"
