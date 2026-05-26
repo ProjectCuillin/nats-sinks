@@ -333,6 +333,13 @@ caveats, owner, originator, policy ID, and retention category without turning
 every policy concept into a fixed file-sink field. See
 [Data-Centric Security Label Profile](security-label-profile.md).
 
+The generic `routing` policy can name a file destination as a logical target,
+for example `file_secret_audit`. The current file sink still has one concrete
+`sink` configuration per running service. Future multi-sink fan-out work will
+bind logical target names to concrete file sink instances and will define which
+targets must commit before ACK. Until then, route matching is validation and
+selection logic only.
+
 For broader file-based handoff, edge operation, classification, labels, and
 audit examples, see [Defence And Mission Support](use-cases/defence/index.md).
 

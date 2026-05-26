@@ -147,6 +147,21 @@ WEBSOCKET_ENV_ONLY_HEADERS = frozenset(
         "x-auth-token",
     }
 )
+ROUTING_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.:-]{0,127}$")
+MAX_ROUTING_ROUTES = 128
+MAX_ROUTING_TARGETS = 64
+MAX_ROUTING_MATCH_VALUES = 64
+MAX_ROUTING_HEADERS = 16
+MAX_ROUTING_VALUE_LENGTH = 512
+ROUTING_SENSITIVE_HEADER_NAMES = frozenset(
+    {
+        "authorization",
+        "cookie",
+        "proxy-authorization",
+        "x-api-key",
+        "x-auth-token",
+    }
+)
 MAX_POLICY_LABEL_LENGTH = 128
 MAX_POLICY_PAYLOAD_BYTES = 1_073_741_824
 DEFAULT_SIZE_POLICY_MAX_PAYLOAD_BYTES = 16_777_216
@@ -329,6 +344,124 @@ def _normalize_configured_labels(value: object, *, source: str) -> tuple[str, ..
         if contains_ascii_control_characters(label):
             raise ValueError(f"{source} must not contain control characters")
     return labels
+
+
+def _normalize_route_scalar_values(value: object, *, source: str) -> tuple[str, ...]:
+    """Normalize exact-match routing values and reject ambiguous input.
+
+    Route policies are evaluated for every message in the hot path.  Keeping
+    values as bounded exact strings makes the policy easy to audit and avoids
+    the denial-of-service risks of user-provided regular expressions.
+    """
+
+    if value is None:
+        return ()
+    if isinstance(value, str):
+        raw_values = [value]
+    elif isinstance(value, (list, tuple, set, frozenset)):
+        raw_values = list(value)
+    else:
+        raise ValueError(f"{source} must be a string or a list of strings")
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for item in raw_values:
+        rendered = normalise_metadata_value(item)
+        if rendered is None:
+            raise ValueError(f"{source} entries must not be empty")
+        if contains_ascii_control_characters(rendered):
+            raise ValueError(f"{source} entries must not contain control characters")
+        if len(rendered) > MAX_ROUTING_VALUE_LENGTH:
+            raise ValueError(
+                f"{source} entries must be at most {MAX_ROUTING_VALUE_LENGTH} characters"
+            )
+        if rendered in seen:
+            continue
+        seen.add(rendered)
+        normalized.append(rendered)
+
+    if len(normalized) > MAX_ROUTING_MATCH_VALUES:
+        raise ValueError(f"{source} supports at most {MAX_ROUTING_MATCH_VALUES} values")
+    return tuple(normalized)
+
+
+def _normalize_route_labels(value: object, *, source: str) -> tuple[str, ...]:
+    """Normalize configured routing labels with route-specific value limits."""
+
+    labels = _normalize_configured_labels(value, source=source)
+    for label in labels:
+        if len(label) > MAX_POLICY_LABEL_LENGTH:
+            raise ValueError(
+                f"{source} entries must be at most {MAX_POLICY_LABEL_LENGTH} characters"
+            )
+    if len(labels) > MAX_ROUTING_MATCH_VALUES:
+        raise ValueError(f"{source} supports at most {MAX_ROUTING_MATCH_VALUES} values")
+    return labels
+
+
+def _normalize_routing_name(value: object, *, source: str) -> str:
+    """Validate route and target identifiers without treating them as secrets."""
+
+    if not isinstance(value, str):
+        raise ValueError(f"{source} must be a string")
+    rendered = value.strip()
+    if rendered != value or not ROUTING_NAME_RE.fullmatch(rendered):
+        raise ValueError(
+            f"{source} must start with a letter and contain only letters, digits, "
+            "'.', '_', ':', or '-'"
+        )
+    if contains_ascii_control_characters(rendered):
+        raise ValueError(f"{source} must not contain control characters")
+    return rendered
+
+
+def _normalize_route_targets(value: object, *, source: str) -> tuple[str, ...]:
+    """Normalize one route's logical sink target list."""
+
+    if isinstance(value, str):
+        raw_targets = [value]
+    elif isinstance(value, (list, tuple, set, frozenset)):
+        raw_targets = list(value)
+    else:
+        raise ValueError(f"{source} must be a string or list of strings")
+    if not raw_targets:
+        raise ValueError(f"{source} must contain at least one target")
+    if len(raw_targets) > MAX_ROUTING_TARGETS:
+        raise ValueError(f"{source} supports at most {MAX_ROUTING_TARGETS} names")
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for item in raw_targets:
+        target = _normalize_routing_name(item, source=f"{source} entry")
+        if target in seen:
+            raise ValueError(f"{source} contains duplicate target {target!r}")
+        seen.add(target)
+        normalized.append(target)
+    return tuple(normalized)
+
+
+def _validate_routing_header_name(value: object, *, source: str) -> str:
+    """Validate one route-match header name.
+
+    Route matching can look at explicitly configured headers, but it must not
+    encourage policy decisions based on secret-bearing headers.  Operators who
+    need a sensitive signal should publish a separate non-secret routing hint.
+    """
+
+    if not isinstance(value, str):
+        raise ValueError(f"{source} header name must be a string")
+    rendered = value.strip()
+    if rendered != value or not WEBSOCKET_HEADER_NAME_RE.fullmatch(rendered):
+        raise ValueError(f"{source} header name must be an HTTP token name")
+    lowered = rendered.casefold()
+    if lowered in WEBSOCKET_DANGEROUS_HEADERS:
+        raise ValueError(f"{source} must not match protocol-owned header {rendered!r}")
+    if lowered in ROUTING_SENSITIVE_HEADER_NAMES:
+        raise ValueError(
+            f"{source} must not match secret-bearing header {rendered!r}; "
+            "publish a non-secret routing hint instead"
+        )
+    return rendered
 
 
 def _validate_websocket_header_env_name(value: str, *, source: str) -> str:
@@ -2290,6 +2423,195 @@ class CustodyConfig(BaseModel):
         return self
 
 
+class RouteHeaderMatchConfig(BaseModel):
+    """One explicit header match used by the generic routing selector."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    values: tuple[str, ...]
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        """Require an approved non-secret header name for route matching."""
+
+        return _validate_routing_header_name(value, source="routing header match")
+
+    @field_validator("values", mode="before")
+    @classmethod
+    def normalize_values(cls, value: object) -> tuple[str, ...]:
+        """Accept exact header values as one string or a bounded list."""
+
+        values = _normalize_route_scalar_values(value, source="routing header values")
+        if not values:
+            raise ValueError("routing header values must contain at least one value")
+        return values
+
+
+class RouteMatchConfig(BaseModel):
+    """Normalized route-match criteria evaluated against a `NatsEnvelope`.
+
+    The model intentionally supports exact-value matching only.  Operators can
+    combine subject wildcards, normalized metadata, labels, and approved header
+    hints without introducing regular-expression or expression-language
+    surfaces into the runtime path.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    subject: str | None = None
+    priority: tuple[str, ...] = Field(default_factory=tuple)
+    classification: tuple[str, ...] = Field(default_factory=tuple)
+    labels_all: tuple[str, ...] = Field(default_factory=tuple)
+    labels_any: tuple[str, ...] = Field(default_factory=tuple)
+    labels_none: tuple[str, ...] = Field(default_factory=tuple)
+    headers: tuple[RouteHeaderMatchConfig, ...] = Field(default_factory=tuple)
+
+    @field_validator("subject")
+    @classmethod
+    def validate_subject(cls, value: str | None) -> str | None:
+        """Validate optional route subjects with the project NATS wildcard rules."""
+
+        if value is None:
+            return None
+        return validate_subject_pattern(value)
+
+    @field_validator("priority", "classification", mode="before")
+    @classmethod
+    def normalize_scalar_matches(cls, value: object) -> tuple[str, ...]:
+        """Normalize exact-match priority and classification values."""
+
+        return _normalize_route_scalar_values(value, source="routing match values")
+
+    @field_validator("labels_all", "labels_any", "labels_none", mode="before")
+    @classmethod
+    def normalize_label_matches(cls, value: object) -> tuple[str, ...]:
+        """Normalize label match lists with the same semicolon shorthand as metadata."""
+
+        return _normalize_route_labels(value, source="routing labels")
+
+    @field_validator("headers", mode="after")
+    @classmethod
+    def validate_headers(
+        cls, value: tuple[RouteHeaderMatchConfig, ...]
+    ) -> tuple[RouteHeaderMatchConfig, ...]:
+        """Bound and de-duplicate header match names case-insensitively."""
+
+        if len(value) > MAX_ROUTING_HEADERS:
+            raise ValueError(f"routing match supports at most {MAX_ROUTING_HEADERS} headers")
+        seen: set[str] = set()
+        for header in value:
+            lowered = header.name.casefold()
+            if lowered in seen:
+                raise ValueError("routing match must not contain duplicate header names")
+            seen.add(lowered)
+        return value
+
+    @model_validator(mode="after")
+    def validate_match_is_meaningful(self) -> RouteMatchConfig:
+        """Reject empty or self-contradicting route matches."""
+
+        if not (
+            self.subject
+            or self.priority
+            or self.classification
+            or self.labels_all
+            or self.labels_any
+            or self.labels_none
+            or self.headers
+        ):
+            raise ValueError("routing route match must contain at least one criterion")
+
+        blocked = set(self.labels_none)
+        required = set(self.labels_all)
+        optional = set(self.labels_any)
+        if blocked.intersection(required):
+            raise ValueError("routing labels_all and labels_none must not overlap")
+        if optional and optional.issubset(blocked):
+            raise ValueError("routing labels_any cannot be entirely blocked by labels_none")
+        return self
+
+
+class RoutePolicyRouteConfig(BaseModel):
+    """One named route and the logical sink targets it selects."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    match: RouteMatchConfig
+    targets: tuple[str, ...]
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        """Validate route names for logs, operator output, and future metrics."""
+
+        return _normalize_routing_name(value, source="routing route name")
+
+    @field_validator("targets", mode="before")
+    @classmethod
+    def normalize_targets(cls, value: object) -> tuple[str, ...]:
+        """Validate selected logical sink names without loading those sinks."""
+
+        return _normalize_route_targets(value, source="routing route targets")
+
+
+class RoutingMatchPolicyConfig(BaseModel):
+    """Generic route selector configuration.
+
+    This policy determines which logical sink target names match a normalized
+    envelope.  It does not perform writes, commit sinks, or ACK JetStream
+    messages by itself; fan-out execution and ACK quorum behavior are separate
+    delivery features.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    mode: Literal["first", "all"] = "first"
+    no_match: Literal["reject", "default_route", "ignore"] = "reject"
+    default_targets: tuple[str, ...] = Field(default_factory=tuple)
+    routes: tuple[RoutePolicyRouteConfig, ...] = Field(default_factory=tuple)
+
+    @field_validator("default_targets", mode="before")
+    @classmethod
+    def normalize_default_targets(cls, value: object) -> tuple[str, ...]:
+        """Validate fallback logical sink names for no-match handling."""
+
+        if value is None:
+            return ()
+        return _normalize_route_targets(value, source="routing default_targets")
+
+    @field_validator("routes", mode="after")
+    @classmethod
+    def validate_routes(
+        cls, value: tuple[RoutePolicyRouteConfig, ...]
+    ) -> tuple[RoutePolicyRouteConfig, ...]:
+        """Bound route count and reject duplicate route names."""
+
+        if len(value) > MAX_ROUTING_ROUTES:
+            raise ValueError(f"routing supports at most {MAX_ROUTING_ROUTES} routes")
+        seen: set[str] = set()
+        for route in value:
+            if route.name in seen:
+                raise ValueError(f"routing contains duplicate route name {route.name!r}")
+            seen.add(route.name)
+        return value
+
+    @model_validator(mode="after")
+    def validate_policy(self) -> RoutingMatchPolicyConfig:
+        """Fail closed for enabled policies that cannot select a safe target."""
+
+        if self.enabled and not self.routes:
+            raise ValueError("routing.enabled requires at least one route")
+        if self.no_match == "default_route" and not self.default_targets:
+            raise ValueError("routing.no_match default_route requires default_targets")
+        if self.no_match != "default_route" and self.default_targets:
+            raise ValueError("routing.default_targets is only valid with no_match default_route")
+        return self
+
+
 class SinkConfig(BaseModel):
     """Raw sink configuration selected through the safe registry."""
 
@@ -2375,6 +2697,7 @@ class AppConfig(BaseModel):
     custody: CustodyConfig = Field(default_factory=CustodyConfig)
     size_policy: SizePolicyConfig = Field(default_factory=SizePolicyConfig)
     pre_sink_policy: PreSinkPolicyConfig = Field(default_factory=PreSinkPolicyConfig)
+    routing: RoutingMatchPolicyConfig = Field(default_factory=RoutingMatchPolicyConfig)
     plugins: SinkPluginConfig = Field(default_factory=SinkPluginConfig)
     sink: SinkConfig
 

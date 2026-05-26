@@ -384,6 +384,15 @@ Each `table_routes` item has this shape:
 
 Routes are evaluated in order, and the first matching route wins.
 
+Oracle `table_routes` are sink-local subject-to-table routing. They are
+separate from the generic top-level `routing` policy. The generic policy can
+select logical targets such as `oracle_secret` or `oracle_unclass` from
+subject, priority, classification, labels, and approved header hints, but it
+does not yet bind those target names to concrete Oracle sink instances or
+tables. Future fan-out delivery will make that binding explicit while keeping
+Oracle connection, table, idempotency, and column settings in Oracle-specific
+configuration.
+
 Per-route overrides are intentionally conservative:
 
 - omitted route fields inherit the sink-level default,

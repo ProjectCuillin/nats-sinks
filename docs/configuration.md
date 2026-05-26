@@ -137,6 +137,40 @@ runtime sections and add destination-specific fields inside the `sink` object.
       }
     ]
   },
+  "routing": {
+    "enabled": false,
+    "mode": "first",
+    "no_match": "reject",
+    "default_targets": [],
+    "routes": [
+      {
+        "name": "nato_secret_sensor_audit",
+        "match": {
+          "subject": "mission.sensor.>",
+          "priority": ["urgent"],
+          "classification": ["NATO SECRET"],
+          "labels_all": ["sensor", "audit"],
+          "headers": [
+            {
+              "name": "Nats-Sinks-Route",
+              "values": ["mission-audit"]
+            }
+          ]
+        },
+        "targets": ["oracle_secret", "file_secret_audit"]
+      },
+      {
+        "name": "nato_unclass_sensor_audit",
+        "match": {
+          "subject": "mission.sensor.>",
+          "priority": ["urgent"],
+          "classification": ["NATO UNCLASS"],
+          "labels_all": ["sensor", "audit"]
+        },
+        "targets": ["oracle_unclass"]
+      }
+    ]
+  },
   "message_authenticity": {
     "enabled": false,
     "unmatched_subject_action": "reject",
@@ -256,6 +290,7 @@ The top-level sections are:
 | `metrics` | no | Metrics namespace, enablement flag, and optional local JSON snapshot path. |
 | `advisories` | no | Optional observation-only JetStream advisory subscription settings. Disabled by default and isolated from source-message ACK behavior. |
 | `message_metadata` | no | Optional priority, classification, and labels extraction defaults applied to every message before sink delivery. |
+| `routing` | no | Optional generic route-match policy that selects logical sink target names from subject, priority, classification, labels, and approved headers. Disabled by default and selection-only until fan-out delivery is enabled. |
 | `message_authenticity` | no | Optional fail-closed message-level authenticity verification before payload encryption and sink delivery. Disabled by default. |
 | `custody` | no | Optional tamper-evident payload and metadata hashes computed by the core before sink delivery. Disabled by default. |
 | `encryption` | no | Optional core payload encryption before messages are passed to any sink. |
@@ -960,6 +995,117 @@ object through the core runtime so Oracle can store it in
 `MISSION_METADATA_JSON`, file sink records can expose it as top-level
 `mission_metadata`, and future sinks can preserve the same destination-neutral
 context without adding many fixed framework fields.
+
+### `routing`
+
+The `routing` section defines a generic route-match policy. It is disabled by
+default and currently performs selection only: it evaluates a normalized
+`NatsEnvelope` and returns logical sink target names. It does not open those
+sinks, fan out a message, commit a destination, or ACK JetStream. The separate
+multi-sink fan-out work will use this policy layer as the safe selector.
+
+Route matching always uses normalized framework fields:
+
+- `subject` is matched with the same NATS wildcard grammar used elsewhere in
+  the project.
+- `priority` and `classification` match the resolved
+  `NatsEnvelope.priority` and `NatsEnvelope.classification` values.
+- `labels_all`, `labels_any`, and `labels_none` match the normalized
+  `NatsEnvelope.labels` tuple.
+- `headers` match only explicitly configured, non-secret, non-protocol-owned
+  header names with exact bounded values.
+
+This design keeps routing policy reviewable in high-assurance environments. It
+does not accept regular expressions, expression languages, or code-like match
+rules from configuration.
+
+Example with two match sets for the same subject and label family:
+
+```json
+{
+  "routing": {
+    "enabled": true,
+    "mode": "first",
+    "no_match": "reject",
+    "routes": [
+      {
+        "name": "nato_secret_sensor_audit",
+        "match": {
+          "subject": "mission.sensor.>",
+          "priority": ["urgent"],
+          "classification": ["NATO SECRET"],
+          "labels_all": ["sensor", "audit"],
+          "headers": [
+            {
+              "name": "Nats-Sinks-Route",
+              "values": ["mission-audit"]
+            }
+          ]
+        },
+        "targets": ["oracle_secret", "file_secret_audit"]
+      },
+      {
+        "name": "nato_unclass_sensor_audit",
+        "match": {
+          "subject": "mission.sensor.>",
+          "priority": ["urgent"],
+          "classification": ["NATO UNCLASS"],
+          "labels_all": ["sensor", "audit"]
+        },
+        "targets": ["oracle_unclass"]
+      }
+    ]
+  }
+}
+```
+
+The target names are logical sink names. A future fan-out configuration will
+bind names such as `oracle_secret`, `file_secret_audit`, and `oracle_unclass`
+to concrete sink instances. For example, `oracle_secret` might point at one
+Oracle Database schema, `oracle_unclass` at another Oracle Database table or
+database, and `file_secret_audit` at a controlled local file destination. The
+individual sink connection, table, filesystem, and durability settings remain
+in sink-specific configuration blocks such as [Oracle Sink](oracle-sink.md)
+and [File Sink](file-sink.md).
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `enabled` | no | `false` | `true` or `false`. | Enables route selection. Disabled policies select no targets. |
+| `mode` | no | `first` | `first` or `all`. | `first` selects the first matching route. `all` selects every matching route and de-duplicates target names while preserving route order. |
+| `no_match` | no | `reject` | `reject`, `ignore`, or `default_route`. | Explicit action returned when no route matches. Delivery behavior remains owned by future fan-out execution. |
+| `default_targets` | no | `[]` | String or list of logical target names. | Fallback targets used only when `no_match` is `default_route`. |
+| `routes` | no | `[]` | List of route objects. | Ordered route definitions. Required when `enabled` is true. At most 128 routes. |
+
+Route fields:
+
+| Route field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `name` | yes | none | Starts with a letter; then letters, digits, `.`, `_`, `:`, or `-`; at most 128 characters. | Stable route identifier for operator output, tests, and future metrics. |
+| `match` | yes | none | Match object. | At least one criterion is required. |
+| `targets` | yes | none | String or list of logical target names. | Logical sink targets selected by the route. At most 64 targets. Duplicate names are rejected. |
+
+Match fields:
+
+| Match field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `subject` | no | unset | NATS subject pattern. | Matches `NatsEnvelope.subject`. |
+| `priority` | no | `[]` | String or list of strings. | Exact allowed priority values. At most 64 values. |
+| `classification` | no | `[]` | String or list of strings. | Exact allowed classification values. At most 64 values. |
+| `labels_all` | no | `[]` | Semicolon-separated string or list. | All listed labels must be present. |
+| `labels_any` | no | `[]` | Semicolon-separated string or list. | At least one listed label must be present. |
+| `labels_none` | no | `[]` | Semicolon-separated string or list. | None of the listed labels may be present. |
+| `headers` | no | `[]` | List of `{ "name": "...", "values": "..." }` objects. | Exact matches against approved non-secret header names. At most 16 headers per route. |
+
+Header matches reject secret-bearing headers such as `Authorization`, `Cookie`,
+`Proxy-Authorization`, `X-Api-Key`, and `X-Auth-Token`. Publish a non-secret
+routing hint such as `Nats-Sinks-Route` when a header needs to influence
+selection.
+
+Validate the tracked example:
+
+```bash
+nats-sink validate examples/routing-match-policy/config.json
+```
 
 ### `mission_metadata`
 

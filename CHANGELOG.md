@@ -12,6 +12,13 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Added
 
+- Added the generic route-match policy selector for issue #138. The new
+  disabled-by-default `routing` configuration can match normalized
+  `NatsEnvelope` subject, priority, classification, labels, and approved
+  non-secret headers, validates NATO SECRET and NATO UNCLASS examples through
+  `nats-sink validate`, exposes public selector helpers, and documents that
+  the feature is selection-only until the separate multi-sink fan-out delivery
+  work is implemented.
 - Added a local-only post-release PyPI artifact validation harness for issue
   #252. The script builds a short-lived Oracle Linux 9 slim validation
   container, installs `nats-sinks` from PyPI instead of the local checkout,
