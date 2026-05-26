@@ -53,6 +53,13 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   `nats-sink validate`, and documents that fan-out is at-least-once and
   idempotent rather than an atomic distributed transaction across
   destinations.
+- Added the subject-aware observability policy model for issue #128. The new
+  disabled-by-default `subject_metrics` policy block uses default-deny
+  subject-family rules, validates stable operator labels, caps subject-family
+  cardinality, defines deterministic overflow behavior, supports label,
+  redacted, hash, and explicitly reviewed raw display modes, and provides a
+  fail-closed evaluator for future connectors without changing current
+  aggregate metric export or delivery behavior.
 - Added a local-only post-release PyPI artifact validation harness for issue
   #252. The script builds a short-lived Oracle Linux 9 slim validation
   container, installs `nats-sinks` from PyPI instead of the local checkout,

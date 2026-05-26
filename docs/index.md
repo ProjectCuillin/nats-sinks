@@ -287,6 +287,9 @@ operations without hunting through a long flat list.
 - [Observability](observability.md): start here for the external-sharing model.
 - [Metrics Snapshot And CLI](metrics.md): inspect local snapshots and use
   shell/Python-friendly metric output.
+- [Subject-Aware Observability Evaluation](subject-aware-observability-evaluation.md):
+  review the disabled-by-default subject-family policy model and why current
+  exporters still avoid subject labels.
 - [Prometheus Integration](prometheus.md): configure the policy-controlled
   textfile connector or optional native HTTP endpoint.
 - [OpenTelemetry OTLP Integration](otlp.md): export approved metrics to an

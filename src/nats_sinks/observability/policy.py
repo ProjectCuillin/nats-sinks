@@ -20,6 +20,9 @@ import re
 import tempfile
 from collections.abc import Iterable
 from contextlib import suppress
+from dataclasses import dataclass
+from fnmatch import fnmatchcase
+from hashlib import sha256
 from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlsplit
@@ -29,7 +32,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from nats_sinks.core.config import AppConfig, load_json
 from nats_sinks.core.errors import ConfigurationError
 from nats_sinks.core.metrics import METRIC_SPEC_BY_NAME, validate_metric_namespace
-from nats_sinks.core.subjects import validate_subject_pattern
+from nats_sinks.core.subjects import matches_subject, validate_subject_pattern
 
 OBSERVABILITY_POLICY_SCHEMA = "nats_sinks.observability.policy.v1"
 PROMETHEUS_HTTP_PATH_MAX_LENGTH = 128
@@ -67,6 +70,26 @@ SPLUNK_HEC_METADATA_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.:-]{0,127}$")
 STATSD_METRIC_PREFIX_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.-]{0,127}$")
 SYSLOG_PRINTABLE_RE = re.compile(r"^[!-~]+$")
 SYSLOG_STRUCTURED_DATA_ID_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,32}$")
+SUBJECT_FAMILY_LABEL_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.-]{0,63}$")
+SUBJECT_FAMILY_LABEL_SECRET_PARTS = frozenset(
+    {
+        "api_key",
+        "apikey",
+        "bearer",
+        "cookie",
+        "credential",
+        "key",
+        "password",
+        "private",
+        "secret_token",
+        "token",
+    }
+)
+MAX_SUBJECT_AWARE_RULES = 128
+MAX_SUBJECT_AWARE_FAMILIES = 100
+SubjectAwareAction = Literal["allow", "deny"]
+SubjectAwareDisplayMode = Literal["label", "redacted", "hash", "raw"]
+SubjectAwareOverflowAction = Literal["drop", "aggregate_other", "fail_closed"]
 
 
 def _validate_otlp_http_endpoint(value: str | None, *, field_name: str) -> str | None:
@@ -160,13 +183,161 @@ def _validate_syslog_printable_field(value: str, *, field_name: str, max_length:
     return rendered
 
 
+def _validate_subject_family_label(value: str, *, field_name: str) -> str:
+    """Validate a stable low-cardinality subject-family label."""
+
+    rendered = value.strip()
+    if not rendered:
+        raise ValueError(f"{field_name} must not be empty")
+    if not SUBJECT_FAMILY_LABEL_RE.fullmatch(rendered):
+        raise ValueError(
+            f"{field_name} must start with a letter or underscore and contain only "
+            "letters, digits, underscores, dots, or hyphens"
+        )
+    lowered = rendered.lower()
+    if any(part in lowered for part in SUBJECT_FAMILY_LABEL_SECRET_PARTS):
+        raise ValueError(f"{field_name} must not look like a secret or credential")
+    return rendered
+
+
+def _validate_observability_metric_names(values: list[str], *, field_name: str) -> list[str]:
+    """Validate exact metric names used by observability policy sections."""
+
+    rendered: list[str] = []
+    for value in values:
+        item = value.strip()
+        if not item:
+            raise ValueError(f"{field_name} metric names must not be empty")
+        if item not in METRIC_SPEC_BY_NAME:
+            raise ValueError(f"unknown nats-sinks metric name: {item}")
+        rendered.append(item)
+    return rendered
+
+
+def _validate_observability_metric_patterns(values: list[str], *, field_name: str) -> list[str]:
+    """Validate bounded metric glob patterns used by observability policy sections."""
+
+    rendered: list[str] = []
+    for value in values:
+        item = value.strip()
+        if not item:
+            raise ValueError(f"{field_name} metric patterns must not be empty")
+        if "\x00" in item or "\n" in item or "\r" in item:
+            raise ValueError(f"{field_name} metric patterns must not contain control characters")
+        rendered.append(item)
+    return rendered
+
+
+@dataclass(frozen=True, slots=True)
+class SubjectAwareDecision:
+    """Result of evaluating a subject against the subject-aware policy model."""
+
+    allowed: bool
+    reason: str
+    label: str | None = None
+    display_mode: SubjectAwareDisplayMode | None = None
+
+
+class SubjectAwareRule(BaseModel):
+    """One explicit subject-family rule for future subject-aware metrics."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    subject: str
+    action: SubjectAwareAction = "allow"
+    label: str | None = None
+    display_mode: SubjectAwareDisplayMode = "label"
+    allowed_metrics: list[str] = Field(default_factory=list)
+    allowed_metric_patterns: list[str] = Field(default_factory=list)
+
+    @field_validator("subject")
+    @classmethod
+    def validate_subject(cls, value: str) -> str:
+        """Validate subject-family rules with the shared NATS wildcard grammar."""
+
+        return validate_subject_pattern(value)
+
+    @field_validator("label")
+    @classmethod
+    def validate_label(cls, value: str | None) -> str | None:
+        """Validate optional operator-chosen family labels."""
+
+        if value is None:
+            return None
+        return _validate_subject_family_label(value, field_name="subject_metrics.rules.label")
+
+    @field_validator("allowed_metrics")
+    @classmethod
+    def validate_metric_names(cls, values: list[str]) -> list[str]:
+        """Validate rule-scoped exact metric names."""
+
+        return _validate_observability_metric_names(
+            values,
+            field_name="subject_metrics.rules.allowed_metrics",
+        )
+
+    @field_validator("allowed_metric_patterns")
+    @classmethod
+    def validate_metric_patterns(cls, values: list[str]) -> list[str]:
+        """Validate rule-scoped metric glob patterns."""
+
+        return _validate_observability_metric_patterns(
+            values,
+            field_name="subject_metrics.rules.allowed_metric_patterns",
+        )
+
+    @model_validator(mode="after")
+    def validate_allow_rule_label(self) -> SubjectAwareRule:
+        """Require reviewable stable labels for every allow rule."""
+
+        if self.action == "allow" and self.label is None:
+            raise ValueError("subject_metrics allow rules require a stable operator label")
+        return self
+
+
+class SubjectAwareObservabilityPolicy(BaseModel):
+    """Disabled-by-default policy for controlled subject-family observability."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    default_action: Literal["deny"] = "deny"
+    max_subject_families: int = Field(default=20, ge=1, le=MAX_SUBJECT_AWARE_FAMILIES)
+    overflow_action: SubjectAwareOverflowAction = "drop"
+    overflow_label: str = "other"
+    allow_raw_subjects: bool = False
+    rules: list[SubjectAwareRule] = Field(default_factory=list, max_length=MAX_SUBJECT_AWARE_RULES)
+
+    @field_validator("overflow_label")
+    @classmethod
+    def validate_overflow_label(cls, value: str) -> str:
+        """Validate the deterministic overflow bucket label."""
+
+        return _validate_subject_family_label(
+            value,
+            field_name="subject_metrics.overflow_label",
+        )
+
+    @model_validator(mode="after")
+    def validate_subject_policy(self) -> SubjectAwareObservabilityPolicy:
+        """Fail closed for unsafe subject-aware policy shapes."""
+
+        allow_rules = [rule for rule in self.rules if rule.action == "allow"]
+        if len(allow_rules) > self.max_subject_families:
+            raise ValueError("subject_metrics allow rules must not exceed max_subject_families")
+        if any(rule.display_mode == "raw" for rule in allow_rules) and not self.allow_raw_subjects:
+            raise ValueError("subject_metrics raw display mode requires allow_raw_subjects=true")
+        return self
+
+
 class ObservabilitySubjectPolicy(BaseModel):
-    """Optional per-subject sharing hint for future subject-aware metrics.
+    """Optional per-subject review hint for subject-aware policy planning.
 
     Current nats-sinks metrics are intentionally not labeled by subject because
     subject names can be sensitive and high-cardinality.  The policy still
     records known subject patterns as disabled hints so operators can review
-    what the core config handles before enabling future subject-aware metrics.
+    what the core config handles before writing explicit `subject_metrics`
+    allow rules for future subject-aware connectors.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -1017,6 +1188,9 @@ class ObservabilityPolicy(BaseModel):
     include_observations: bool = False
     include_legacy: bool = False
     subjects: list[ObservabilitySubjectPolicy] = Field(default_factory=list)
+    subject_metrics: SubjectAwareObservabilityPolicy = Field(
+        default_factory=SubjectAwareObservabilityPolicy
+    )
     prometheus: PrometheusTextfilePolicy = Field(default_factory=PrometheusTextfilePolicy)
     otlp: OtlpMetricsPolicy = Field(default_factory=OtlpMetricsPolicy)
     elastic: ElasticObservabilityPolicy = Field(default_factory=ElasticObservabilityPolicy)
@@ -1042,30 +1216,109 @@ class ObservabilityPolicy(BaseModel):
     def validate_metric_names(cls, values: list[str]) -> list[str]:
         """Allow only known nats-sinks metric names in exact-name lists."""
 
-        rendered: list[str] = []
-        for value in values:
-            item = value.strip()
-            if not item:
-                raise ValueError("metric names must not be empty")
-            if item not in METRIC_SPEC_BY_NAME:
-                raise ValueError(f"unknown nats-sinks metric name: {item}")
-            rendered.append(item)
-        return rendered
+        return _validate_observability_metric_names(values, field_name="observability policy")
 
     @field_validator("allowed_metric_patterns", "denied_metric_patterns")
     @classmethod
     def validate_metric_patterns(cls, values: list[str]) -> list[str]:
         """Reject empty or control-character glob patterns."""
 
-        rendered: list[str] = []
-        for value in values:
-            item = value.strip()
-            if not item:
-                raise ValueError("metric patterns must not be empty")
-            if "\x00" in item or "\n" in item or "\r" in item:
-                raise ValueError("metric patterns must not contain control characters")
-            rendered.append(item)
-        return rendered
+        return _validate_observability_metric_patterns(values, field_name="observability policy")
+
+
+def _base_metric_name(metric_name: str) -> str:
+    """Return a base metric name accepted by exact policy checks."""
+
+    if metric_name in METRIC_SPEC_BY_NAME:
+        return metric_name
+    base_name, separator, _stat = metric_name.rpartition(".")
+    if separator and base_name in METRIC_SPEC_BY_NAME:
+        return base_name
+    return metric_name
+
+
+def _subject_metric_matches(rule: SubjectAwareRule, metric_name: str | None) -> bool:
+    """Return whether a rule applies to a metric name."""
+
+    if metric_name is None:
+        return True
+    base_name = _base_metric_name(metric_name.strip())
+    if base_name not in METRIC_SPEC_BY_NAME:
+        return False
+    if not rule.allowed_metrics and not rule.allowed_metric_patterns:
+        return True
+    return (
+        metric_name in rule.allowed_metrics
+        or base_name in rule.allowed_metrics
+        or any(fnmatchcase(metric_name, pattern) for pattern in rule.allowed_metric_patterns)
+        or any(fnmatchcase(base_name, pattern) for pattern in rule.allowed_metric_patterns)
+    )
+
+
+def _subject_family_label(
+    *,
+    rule: SubjectAwareRule,
+    subject: str,
+) -> str:
+    """Render the future subject-family label according to a reviewed display mode."""
+
+    if rule.display_mode == "label":
+        return rule.label or "unknown"
+    if rule.display_mode == "redacted":
+        return "redacted"
+    if rule.display_mode == "hash":
+        digest = sha256(subject.encode("utf-8")).hexdigest()[:16]
+        return f"sha256_{digest}"
+    return subject
+
+
+def evaluate_subject_observability_policy(
+    policy: SubjectAwareObservabilityPolicy | ObservabilityPolicy,
+    *,
+    subject: str,
+    metric_name: str | None = None,
+) -> SubjectAwareDecision:
+    """Evaluate a concrete subject against the fail-closed subject policy.
+
+    This helper is intentionally independent from delivery code. It lets future
+    observability connectors ask whether subject-family metadata may be shared
+    without affecting ACK behavior, retries, DLQ handling, or sink writes.
+    """
+
+    subject_policy = policy.subject_metrics if isinstance(policy, ObservabilityPolicy) else policy
+    if not subject_policy.enabled:
+        return SubjectAwareDecision(allowed=False, reason="disabled")
+
+    try:
+        validated_subject = validate_subject_pattern(subject)
+    except ConfigurationError:
+        return SubjectAwareDecision(allowed=False, reason="invalid_subject")
+
+    matching_deny = [
+        rule
+        for rule in subject_policy.rules
+        if rule.action == "deny"
+        and matches_subject(rule.subject, validated_subject)
+        and _subject_metric_matches(rule, metric_name)
+    ]
+    if matching_deny:
+        return SubjectAwareDecision(allowed=False, reason="denied")
+
+    for rule in subject_policy.rules:
+        if rule.action != "allow":
+            continue
+        if not matches_subject(rule.subject, validated_subject):
+            continue
+        if not _subject_metric_matches(rule, metric_name):
+            continue
+        return SubjectAwareDecision(
+            allowed=True,
+            reason="allowed",
+            label=_subject_family_label(rule=rule, subject=validated_subject),
+            display_mode=rule.display_mode,
+        )
+
+    return SubjectAwareDecision(allowed=False, reason="no_match")
 
 
 def _unique_preserve_order(values: Iterable[str]) -> list[str]:

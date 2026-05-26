@@ -376,12 +376,13 @@ events, callback exceptions, and queue saturation must be logged without
 payloads, credentials, private subject families, or sensitive metadata values.
 See [Push Consumer Evaluation](push-consumer-evaluation.md).
 
-Subject-aware observability is also not enabled today. NATS subjects can reveal
+Subject-aware observability has a disabled-by-default policy model, but current
+aggregate exporters do not emit subject labels. NATS subjects can reveal
 mission, tenant, platform, environment, or routing structure, and per-subject
-metrics can create high-cardinality series. Any future subject-aware export
-must be disabled by default, use explicit subject-family allow lists, use
-stable low-cardinality labels, enforce caps, and fail closed for export without
-changing ACK behavior. See
+metrics can create high-cardinality series. Any connector that implements
+subject-family export must use explicit allow lists, stable low-cardinality
+labels, caps, deterministic overflow behavior, and fail-closed export decisions
+without changing ACK behavior. See
 [Subject-Aware Observability Evaluation](subject-aware-observability-evaluation.md).
 
 Route target ACK-gating also follows fail-closed defaults. Every selected

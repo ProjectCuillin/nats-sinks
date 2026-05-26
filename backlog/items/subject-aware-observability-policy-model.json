@@ -3,7 +3,7 @@
   "title": "[Feature]: Add subject-aware observability policy model",
   "area": "Metrics and observability",
   "priority": "P3 - backlog candidate",
-  "target_release": "unscheduled",
+  "target_release": "v0.4.2",
   "labels": ["observability", "security", "testing", "documentation"],
   "problem": "Operators may need subject-family visibility, but the current observability policy intentionally does not export subjects. Adding subject labels without a dedicated policy model would risk sensitive metadata disclosure and unbounded metric cardinality.",
   "proposal": "Add a disabled-by-default subject-aware observability policy block that supports default-deny behavior, explicit subject-family allow rules, stable operator-chosen labels, bounded maximum subject families, deterministic overflow behavior, and optional hash/redaction display modes. The policy should reject raw subject sharing unless an explicit reviewed mode allows it.",

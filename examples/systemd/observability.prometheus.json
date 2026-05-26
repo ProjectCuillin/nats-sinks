@@ -9,6 +9,15 @@
   "include_observations": false,
   "include_legacy": false,
   "subjects": [],
+  "subject_metrics": {
+    "enabled": false,
+    "default_action": "deny",
+    "max_subject_families": 20,
+    "overflow_action": "drop",
+    "overflow_label": "other",
+    "allow_raw_subjects": false,
+    "rules": []
+  },
   "prometheus": {
     "enabled": false,
     "output_file": "/var/lib/node_exporter/textfile_collector/nats_sinks.prom",

@@ -133,6 +133,15 @@ The generated policy is disabled:
       "share_subject_label": false
     }
   ],
+  "subject_metrics": {
+    "enabled": false,
+    "default_action": "deny",
+    "max_subject_families": 20,
+    "overflow_action": "drop",
+    "overflow_label": "other",
+    "allow_raw_subjects": false,
+    "rules": []
+  },
   "prometheus": {
     "enabled": false,
     "output_file": "/var/lib/node_exporter/textfile_collector/nats_sinks.prom",
@@ -154,11 +163,13 @@ The `subjects` section helps operators review which subject patterns the sink
 configuration knows about. Current Prometheus output does not include subject
 labels by default.
 
-Subject-aware Prometheus export has been evaluated as future work, but it is
-not enabled today. Do not add raw NATS subjects as Prometheus labels through
-local patches or ad hoc exporters. A future implementation needs explicit
-subject-family allow rules, stable low-cardinality labels, cardinality caps,
-and tests proving delivery behavior is unchanged. See
+The policy also supports a disabled-by-default `subject_metrics` block. That
+block lets operators model reviewed subject-family rules, stable labels,
+display modes, cardinality caps, and overflow behavior for future
+subject-aware connectors. The current Prometheus connector still emits only
+aggregate metrics; it does not add subject labels from `subject_metrics`. Do
+not add raw NATS subjects as Prometheus labels through local patches or ad hoc
+exporters. See
 [Subject-Aware Observability Evaluation](subject-aware-observability-evaluation.md).
 
 ## Enable A Minimal Export
@@ -188,6 +199,15 @@ metrics needed for operations:
   "include_observations": false,
   "include_legacy": false,
   "subjects": [],
+  "subject_metrics": {
+    "enabled": false,
+    "default_action": "deny",
+    "max_subject_families": 20,
+    "overflow_action": "drop",
+    "overflow_label": "other",
+    "allow_raw_subjects": false,
+    "rules": []
+  },
   "prometheus": {
     "enabled": true,
     "output_file": "/var/lib/node_exporter/textfile_collector/nats_sinks.prom",
