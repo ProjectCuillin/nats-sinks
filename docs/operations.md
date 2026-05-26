@@ -302,9 +302,10 @@ but the sink runner did not necessarily classify those messages as permanent
 sink failures. That distinction matters: advisories are server-side operational
 signals, while DLQ publication remains a deliberate sink-runner action.
 
-Ordered-consumer support has been evaluated for future inspection and analysis
-tooling. It is not enabled today and should not be used as a replacement for
-durable pull-consumer sink workers. Replay into sinks should use durable
+Ordered-consumer support is available only through the read-only
+`nats-sink inspect-ordered` command for bounded inspection and analysis. The
+command does not construct a sink, does not write to destinations, and does not
+ACK production durable work. Replay into sinks should still use durable
 pull-consumer semantics with commit-then-acknowledge. See
 [Ordered Consumer Evaluation](ordered-consumer-evaluation.md).
 

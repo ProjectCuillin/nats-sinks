@@ -74,8 +74,8 @@ used immediately:
   [Message Authenticity](https://nats-sinks.readthedocs.io/en/latest/message-authenticity/).
 - `nats-sink`, the CLI for validating JSON configuration, showing redacted
   effective config, testing sinks, running sink processes, and performing
-  bounded read-only Oracle lineage queries by allow-listed mission metadata or
-  message identity fields.
+  bounded read-only Oracle lineage queries and ordered-consumer stream
+  inspection without building or writing a sink.
 - `nats-sink-metrics`, a separate CLI for reading a local JSON metrics snapshot
   and rendering status as tables, JSON, JSONL, shell variables, metric names,
   or Prometheus text output.
@@ -796,6 +796,7 @@ nats-sink test-sink examples/named-multi-sink/config.json --sink-name file_audit
 nats-sink validate examples/oracle-jetstream/config.json
 nats-sink show-effective-config examples/oracle-jetstream/config.json
 nats-sink stream-plan examples/oracle-jetstream/config.json
+nats-sink inspect-ordered examples/file-basic/config.json --max-messages 5 --format jsonl
 nats-sink query-lineage examples/oracle-jetstream/config.json --field mission_id --value MISSION-ALPHA --dry-run
 nats-sink test-sink examples/oracle-jetstream/config.json
 nats-sink run examples/oracle-jetstream/config.json

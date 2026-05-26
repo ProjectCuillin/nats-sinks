@@ -14,8 +14,10 @@ The conclusion is intentionally strict:
 - replaying into sinks should use durable pull consumers with
   commit-then-acknowledge, not ordered inspection consumers.
 
-The current release documents the evaluation and creates follow-up backlog
-items. It does not yet add ordered-consumer runtime behavior.
+The current implementation adds a read-only `nats-sink inspect-ordered`
+command. It keeps ordered consumers in the inspection lane only: no sink is
+constructed, no destination write is attempted, and production durable sink
+workers continue to use the normal pull-consumer path.
 
 ## Background
 
@@ -84,6 +86,18 @@ This is operationally useful, but it is not production sink processing. It
 should be read-only by default, bounded, redacted, and explicitly named so
 users do not confuse it with durable replay or sink delivery.
 
+The CLI command is:
+
+```bash
+nats-sink inspect-ordered examples/file-basic/config.json \
+  --max-messages 5 \
+  --max-payload-bytes 1048576
+```
+
+It fails closed when the installed NATS Python client does not expose the
+`ordered_consumer` subscribe option. This prevents a misleading fallback to an
+ordinary push or durable pull subscription.
+
 ## Why Ordered Consumers Should Not Replace The Sink Runner
 
 Ordered consumers are not a substitute for the production runner because:
@@ -130,14 +144,10 @@ Durable replay-to-sinks should require:
 ## Python Client Consideration
 
 Ordered-consumer support depends on the NATS Python client exposing a stable
-public API for the feature. The current local `nats.py` API used by this
-repository exposes ordinary subscribe and pull-subscribe helpers, but a
-high-level ordered-consumer helper was not visible through the imported
-`JetStreamContext` API during this evaluation.
-
-For that reason, a future implementation should start with a compatibility
-layer. If ordered-consumer support is unavailable or ambiguous, the tool should
-fail closed instead of silently falling back to another delivery mode.
+public API for the feature. The implementation checks the active
+`JetStreamContext.subscribe` API for an `ordered_consumer` option before
+subscribing. If the option is unavailable or ambiguous, inspection stops with a
+configuration error instead of silently falling back to another delivery mode.
 
 ## Security Guidance
 
@@ -145,7 +155,7 @@ Inspection and replay are sensitive operations. Even without payload output,
 subjects, headers, stream names, sequence numbers, timestamps, priority,
 classification, labels, and mission metadata can reveal operational context.
 
-Future ordered-inspection tooling should:
+The ordered-inspection CLI:
 
 - redact payloads by default,
 - hide sensitive headers by default,
@@ -156,18 +166,28 @@ Future ordered-inspection tooling should:
   subject families,
 - make output clearly non-production and non-release evidence unless sanitized.
 
+Payload output is available only through `--include-payload`. When enabled,
+UTF-8 payloads are emitted as text and binary payloads are emitted as Base64.
+The command always includes a payload byte count and SHA-256 digest so
+operators can compare records without printing the body.
+
 ## Recommended Implementation Split
 
-The evaluation recommends three separate follow-up items:
+The evaluation recommended three separate follow-up items:
 
 1. Add ordered-consumer client compatibility and fail-closed capability checks.
 2. Add a read-only ordered-consumer inspection CLI.
 3. Add durable replay-to-sinks guidance and tooling design.
+
+The first two items are now implemented by `nats-sink inspect-ordered`. The
+third remains deliberately separate because replay into destinations has
+different delivery semantics and must stay on durable pull consumers.
 
 This split prevents a useful inspection feature from accidentally weakening
 the durable sink runtime.
 
 ## Current Status
 
-This release documents the evaluation and creates follow-up feature requests.
-No ordered-consumer runtime behavior is enabled yet.
+The read-only inspection CLI and fail-closed client compatibility check are
+implemented. Durable replay-to-sinks remains separate future work and should
+continue to use durable pull consumers with commit-then-acknowledge semantics.

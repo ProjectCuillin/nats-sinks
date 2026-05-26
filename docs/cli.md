@@ -37,6 +37,7 @@ nats-sink run config.json
 nats-sink validate config.json
 nats-sink show-effective-config config.json
 nats-sink test-sink config.json
+nats-sink inspect-ordered config.json --max-messages 5 --format jsonl
 nats-sink stream-plan config.json
 nats-sink query-lineage config.json --field mission_id --value MISSION-ALPHA --dry-run
 nats-sink replay-spool spool-config.json target-config.json --dry-run
@@ -121,6 +122,65 @@ nats-sink test-sink examples/named-multi-sink/config.json --all-named-sinks
 `--sink-name` is useful when the configuration contains Oracle targets and file
 targets but an operator only wants to check the local file audit path. Use
 `--all-named-sinks` only when opening every configured destination is expected.
+
+### `nats-sink inspect-ordered`
+
+Inspects JetStream messages through a NATS ordered consumer when the installed
+NATS Python client exposes ordered-consumer support. This is an inspection
+tool, not a sink worker: it does not build a sink, does not write to Oracle
+Database, Oracle MySQL, file, spool, fan-out, or plugin destinations, and does
+not ACK production durable work.
+
+Use it for bounded local troubleshooting when an operator needs to inspect a
+small in-order view of a subject without advancing the configured durable sink
+consumer:
+
+```bash
+nats-sink inspect-ordered examples/file-basic/config.json --max-messages 5
+```
+
+Example text output:
+
+```text
+Ordered inspection result
+inspection_only=true
+messages_seen=1
+payload_bytes_seen=24
+stopped_reason=timeout
+record stream_sequence=7 consumer_sequence=1 subject='orders.created' priority=null classification=null labels='' payload_bytes=24 payload_redacted=true
+```
+
+Payloads are redacted by default. For local troubleshooting files, write
+sanitized JSONL under an approved output root:
+
+```bash
+nats-sink inspect-ordered examples/file-basic/config.json \
+  --max-messages 5 \
+  --max-payload-bytes 1048576 \
+  --max-headers 32 \
+  --max-header-value-bytes 256 \
+  --output-root .local/nats-sinks/inspection \
+  --output orders.jsonl
+```
+
+Example JSONL record:
+
+```json
+{"inspection_only":true,"subject":"orders.created","stream":"ORDERS","consumer":"_ordered","stream_sequence":7,"consumer_sequence":1,"timestamp":null,"received_at":"2026-05-26T10:00:00Z","priority":null,"classification":null,"labels":[],"headers":{"Authorization":"<redacted>","X-Trace":"visible"},"payload":{"redacted":true,"bytes":24,"sha256":"..."}}
+```
+
+Use `--format jsonl` when shell tooling should consume the records from
+standard output. Use `--include-payload` only in controlled local environments
+where the payload is approved for display; binary payloads are encoded as
+Base64, and text payloads are emitted as UTF-8. The command enforces hard
+limits for message count, payload bytes, pending messages, pending bytes,
+timeouts, header count, header value length, and JSONL output paths before or
+during inspection. If ordered-consumer support is not available in the active
+client, the command exits with a configuration error rather than falling back
+to durable pull or ordinary push delivery.
+
+See [Ordered Consumer Evaluation](ordered-consumer-evaluation.md) for the
+design decision and replay boundaries.
 
 ### `nats-sink stream-plan`
 
