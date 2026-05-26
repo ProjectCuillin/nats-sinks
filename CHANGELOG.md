@@ -85,6 +85,12 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   connector entry-point sort lambda while preserving deterministic connector
   loading behavior.
 
+### Removed
+
+- Removed the standalone sink candidate research page from the public
+  documentation navigation so sink planning stays in managed backlog issues and
+  roadmap summaries.
+
 ## [0.4.1] - 2026-05-25
 
 ### Added
@@ -361,11 +367,9 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   custody, record-level AES encryption, deterministic idempotency-key files,
   priority-aware replay, the `nats-sink replay-spool` command, unit coverage,
   example configuration, and operator documentation.
-- Added a GoldenGate-inspired sink candidate research page and new managed
-  backlog items for missing Oracle-family, cloud, streaming, lakehouse,
-  database, messaging, and compatibility-profile connector candidates, using
-  Oracle GoldenGate public connectivity documentation as a planning reference
-  without claiming GoldenGate compatibility.
+- Added managed backlog items for missing Oracle-family, cloud, streaming,
+  lakehouse, database, messaging, and compatibility-profile connector
+  candidates.
 
 ### Changed
 

@@ -188,24 +188,22 @@ release, and closed only after the containing release is published.
   itself remains backlog work.
 - Oracle Berkeley DB, Oracle NoSQL Database, and OCI Streaming sink evaluations
   as first-party Oracle-family connector candidates.
-- GoldenGate-inspired sink candidate tracking for additional Oracle-family
-  connector opportunities such as Oracle Autonomous AI Lakehouse, Oracle AI
-  Data Platform, Oracle JSON document stores, OCI Cache Cluster, WebLogic JMS,
-  Oracle TimesTen, Oracle Spatial and Graph profiles, Oracle application
-  connector families, and OCI PostgreSQL profile decisions.
+- Additional Oracle-family connector evaluations such as Oracle Autonomous AI
+  Lakehouse, Oracle AI Data Platform, Oracle JSON document stores, OCI Cache
+  Cluster, WebLogic JMS, Oracle TimesTen, Oracle Spatial and Graph profiles,
+  Oracle application connector families, and OCI PostgreSQL profile decisions.
 - Palantir Foundry and Palantir Gotham sink evaluations with local fake-client
   or contract-harness testing before any live certification claim.
 - Elasticsearch or OpenSearch, Snowflake, BigQuery, Azure object storage,
   Kafka, MongoDB, Redis, and Cassandra-compatible sink evaluations at low
   priority so the project can learn from common Kafka-style connector patterns
   without prematurely broadening the production surface.
-- Additional external connector evaluations informed by GoldenGate target
-  coverage, including AWS streaming and warehouse targets, Azure Event Hubs and
-  Microsoft Fabric, Google Cloud Storage and Pub/Sub, Databricks, Apache
-  Iceberg and Hadoop ecosystem targets, JMS, JDBC, SQL Server, Db2, SAP HANA,
-  specialty warehouses, distributed SQL systems, legacy database families,
-  Solace, managed Kafka compatibility profiles, Cosmos DB profiles, and
-  MariaDB.
+- Additional external connector evaluations, including AWS streaming and
+  warehouse targets, Azure Event Hubs and Microsoft Fabric, Google Cloud
+  Storage and Pub/Sub, Databricks, Apache Iceberg and Hadoop ecosystem targets,
+  JMS, JDBC, SQL Server, Db2, SAP HANA, specialty warehouses, distributed SQL
+  systems, legacy database families, Solace, managed Kafka compatibility
+  profiles, Cosmos DB profiles, and MariaDB.
 - HTTP sink.
 - Public Docker image release publication automation, including signed image
   publication, container-specific provenance, and release-attached container
