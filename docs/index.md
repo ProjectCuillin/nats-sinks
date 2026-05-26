@@ -149,10 +149,15 @@ The current release provides the following production-ready foundation:
 - `nats_sinks.spool.SpoolSink`, a production-oriented encrypted edge spool sink
   for disconnected operation, bounded local custody, deterministic idempotency,
   priority-aware replay, and forwarding into a final destination sink.
-- A safe sink connector framework with first-party Oracle, file, and spool
-  connector descriptors, explicit registry resolution, public connector metadata, and
+- A safe sink connector framework with first-party Oracle Database,
+  Oracle MySQL, file, and spool connector descriptors, explicit registry
+  resolution, public connector metadata, and
   disabled-by-default allow-listed entry-point discovery for reviewed external
   connectors.
+- A named multi-sink configuration registry that lets one JSON file declare
+  several Oracle Database, Oracle MySQL, file, or spool sink instances for
+  route validation, redacted review, named health checks, and future fan-out
+  execution.
 - A disabled-by-default generic route-match policy selector that can match
   normalized subject, priority, classification, labels, and approved non-secret
   headers to logical target names and bounded ACK-gating policy for future
@@ -251,8 +256,12 @@ operations without hunting through a long flat list.
 
 - [Oracle Sink](oracle-sink.md): table design, write modes, staging-table
   merge mode, metadata columns, Autonomous Database, and transactions.
+- [Oracle MySQL Sink](mysql-sink.md): Oracle MySQL connection settings, TLS,
+  schema design, subject-to-table routing, and container-backed testing.
 - [File Sink](file-sink.md): atomic local files, deterministic filenames,
   duplicate handling, gzip compression, and handoff patterns.
+- [Named Sinks And Routing](named-sinks.md): declare several destination
+  instances in one configuration file and validate route target references.
 - [Edge Spool Sink](spool-sink.md): encrypted local custody for disconnected
   operation and controlled replay into a final destination sink.
 

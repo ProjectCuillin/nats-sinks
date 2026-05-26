@@ -132,6 +132,17 @@ def _raw_sink_config(config: AppConfig) -> dict[str, Any]:
     return config.sink.model_dump(mode="python")
 
 
+def _raw_named_sink_config(config: AppConfig, sink_name: str) -> dict[str, Any]:
+    try:
+        sink_config = config.sinks[sink_name]
+    except KeyError as exc:
+        available = ", ".join(sorted(config.sinks)) or "none configured"
+        raise ConfigurationError(
+            f"unknown named sink {sink_name!r}; available named sinks: {available}"
+        ) from exc
+    return sink_config.model_dump(mode="python")
+
+
 def _load_or_exit(config_path: Path) -> AppConfig:
     try:
         return load_config(config_path)
@@ -142,8 +153,70 @@ def _load_or_exit(config_path: Path) -> AppConfig:
 
 def _build_sink(config: AppConfig) -> Sink:
     raw_sink = _raw_sink_config(config)
+    return _build_sink_from_raw(config, raw_sink)
+
+
+def _build_sink_from_raw(config: AppConfig, raw_sink: dict[str, Any]) -> Sink:
     sink_type = str(raw_sink.get("type", ""))
     return _registry(config.plugins).create(sink_type, raw_sink)
+
+
+def _validate_sink_config(
+    config: AppConfig,
+    raw_sink: dict[str, Any],
+    *,
+    label: str,
+) -> None:
+    """Validate one sink instance through the registry without opening it."""
+
+    try:
+        _build_sink_from_raw(config, raw_sink)
+    except (ConfigurationError, PydanticValidationError) as exc:
+        raise ConfigurationError(f"{label}: {exc}") from exc
+
+
+def _validate_all_sink_configs(config: AppConfig) -> None:
+    """Validate the active sink and every named sink instance."""
+
+    _validate_sink_config(config, _raw_sink_config(config), label="sink")
+    for name, sink_config in config.sinks.items():
+        _validate_sink_config(
+            config,
+            sink_config.model_dump(mode="python"),
+            label=f"sinks.{name}",
+        )
+
+
+def _target_description(target: Any) -> str:
+    """Render one route target without exposing destination credentials."""
+
+    parts = [target.sink]
+    parts.append("required" if target.required else "optional")
+    if target.minimum_wait_ms is not None:
+        parts.append(f"minimum_wait_ms={target.minimum_wait_ms}")
+    if target.timeout_ms is not None:
+        parts.append(f"timeout_ms={target.timeout_ms}")
+    return " (".join((parts[0], ", ".join(parts[1:]))) + ")"
+
+
+def _print_named_sink_report(config: AppConfig) -> None:
+    """Print safe route-to-sink information for operator review."""
+
+    if config.sinks:
+        rendered = ", ".join(
+            f"{name} ({sink_config.type})" for name, sink_config in sorted(config.sinks.items())
+        )
+        typer.echo(f"Named sinks: {rendered}")
+    if config.routing.default_targets:
+        targets = ", ".join(
+            _target_description(target) for target in config.routing.default_targets
+        )
+        typer.echo(f"Default route targets: {targets}")
+    if config.routing.routes:
+        typer.echo("Route target references:")
+        for route in config.routing.routes:
+            targets = ", ".join(_target_description(target) for target in route.targets)
+            typer.echo(f"  - {route.name}: {targets}")
 
 
 def _oracle_sink_config(config: AppConfig) -> OracleSinkConfig:
@@ -258,13 +331,14 @@ def validate(config: Annotated[Path, typer.Argument(exists=True, readable=True)]
 
     loaded = _load_or_exit(config)
     try:
-        _build_sink(loaded)
+        _validate_all_sink_configs(loaded)
     except (ConfigurationError, PydanticValidationError) as exc:
         typer.echo(f"Configuration error: {exc}", err=True)
         raise typer.Exit(2) from exc
     typer.echo("Configuration is valid.")
     typer.echo(f"Active sink: {loaded.sink.type}")
     typer.echo("ACK policy: commit-then-acknowledge")
+    _print_named_sink_report(loaded)
 
 
 @app.command("show-effective-config")
@@ -531,25 +605,68 @@ def run(
 @app.command("test-sink")
 def test_sink(
     config: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    sink_name: Annotated[
+        str | None,
+        typer.Option(
+            "--sink-name",
+            help="Health-check one named sink from the top-level sinks object.",
+        ),
+    ] = None,
+    all_named_sinks: Annotated[
+        bool,
+        typer.Option(
+            "--all-named-sinks",
+            help="Health-check every named sink instance instead of only the active sink.",
+        ),
+    ] = False,
     dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
 ) -> None:
     """Start and health-check the configured sink."""
 
     loaded = _load_or_exit(config)
-    sink = _build_sink(loaded)
-    typer.echo(f"Active sink: {loaded.sink.type}")
+    if sink_name is not None and all_named_sinks:
+        typer.echo("Configuration error: use --sink-name or --all-named-sinks, not both", err=True)
+        raise typer.Exit(2)
+
+    try:
+        if all_named_sinks:
+            if not loaded.sinks:
+                raise ConfigurationError("no named sinks are configured")
+            selected_sinks = [
+                (name, sink_config.model_dump(mode="python"))
+                for name, sink_config in loaded.sinks.items()
+            ]
+            typer.echo(f"Named sinks selected: {', '.join(name for name, _ in selected_sinks)}")
+        elif sink_name is not None:
+            selected_sinks = [(sink_name, _raw_named_sink_config(loaded, sink_name))]
+            typer.echo(
+                f"Named sink selected: {sink_name} ({selected_sinks[0][1].get('type', 'unknown')})"
+            )
+        else:
+            selected_sinks = [("active", _raw_sink_config(loaded))]
+            typer.echo(f"Active sink: {loaded.sink.type}")
+    except ConfigurationError as exc:
+        typer.echo(f"Configuration error: {exc}", err=True)
+        raise typer.Exit(2) from exc
     typer.echo("ACK policy: commit-then-acknowledge")
     if dry_run:
         typer.echo("Dry run complete; sink was not opened.")
         return
 
-    async def _test() -> None:
+    async def _test_one(label: str, raw_sink: dict[str, Any]) -> None:
+        sink = _build_sink_from_raw(loaded, raw_sink)
         await sink.start()
         try:
             if isinstance(sink, HealthCheckableSink):
                 await sink.healthcheck()
         finally:
             await sink.stop()
+
+    async def _test() -> None:
+        for label, raw_sink in selected_sinks:
+            await _test_one(label, raw_sink)
+            if label != "active":
+                typer.echo(f"Sink test succeeded for {label}.")
 
     try:
         asyncio.run(_test())

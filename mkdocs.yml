@@ -22,6 +22,7 @@ nav:
       - Architecture: architecture.md
       - Commit Then ACK: commit-then-ack.md
       - Sink Framework: sink-framework.md
+      - Named Sinks And Routing: named-sinks.md
       - Idempotency: idempotency.md
       - Dead Letter Queues: dead-letter-queues.md
       - Message Sizing: message-sizing.md

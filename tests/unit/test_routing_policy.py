@@ -525,10 +525,14 @@ def test_route_policy_redacted_config_shows_effective_optional_defaults(tmp_path
                 "enabled": True,
                 "target_sink_types": {"oracle_a": "oracle"},
                 "routes": [
-                    {"name": "route_a", "match": {"subject": "mission.>"}, "targets": ["file_a"]}
+                    {
+                        "name": "route_a",
+                        "match": {"subject": "mission.>"},
+                        "targets": [{"sink": "file_a", "required": False}],
+                    }
                 ],
             },
-            "missing file_a",
+            "optional target policies require routing.target_sink_types",
         ),
         (
             {

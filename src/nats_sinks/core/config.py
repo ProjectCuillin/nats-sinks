@@ -171,6 +171,7 @@ ROUTING_SENSITIVE_HEADER_NAMES = frozenset(
         "x-auth-token",
     }
 )
+MAX_NAMED_SINKS = 64
 MAX_POLICY_LABEL_LENGTH = 128
 MAX_POLICY_PAYLOAD_BYTES = 1_073_741_824
 DEFAULT_SIZE_POLICY_MAX_PAYLOAD_BYTES = 16_777_216
@@ -424,6 +425,18 @@ def _normalize_routing_name(value: object, *, source: str) -> str:
     return rendered
 
 
+def _normalize_sink_instance_name(value: object, *, source: str) -> str:
+    """Validate one named sink instance used by route targets.
+
+    Named sinks intentionally share the route-target grammar. That keeps
+    operator-facing references stable across config validation, route reports,
+    and future fan-out execution without letting path-like or expression-like
+    values into the runtime model.
+    """
+
+    return _normalize_routing_name(value, source=source)
+
+
 def _normalize_route_target_configs(
     value: object,
     *,
@@ -459,6 +472,46 @@ def _normalize_route_target_configs(
         seen.add(target.sink)
         normalized.append(target)
     return tuple(normalized)
+
+
+def _raw_route_target_names(value: object) -> tuple[str, ...]:
+    """Extract target names from raw JSON routing config before Pydantic routing validation."""
+
+    raw_targets: list[object]
+    if value is None:
+        return ()
+    if isinstance(value, str):
+        raw_targets = [value]
+    elif isinstance(value, dict):
+        raw_targets = [value]
+    elif isinstance(value, list | tuple):
+        raw_targets = list(value)
+    else:
+        return ()
+
+    names: list[str] = []
+    for item in raw_targets:
+        if isinstance(item, str):
+            names.append(item)
+        elif isinstance(item, dict):
+            raw_name = item.get("sink")
+            if isinstance(raw_name, str):
+                names.append(raw_name)
+    return tuple(names)
+
+
+def _raw_routing_target_names(raw_routing: object) -> tuple[str, ...]:
+    """Collect raw target names for AppConfig-level named-sink enrichment."""
+
+    if not isinstance(raw_routing, dict):
+        return ()
+    names: list[str] = list(_raw_route_target_names(raw_routing.get("default_targets")))
+    raw_routes = raw_routing.get("routes")
+    if isinstance(raw_routes, list | tuple):
+        for route in raw_routes:
+            if isinstance(route, dict):
+                names.extend(_raw_route_target_names(route.get("targets")))
+    return tuple(names)
 
 
 def _validate_fanout_wait_ms(value: object, *, source: str, maximum: int) -> int | None:
@@ -2750,6 +2803,23 @@ class RoutingMatchPolicyConfig(BaseModel):
             targets.extend(route.targets)
         return tuple(targets)
 
+    def target_names(self) -> tuple[str, ...]:
+        """Return every logical sink target referenced by this policy.
+
+        The tuple is de-duplicated in first-seen order so CLI reports stay
+        stable while validation can compare the route policy with the named
+        sink registry.
+        """
+
+        ordered: list[str] = []
+        seen: set[str] = set()
+        for target in self._all_route_targets():
+            if target.sink in seen:
+                continue
+            seen.add(target.sink)
+            ordered.append(target.sink)
+        return tuple(ordered)
+
     def _apply_ack_gate_defaults(self) -> None:
         """Apply fail-closed ACK-gating defaults to optional route targets."""
 
@@ -2757,25 +2827,16 @@ class RoutingMatchPolicyConfig(BaseModel):
             return
 
         all_targets = self._all_route_targets()
-        referenced_target_names = {target.sink for target in all_targets}
-        if self.target_sink_types:
-            unknown = sorted(
-                name for name in referenced_target_names if name not in self.target_sink_types
-            )
-            if unknown:
-                joined = ", ".join(unknown)
-                raise ValueError(
-                    f"routing target_sink_types must include every routed target; missing {joined}"
-                )
-
         for target in all_targets:
             if target.required:
                 continue
             sink_type = self.target_sink_types.get(target.sink)
             if sink_type is None:
+                if target.minimum_wait_ms is not None and target.timeout_ms is not None:
+                    continue
                 raise ValueError(
                     "routing optional target policies require routing.target_sink_types "
-                    f"for target {target.sink!r}"
+                    f"for target {target.sink!r} when wait values are not explicit"
                 )
             defaults = FANOUT_OPTIONAL_ACK_DEFAULTS[sink_type]
             if target.minimum_wait_ms is None:
@@ -2792,6 +2853,21 @@ class SinkConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     type: str
+
+    @field_validator("type")
+    @classmethod
+    def validate_type(cls, value: str) -> str:
+        """Normalize sink connector names before registry lookup."""
+
+        if not isinstance(value, str):
+            raise ValueError("sink.type must be a string")
+        rendered = value.strip().lower()
+        if not SINK_PLUGIN_NAME_RE.fullmatch(rendered):
+            raise ValueError(
+                "sink.type must start with a lowercase letter and contain only lowercase "
+                "letters, digits, '_' or '-'"
+            )
+        return rendered
 
 
 class SinkPluginConfig(BaseModel):
@@ -2873,7 +2949,114 @@ class AppConfig(BaseModel):
     pre_sink_policy: PreSinkPolicyConfig = Field(default_factory=PreSinkPolicyConfig)
     routing: RoutingMatchPolicyConfig = Field(default_factory=RoutingMatchPolicyConfig)
     plugins: SinkPluginConfig = Field(default_factory=SinkPluginConfig)
+    sinks: dict[str, SinkConfig] = Field(default_factory=dict)
     sink: SinkConfig
+
+    @model_validator(mode="before")
+    @classmethod
+    def enrich_routing_with_named_sink_types(cls, value: object) -> object:
+        """Use named sink definitions as the ACK-gate sink-type source when present.
+
+        The routing policy is validated before the full AppConfig instance exists.
+        This pre-validation pass fills missing `routing.target_sink_types` entries
+        from top-level `sinks` so optional fan-out wait defaults can be applied
+        without asking operators to duplicate sink type names in two sections.
+        """
+
+        if not isinstance(value, dict):
+            return value
+        raw_sinks = value.get("sinks")
+        raw_routing = value.get("routing")
+        if not isinstance(raw_sinks, dict) or not isinstance(raw_routing, dict):
+            return value
+
+        named_sink_types: dict[str, str] = {}
+        for raw_name, raw_sink in raw_sinks.items():
+            if not isinstance(raw_name, str) or not isinstance(raw_sink, dict):
+                continue
+            raw_type = raw_sink.get("type")
+            if not isinstance(raw_type, str):
+                continue
+            sink_type = raw_type.strip().lower()
+            if sink_type in FANOUT_ACK_GATE_SINK_TYPES:
+                named_sink_types[raw_name] = sink_type
+
+        if not named_sink_types:
+            return value
+
+        prepared = dict(value)
+        prepared_routing = dict(raw_routing)
+        raw_target_sink_types = prepared_routing.get("target_sink_types")
+        target_sink_types = (
+            dict(raw_target_sink_types) if isinstance(raw_target_sink_types, dict) else {}
+        )
+        for target_name in _raw_routing_target_names(prepared_routing):
+            target_sink_types.setdefault(target_name, named_sink_types.get(target_name))
+        prepared_routing["target_sink_types"] = {
+            name: sink_type
+            for name, sink_type in target_sink_types.items()
+            if sink_type is not None
+        }
+        prepared["routing"] = prepared_routing
+        return prepared
+
+    @field_validator("sinks", mode="before")
+    @classmethod
+    def normalize_named_sinks(cls, value: object) -> dict[str, object]:
+        """Validate the named sink registry without opening any destination."""
+
+        if value is None:
+            return {}
+        if not isinstance(value, dict):
+            raise ValueError("sinks must be an object of named sink configurations")
+        if len(value) > MAX_NAMED_SINKS:
+            raise ValueError(f"sinks supports at most {MAX_NAMED_SINKS} named instances")
+
+        normalized: dict[str, object] = {}
+        seen: set[str] = set()
+        for raw_name, raw_config in value.items():
+            name = _normalize_sink_instance_name(raw_name, source="sinks name")
+            if name in seen:
+                raise ValueError(f"sinks contains duplicate named sink {name!r}")
+            if not isinstance(raw_config, dict):
+                raise ValueError(f"sinks.{name} must be an object")
+            seen.add(name)
+            normalized[name] = raw_config
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_named_sink_references(self) -> AppConfig:
+        """Ensure route targets reference declared sink instances when a registry exists."""
+
+        if not self.sinks:
+            return self
+
+        referenced_targets = set(self.routing.target_names())
+        unknown = sorted(target for target in referenced_targets if target not in self.sinks)
+        if unknown:
+            joined = ", ".join(unknown)
+            raise ValueError(f"routing targets reference unknown named sink(s): {joined}")
+
+        unknown_type_entries = sorted(
+            target for target in self.routing.target_sink_types if target not in self.sinks
+        )
+        if unknown_type_entries:
+            joined = ", ".join(unknown_type_entries)
+            raise ValueError(
+                f"routing.target_sink_types references unknown named sink(s): {joined}"
+            )
+
+        mismatches: list[str] = []
+        for target, sink_type in self.routing.target_sink_types.items():
+            configured_type = self.sinks[target].type
+            if configured_type != sink_type:
+                mismatches.append(
+                    f"{target} configured as {configured_type}, routed as {sink_type}"
+                )
+        if mismatches:
+            joined = "; ".join(mismatches)
+            raise ValueError(f"routing.target_sink_types must match named sink types: {joined}")
+        return self
 
 
 ENV_OVERRIDES: dict[str, tuple[str, ...]] = {
@@ -3028,7 +3211,19 @@ def redact_mapping(value: Any) -> Any:
     if isinstance(value, BaseModel):
         value = value.model_dump(mode="json")
     if isinstance(value, dict):
-        return {key: redact_mapping(_redact_value(str(key), item)) for key, item in value.items()}
+        rendered: dict[Any, Any] = {}
+        for key, item in value.items():
+            key_text = str(key)
+            if key_text == "sinks" and isinstance(item, dict):
+                rendered[key] = {
+                    sink_name: redact_mapping(sink_config)
+                    for sink_name, sink_config in item.items()
+                }
+            elif key_text == "target_sink_types" and isinstance(item, dict):
+                rendered[key] = dict(item)
+            else:
+                rendered[key] = redact_mapping(_redact_value(key_text, item))
+        return rendered
     if isinstance(value, list):
         return [redact_mapping(item) for item in value]
     return value

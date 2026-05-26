@@ -20,7 +20,8 @@ The example contains two routes for the same subject family and labels:
 - `nato_unclass_sensor_audit` matches the same subject and label family with
   `classification=NATO UNCLASS`. It selects only `oracle_unclass`.
 
-The actual Oracle and file sink instances behind those logical names are
-configured by the future fan-out delivery feature. Until that feature is
-enabled, this example is a validation and documentation fixture for the shared
-policy model.
+The actual Oracle and file sink instances behind those logical names can be
+declared in the top-level `sinks` registry, as shown in
+`examples/named-multi-sink/config.json`. Until fan-out delivery is enabled,
+this example remains a validation and documentation fixture for the shared
+route-selection model.

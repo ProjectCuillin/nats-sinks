@@ -25,6 +25,13 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   applied and visible in redacted effective config, and the new core ACK-gate
   helper records optional success, failure, or timeout without weakening the
   commit-then-ACK rule for required targets.
+- Added named multi-sink instance configuration for issue #136. Config files
+  can now declare a top-level `sinks` registry with multiple named Oracle
+  Database, Oracle MySQL, file, or spool instances while preserving the
+  existing single active `sink` runtime path. The CLI validates every named
+  sink, reports route-to-target references, redacts secrets without hiding
+  route target names such as `oracle_secret`, and can health-check one named
+  sink with `--sink-name` or all named sinks with `--all-named-sinks`.
 - Added a local-only post-release PyPI artifact validation harness for issue
   #252. The script builds a short-lived Oracle Linux 9 slim validation
   container, installs `nats-sinks` from PyPI instead of the local checkout,
