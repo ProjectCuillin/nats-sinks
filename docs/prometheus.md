@@ -170,7 +170,9 @@ derive labels from raw subjects. It renders subject-family labels only when a
 separate reviewed aggregation step has attached prepared `labeled_metrics` rows
 to the local metrics snapshot. Do not add raw NATS subjects as Prometheus
 labels through local patches or ad hoc exporters. See
-[Subject-Aware Observability Evaluation](subject-aware-observability-evaluation.md).
+[Subject-Aware Observability Evaluation](subject-aware-observability-evaluation.md)
+and the
+[Subject-Aware Observability Runbook](subject-aware-observability-runbook.md).
 
 ## Enable A Minimal Export
 
@@ -242,6 +244,12 @@ nats_sinks_messages_written_total{subject_family="orders"} 128
 ```
 
 The example does not expose concrete subjects such as `orders.created`.
+Run the subject-aware observability certification tests before changing the
+policy or connector behavior:
+
+```bash
+python -m pytest tests/unit/test_subject_observability_certification.py -q
+```
 
 ## Export Freshness Metrics
 
@@ -745,7 +753,8 @@ Before enabling Prometheus export, confirm:
 - `include_observations` is enabled only if timing values are safe to share,
 - freshness metrics are enabled only when event-age and clock-skew timing is
   approved for the deployment,
-- subject labels are not exported,
+- raw subject labels are not exported, and subject-family labels require
+  prepared `labeled_metrics` rows plus approved `subject_metrics` policy,
 - textfile directory permissions allow the observability service to write and
   node_exporter to read,
 - the metrics snapshot and textfile are not tracked in git,
@@ -762,7 +771,7 @@ The Prometheus connector does not export:
 - message payloads,
 - decrypted payloads,
 - NATS headers,
-- subject labels,
+- raw subject labels,
 - message IDs,
 - stream sequence values,
 - Oracle table names,

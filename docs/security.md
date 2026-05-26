@@ -153,7 +153,10 @@ Use this baseline for code review and future releases:
   Subject-family observability must use the disabled-by-default
   `subject_metrics` policy and prepared `labeled_metrics` rows. Exporters must
   not derive labels directly from raw NATS subjects, payloads, message IDs,
-  classifications, file paths, table names, or credentials.
+  classifications, file paths, table names, or credentials. Run the
+  subject-aware certification tests and follow the
+  [Subject-Aware Observability Runbook](subject-aware-observability-runbook.md)
+  before enabling a subject-family sharing boundary.
 - Treat local spool directories as protected custody locations. Spool records
   are encrypted by default, but operators must still restrict filesystem
   permissions, exclude spool paths from source control, monitor disk usage,
@@ -380,14 +383,16 @@ events, callback exceptions, and queue saturation must be logged without
 payloads, credentials, private subject families, or sensitive metadata values.
 See [Push Consumer Evaluation](push-consumer-evaluation.md).
 
-Subject-aware observability has a disabled-by-default policy model, but current
-aggregate exporters do not emit subject labels. NATS subjects can reveal
-mission, tenant, platform, environment, or routing structure, and per-subject
-metrics can create high-cardinality series. Any connector that implements
-subject-family export must use explicit allow lists, stable low-cardinality
-labels, caps, deterministic overflow behavior, and fail-closed export decisions
-without changing ACK behavior. See
-[Subject-Aware Observability Evaluation](subject-aware-observability-evaluation.md).
+Subject-aware observability has a disabled-by-default policy model, bounded
+prepared `labeled_metrics` rows, and a focused certification suite. NATS
+subjects can reveal mission, tenant, platform, environment, or routing
+structure, and per-subject metrics can create high-cardinality series. Any
+connector that renders subject-family export must use explicit allow lists,
+stable low-cardinality labels, caps, deterministic overflow behavior, and
+fail-closed export decisions without changing ACK behavior. See
+[Subject-Aware Observability Evaluation](subject-aware-observability-evaluation.md)
+and the
+[Subject-Aware Observability Runbook](subject-aware-observability-runbook.md).
 
 Route target ACK-gating also follows fail-closed defaults. Every selected
 target is required unless configuration explicitly marks it optional. Optional

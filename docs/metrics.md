@@ -94,7 +94,9 @@ aggregation step attaches prepared `labeled_metrics` rows. That extension is
 disabled unless the `subject_metrics` policy model explicitly allows a subject
 family, gives it a stable label, and keeps it within cardinality bounds. Raw
 subjects are not exported by default. See
-[Subject-Aware Observability Evaluation](subject-aware-observability-evaluation.md).
+[Subject-Aware Observability Evaluation](subject-aware-observability-evaluation.md)
+and the
+[Subject-Aware Observability Runbook](subject-aware-observability-runbook.md).
 
 ## Enabling The Snapshot Recorder
 
@@ -179,6 +181,15 @@ values before any connector can render them.
 The snapshot should not contain secrets or payload bodies. It can still reveal
 operational tempo, failure rates, and batch sizes, so store it in a local path
 with appropriate filesystem permissions.
+
+The subject-aware certification helper under `nats_sinks.testing` verifies that
+prepared rows remain disabled by default, low-cardinality, sanitized, and
+delivery-neutral. Run the focused certification suite before enabling or
+changing subject-family metrics:
+
+```bash
+python -m pytest tests/unit/test_subject_observability_certification.py -q
+```
 
 ## Event Freshness And Staleness Metrics
 

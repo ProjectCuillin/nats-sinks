@@ -1,9 +1,11 @@
 # Subject-Aware Observability Evaluation
 
 This page records the evaluation for bounded subject-aware observability
-policies in `nats-sinks`. It is written for operators who want insight into
-subject-family behavior without accidentally publishing sensitive operational
-metadata or creating unbounded metric cardinality.
+policies in `nats-sinks`. It is paired with the
+[Subject-Aware Observability Runbook](subject-aware-observability-runbook.md)
+and is written for operators who want insight into subject-family behavior
+without accidentally publishing sensitive operational metadata or creating
+unbounded metric cardinality.
 
 The conclusion is intentionally conservative:
 
@@ -15,10 +17,10 @@ The conclusion is intentionally conservative:
 - any subject-aware feature must be bounded, fail closed, and unable to
   influence ACK behavior, sink writes, retries, or DLQ handling.
 
-The current release adds the policy model and a bounded prepared metric-series
-format. Subject-labeled export remains disabled unless an operator enables a
-reviewed policy and a safe aggregation path emits prepared `labeled_metrics`
-rows.
+The current release adds the policy model, a bounded prepared metric-series
+format, and certification tests with runbook guidance. Subject-labeled export
+remains disabled unless an operator enables a reviewed policy and a safe
+aggregation path emits prepared `labeled_metrics` rows.
 
 ## Background
 
@@ -60,7 +62,7 @@ The current observability design is intentionally low-cardinality:
 flowchart LR
     Runner[Sink runner] --> Snapshot[Local metrics snapshot]
     Snapshot --> Policy[Disabled observability policy]
-    Policy --> Exporter[Prometheus or future connector]
+    Policy --> Exporter[Observability connector]
     Exporter -->|default| None[No external subject sharing]
 ```
 
@@ -182,7 +184,17 @@ reviewable as separate changes.
 
 ## Current Status
 
-This release adds the disabled-by-default subject-aware policy model and the
-bounded `labeled_metrics` snapshot extension. Subject-family rows are prepared
-from approved policy decisions and stable family labels rather than from raw
-subject strings. Existing aggregate counters remain unchanged.
+This release adds the disabled-by-default subject-aware policy model, the
+bounded `labeled_metrics` snapshot extension, and a focused certification
+suite with operator runbook guidance. Subject-family rows are prepared from
+approved policy decisions and stable family labels rather than from raw subject
+strings. The certification tests prove disabled defaults, allow and deny
+handling, malformed policy rejection, cardinality caps, sanitized connector
+output, and delivery non-interference. Existing aggregate counters remain
+unchanged.
+
+Run the focused release gate with:
+
+```bash
+python -m pytest tests/unit/test_subject_observability_certification.py -q
+```

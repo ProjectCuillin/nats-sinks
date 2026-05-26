@@ -355,6 +355,10 @@ possible. See [Observability](observability.md) for the sharing model, the
 details, [OpenTelemetry OTLP Integration](otlp.md) for collector export,
 [Syslog Bridge](syslog.md) for bounded RFC 5424-style message export, and
 [Running nats-sink As A Service](service-deployment.md) for the service model.
+When subject-family metrics are considered, follow the
+[Subject-Aware Observability Runbook](subject-aware-observability-runbook.md)
+before enabling `subject_metrics`; the default operating posture remains
+aggregate-only metrics.
 
 NATS server monitoring endpoints such as `/jsz` and `/healthz` should be
 monitored through your NATS or platform monitoring stack, or through the

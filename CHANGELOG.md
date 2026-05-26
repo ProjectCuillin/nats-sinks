@@ -66,6 +66,12 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   deterministic overflow handling, and let Prometheus, OTLP-backed profiles,
   Splunk HEC, StatsD, and syslog render only low-cardinality approved family
   labels instead of raw subjects.
+- Added subject-aware observability certification tests and runbook guidance
+  for issue #127. The new reusable `nats_sinks.testing` helpers use synthetic
+  subjects to prove disabled-by-default behavior, allow and deny handling,
+  malformed policy rejection, cardinality caps, sanitized connector and
+  `nats-sink-metrics` output, and delivery non-interference before
+  subject-family metrics are enabled.
 - Added a local-only post-release PyPI artifact validation harness for issue
   #252. The script builds a short-lived Oracle Linux 9 slim validation
   container, installs `nats-sinks` from PyPI instead of the local checkout,

@@ -65,6 +65,7 @@ nav:
       - Syslog Bridge: syslog.md
       - NATS Server Monitoring: nats-server-monitoring.md
       - Subject-Aware Observability Evaluation: subject-aware-observability-evaluation.md
+      - Subject-Aware Observability Runbook: subject-aware-observability-runbook.md
       - Future Connectors: observability-connectors.md
   - Deployment:
       - Operations: operations.md
