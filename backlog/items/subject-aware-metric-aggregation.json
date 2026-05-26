@@ -3,7 +3,7 @@
   "title": "[Feature]: Add bounded subject-family metric aggregation",
   "area": "Metrics and observability",
   "priority": "P3 - backlog candidate",
-  "target_release": "unscheduled",
+  "target_release": "v0.4.2",
   "labels": ["observability", "security", "testing"],
   "problem": "The current metrics snapshot stores aggregate metric values only. A future subject-aware policy needs a safe runtime representation of subject-family metrics that does not export raw subjects or create unbounded time series.",
   "proposal": "Add bounded subject-family metric aggregation after the subject-aware policy model exists. The aggregation should map actual subjects to approved low-cardinality family labels, count only allowed metrics, keep overflow behavior deterministic, and keep the existing aggregate counters unchanged. Exporters should read the prepared subject-family series instead of deriving labels directly from raw message subjects.",

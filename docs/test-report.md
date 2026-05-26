@@ -14,28 +14,29 @@ generated database passwords, or full raw logs from live systems.
 | Field | Value |
 | --- | --- |
 | Overall result | Pass |
-| Report generated | 2026-05-26 issue `#128` validation for upcoming `v0.4.2` development |
+| Report generated | 2026-05-26 issue `#126` validation for upcoming `v0.4.2` development |
 | Project version | `0.4.1` package metadata with `v0.4.2` development changes |
 | Python version | 3.12.4 |
-| Git revision checked | Branch `issue-128-subject-aware-observability` based on `release-v0.4.2` |
+| Git revision checked | Branch `issue-126-subject-aware-metric-aggregation` based on `release-v0.4.2` |
 | Live NATS details | Environment-gated live tests skipped unless explicitly enabled |
 | Live Oracle Database details | Environment-gated live tests skipped unless explicitly enabled |
 | Live Oracle MySQL details | Environment-gated live tests skipped unless explicitly enabled |
 
-This refresh covered the disabled-by-default subject-aware observability policy
-model for issue `#128` and a full local regression cycle for the current
-development branch. The new tests prove that `subject_metrics` defaults to no
-export, uses default-deny subject-family rules, validates operator labels and
-display modes, enforces cardinality caps, rejects raw subject sharing unless
-explicitly reviewed, and leaves current aggregate Prometheus output unchanged.
+This refresh covered bounded subject-family metric aggregation for issue `#126`
+and a full local regression cycle for the current development branch. The new
+tests prove that subject-family counters are built only from reviewed
+observability policy rules, that raw subjects are not exported by default, that
+overflow behavior remains deterministic and low-cardinality, and that existing
+aggregate metrics remain unchanged.
 
 ```mermaid
 flowchart LR
-    Config[Observability policy] --> SubjectMetrics[subject_metrics]
-    SubjectMetrics --> Decision[Fail-closed evaluator]
-    Snapshot[Aggregate metrics snapshot] --> Exporter[Current exporters]
-    Decision --> Future[Future subject-aware connectors]
-    Exporter --> Report[Sanitized latest report]
+    Messages[Validated envelopes] --> Policy[Subject observability policy]
+    Policy --> Aggregator[Subject-family aggregation]
+    Aggregator --> Snapshot[labeled_metrics snapshot rows]
+    Snapshot --> Exporters[Prometheus / OTLP / StatsD / syslog / Splunk HEC]
+    Snapshot --> CLI[nats-sink-metrics]
+    Exporters --> Report[Sanitized latest report]
     Docs[Documentation builds] --> Report
 ```
 
@@ -43,13 +44,13 @@ flowchart LR
 
 | Check | Result |
 | --- | --- |
-| Ruff format | Pass, `226 files already formatted` |
+| Ruff format | Pass, `228 files already formatted` |
 | Ruff lint | Pass |
-| Mypy | Pass, no issues in `90` source files |
+| Mypy | Pass, no issues in `91` source files |
 | Version metadata consistency | Pass for `0.4.1` |
 | Dependency manifests | Pass, manifest files up to date |
-| Backlog item validation | Pass, `142` backlog items validated |
-| Bug report validation | Pass, `87` bug report items validated |
+| Backlog item validation | Pass |
+| Bug report validation | Pass |
 | PyPI-facing Markdown links | Pass |
 | Secret scan | Pass, no high-confidence secret material found |
 | Bandit | Pass with reviewed `nosec` annotations for validated SQL identifier builders |
@@ -62,40 +63,39 @@ flowchart LR
 
 | Test Area | Command | Result |
 | --- | --- | --- |
-| Subject-aware observability focused tests | `python -m pytest tests/unit/test_observability_policy.py tests/unit/test_observability_cli.py tests/unit/test_prometheus_observability.py tests/unit/test_public_api.py -q` | Pass, `72 passed` |
-| Observability connector regression tests | `python -m pytest tests/unit/test_observability_policy.py tests/unit/test_observability_cli.py tests/unit/test_prometheus_observability.py tests/unit/test_otlp_observability.py tests/unit/test_elastic_observability.py tests/unit/test_grafana_alloy_observability.py tests/unit/test_splunk_hec_observability.py tests/unit/test_statsd_observability.py tests/unit/test_syslog_observability.py tests/unit/test_public_api.py -q` | Pass, `136 passed` |
-| Main repository test suite | `scripts/check.sh` | Pass, `1004 passed, 10 skipped` |
+| Subject-family observability focused tests | `python -m pytest tests/unit/test_subject_family_observability.py tests/unit/test_metrics.py tests/unit/test_metrics_cli.py tests/unit/test_observability_policy.py tests/unit/test_observability_cli.py tests/unit/test_prometheus_observability.py tests/unit/test_otlp_observability.py tests/unit/test_elastic_observability.py tests/unit/test_grafana_alloy_observability.py tests/unit/test_splunk_hec_observability.py tests/unit/test_statsd_observability.py tests/unit/test_syslog_observability.py tests/unit/test_public_api.py -q` | Pass, `175 passed` |
+| Main repository test suite | `scripts/check.sh` | Pass, `1013 passed, 10 skipped` |
 | Encryption and sink contract subset | `scripts/check.sh` | Pass, `123 passed` |
 | Sink capability subset | `scripts/check.sh` | Pass, `117 passed` |
 | Documentation builds | `scripts/check.sh` | Pass for Read the Docs and GitHub Pages MkDocs builds |
 | Example validation | `nats-sink validate examples/named-multi-sink/config.json` through unit/CLI coverage | Pass |
 
 The skipped tests are the existing environment-gated live NATS, Oracle
-Database, and Oracle MySQL integration tests. Issue `#128` adds policy
-validation and a fail-closed evaluator only. It does not change message
-delivery, ACK behavior, retries, DLQ behavior, sink writes, or current aggregate
-metric export.
+Database, and Oracle MySQL integration tests. Issue `#126` adds bounded
+observability aggregation only. It does not change message delivery, ACK
+behavior, retries, DLQ behavior, sink writes, or idempotency behavior.
 
-## Subject-Aware Observability Evidence
+## Subject-Family Aggregation Evidence
 
 The new unit coverage verifies:
 
-- subject-aware export remains disabled by default;
-- subject-family policy uses default-deny evaluation;
-- allow rules require stable operator labels;
-- deny rules override allow rules;
-- invalid subject patterns and runtime subjects fail closed;
-- invalid, high-risk, or credential-like labels are rejected;
-- `max_subject_families` caps allowed subject families;
-- overflow actions are limited to `drop`, `aggregate_other`, and `fail_closed`;
-- display modes are limited to `label`, `redacted`, `hash`, and `raw`;
-- `raw` display mode requires `allow_raw_subjects=true`;
-- current Prometheus output remains aggregate-only and does not add subject
-  labels from `subject_metrics`.
+- aggregate metrics remain available and unchanged;
+- subject-family metrics are emitted only for approved policy rules;
+- raw subjects are not exported by default;
+- denied subjects do not create metric rows;
+- overflow can aggregate to a reviewed fallback label, drop the overflowed
+  rows, or fail closed;
+- snapshot rows are bounded, typed, and validated before rendering;
+- Prometheus, OTLP, StatsD, syslog, Splunk HEC, and `nats-sink-metrics` consume
+  prepared `labeled_metrics` rows instead of deriving labels from raw subjects;
+- metric labels are restricted to stable operator-approved labels such as
+  `subject_family`;
+- subject-family aggregation remains observational only and does not affect
+  delivery semantics.
 
 ## Issues Found During Validation
 
-No new product bugs were found during issue `#128` validation.
+No new product bugs were found during issue `#126` validation.
 
 ## Documentation Evidence
 
@@ -121,6 +121,6 @@ The following public documentation was updated and built successfully:
 - [Named Multi-Sink Example](https://github.com/ProjectCuillin/nats-sinks/blob/main/examples/named-multi-sink/config.json)
 - [Documentation Home](index.md)
 
-The changelog, backlog metadata, public API contract tests, observability policy
-tests, connector regression tests, and subject-aware observability documentation
-were also updated for issue `#128`.
+The changelog, backlog metadata, public API contract tests, metrics CLI tests,
+observability connector tests, and subject-aware observability documentation
+were also updated for issue `#126`.

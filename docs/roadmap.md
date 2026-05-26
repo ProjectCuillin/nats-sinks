@@ -39,6 +39,9 @@
   table, JSON, JSONL, shell, names, and Prometheus text output.
 - Observability core with disabled-by-default sharing policies and a
   `nats-sink-observe` CLI for safe connector operation.
+- Subject-aware observability policy model and bounded subject-family metric
+  aggregation through prepared `labeled_metrics` snapshot rows, with raw
+  subject export disabled by default.
 - Policy-controlled Prometheus textfile connector for node_exporter, designed
   to run as a separate Linux service from the sink worker.
 - Optional native Prometheus HTTP scrape endpoint, designed as a separate
@@ -203,8 +206,6 @@
 - Optional `InProgress` heartbeat during long-running sink writes.
 - InProgress metrics and an operator runbook for distinguishing slow active
   work from durable success.
-- Bounded subject-family metric aggregation without raw subject export by
-  default.
 - Subject-aware observability certification tests and operator runbook.
 ## Phase 3
 

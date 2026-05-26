@@ -35,7 +35,11 @@ from typing import Literal, Protocol, cast
 DEFAULT_METRIC_NAMESPACE = "nats_sinks"
 METRICS_SNAPSHOT_SCHEMA = "nats_sinks.metrics.snapshot.v1"
 MAX_METRICS_SNAPSHOT_BYTES = 1_048_576
+MAX_LABELED_METRIC_ROWS = 1_000
+MAX_METRIC_ROW_LABELS = 4
 METRIC_NAMESPACE_RE = re.compile(r"^[A-Za-z_:][A-Za-z0-9_:]*$")
+METRIC_LABEL_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
+METRIC_LABEL_VALUE_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.-]{0,63}$")
 
 
 MetricKind = Literal["counter", "histogram", "gauge"]
@@ -794,12 +798,18 @@ class MetricRow:
     value: float
     description: str = ""
     stat: str | None = None
+    labels: dict[str, str] = field(default_factory=dict)
 
     @property
     def shell_name(self) -> str:
         """Return an environment-variable-safe representation of the row name."""
 
         rendered = self.name.replace(".", "_")
+        if self.labels:
+            label_suffix = "_".join(
+                f"{name}_{value}" for name, value in sorted(self.labels.items())
+            )
+            rendered = f"{rendered}_{label_suffix}"
         return re.sub(r"[^A-Za-z0-9_]", "_", rendered).upper()
 
 
@@ -1068,7 +1078,66 @@ def load_metrics_snapshot(path: str | os.PathLike[str]) -> dict[str, object]:
     for section in ("counters", "gauges", "observations"):
         if not isinstance(payload.get(section), dict):
             raise ValueError(f"metrics snapshot {section!r} section must be an object")
+    _validate_labeled_metric_rows(payload.get("labeled_metrics", []))
     return cast(dict[str, object], payload)
+
+
+def _validate_metric_row_labels(raw_labels: object) -> dict[str, str]:
+    """Validate bounded labels carried by prepared observability series."""
+
+    if not isinstance(raw_labels, dict):
+        raise ValueError("labeled metric row labels must be an object")
+    if len(raw_labels) > MAX_METRIC_ROW_LABELS:
+        raise ValueError(f"labeled metric rows may contain at most {MAX_METRIC_ROW_LABELS} labels")
+    labels: dict[str, str] = {}
+    for raw_name, raw_value in raw_labels.items():
+        if not isinstance(raw_name, str) or not METRIC_LABEL_NAME_RE.fullmatch(raw_name):
+            raise ValueError("labeled metric label names must be bounded identifiers")
+        if not isinstance(raw_value, str) or not METRIC_LABEL_VALUE_RE.fullmatch(raw_value):
+            raise ValueError("labeled metric label values must be bounded identifiers")
+        labels[raw_name] = raw_value
+    return labels
+
+
+def _validate_labeled_metric_rows(raw_rows: object) -> list[MetricRow]:
+    """Validate optional prepared labeled metric rows from a metrics snapshot."""
+
+    if raw_rows in (None, []):
+        return []
+    if not isinstance(raw_rows, list):
+        raise ValueError("metrics snapshot 'labeled_metrics' section must be a list")
+    if len(raw_rows) > MAX_LABELED_METRIC_ROWS:
+        raise ValueError(
+            f"metrics snapshot may contain at most {MAX_LABELED_METRIC_ROWS} labeled rows"
+        )
+
+    rows: list[MetricRow] = []
+    for raw_row in raw_rows:
+        if not isinstance(raw_row, dict):
+            raise ValueError("labeled metric rows must be objects")
+        name = raw_row.get("name")
+        kind = raw_row.get("kind")
+        if not isinstance(name, str) or name not in METRIC_SPEC_BY_NAME:
+            raise ValueError("labeled metric row names must be known nats-sinks metrics")
+        spec = METRIC_SPEC_BY_NAME[name]
+        if kind not in {"counter", "gauge"}:
+            raise ValueError("labeled metric rows may only be counters or gauges")
+        if kind != spec.kind:
+            raise ValueError("labeled metric row kind must match the metric specification")
+        value = _coerce_metric_number(raw_row.get("value"), name=name)
+        if value < 0 and kind == "counter":
+            raise ValueError("labeled metric counters must not be negative")
+        labels = _validate_metric_row_labels(raw_row.get("labels", {}))
+        rows.append(
+            MetricRow(
+                kind=cast(MetricRowKind, kind),
+                name=name,
+                value=value,
+                description=spec.description,
+                labels=labels,
+            )
+        )
+    return rows
 
 
 def metric_rows_from_snapshot(
@@ -1126,6 +1195,7 @@ def metric_rows_from_snapshot(
                     stat=stat,
                 )
             )
+    rows.extend(_validate_labeled_metric_rows(snapshot.get("labeled_metrics", [])))
     return rows
 
 

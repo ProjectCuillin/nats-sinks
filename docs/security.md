@@ -150,6 +150,10 @@ Use this baseline for code review and future releases:
   Fan-out metrics must remain aggregate by default: do not export route names,
   child sink names, classification values, labels, file paths, or destination
   identifiers without a reviewed allow-list policy.
+  Subject-family observability must use the disabled-by-default
+  `subject_metrics` policy and prepared `labeled_metrics` rows. Exporters must
+  not derive labels directly from raw NATS subjects, payloads, message IDs,
+  classifications, file paths, table names, or credentials.
 - Treat local spool directories as protected custody locations. Spool records
   are encrypted by default, but operators must still restrict filesystem
   permissions, exclude spool paths from source control, monitor disk usage,

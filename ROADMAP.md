@@ -54,6 +54,8 @@ release, and closed only after the containing release is published.
 - Subject-aware observability policy model with disabled-by-default
   subject-family rules, stable labels, cardinality caps, overflow behavior,
   and raw-subject sharing disabled unless explicitly reviewed.
+- Bounded subject-family metric aggregation through prepared `labeled_metrics`
+  snapshot rows, with raw subject export disabled by default.
 - Policy-controlled Prometheus textfile connector for node_exporter, designed
   to run as a separate Linux service from the sink worker.
 - Optional native Prometheus HTTP scrape endpoint, designed as a separate
@@ -227,8 +229,6 @@ release, and closed only after the containing release is published.
 - Optional `InProgress` heartbeat during long-running sink writes.
 - InProgress metrics and an operator runbook for distinguishing slow active
   work from durable success.
-- Bounded subject-family metric aggregation without raw subject export by
-  default.
 - Subject-aware observability certification tests and operator runbook.
 ## Phase 3
 

@@ -186,6 +186,8 @@ def build_syslog_message(
         "namespace": policy.namespace,
         "profile": SYSLOG_PROFILE_NAME,
     }
+    for key, value in sorted(row.labels.items()):
+        params[f"label_{key}"] = value
     structured_params = " ".join(
         f'{key}="{_escape_structured_data_value(value)}"' for key, value in params.items()
     )

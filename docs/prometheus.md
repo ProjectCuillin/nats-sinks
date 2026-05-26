@@ -165,11 +165,11 @@ labels by default.
 
 The policy also supports a disabled-by-default `subject_metrics` block. That
 block lets operators model reviewed subject-family rules, stable labels,
-display modes, cardinality caps, and overflow behavior for future
-subject-aware connectors. The current Prometheus connector still emits only
-aggregate metrics; it does not add subject labels from `subject_metrics`. Do
-not add raw NATS subjects as Prometheus labels through local patches or ad hoc
-exporters. See
+display modes, cardinality caps, and overflow behavior. Prometheus does not
+derive labels from raw subjects. It renders subject-family labels only when a
+separate reviewed aggregation step has attached prepared `labeled_metrics` rows
+to the local metrics snapshot. Do not add raw NATS subjects as Prometheus
+labels through local patches or ad hoc exporters. See
 [Subject-Aware Observability Evaluation](subject-aware-observability-evaluation.md).
 
 ## Enable A Minimal Export
@@ -231,12 +231,26 @@ connection-event counters. It does not export timings, legacy aliases, subject
 names, message IDs, table names, file paths, classification values, labels, or
 payload contents.
 
+When a reviewed subject-family aggregation step has attached prepared
+`labeled_metrics` rows, Prometheus renders only the approved family label:
+
+```text
+# HELP nats_sinks_messages_written_total Messages reported durable by the destination sink.
+# TYPE nats_sinks_messages_written_total counter
+nats_sinks_messages_written_total 256
+nats_sinks_messages_written_total{subject_family="orders"} 128
+```
+
+The example does not expose concrete subjects such as `orders.created`.
+
 ## Export Freshness Metrics
 
 Freshness metrics can show delayed feeds, stale replay, missing publisher
 timestamps, malformed `Nats-Time-Stamp` headers, and positive source clock skew.
-They are aggregate metrics only; the Prometheus connector does not add subject,
-source, sensor, sink, table, priority, classification, or label dimensions.
+They are aggregate metrics only unless a separate reviewed subject-family
+aggregation step attaches prepared `labeled_metrics` rows. The Prometheus
+connector does not add source, sensor, sink, table, priority, classification,
+payload, or raw subject dimensions.
 
 Enable the freshness counters and observations only when that timing evidence is
 approved for the deployment:
