@@ -139,17 +139,72 @@ class OrderedInspectionResult:
         }
 
 
-def ordered_consumer_supported(jetstream: object) -> bool:
-    """Return true when the active client exposes `ordered_consumer` subscribe support."""
+@dataclass(frozen=True, slots=True)
+class OrderedConsumerCapabilityResult:
+    """Compatibility result for the public NATS ordered-consumer API boundary."""
 
+    supported: bool
+    checked_api: str
+    reason: str
+
+
+def detect_ordered_consumer_capability(jetstream: object) -> OrderedConsumerCapabilityResult:
+    """Detect ordered-consumer support through documented public client attributes.
+
+    The inspection command must fail closed when support is missing or
+    ambiguous. Returning a structured result keeps that decision explicit while
+    avoiding private NATS client APIs, dynamic imports, or exception text that
+    may include environment-specific details.
+    """
+
+    checked_api = "JetStreamContext.subscribe"
     subscribe = getattr(jetstream, "subscribe", None)
-    if subscribe is None or not callable(subscribe):
-        return False
+    if subscribe is None:
+        return OrderedConsumerCapabilityResult(
+            supported=False,
+            checked_api=checked_api,
+            reason="JetStream context does not expose subscribe",
+        )
+    if not callable(subscribe):
+        return OrderedConsumerCapabilityResult(
+            supported=False,
+            checked_api=checked_api,
+            reason="JetStream subscribe attribute is not callable",
+        )
     try:
         signature = inspect.signature(subscribe)
     except (TypeError, ValueError):
-        return False
-    return "ordered_consumer" in signature.parameters
+        return OrderedConsumerCapabilityResult(
+            supported=False,
+            checked_api=checked_api,
+            reason="JetStream subscribe signature is unavailable",
+        )
+    if "ordered_consumer" not in signature.parameters:
+        return OrderedConsumerCapabilityResult(
+            supported=False,
+            checked_api=checked_api,
+            reason="JetStream subscribe API does not expose ordered_consumer",
+        )
+    return OrderedConsumerCapabilityResult(
+        supported=True,
+        checked_api=checked_api,
+        reason="JetStream subscribe API exposes ordered_consumer",
+    )
+
+
+def ordered_consumer_supported(jetstream: object) -> bool:
+    """Return true when the active client exposes `ordered_consumer` subscribe support."""
+
+    return detect_ordered_consumer_capability(jetstream).supported
+
+
+def ordered_consumer_capability_error(capability: OrderedConsumerCapabilityResult) -> str:
+    """Render a sanitized fail-closed message for ordered-inspection callers."""
+
+    return (
+        "ordered-consumer inspection requires a nats-py JetStream subscribe API "
+        f"with an ordered_consumer option; {capability.reason}"
+    )
 
 
 def validate_ordered_inspection_options(options: OrderedInspectionOptions) -> None:
@@ -247,11 +302,9 @@ async def collect_ordered_inspection_records(
 
     inspection_options = options or OrderedInspectionOptions()
     validate_ordered_inspection_options(inspection_options)
-    if not ordered_consumer_supported(jetstream):
-        raise ConfigurationError(
-            "ordered-consumer inspection requires a nats-py JetStream subscribe API "
-            "with an ordered_consumer option"
-        )
+    capability = detect_ordered_consumer_capability(jetstream)
+    if not capability.supported:
+        raise ConfigurationError(ordered_consumer_capability_error(capability))
 
     jetstream_client = cast(Any, jetstream)
     subscription = await jetstream_client.subscribe(

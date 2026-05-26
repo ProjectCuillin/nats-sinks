@@ -177,7 +177,10 @@ limits for message count, payload bytes, pending messages, pending bytes,
 timeouts, header count, header value length, and JSONL output paths before or
 during inspection. If ordered-consumer support is not available in the active
 client, the command exits with a configuration error rather than falling back
-to durable pull or ordinary push delivery.
+to durable pull or ordinary push delivery. The compatibility check uses the
+public `JetStreamContext.subscribe` API and reports only a short sanitized
+reason, such as a missing `ordered_consumer` option or an unreadable client
+signature.
 
 See [Ordered Consumer Evaluation](ordered-consumer-evaluation.md) for the
 design decision and replay boundaries.

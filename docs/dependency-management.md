@@ -110,6 +110,27 @@ cloud authentication library, add it behind an optional extra, document why the
 dependency is required, update the generated manifest files, and include tests
 proving the base install still works without that optional connector.
 
+## NATS Python Client Capability Checks
+
+The runtime package depends on `nats-py` through the version range declared in
+`pyproject.toml`. Some NATS client capabilities are not only a package-version
+question; they also depend on which public client API the installed library
+exposes. Ordered-consumer inspection is handled this way.
+
+`nats-sink inspect-ordered` checks the active JetStream context before it
+subscribes. It requires a callable public `JetStreamContext.subscribe` API with
+an `ordered_consumer` keyword. If that support is missing, partial, or
+ambiguous, the command fails closed with a short sanitized configuration error.
+It does not fall back to ordinary push delivery, durable pull delivery, private
+client attributes, or dynamic imports.
+
+This check is deliberately limited to explicit inspection tooling. It does not
+change the production durable pull runner, sink construction, commit
+semantics, ACK ordering, DLQ handling, or idempotency behavior. Operators who
+pin dependencies for controlled environments should validate
+`nats-sink inspect-ordered` in their own runtime image if they intend to use
+ordered inspection during incident response or lab analysis.
+
 ## Security Notes
 
 Generated dependency manifests must never include secrets, private indexes with
