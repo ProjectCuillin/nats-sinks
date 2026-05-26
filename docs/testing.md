@@ -240,6 +240,43 @@ See [Oracle MySQL Sink](mysql-sink.md) for sink configuration and
 container security model, runtime sequence, capability exception, and
 troubleshooting guidance.
 
+## Local PyPI Artifact Container Validation
+
+After a release has been published to PyPI, maintainers can run a local
+post-release validation in a clean Oracle Linux 9 slim based container:
+
+```bash
+python scripts/run-pypi-release-container-validation.py --version 0.4.1
+```
+
+This check is intentionally not part of GitHub Actions. It validates public
+registry state after publication by installing `nats-sinks` from PyPI inside a
+short-lived container and confirming that the package does not import from the
+local checkout. It then checks CLI help, version output, Python imports,
+configuration validation, FileSink smoke behavior, metrics snapshot behavior,
+and observability CLI startup.
+
+Use `latest` to check the newest public package:
+
+```bash
+python scripts/run-pypi-release-container-validation.py --version latest
+```
+
+Use optional extras only when they can be validated without private services:
+
+```bash
+python scripts/run-pypi-release-container-validation.py \
+  --version 0.4.1 \
+  --extras crypto,mysql
+```
+
+The script removes the validation container, temporary image, and generated
+validator files by default. It writes sanitized reports under
+`.local/pypi-release-validation/reports/`, which is ignored by Git. If the
+check finds a failure, create a sanitized GitHub bug report before starting the
+fix, attach the relevant local report summary, and follow the normal
+test-driven bug workflow.
+
 ## Local WebSocket End-To-End Test
 
 WebSocket transport has two layers of testing:

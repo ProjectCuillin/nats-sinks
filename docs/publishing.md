@@ -374,21 +374,29 @@ GitHub release workflow: GitHub Actions validates the release candidate and
 publishes the artifacts, while the local post-release check validates that the
 published PyPI artifact can be installed and used from a clean environment.
 
-The planned maintained harness will run in a short-lived container, install
-`nats-sinks` from PyPI, verify that the local checkout is not imported, and run
-artifact-level smoke checks for CLI help, version reporting, Python imports,
-configuration validation, file sink behavior, and metrics CLI behavior. It
-will support checking the latest released version or an explicit version, and
-it will write only sanitized local evidence.
-
-Until that harness exists, a maintainer can run a manual clean-container check:
+Run the maintained local validation harness:
 
 ```bash
-docker run --rm -it container-registry.oracle.com/os/oraclelinux:9-slim bash -lc '\
-  microdnf install -y --setopt=install_weak_deps=0 python3.11 python3.11-pip && \
-  python3.11 -m pip install --no-cache-dir nats-sinks && \
-  nats-sink --help >/tmp/nats-sink-help && \
-  python3.11 -c "from nats_sinks import JetStreamSinkRunner; from nats_sinks.file import FileSink; print(\"ok\")"'
+python scripts/run-pypi-release-container-validation.py --version 0.4.1
+```
+
+Use the package version without the leading `v` when checking the PyPI
+artifact. Git tags use `v0.4.1`; PyPI package versions use `0.4.1`.
+
+The script starts from an Oracle Linux 9 slim validation image, installs
+`nats-sinks` from PyPI, verifies that the local checkout is not imported, and
+runs artifact-level smoke checks for CLI help, version reporting, Python
+imports, configuration validation, FileSink behavior, metrics CLI behavior,
+and observability CLI startup. It supports checking the latest released
+version or an explicit version, and it writes only sanitized local evidence.
+
+Optional extras can be included when they can be validated without private
+infrastructure:
+
+```bash
+python scripts/run-pypi-release-container-validation.py \
+  --version 0.4.1 \
+  --extras crypto,mysql
 ```
 
 Do not run this as a default GitHub Action. It depends on public registry state
