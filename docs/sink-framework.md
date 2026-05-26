@@ -50,8 +50,8 @@ flowchart TB
     Protocol --> Future
     Runner --> DLQ
     Runner --> Metrics
-    Registry --> Oracle
-    Registry --> File
+Registry --> Oracle
+Registry --> File
 ```
 
 The core layer owns NATS connectivity, JetStream consumer behavior, batching,
@@ -60,6 +60,38 @@ metrics hooks. It also owns destination-neutral per-message transformations,
 including priority/classification/labels metadata resolution and optional payload
 encryption. Destination modules own destination writes and destination commit
 behavior only.
+
+## Named Sink Registry
+
+The top-level `sinks` object is the shared configuration registry for multiple
+destination instances. It does not write messages by itself and it does not
+change ACK behavior. Its purpose is to give routing policy, CLI validation,
+redacted config output, health checks, and future fan-out execution one stable
+set of names for destination instances.
+
+```json
+{
+  "sinks": {
+    "oracle_secret": {
+      "type": "oracle",
+      "dsn": "tcps://adb.example.invalid/secret",
+      "user": "app_secret",
+      "password_env": "ORACLE_SECRET_PASSWORD",
+      "table": "NATS_SECRET_EVENTS"
+    },
+    "file_audit": {
+      "type": "file",
+      "directory": "/var/lib/nats-sinks/audit",
+      "fsync": true
+    }
+  }
+}
+```
+
+Route policy references these names, not destination details. This keeps
+generic matching independent from Oracle tables, Oracle connection sources,
+file-system paths, and future sink-specific options. See
+[Named Sinks And Routing](named-sinks.md) for the full operator guide.
 
 ## Generic Contract
 

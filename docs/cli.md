@@ -65,6 +65,28 @@ to connect to NATS or the configured destination.
 nats-sink validate examples/file-basic/config.json
 ```
 
+When the configuration contains a top-level `sinks` registry, `validate` also
+checks every named sink and reports which route names reference which target
+names. The report is intentionally safe to paste into tickets or release
+evidence because it includes target names and sink types, not passwords,
+connection credentials, or payloads.
+
+```bash
+nats-sink validate examples/named-multi-sink/config.json
+```
+
+Example output:
+
+```text
+Configuration is valid.
+Active sink: file
+ACK policy: commit-then-acknowledge
+Named sinks: file_audit (file), oracle_secret (oracle), oracle_unclass (oracle)
+Route target references:
+  - nato_secret_sensor_audit: oracle_secret (required), file_audit (optional, minimum_wait_ms=250, timeout_ms=1000)
+  - nato_unclass_sensor_audit: oracle_unclass (required)
+```
+
 ### `nats-sink show-effective-config`
 
 Displays the validated configuration as redacted JSON. Use this when you want
@@ -87,6 +109,18 @@ Starts the configured sink and runs a health check when the sink supports it. Th
 ```bash
 nats-sink test-sink examples/file-basic/config.json
 ```
+
+Named sink health checks use the same sink-specific validation and startup path
+as the active sink:
+
+```bash
+nats-sink test-sink examples/named-multi-sink/config.json --sink-name file_audit
+nats-sink test-sink examples/named-multi-sink/config.json --all-named-sinks
+```
+
+`--sink-name` is useful when the configuration contains Oracle targets and file
+targets but an operator only wants to check the local file audit path. Use
+`--all-named-sinks` only when opening every configured destination is expected.
 
 ### `nats-sink stream-plan`
 

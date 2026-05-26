@@ -129,6 +129,10 @@ used immediately:
   connectors, stable `SinkConnector` metadata, explicit `SinkRegistry` resolution, and
   disabled-by-default allow-listed entry-point discovery for reviewed external
   connectors.
+- A named multi-sink configuration registry that lets one JSON file declare
+  several Oracle Database, Oracle MySQL, file, or spool sink instances for
+  route validation, redacted review, named health checks, and future fan-out
+  execution.
 - Basic metrics counters and timing observations for fetched, prepared,
   written, ACKed, NAKed, failed, DLQ, sink write, ACK error, active batch, and
   event freshness behavior. Freshness metrics cover event age at receive and
@@ -377,7 +381,11 @@ behavior without needing database access.
 Runtime configuration is JSON-only. The package uses the standard-library JSON parser for application configuration.
 The generic `nats`, `delivery`, `dead_letter`, `logging`, and `metrics`
 sections are shared by all sinks. The `sink` object selects the destination and
-contains destination-specific fields documented on each sink page.
+contains destination-specific fields documented on each sink page. The optional
+`sinks` object declares additional named destination instances, such as
+`oracle_secret`, `oracle_unclass`, or `file_audit`, so route policy can refer to
+stable names while Oracle connection details and file paths stay in sink
+definitions.
 
 ```json
 {
@@ -776,6 +784,8 @@ nats-sink --help
 nats-sink validate examples/file-basic/config.json
 nats-sink test-sink examples/file-basic/config.json
 nats-sink validate examples/routing-match-policy/config.json
+nats-sink validate examples/named-multi-sink/config.json
+nats-sink test-sink examples/named-multi-sink/config.json --sink-name file_audit
 nats-sink validate examples/oracle-jetstream/config.json
 nats-sink show-effective-config examples/oracle-jetstream/config.json
 nats-sink stream-plan examples/oracle-jetstream/config.json
@@ -898,6 +908,10 @@ Destination-specific details are split into dedicated pages:
   local file output, atomic write behavior, deterministic file names, duplicate
   policies, gzip compression, filesystem safety, and file-specific performance
   guidance.
+- [Named Sinks And Routing](https://nats-sinks.readthedocs.io/en/latest/named-sinks/)
+  covers declaring several destination instances in one configuration file,
+  validating route target references, redacted review output, and named sink
+  health checks.
 - [Edge Spool Sink](https://nats-sinks.readthedocs.io/en/latest/spool-sink/)
   covers encrypted local custody for disconnected operation, bounded spool
   directories, deterministic duplicate handling, priority-aware replay, and

@@ -14,6 +14,9 @@ where it will write.
 The minimal example uses the local file sink because it does not require a
 database or credentials. Oracle Database and Oracle MySQL use the same generic
 runtime sections and add destination-specific fields inside the `sink` object.
+When a deployment needs to prepare several destinations for routing and future
+fan-out, it can also declare additional named instances in the top-level
+`sinks` object.
 
 ```json
 {
@@ -263,6 +266,20 @@ runtime sections and add destination-specific fields inside the `sink` object.
     "allowed_sinks": [],
     "require_production_ready": true
   },
+  "sinks": {
+    "oracle_secret": {
+      "type": "oracle",
+      "dsn": "tcps://adb.example.invalid/secret",
+      "user": "app_secret",
+      "password_env": "ORACLE_SECRET_PASSWORD",
+      "table": "NATS_SECRET_EVENTS"
+    },
+    "file_audit": {
+      "type": "file",
+      "directory": ".local/file-audit/events",
+      "fsync": false
+    }
+  },
   "sink": {
     "type": "file",
     "directory": ".local/file-sink/events",
@@ -310,6 +327,7 @@ The top-level sections are:
 | `size_policy` | no | Optional destination-neutral payload, header, metadata, label, record, and batch-size bounds evaluated before any sink write. Disabled by default. |
 | `pre_sink_policy` | no | Optional fail-closed validation gate evaluated after normalization and core payload transformation, but before any sink write. |
 | `plugins` | no | Optional allow-listed discovery for externally installed sink connectors. Disabled by default. Built-in Oracle, file, and spool sinks do not need this section. |
+| `sinks` | no | Optional registry of named sink instances used by route validation, redacted output, named health checks, and future multi-sink fan-out. See [Named Sinks And Routing](named-sinks.md). |
 | `sink` | yes | Destination-specific sink configuration. `sink.type` chooses the sink implementation. |
 
 The only supported `delivery.ack_policy` value is `after_sink_commit`, which
@@ -345,6 +363,59 @@ flowchart TD
     Core --> Sink[Validate selected sink configuration]
     Sink --> Run[Run service or print redacted effective config]
 ```
+
+## Named Sink Registry
+
+The optional top-level `sinks` object declares additional named destination
+instances. Each child object uses the same sink-specific fields as a normal
+top-level `sink`. For example, an Oracle child still configures `dsn`, `user`,
+`password_env`, `table`, and Oracle write policy, while a file child configures
+`directory`, `filename_strategy`, `duplicate_policy`, compression, and fsync
+behavior.
+
+Named sinks are separate from route matching. The route policy contains match
+rules and target names only; destination-specific configuration stays in
+`sinks`. This makes review easier in environments where operational routes,
+classification boundaries, Oracle Database schemas, local file handoff paths,
+and secret sources are owned by different teams.
+
+```json
+{
+  "sinks": {
+    "oracle_secret": {
+      "type": "oracle",
+      "dsn": "tcps://adb.example.invalid/secret",
+      "user": "app_secret",
+      "password_env": "ORACLE_SECRET_PASSWORD",
+      "table": "NATS_SECRET_EVENTS"
+    },
+    "oracle_unclass": {
+      "type": "oracle",
+      "dsn": "tcps://adb.example.invalid/unclass",
+      "user": "app_unclass",
+      "password_env": "ORACLE_UNCLASS_PASSWORD",
+      "table": "NATS_UNCLASS_EVENTS"
+    },
+    "file_audit": {
+      "type": "file",
+      "directory": ".local/file-audit/events",
+      "fsync": false
+    }
+  }
+}
+```
+
+`nats-sink validate` checks the active `sink`, every named sink under `sinks`,
+and every route target reference when named sinks are configured. It also prints
+a safe route-to-target report. `nats-sink show-effective-config` includes the
+named registry with password, token, credential, and key material redacted. Use
+`nats-sink test-sink CONFIG --sink-name NAME` to health-check one named sink or
+`--all-named-sinks` to check every named sink where opening those destinations
+is appropriate.
+
+See [Named Sinks And Routing](named-sinks.md) for complete examples covering
+two Oracle backends, two Oracle tables in one backend, Oracle plus file, two
+file destinations, route target validation, and CLI output.
 
 ## Core Configuration Reference
 
