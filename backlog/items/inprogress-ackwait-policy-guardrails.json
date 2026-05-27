@@ -3,7 +3,7 @@
   "title": "[Feature]: Add AckWait and BackOff guardrails for InProgress support",
   "area": "Core runtime and delivery semantics",
   "priority": "P3 - backlog candidate",
-  "target_release": "unscheduled",
+  "target_release": "v0.4.2",
   "labels": ["nats", "security", "testing"],
   "problem": "InProgress extends the server-side acknowledgement timer by the consumer AckWait duration, but nats-sinks does not currently own or inspect the full consumer policy. Without guardrails, an operator could configure a heartbeat interval that is too long, incompatible with BackOff behavior, or unsafe for the existing durable consumer.",
   "proposal": "Add startup validation and documentation that ties InProgress configuration to consumer AckWait and BackOff policy. The first production implementation should fail closed when InProgress is enabled but the runner cannot determine a safe interval, cannot verify the durable consumer policy, or detects that the configured interval is not meaningfully shorter than the effective AckWait window. This work should align with the broader JetStream consumer policy configuration backlog item.",
@@ -18,10 +18,14 @@
     "Tests cover missing consumer policy, unsafe interval, BackOff interaction, safe policy, and redacted errors."
   ],
   "tests": "Add unit tests with mocked JetStream consumer info responses and configuration validation tests for safe and unsafe timing combinations. Run scripts/check.sh.",
-  "documentation": "Update in-progress evaluation, JetStream topology, configuration, operations, NATS permissions, roadmap, and changelog documentation.",
+  "documentation": "Update in-progress evaluation, JetStream topology, configuration, operations, NATS permissions, roadmap, latest test report, and changelog documentation.",
   "closeout": "Close after the release containing InProgress AckWait and BackOff guardrails is published. Include release tag, tests, docs, and limitations.",
   "relationships": {
-    "related": ["#28", "backlog:jetstream-consumer-policy-configuration"],
-    "blocks": ["backlog:inprogress-heartbeat-during-sink-writes"]
+    "related": [
+      "#28",
+      "backlog:inprogress-heartbeat-during-sink-writes",
+      "backlog:jetstream-consumer-policy-configuration"
+    ],
+    "blocks": []
   }
 }

@@ -12,13 +12,19 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Added
 
+- Added effective consumer-policy guardrails for optional JetStream
+  `InProgress` heartbeats for issue #117. The runner now allows `bind_only`
+  deployments to verify AckWait from the existing durable consumer before
+  fetching, re-checks created or reconciled consumers when progress heartbeats
+  are enabled, rejects effective BackOff policies until BackOff-aware timing is
+  supported, and fails closed when durable consumer timing cannot be verified.
 - Added optional JetStream `InProgress` heartbeats for issue #118. The new
   `delivery.in_progress` configuration is disabled by default, starts only
   while `sink.write_batch(...)` is active, stops before final ACK, NAK, Term,
   retry, DLQ, cancellation, or shutdown completion, and fails closed unless
-  `consumer_management.ack_wait_seconds` is explicitly configured with a
-  heartbeat interval below 80% of AckWait. BackOff-based consumer timing remains
-  rejected until richer guardrails are implemented.
+  safe effective AckWait timing is verified with a heartbeat interval below 80%
+  of AckWait. BackOff-based consumer timing remains rejected until explicit
+  BackOff-aware heartbeat support is implemented.
 - Added stable InProgress observability metrics and an operator runbook for
   issue #119. The new metric contract covers progress attempts, successful
   progress signals, failed progress signals, maximum-heartbeat exits, active

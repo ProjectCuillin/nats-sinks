@@ -14,12 +14,13 @@ The conclusion is deliberately cautious:
 - it requires guardrails around the effective consumer `AckWait` and `BackOff`
   policy before it should be considered production-ready.
 
-The current release provides the first runtime option: a disabled-by-default
-heartbeat around active sink writes. It is intentionally conservative. It
-requires explicit `consumer_management.ack_wait_seconds`, rejects
-`consumer_management.backoff_seconds`, and requires the heartbeat interval to be
-below 80% of AckWait. Richer administrative inspection and BackOff-aware
-guardrails remain separate backlog work.
+The current release provides a disabled-by-default heartbeat around active sink
+writes. It is intentionally conservative. It requires either explicit
+`consumer_management.ack_wait_seconds` or a `bind_only` durable consumer whose
+effective AckWait can be inspected before fetch. Configured and effective
+BackOff policies are rejected until BackOff-aware heartbeat support is
+implemented. The heartbeat interval must be below 80% of the verified AckWait
+window.
 
 ## Background
 
@@ -178,10 +179,10 @@ The evaluation split this work into three implementation items:
 2. Add optional InProgress heartbeat during long sink writes.
 3. Add InProgress metrics and an operator runbook.
 
-The current release implements the runtime heartbeat, stable metrics, and the
-operator runbook with a first fail-closed AckWait-only guardrail. BackOff-aware
-support and richer consumer-policy inspection remain separate work because
-BackOff changes the effective acknowledgement wait window.
+The current release implements the runtime heartbeat, stable metrics, operator
+runbook, and effective consumer-policy guardrails. BackOff-aware heartbeat
+support remains separate work because BackOff changes the effective
+acknowledgement wait window.
 
 ## Configuration
 
@@ -201,8 +202,8 @@ BackOff changes the effective acknowledgement wait window.
 }
 ```
 
-To enable it safely, set an explicit AckWait policy and use an interval below
-80% of that window:
+To enable it safely with managed consumers, set an explicit AckWait policy and
+use an interval below 80% of that window:
 
 ```json
 {
@@ -225,13 +226,34 @@ Validation rules:
 | Field | Safety rule |
 | --- | --- |
 | `enabled` | Default `false`; explicit opt-in required. |
-| `interval_ms` | Must be positive, bounded, and below 80% of configured AckWait when enabled. |
+| `interval_ms` | Must be positive, bounded, and below 80% of the verified effective AckWait when enabled. |
 | `max_heartbeats` | Must be positive and bounded to prevent unbounded heartbeats. |
 | `shutdown_timeout_ms` | Must be bounded so final ACK or failure handling cannot wait forever on heartbeat shutdown. |
 
-The current implementation rejects `consumer_management.backoff_seconds` when
-the heartbeat is enabled. Operators using BackOff should leave runtime
-heartbeats disabled until BackOff-aware guardrails are implemented.
+For least-privilege bind-only deployments, operators can omit local
+`ack_wait_seconds` only when the runtime identity can inspect the existing
+durable consumer:
+
+```json
+{
+  "consumer_management": {
+    "mode": "bind_only"
+  },
+  "delivery": {
+    "in_progress": {
+      "enabled": true,
+      "interval_ms": 5000,
+      "max_heartbeats": 12
+    }
+  }
+}
+```
+
+In that mode, startup reads the effective `ack_wait` and `backoff` values from
+the durable consumer before subscribing. Missing, unreadable, non-positive, or
+too-small AckWait fails closed. Any effective BackOff sequence also fails
+closed. Operators using BackOff should leave runtime heartbeats disabled until
+BackOff-aware support is explicitly implemented.
 
 ## Metrics Direction
 
@@ -269,6 +291,7 @@ DLQ according to policy.
 
 ## Current Status
 
-This release includes optional runtime heartbeat support with conservative
-AckWait-only startup validation, metrics, documentation, and tests. BackOff
-guardrails and richer consumer-policy inspection remain follow-up work.
+This release includes optional runtime heartbeat support with effective
+AckWait-only startup validation, bind-only consumer-policy inspection, BackOff
+rejection, metrics, documentation, and tests. BackOff-aware heartbeat timing
+remains follow-up work.

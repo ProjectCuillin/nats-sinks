@@ -356,9 +356,10 @@ JetStream acknowledgement wait window while work is still running, but it never
 turns work into a success. The runner starts it only during
 `sink.write_batch(...)` and stops it before final ACK, NAK, Term, DLQ, retry,
 or shutdown completion. It currently requires an explicit
-`consumer_management.ack_wait_seconds` value, rejects
-`consumer_management.backoff_seconds`, and requires the heartbeat interval to be
-below 80% of the AckWait window. See
+`consumer_management.ack_wait_seconds` value or a `bind_only` durable consumer
+whose effective AckWait can be verified at startup. It rejects configured or
+effective BackOff policies and requires the heartbeat interval to be below 80%
+of the verified AckWait window. See
 [InProgress Evaluation](in-progress-evaluation.md).
 
 ```mermaid
@@ -813,17 +814,22 @@ long-running sink writes. Use it only when sink writes can legitimately exceed
 the configured consumer AckWait window and idempotency is already in place.
 
 The feature is disabled by default. When enabled, startup fails closed unless
-the runner can verify safe timing from local configuration:
+the runner can verify safe timing from either local configuration or an
+existing durable consumer:
 
-- `consumer_management.ack_wait_seconds` must be set;
-- `consumer_management.backoff_seconds` must remain `null`;
+- `nats.durable` must be `true`;
+- `consumer_management.ack_wait_seconds` must be set, or
+  `consumer_management.mode` must be `bind_only` so the existing durable
+  consumer can be inspected before fetch;
+- configured and effective `consumer_management.backoff_seconds`/JetStream
+  `BackOff` must remain unset;
 - `delivery.in_progress.interval_ms` must be below 80% of
-  `consumer_management.ack_wait_seconds`.
+  the verified effective AckWait window.
 
 This first implementation intentionally avoids BackOff-based runtime
-heartbeats until richer consumer-policy guardrails are available. BackOff can
-override AckWait in JetStream, so deployments using BackOff should keep
-`delivery.in_progress.enabled=false`.
+heartbeats. BackOff can override AckWait in JetStream, so deployments using
+BackOff should keep `delivery.in_progress.enabled=false` until BackOff-aware
+heartbeat support is explicitly implemented.
 
 | Field | Required | Default | Valid values | Description |
 | --- | --- | --- | --- | --- |
@@ -854,6 +860,29 @@ The example sends progress signals at most every five seconds while the sink is
 actively writing. A durable success still produces the final ACK only after the
 write returns successfully. A temporary or permanent failure after one or more
 progress signals still follows the normal NAK, redelivery, or DLQ path.
+
+For least-privilege production deployments that pre-create consumers, use
+`bind_only` and omit `ack_wait_seconds` only when the runtime identity can read
+the existing durable consumer policy through `consumer_info`:
+
+```json
+{
+  "consumer_management": {
+    "mode": "bind_only"
+  },
+  "delivery": {
+    "in_progress": {
+      "enabled": true,
+      "interval_ms": 5000,
+      "max_heartbeats": 12
+    }
+  }
+}
+```
+
+In this shape, startup reads the effective consumer `ack_wait` and `backoff`
+fields. If AckWait is missing, unreadable, non-positive, too close to the
+heartbeat interval, or BackOff is present, the worker refuses to fetch messages.
 
 | Field | Required | Default | Valid values | Description |
 | --- | --- | --- | --- | --- |

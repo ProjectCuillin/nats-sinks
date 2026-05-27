@@ -61,6 +61,7 @@ stream administration tool.
 | Stream compression | Server-side storage format and resource use. | Transparent to the runner. Do not confuse stream compression with file sink gzip compression or payload encryption. |
 | Placement | Cluster placement, latency, availability, and failure domain. | Tune reconnect, batch timeout, and destination write expectations to match the chosen placement. |
 | Stream metadata | Stream-level labels or operator hints. | Not automatically persisted as per-message metadata. Use message headers or `message_metadata` defaults when the destination must store a value. |
+| Consumer AckWait and BackOff | Redelivery timing for unacknowledged work. | Required for optional `InProgress` safety. The runner verifies effective AckWait before progress heartbeats are allowed and rejects effective BackOff until BackOff-aware heartbeat timing is supported. |
 
 ## Mirrors
 

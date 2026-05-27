@@ -104,9 +104,13 @@ authorization {
 ```
 
 The `publish.allow` entry for `$JS.API.CONSUMER.INFO...` is included because
-many deployments want startup or health tooling to verify that the durable
-consumer exists. If your deployment has a separate validation account and the
-runtime worker never performs that check, you may remove it after testing.
+startup validates the durable consumer before fetching messages. It is also
+required when `delivery.in_progress.enabled=true` and
+`consumer_management.mode=bind_only`, because the runtime must inspect the
+effective AckWait and BackOff policy before it may send progress heartbeats.
+If your deployment has a separate validation account and the runtime worker
+never performs those checks, you may remove it only after testing that your
+chosen runtime mode still starts safely.
 
 The `subscribe.allow` entry for `_INBOX.>` is necessary for NATS request/reply
 patterns used by JetStream API requests and pull delivery. In more sensitive

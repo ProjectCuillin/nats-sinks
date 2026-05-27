@@ -21,6 +21,7 @@ running with unexpected delivery behavior.
 from __future__ import annotations
 
 import inspect
+import math
 from dataclasses import dataclass
 from typing import Any, Literal, Protocol, cast
 
@@ -41,6 +42,7 @@ FLOAT_COMPARISON_TOLERANCE = 0.001
 ConsumerManagementMode = Literal["bind_only", "create_if_missing", "reconcile"]
 ConsumerDeliverPolicy = Literal["all", "last", "new", "last_per_subject"]
 ConsumerReplayPolicy = Literal["instant", "original"]
+IN_PROGRESS_ACK_WAIT_SAFETY_RATIO = 0.8
 
 
 class ConsumerManagementConfigProtocol(Protocol):
@@ -74,6 +76,13 @@ class PushConsumerConfigProtocol(Protocol):
     flow_control: bool
     idle_heartbeat_seconds: float | None
     drain_timeout_ms: int
+
+
+class InProgressConfigProtocol(Protocol):
+    """Runtime shape needed from the Pydantic InProgress delivery config."""
+
+    enabled: bool
+    interval_ms: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -169,6 +178,21 @@ def _float_equal(expected: float | None, actual: object) -> bool:
     except (TypeError, ValueError):
         return False
     return abs(actual_float - expected) <= FLOAT_COMPARISON_TOLERANCE
+
+
+def _has_effective_backoff(value: object) -> bool:
+    """Return true when consumer info exposes any BackOff-like policy.
+
+    Effective consumer policy is runtime input from NATS and must be treated as
+    untrusted.  Until BackOff-aware heartbeat timing is implemented, any
+    non-empty or malformed BackOff value fails closed instead of being guessed.
+    """
+
+    if value is None:
+        return False
+    if isinstance(value, (list, tuple)):
+        return len(value) > 0
+    return True
 
 
 def _float_sequence_equal(expected: tuple[float, ...] | None, actual: object) -> bool:
@@ -686,6 +710,72 @@ def _format_drift(drift: tuple[ConsumerDrift, ...]) -> str:
     return "; ".join(parts)
 
 
+def validate_in_progress_effective_consumer_policy(
+    existing: object,
+    *,
+    in_progress: InProgressConfigProtocol | None,
+) -> None:
+    """Verify effective consumer timing before allowing progress heartbeats."""
+
+    if in_progress is None or not in_progress.enabled:
+        return
+
+    existing_config = _existing_config(existing)
+    effective_backoff = _field(existing_config, "backoff")
+    if _has_effective_backoff(effective_backoff):
+        raise ConfigurationError(
+            "delivery.in_progress.enabled does not yet support an effective "
+            "JetStream BackOff policy; disable InProgress or use an AckWait-only "
+            "consumer until BackOff-aware guardrails are available"
+        )
+
+    effective_ack_wait = _field(existing_config, "ack_wait")
+    try:
+        effective_ack_wait_seconds = float(cast(Any, effective_ack_wait))
+    except (TypeError, ValueError):
+        raise ConfigurationError(
+            "delivery.in_progress.enabled requires a readable effective JetStream "
+            "consumer ack_wait policy"
+        ) from None
+    if effective_ack_wait_seconds <= 0:
+        raise ConfigurationError(
+            "delivery.in_progress.enabled requires a positive effective JetStream "
+            "consumer ack_wait policy"
+        )
+    if not math.isfinite(effective_ack_wait_seconds):
+        raise ConfigurationError(
+            "delivery.in_progress.enabled requires a finite effective JetStream "
+            "consumer ack_wait policy"
+        )
+
+    safe_interval_ms = effective_ack_wait_seconds * 1000 * IN_PROGRESS_ACK_WAIT_SAFETY_RATIO
+    if in_progress.interval_ms >= safe_interval_ms:
+        raise ConfigurationError(
+            "delivery.in_progress.interval_ms must be below 80% of the effective "
+            "JetStream consumer AckWait window"
+        )
+
+
+async def _verify_created_or_reconciled_consumer(
+    jetstream: object,
+    *,
+    stream: str,
+    durable_name: str,
+    in_progress: InProgressConfigProtocol | None,
+) -> None:
+    """Re-read a changed consumer when InProgress needs effective policy proof."""
+
+    if in_progress is None or not in_progress.enabled:
+        return
+    existing = await _consumer_info(jetstream, stream, durable_name)
+    if existing is None:
+        raise ConfigurationError(
+            "delivery.in_progress.enabled requires JetStream consumer policy "
+            "verification after consumer creation or reconciliation"
+        )
+    validate_in_progress_effective_consumer_policy(existing, in_progress=in_progress)
+
+
 async def _consumer_info(jetstream: object, stream: str, consumer: str) -> object | None:
     """Fetch consumer info, returning None when the consumer does not exist."""
 
@@ -754,6 +844,7 @@ async def ensure_jetstream_consumer(
     subject: str,
     durable: bool,
     config: ConsumerManagementConfigProtocol,
+    in_progress: InProgressConfigProtocol | None = None,
 ) -> ConsumerManagementResult:
     """Ensure a durable pull consumer exists and matches safe expectations.
 
@@ -763,6 +854,11 @@ async def ensure_jetstream_consumer(
     can receive messages under unexpected delivery semantics.
     """
 
+    if in_progress is not None and in_progress.enabled and not durable:
+        raise ConfigurationError(
+            "delivery.in_progress.enabled requires a durable JetStream consumer "
+            "so the effective acknowledgement timing policy can be verified"
+        )
     if not durable:
         return ConsumerManagementResult(mode=config.mode, action="skipped_ephemeral")
 
@@ -779,6 +875,12 @@ async def ensure_jetstream_consumer(
             subject=subject,
             config=config,
         )
+        await _verify_created_or_reconciled_consumer(
+            jetstream,
+            stream=stream,
+            durable_name=durable_name,
+            in_progress=in_progress,
+        )
         return ConsumerManagementResult(mode=config.mode, action="created")
 
     drift = detect_consumer_drift(
@@ -792,6 +894,7 @@ async def ensure_jetstream_consumer(
         raise ConfigurationError(
             "JetStream durable consumer configuration drift detected: " + _format_drift(drift)
         )
+    validate_in_progress_effective_consumer_policy(existing, in_progress=in_progress)
 
     if config.mode == "reconcile":
         await _add_consumer(
@@ -800,6 +903,12 @@ async def ensure_jetstream_consumer(
             durable_name=durable_name,
             subject=subject,
             config=config,
+        )
+        await _verify_created_or_reconciled_consumer(
+            jetstream,
+            stream=stream,
+            durable_name=durable_name,
+            in_progress=in_progress,
         )
         return ConsumerManagementResult(mode=config.mode, action="reconciled")
 
@@ -815,6 +924,7 @@ async def ensure_jetstream_push_consumer(
     durable: bool,
     consumer_management: ConsumerManagementConfigProtocol,
     push_consumer: PushConsumerConfigProtocol,
+    in_progress: InProgressConfigProtocol | None = None,
 ) -> ConsumerManagementResult:
     """Ensure a durable push consumer exists and matches safe expectations."""
 
@@ -824,6 +934,11 @@ async def ensure_jetstream_push_consumer(
         push_consumer=push_consumer,
     )
 
+    if in_progress is not None and in_progress.enabled and not durable:
+        raise ConfigurationError(
+            "delivery.in_progress.enabled requires a durable JetStream consumer "
+            "so the effective acknowledgement timing policy can be verified"
+        )
     if not durable:
         return ConsumerManagementResult(mode=consumer_management.mode, action="skipped_ephemeral")
 
@@ -841,6 +956,12 @@ async def ensure_jetstream_push_consumer(
             consumer_management=consumer_management,
             push_consumer=push_consumer,
         )
+        await _verify_created_or_reconciled_consumer(
+            jetstream,
+            stream=stream,
+            durable_name=durable_name,
+            in_progress=in_progress,
+        )
         return ConsumerManagementResult(mode=consumer_management.mode, action="created")
 
     drift = detect_push_consumer_drift(
@@ -855,6 +976,7 @@ async def ensure_jetstream_push_consumer(
         raise ConfigurationError(
             "JetStream durable push consumer configuration drift detected: " + _format_drift(drift)
         )
+    validate_in_progress_effective_consumer_policy(existing, in_progress=in_progress)
 
     if consumer_management.mode == "reconcile":
         await _add_push_consumer(
@@ -864,6 +986,12 @@ async def ensure_jetstream_push_consumer(
             subject=subject,
             consumer_management=consumer_management,
             push_consumer=push_consumer,
+        )
+        await _verify_created_or_reconciled_consumer(
+            jetstream,
+            stream=stream,
+            durable_name=durable_name,
+            in_progress=in_progress,
         )
         return ConsumerManagementResult(mode=consumer_management.mode, action="reconciled")
 
