@@ -24,6 +24,7 @@ import inspect
 import logging
 import time
 from collections.abc import Mapping, Sequence
+from contextlib import suppress
 from datetime import UTC, datetime
 from typing import Any
 
@@ -47,6 +48,7 @@ from nats_sinks.core.config import (
     PushConsumerConfig,
     SecurityLabelProfileConfig,
     SizePolicyConfig,
+    validate_in_progress_consumer_policy,
 )
 from nats_sinks.core.consumer import envelope_from_nats_message
 from nats_sinks.core.consumer_management import (
@@ -90,6 +92,8 @@ _NATS_CONNECTION_EVENT_METRICS = {
     "discovered_server_cb": MetricNames.NATS_DISCOVERED_SERVERS_TOTAL,
     "error_cb": MetricNames.NATS_ASYNC_ERRORS_TOTAL,
 }
+
+_InProgressHeartbeatHandle = tuple[asyncio.Event, asyncio.Task[None]]
 
 
 async def _maybe_await(value: object) -> None:
@@ -177,6 +181,10 @@ class JetStreamSinkRunner:
             raise ConfigurationError("only ack_policy='after_sink_commit' is supported")
         if self.dead_letter.enabled and not self.dead_letter.subject:
             raise ConfigurationError("dead_letter.subject is required when DLQ is enabled")
+        validate_in_progress_consumer_policy(
+            delivery=self.delivery,
+            consumer_management=self.consumer_management,
+        )
 
     async def start(self) -> None:
         """Start sink and connect to NATS if a JetStream context was not injected."""
@@ -740,22 +748,29 @@ class JetStreamSinkRunner:
         increment_metric(self.metrics, MetricNames.MESSAGES_PREPARED_TOTAL, len(envelopes))
         set_metric_value(self.metrics, MetricNames.CURRENT_BATCH_MESSAGES, float(len(envelopes)))
 
+        heartbeat = self._start_in_progress_heartbeat(raw_message_list)
         started = time.perf_counter()
+        sink_error: Exception | None = None
         try:
             await self.sink.write_batch(envelopes)
-        except PermanentSinkError as exc:
-            await self._handle_permanent_failure(raw_message_list, envelopes, exc)
-            return
-        except TemporarySinkError as exc:
-            await self._handle_temporary_failure(raw_message_list, exc)
-            return
-        except SinkError as exc:
-            await self._handle_temporary_failure(raw_message_list, exc)
-            return
         except Exception as exc:
+            sink_error = exc
+        finally:
+            await self._stop_in_progress_heartbeat(heartbeat)
+
+        if isinstance(sink_error, PermanentSinkError):
+            await self._handle_permanent_failure(raw_message_list, envelopes, sink_error)
+            return
+        if isinstance(sink_error, TemporarySinkError):
+            await self._handle_temporary_failure(raw_message_list, sink_error)
+            return
+        if isinstance(sink_error, SinkError):
+            await self._handle_temporary_failure(raw_message_list, sink_error)
+            return
+        if sink_error is not None:
             await self._handle_temporary_failure(
                 raw_message_list,
-                exc,
+                sink_error,
                 context="unexpected sink failure",
                 log_exception=True,
             )
@@ -783,6 +798,116 @@ class JetStreamSinkRunner:
         )
         increment_metric(self.metrics, MetricNames.MESSAGES_ACKED_TOTAL, len(raw_message_list))
         set_metric_value(self.metrics, MetricNames.LAST_SINK_SUCCESS_EPOCH_SECONDS, time.time())
+
+    def _start_in_progress_heartbeat(
+        self,
+        raw_messages: Sequence[Any],
+    ) -> _InProgressHeartbeatHandle | None:
+        """Start a bounded progress heartbeat for an active sink write."""
+
+        if not self.delivery.in_progress.enabled:
+            return None
+        stop_event = asyncio.Event()
+        task = asyncio.create_task(
+            self._run_in_progress_heartbeat(list(raw_messages), stop_event),
+            name="nats-sinks-in-progress-heartbeat",
+        )
+        return stop_event, task
+
+    async def _stop_in_progress_heartbeat(
+        self,
+        handle: _InProgressHeartbeatHandle | None,
+    ) -> None:
+        """Stop the progress heartbeat before any final acknowledgement path."""
+
+        if handle is None:
+            return
+        stop_event, task = handle
+        stop_event.set()
+        timeout = self.delivery.in_progress.shutdown_timeout_ms / 1000
+        try:
+            if timeout == 0:
+                task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await task
+            else:
+                await asyncio.wait_for(task, timeout=timeout)
+        except TimeoutError:
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
+            LOGGER.warning(
+                "JetStream InProgress heartbeat task exceeded shutdown timeout; "
+                "task was cancelled before final acknowledgement handling"
+            )
+
+    async def _run_in_progress_heartbeat(
+        self,
+        raw_messages: Sequence[Any],
+        stop_event: asyncio.Event,
+    ) -> None:
+        """Send bounded InProgress heartbeats while sink work is active."""
+
+        interval = self.delivery.in_progress.interval_ms / 1000
+        max_heartbeats = self.delivery.in_progress.max_heartbeats
+        sent_heartbeats = 0
+        stopped_by_failure = False
+        set_metric_value(self.metrics, MetricNames.CURRENT_IN_PROGRESS_BATCHES_ACTIVE, 1.0)
+        try:
+            while sent_heartbeats < max_heartbeats and not stop_event.is_set():
+                try:
+                    await asyncio.wait_for(stop_event.wait(), timeout=interval)
+                except TimeoutError:
+                    pass
+                if stop_event.is_set() or self._stop_requested:
+                    break
+                sent_heartbeats += 1
+                if not await self._send_in_progress_once(raw_messages):
+                    stopped_by_failure = True
+                    break
+            if (
+                sent_heartbeats >= max_heartbeats
+                and not stopped_by_failure
+                and not stop_event.is_set()
+            ):
+                increment_metric(self.metrics, MetricNames.IN_PROGRESS_MAX_HEARTBEATS_REACHED_TOTAL)
+        finally:
+            set_metric_value(self.metrics, MetricNames.CURRENT_IN_PROGRESS_BATCHES_ACTIVE, 0.0)
+
+    async def _send_in_progress_once(self, raw_messages: Sequence[Any]) -> bool:
+        """Send one InProgress heartbeat to every raw message in the active batch."""
+
+        started = time.perf_counter()
+        successes = 0
+        failures = 0
+        for raw_message in raw_messages:
+            increment_metric(self.metrics, MetricNames.IN_PROGRESS_ATTEMPTS_TOTAL)
+            in_progress = getattr(raw_message, "in_progress", None)
+            if in_progress is None:
+                failures += 1
+                continue
+            try:
+                await _maybe_await(in_progress())
+                successes += 1
+            except Exception:
+                failures += 1
+        observe_metric(
+            self.metrics,
+            MetricNames.IN_PROGRESS_HEARTBEAT_SECONDS,
+            time.perf_counter() - started,
+        )
+        if successes:
+            increment_metric(self.metrics, MetricNames.IN_PROGRESS_SUCCESSES_TOTAL, successes)
+        if failures:
+            increment_metric(self.metrics, MetricNames.IN_PROGRESS_FAILURES_TOTAL, failures)
+            LOGGER.warning(
+                "JetStream InProgress heartbeat failed for %s of %s message(s); "
+                "stopping progress heartbeat and preserving normal final acknowledgement handling",
+                failures,
+                len(raw_messages),
+            )
+            return False
+        return True
 
     async def _handle_temporary_failure(
         self,

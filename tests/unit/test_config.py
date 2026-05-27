@@ -1451,3 +1451,122 @@ def test_consumer_management_rejects_unsafe_policy_values(
 
     with pytest.raises(ConfigurationError, match=expected):
         load_config(path, env_overrides=False)
+
+
+def test_in_progress_heartbeat_is_disabled_by_default(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        json.dumps(
+            {
+                "nats": {
+                    "url": "nats://localhost:4222",
+                    "stream": "ORDERS",
+                    "consumer": "file-orders-sink",
+                    "subject": "orders.*",
+                },
+                "sink": {
+                    "type": "file",
+                    "directory": "/var/lib/nats-sinks/events",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    config = load_config(path, env_overrides=False)
+
+    assert config.delivery.in_progress.enabled is False
+    assert config.delivery.in_progress.interval_ms == 5000
+    assert config.delivery.in_progress.max_heartbeats == 12
+    assert config.delivery.in_progress.shutdown_timeout_ms == 5000
+
+
+def test_in_progress_heartbeat_loads_with_explicit_safe_ack_wait(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        json.dumps(
+            {
+                "nats": {
+                    "url": "nats://localhost:4222",
+                    "stream": "ORDERS",
+                    "consumer": "file-orders-sink",
+                    "subject": "orders.*",
+                },
+                "consumer_management": {
+                    "ack_wait_seconds": 10,
+                },
+                "delivery": {
+                    "in_progress": {
+                        "enabled": True,
+                        "interval_ms": 1000,
+                        "max_heartbeats": 5,
+                        "shutdown_timeout_ms": 250,
+                    }
+                },
+                "sink": {
+                    "type": "file",
+                    "directory": "/var/lib/nats-sinks/events",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    config = load_config(path, env_overrides=False)
+
+    assert config.consumer_management.ack_wait_seconds == 10
+    assert config.delivery.in_progress.enabled is True
+    assert config.delivery.in_progress.interval_ms == 1000
+    assert config.delivery.in_progress.max_heartbeats == 5
+    assert config.delivery.in_progress.shutdown_timeout_ms == 250
+
+
+@pytest.mark.parametrize(
+    ("consumer_management", "delivery", "expected"),
+    [
+        (
+            {},
+            {"in_progress": {"enabled": True, "interval_ms": 1000}},
+            "requires consumer_management.ack_wait_seconds",
+        ),
+        (
+            {"max_deliver": 3, "backoff_seconds": [1, 2, 4]},
+            {"in_progress": {"enabled": True, "interval_ms": 1000}},
+            "does not yet support consumer_management.backoff_seconds",
+        ),
+        (
+            {"ack_wait_seconds": 10},
+            {"in_progress": {"enabled": True, "interval_ms": 8000}},
+            "below 80%",
+        ),
+    ],
+)
+def test_in_progress_heartbeat_rejects_unsafe_consumer_timing(
+    consumer_management: dict[str, object],
+    delivery: dict[str, object],
+    expected: str,
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        json.dumps(
+            {
+                "nats": {
+                    "url": "nats://localhost:4222",
+                    "stream": "ORDERS",
+                    "consumer": "file-orders-sink",
+                    "subject": "orders.*",
+                },
+                "consumer_management": consumer_management,
+                "delivery": delivery,
+                "sink": {
+                    "type": "file",
+                    "directory": "/var/lib/nats-sinks/events",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError, match=expected):
+        load_config(path, env_overrides=False)

@@ -14,9 +14,12 @@ The conclusion is deliberately cautious:
 - it requires guardrails around the effective consumer `AckWait` and `BackOff`
   policy before it should be considered production-ready.
 
-The current release documents the evaluation and provides the stable
-InProgress metrics contract and operator runbook. It does not yet expose a
-runtime `InProgress` configuration option.
+The current release provides the first runtime option: a disabled-by-default
+heartbeat around active sink writes. It is intentionally conservative. It
+requires explicit `consumer_management.ack_wait_seconds`, rejects
+`consumer_management.backoff_seconds`, and requires the heartbeat interval to be
+below 80% of AckWait. Richer administrative inspection and BackOff-aware
+guardrails remain separate backlog work.
 
 ## Background
 
@@ -41,10 +44,15 @@ multiple times. See the upstream
 
 ## Current Behavior
 
-Today, `nats-sinks` does not send progress acknowledgements. The runner fetches
-bounded batches, transforms messages into internal envelopes, calls
+By default, `nats-sinks` does not send progress acknowledgements. The runner
+fetches bounded batches, transforms messages into internal envelopes, calls
 `sink.write_batch(...)`, and then ACKs only after the sink returns durable
 success.
+
+When `delivery.in_progress.enabled=true`, the core runner starts a bounded
+background heartbeat only while `sink.write_batch(...)` is active. The
+heartbeat stops before final ACK, NAK, Term, DLQ, retry handling, cancellation,
+or shutdown completion.
 
 ```mermaid
 sequenceDiagram
@@ -61,14 +69,15 @@ sequenceDiagram
     R->>JS: Final ACK
 ```
 
-This keeps the delivery contract simple. The downside is that a very long sink
-write can exceed the server-side `AckWait` window. In that case, JetStream may
-redeliver while the first processing attempt is still running.
+This keeps the delivery contract simple. The optional heartbeat addresses the
+case where a very long but healthy sink write can exceed the server-side
+`AckWait` window and cause JetStream to redeliver while the first processing
+attempt is still running.
 
-## Proposed Future Shape
+## Runtime Shape
 
-If implemented, `InProgress` should be a heartbeat around active sink work. It
-should not be a sink API and it should not be a message-success signal.
+`InProgress` is a heartbeat around active sink work. It is not a sink API and
+it is not a message-success signal.
 
 ```mermaid
 sequenceDiagram
@@ -91,7 +100,7 @@ sequenceDiagram
     R->>JS: Final ACK
 ```
 
-The heartbeat should stop on every terminal path:
+The heartbeat stops on every terminal path:
 
 - sink success,
 - sink temporary failure,
@@ -161,22 +170,22 @@ occasionally be higher than ordinary message-processing latency.
 In those cases, the runner should fail closed when the option is enabled rather
 than process messages with unclear redelivery timing.
 
-## Recommended Implementation Split
+## Implementation Split
 
-The evaluation recommends three separate implementation items:
+The evaluation split this work into three implementation items:
 
 1. Add AckWait and BackOff guardrails for InProgress support.
 2. Add optional InProgress heartbeat during long sink writes.
-3. Add InProgress metrics and an operator runbook. This metric and runbook
-   layer is now available, while the runtime heartbeat remains separate.
+3. Add InProgress metrics and an operator runbook.
 
-This split matters. Timing policy, runtime heartbeats, and observability have
-different risks and deserve separate review.
+The current release implements the runtime heartbeat, stable metrics, and the
+operator runbook with a first fail-closed AckWait-only guardrail. BackOff-aware
+support and richer consumer-policy inspection remain separate work because
+BackOff changes the effective acknowledgement wait window.
 
-## Configuration Direction
+## Configuration
 
-A future configuration shape should keep `InProgress` disabled by default.
-This example is illustrative only:
+`InProgress` stays disabled by default:
 
 ```json
 {
@@ -185,21 +194,44 @@ This example is illustrative only:
     "in_progress": {
       "enabled": false,
       "interval_ms": 5000,
-      "max_signals_per_message": 12,
-      "require_consumer_ack_wait_verification": true
+      "max_heartbeats": 12,
+      "shutdown_timeout_ms": 5000
     }
   }
 }
 ```
 
-Suggested validation rules:
+To enable it safely, set an explicit AckWait policy and use an interval below
+80% of that window:
+
+```json
+{
+  "consumer_management": {
+    "ack_wait_seconds": 30
+  },
+  "delivery": {
+    "in_progress": {
+      "enabled": true,
+      "interval_ms": 5000,
+      "max_heartbeats": 12,
+      "shutdown_timeout_ms": 5000
+    }
+  }
+}
+```
+
+Validation rules:
 
 | Field | Safety rule |
 | --- | --- |
 | `enabled` | Default `false`; explicit opt-in required. |
-| `interval_ms` | Must be positive, bounded, and lower than the effective `AckWait`. |
-| `max_signals_per_message` | Must be positive and bounded to prevent unbounded heartbeats. |
-| `require_consumer_ack_wait_verification` | Default `true`; fail closed when safe timing cannot be verified. |
+| `interval_ms` | Must be positive, bounded, and below 80% of configured AckWait when enabled. |
+| `max_heartbeats` | Must be positive and bounded to prevent unbounded heartbeats. |
+| `shutdown_timeout_ms` | Must be bounded so final ACK or failure handling cannot wait forever on heartbeat shutdown. |
+
+The current implementation rejects `consumer_management.backoff_seconds` when
+the heartbeat is enabled. Operators using BackOff should leave runtime
+heartbeats disabled until BackOff-aware guardrails are implemented.
 
 ## Metrics Direction
 
@@ -225,10 +257,10 @@ Operator interpretation is documented in the
 ## Operational Guidance
 
 `InProgress` is not a performance fix. It is a redelivery-timing tool for work
-that is legitimately still running. Before enabling it in a future release,
-operators should first measure sink latency, tune batch size, review database
-indexes and commit behavior, and confirm that the consumer `AckWait` policy
-matches the expected write duration.
+that is legitimately still running. Before enabling it, operators should first
+measure sink latency, tune batch size, review database indexes and commit
+behavior, and confirm that the consumer `AckWait` policy matches the expected
+write duration.
 
 In mission-oriented deployments, use it only when it improves custody of
 long-running work without hiding saturation. A slow destination should still
@@ -237,5 +269,6 @@ DLQ according to policy.
 
 ## Current Status
 
-This release documents the evaluation and creates follow-up feature requests.
-No runtime `InProgress` option is enabled yet.
+This release includes optional runtime heartbeat support with conservative
+AckWait-only startup validation, metrics, documentation, and tests. BackOff
+guardrails and richer consumer-policy inspection remain follow-up work.
