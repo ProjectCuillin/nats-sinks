@@ -39,6 +39,10 @@ def _snapshot(path: Path) -> Path:
     increment_metric(metrics, MetricNames.ORACLE_DUPLICATE_IGNORED_TOTAL, 2)
     increment_metric(metrics, MetricNames.ORACLE_DUPLICATE_NOOP_TOTAL, 1)
     increment_metric(metrics, MetricNames.ORACLE_MERGE_ROWS_TOTAL, 3)
+    increment_metric(metrics, MetricNames.IN_PROGRESS_ATTEMPTS_TOTAL, 3)
+    increment_metric(metrics, MetricNames.IN_PROGRESS_SUCCESSES_TOTAL, 2)
+    increment_metric(metrics, MetricNames.IN_PROGRESS_FAILURES_TOTAL, 1)
+    increment_metric(metrics, MetricNames.IN_PROGRESS_MAX_HEARTBEATS_REACHED_TOTAL, 1)
     increment_metric(metrics, MetricNames.EVENTS_STALE_AT_RECEIVE_TOTAL, 1)
     increment_metric(metrics, MetricNames.FANOUT_MESSAGES_ROUTED_TOTAL, 1)
     increment_metric(metrics, MetricNames.FANOUT_CHILD_SINKS_SELECTED_TOTAL, 2)
@@ -46,9 +50,11 @@ def _snapshot(path: Path) -> Path:
     increment_metric(metrics, MetricNames.FANOUT_MESSAGES_ACKED_TOTAL, 1)
     observe_metric(metrics, MetricNames.SINK_BATCH_WRITE_SECONDS, 0.25)
     observe_metric(metrics, MetricNames.SINK_BATCH_WRITE_SECONDS, 0.75)
+    observe_metric(metrics, MetricNames.IN_PROGRESS_HEARTBEAT_SECONDS, 0.05)
     observe_metric(metrics, MetricNames.EVENT_AGE_AT_RECEIVE_SECONDS, 42.0)
     observe_metric(metrics, MetricNames.FANOUT_ACK_GATE_WAIT_SECONDS, 0.125)
     set_metric_value(metrics, MetricNames.CURRENT_BATCH_MESSAGES, 4.0)
+    set_metric_value(metrics, MetricNames.CURRENT_IN_PROGRESS_BATCHES_ACTIVE, 1.0)
     set_metric_value(metrics, MetricNames.CURRENT_FANOUT_CHILD_SINKS_SELECTED, 2.0)
     return path
 
@@ -131,6 +137,33 @@ def test_metrics_cli_filters_fanout_metrics(tmp_path: Path) -> None:
     assert "MESSAGES_FETCHED_TOTAL" not in result.stdout
 
 
+def test_metrics_cli_filters_in_progress_metrics(tmp_path: Path) -> None:
+    path = _snapshot(tmp_path / "metrics.json")
+
+    result = runner.invoke(
+        app,
+        [
+            "show",
+            str(path),
+            "--format",
+            "shell",
+            "--metric",
+            "in_progress_*",
+            "--metric",
+            "current_in_progress_*",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "IN_PROGRESS_ATTEMPTS_TOTAL=3" in result.stdout
+    assert "IN_PROGRESS_SUCCESSES_TOTAL=2" in result.stdout
+    assert "IN_PROGRESS_FAILURES_TOTAL=1" in result.stdout
+    assert "IN_PROGRESS_MAX_HEARTBEATS_REACHED_TOTAL=1" in result.stdout
+    assert "IN_PROGRESS_HEARTBEAT_SECONDS_COUNT=1" in result.stdout
+    assert "CURRENT_IN_PROGRESS_BATCHES_ACTIVE=1" in result.stdout
+    assert "MESSAGES_ACKED_TOTAL" not in result.stdout
+
+
 def test_metrics_cli_filters_terminal_ack_metrics(tmp_path: Path) -> None:
     path = _snapshot(tmp_path / "metrics.json")
 
@@ -151,6 +184,7 @@ def test_metrics_cli_show_prometheus(tmp_path: Path) -> None:
     assert result.exit_code == 0
     assert "# TYPE mission_ops_messages_fetched_total counter" in result.stdout
     assert "mission_ops_sink_batch_write_seconds_count 2" in result.stdout
+    assert "mission_ops_in_progress_heartbeat_seconds_count 1" in result.stdout
     assert "mission_ops_event_age_at_receive_seconds_count 1" in result.stdout
     assert "mission_ops_fanout_ack_gate_wait_seconds_count 1" in result.stdout
 
@@ -243,6 +277,8 @@ def test_metrics_cli_describe_names() -> None:
     assert "messages_fetched_total" in result.stdout
     assert "oracle_duplicates_total" in result.stdout
     assert "event_age_at_receive_seconds" in result.stdout
+    assert "in_progress_attempts_total" in result.stdout
+    assert "current_in_progress_batches_active" in result.stdout
     assert "fanout_messages_routed_total" in result.stdout
     assert "fanout_ack_gate_wait_seconds" in result.stdout
     assert "sink_batch_write_seconds" in result.stdout

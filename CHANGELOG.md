@@ -12,6 +12,12 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Added
 
+- Added stable InProgress observability metrics and an operator runbook for
+  issue #119. The new metric contract covers progress attempts, successful
+  progress signals, failed progress signals, maximum-heartbeat exits, active
+  heartbeat batches, and heartbeat timing, with `nats-sink-metrics` shell,
+  table, and Prometheus rendering guidance that keeps payloads, subjects,
+  destinations, and classification details out of metric output.
 - Added durable replay-to-sinks guidance and tooling design for issue #120.
   The new documentation separates ordered inspection from write-capable replay,
   requires durable pull consumers and commit-then-ACK behavior for replay into

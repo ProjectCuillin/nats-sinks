@@ -89,6 +89,12 @@ class MetricNames:
     ORACLE_COMMIT_SECONDS = "oracle_commit_seconds"
     MESSAGE_ACK_SECONDS = "message_ack_seconds"
     MESSAGE_TERM_SECONDS = "message_term_seconds"
+    IN_PROGRESS_ATTEMPTS_TOTAL = "in_progress_attempts_total"
+    IN_PROGRESS_SUCCESSES_TOTAL = "in_progress_successes_total"
+    IN_PROGRESS_FAILURES_TOTAL = "in_progress_failures_total"
+    IN_PROGRESS_MAX_HEARTBEATS_REACHED_TOTAL = "in_progress_max_heartbeats_reached_total"
+    IN_PROGRESS_HEARTBEAT_SECONDS = "in_progress_heartbeat_seconds"
+    CURRENT_IN_PROGRESS_BATCHES_ACTIVE = "current_in_progress_batches_active"
     RETRY_BACKOFF_DELAY_SECONDS = "retry_backoff_delay_seconds"
     SINK_WRITE_ERRORS_TOTAL = "sink_write_errors_total"
     MESSAGE_NORMALIZATION_ERRORS_TOTAL = "message_normalization_errors_total"
@@ -273,6 +279,36 @@ METRIC_SPECS: tuple[MetricSpec, ...] = (
         MetricNames.MESSAGE_TERM_SECONDS,
         "histogram",
         "Elapsed seconds spent sending terminal acknowledgements after DLQ publication.",
+    ),
+    MetricSpec(
+        MetricNames.IN_PROGRESS_ATTEMPTS_TOTAL,
+        "counter",
+        "JetStream InProgress heartbeat attempts while sink work is still active.",
+    ),
+    MetricSpec(
+        MetricNames.IN_PROGRESS_SUCCESSES_TOTAL,
+        "counter",
+        "JetStream InProgress heartbeats accepted by the client; this is not sink success.",
+    ),
+    MetricSpec(
+        MetricNames.IN_PROGRESS_FAILURES_TOTAL,
+        "counter",
+        "JetStream InProgress heartbeat failures observed before the final ACK decision.",
+    ),
+    MetricSpec(
+        MetricNames.IN_PROGRESS_MAX_HEARTBEATS_REACHED_TOTAL,
+        "counter",
+        "Batches where the configured InProgress heartbeat limit was reached.",
+    ),
+    MetricSpec(
+        MetricNames.IN_PROGRESS_HEARTBEAT_SECONDS,
+        "histogram",
+        "Elapsed seconds spent sending JetStream InProgress heartbeat operations.",
+    ),
+    MetricSpec(
+        MetricNames.CURRENT_IN_PROGRESS_BATCHES_ACTIVE,
+        "gauge",
+        "Batches currently protected by InProgress heartbeat supervision.",
     ),
     MetricSpec(
         MetricNames.RETRY_BACKOFF_DELAY_SECONDS,

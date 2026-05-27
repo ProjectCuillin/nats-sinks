@@ -271,6 +271,52 @@ sensitive and can create unbounded cardinality. Use aggregate counters first,
 then investigate individual records through approved operational tooling when a
 metric indicates delayed, missing, malformed, or skewed event timestamps.
 
+## InProgress Metrics
+
+InProgress metrics describe future optional JetStream progress heartbeats for
+long-running sink writes. The metric contract, snapshot rendering, CLI output,
+and Prometheus text rendering are available now so operators and connector
+authors can build dashboards without inventing names. Runtime InProgress
+heartbeats are still disabled until the separate heartbeat feature is
+implemented and explicitly configured.
+
+These metrics are observational only. A progress heartbeat means "work is
+still active." It is not durable sink success, not a message ACK, not a DLQ
+publication, and not an idempotency decision.
+
+| Metric suffix | Type | Meaning |
+| --- | --- | --- |
+| `in_progress_attempts_total` | counter | JetStream InProgress heartbeat attempts while sink work is active. |
+| `in_progress_successes_total` | counter | Heartbeats accepted by the client path; not sink success. |
+| `in_progress_failures_total` | counter | Heartbeat calls that failed before the final ACK decision. |
+| `in_progress_max_heartbeats_reached_total` | counter | Batches where the configured heartbeat limit was reached. |
+| `current_in_progress_batches_active` | gauge | Batches currently under heartbeat supervision. |
+| `in_progress_heartbeat_seconds` | observation | Elapsed time spent sending heartbeat operations. |
+
+Example shell inspection:
+
+```bash
+nats-sink-metrics show .local/nats-sinks/metrics.json \
+  --format shell \
+  --metric "in_progress_*" \
+  --metric "current_in_progress_*"
+```
+
+Example output:
+
+```text
+CURRENT_IN_PROGRESS_BATCHES_ACTIVE=0.0
+IN_PROGRESS_ATTEMPTS_TOTAL=18
+IN_PROGRESS_FAILURES_TOTAL=0
+IN_PROGRESS_HEARTBEAT_SECONDS_COUNT=18
+IN_PROGRESS_MAX_HEARTBEATS_REACHED_TOTAL=0
+IN_PROGRESS_SUCCESSES_TOTAL=18
+```
+
+For operational interpretation, alerting guidance, and safe Prometheus
+examples, read the
+[InProgress Metrics Runbook](inprogress-metrics-runbook.md).
+
 ## Message Authenticity Metrics
 
 When `message_authenticity.enabled` is true, the core runtime records aggregate
@@ -428,11 +474,13 @@ expose a confirmed ACK option. The evaluated future metrics are documented in
 Those future metrics should remain separate from ordinary ACK counters so an
 operator can distinguish "ACK sent" from "ACK confirmation received".
 
-InProgress metrics are also not emitted yet because the runtime does not yet
-send progress signals. The evaluated future metrics are documented in
-[InProgress Evaluation](in-progress-evaluation.md). Those future metrics should
-distinguish "work is still active" from "work is successful" so dashboards do
-not accidentally treat progress as durable completion.
+The InProgress metric contract is available, but runtime progress heartbeats
+are not enabled yet. The metrics and operator interpretation guidance are
+documented in the
+[InProgress Metrics Runbook](inprogress-metrics-runbook.md), and the timing
+evaluation remains in [InProgress Evaluation](in-progress-evaluation.md).
+These metrics distinguish "work is still active" from "work is successful" so
+dashboards do not accidentally treat progress as durable completion.
 
 ```bash
 nats-sink-metrics show .local/nats-sinks/metrics.json --metric "*term*"
