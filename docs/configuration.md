@@ -86,7 +86,13 @@ fan-out, it can also declare additional named instances in the top-level
     "retry_backoff_multiplier": 2.0,
     "retry_jitter": "full",
     "temporary_failure_action": "nak",
-    "prefer_safe_duplication": true
+    "prefer_safe_duplication": true,
+    "in_progress": {
+      "enabled": false,
+      "interval_ms": 5000,
+      "max_heartbeats": 12,
+      "shutdown_timeout_ms": 5000
+    }
   },
   "dead_letter": {
     "enabled": true,
@@ -344,10 +350,16 @@ will be disabled by default and will run only after durable sink success. See
 [Acknowledgement Confirmation Evaluation](acknowledgement-confirmation.md) for
 the current design direction and limitations.
 
-JetStream `InProgress` handling has also been evaluated but is not yet a
-runtime configuration option. Any future option will be disabled by default,
-bounded, advisory only, and tied to verifiable consumer `AckWait` or `BackOff`
-timing. See [InProgress Evaluation](in-progress-evaluation.md).
+JetStream `InProgress` handling is available as an optional, disabled-by-default
+heartbeat around active sink writes. It is advisory only: it can extend the
+JetStream acknowledgement wait window while work is still running, but it never
+turns work into a success. The runner starts it only during
+`sink.write_batch(...)` and stops it before final ACK, NAK, Term, DLQ, retry,
+or shutdown completion. It currently requires an explicit
+`consumer_management.ack_wait_seconds` value, rejects
+`consumer_management.backoff_seconds`, and requires the heartbeat interval to be
+below 80% of the AckWait window. See
+[InProgress Evaluation](in-progress-evaluation.md).
 
 ```mermaid
 flowchart TD
@@ -740,6 +752,7 @@ sinks all receive batches according to these settings.
 | `temporary_failure_action` | no | `nak` | `nak` or `leave_unacked`. | `nak` asks JetStream to redeliver after the configured backoff. `leave_unacked` relies on the consumer ACK timeout. |
 | `prefer_safe_duplication` | no | `true` | `true` or `false`. | Documents the intended reliability posture: duplicates are acceptable when idempotency handles them; silent loss is not. Keep true unless a future sink documents a reviewed alternative. |
 | `priority_lanes` | no | disabled default lane | Object. | Optional in-batch priority scheduling policy. See [Priority-Aware Processing Lanes](priority-lanes.md). |
+| `in_progress` | no | disabled | Object. | Optional JetStream progress heartbeat during active sink writes. Disabled by default and fail-closed unless safe consumer timing is configured. |
 
 Retry delays are based on JetStream delivery-attempt metadata when available.
 For example, with the defaults, the first retryable failure uses a base delay
@@ -792,6 +805,55 @@ ACKs only after the sink reports durable success for the batch.
   }
 }
 ```
+
+#### `delivery.in_progress`
+
+`delivery.in_progress` controls optional JetStream progress heartbeats for
+long-running sink writes. Use it only when sink writes can legitimately exceed
+the configured consumer AckWait window and idempotency is already in place.
+
+The feature is disabled by default. When enabled, startup fails closed unless
+the runner can verify safe timing from local configuration:
+
+- `consumer_management.ack_wait_seconds` must be set;
+- `consumer_management.backoff_seconds` must remain `null`;
+- `delivery.in_progress.interval_ms` must be below 80% of
+  `consumer_management.ack_wait_seconds`.
+
+This first implementation intentionally avoids BackOff-based runtime
+heartbeats until richer consumer-policy guardrails are available. BackOff can
+override AckWait in JetStream, so deployments using BackOff should keep
+`delivery.in_progress.enabled=false`.
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `enabled` | no | `false` | Boolean. | Enables the heartbeat while `sink.write_batch(...)` is active. Keep disabled unless the AckWait policy and sink latency have been reviewed. |
+| `interval_ms` | no | `5000` | Integer `1` to `3600000`, and less than 80% of AckWait when enabled. | Delay between heartbeat rounds. Each round calls the client `in_progress()` method for every raw message in the active batch. |
+| `max_heartbeats` | no | `12` | Integer `1` to `10000`. | Maximum number of heartbeat rounds per active batch. When the limit is reached, the runner stops sending progress signals and preserves normal final ACK or failure behavior. |
+| `shutdown_timeout_ms` | no | `5000` | Integer `0` to `60000`. | Time allowed for the heartbeat task to stop before final acknowledgement handling continues. `0` cancels immediately. |
+
+Example:
+
+```json
+{
+  "consumer_management": {
+    "ack_wait_seconds": 30
+  },
+  "delivery": {
+    "in_progress": {
+      "enabled": true,
+      "interval_ms": 5000,
+      "max_heartbeats": 12,
+      "shutdown_timeout_ms": 5000
+    }
+  }
+}
+```
+
+The example sends progress signals at most every five seconds while the sink is
+actively writing. A durable success still produces the final ACK only after the
+write returns successfully. A temporary or permanent failure after one or more
+progress signals still follows the normal NAK, redelivery, or DLQ path.
 
 | Field | Required | Default | Valid values | Description |
 | --- | --- | --- | --- | --- |

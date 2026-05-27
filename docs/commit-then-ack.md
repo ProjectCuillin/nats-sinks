@@ -150,11 +150,13 @@ still being worked on and that the acknowledgement wait window should be
 extended. They are not success acknowledgements. They must never replace final
 ACK, NAK, Term, retry, or DLQ behavior.
 
-For `nats-sinks`, any future `InProgress` feature must remain optional,
-disabled by default, bounded, and owned by the core runner. The sink still only
-returns durable success or raises an error. If the sink fails after one or more
-progress signals, the message remains eligible for redelivery or DLQ according
-to policy.
+For `nats-sinks`, `delivery.in_progress` is optional, disabled by default,
+bounded, and owned by the core runner. When enabled with safe AckWait
+configuration, the runner sends progress heartbeats only while
+`sink.write_batch(...)` is active and stops before final ACK, NAK, Term, retry,
+or DLQ handling. The sink still only returns durable success or raises an
+error. If the sink fails after one or more progress signals, the message
+remains eligible for redelivery or DLQ according to policy.
 
 The evaluation and recommended implementation split are documented in
 [InProgress Evaluation](in-progress-evaluation.md).

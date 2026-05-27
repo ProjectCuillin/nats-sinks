@@ -292,11 +292,13 @@ while still allowing redelivery if confirmation fails after durable sink
 success. See
 [Acknowledgement Confirmation Evaluation](acknowledgement-confirmation.md).
 
-JetStream `InProgress` support has also been evaluated for future long-running
-sink writes. It is not enabled today. If implemented, it should be treated as a
-bounded heartbeat around active work, not as a success signal. See
-[InProgress Evaluation](in-progress-evaluation.md). Stable InProgress metric
-names and operator guidance are available in the
+JetStream `InProgress` support is available as an optional disabled-by-default
+heartbeat for long-running sink writes. It is treated as a bounded signal around
+active work, not as a success signal. The current guardrail requires an
+explicit `consumer_management.ack_wait_seconds` value, rejects BackOff-based
+consumer timing, and requires the heartbeat interval to be below 80% of the
+AckWait window. See [InProgress Evaluation](in-progress-evaluation.md). Stable
+InProgress metric names and operator guidance are available in the
 [InProgress Metrics Runbook](inprogress-metrics-runbook.md), including shell
 and Prometheus examples that keep payloads, subjects, destinations, and
 classification details out of observability output.

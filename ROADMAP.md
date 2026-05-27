@@ -50,6 +50,9 @@ release, and closed only after the containing release is published.
 - Stable InProgress metric names, metrics CLI rendering, Prometheus text
   rendering, and an operator runbook for distinguishing slow active work from
   durable sink success.
+- Optional disabled-by-default JetStream `InProgress` heartbeat during
+  long-running sink writes, with AckWait-only startup guardrails and bounded
+  interval, count, and shutdown controls.
 - Local JSON metrics snapshots and the `nats-sink-metrics` inspection CLI for
   table, JSON, JSONL, shell, names, and Prometheus text output.
 - Observability core with disabled-by-default sharing policies and a
@@ -232,8 +235,9 @@ release, and closed only after the containing release is published.
   DLQ publication.
 - ACK confirmation metrics and an operator runbook for interpreting durable
   success followed by ACK confirmation failure.
-- AckWait and BackOff guardrails for optional `InProgress` handling.
-- Optional `InProgress` heartbeat during long-running sink writes.
+- BackOff-aware guardrails and richer consumer-policy inspection for optional
+  `InProgress` handling.
+
 ## Phase 3
 
 - External connector marketplace guidance, certification evidence, and

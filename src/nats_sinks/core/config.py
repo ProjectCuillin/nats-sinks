@@ -121,6 +121,10 @@ MAX_PUSH_PENDING_BYTES = 268_435_456
 DEFAULT_PUSH_PENDING_BYTES = 67_108_864
 MAX_PUSH_IDLE_HEARTBEAT_SECONDS = 3600
 MAX_PUSH_DRAIN_TIMEOUT_MS = 600_000
+MAX_IN_PROGRESS_INTERVAL_MS = 3_600_000
+MAX_IN_PROGRESS_HEARTBEATS = 10_000
+MAX_IN_PROGRESS_SHUTDOWN_TIMEOUT_MS = 60_000
+IN_PROGRESS_ACK_WAIT_SAFETY_RATIO = 0.8
 CONSUMER_METADATA_KEY_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.:/-]{0,127}$")
 PUSH_DELIVER_GROUP_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,127}$")
 PRIORITY_LANE_NAME_RE = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
@@ -1282,6 +1286,28 @@ class PriorityLanesConfig(BaseModel):
         return self
 
 
+class InProgressConfig(BaseModel):
+    """Optional JetStream progress heartbeat for long-running sink writes.
+
+    Progress heartbeats are disabled by default.  When enabled, the top-level
+    configuration and runner both require an explicit, locally verifiable
+    consumer AckWait policy before any message is fetched.  This keeps the
+    feature fail-closed until richer administrative consumer inspection is
+    implemented.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    interval_ms: int = Field(default=5000, ge=1, le=MAX_IN_PROGRESS_INTERVAL_MS)
+    max_heartbeats: int = Field(default=12, ge=1, le=MAX_IN_PROGRESS_HEARTBEATS)
+    shutdown_timeout_ms: int = Field(
+        default=5000,
+        ge=0,
+        le=MAX_IN_PROGRESS_SHUTDOWN_TIMEOUT_MS,
+    )
+
+
 class DeliveryConfig(BaseModel):
     """Delivery behavior. ACK policy is intentionally fixed to commit-then-ack.
 
@@ -1306,6 +1332,7 @@ class DeliveryConfig(BaseModel):
     temporary_failure_action: Literal["nak", "leave_unacked"] = "nak"
     prefer_safe_duplication: bool = True
     priority_lanes: PriorityLanesConfig = Field(default_factory=PriorityLanesConfig)
+    in_progress: InProgressConfig = Field(default_factory=InProgressConfig)
 
     @model_validator(mode="after")
     def validate_retry_backoff_cap(self) -> DeliveryConfig:
@@ -1322,6 +1349,37 @@ class DeliveryConfig(BaseModel):
                 "delivery.retry_backoff_ms"
             )
         return self
+
+
+def validate_in_progress_consumer_policy(
+    *,
+    delivery: DeliveryConfig,
+    consumer_management: ConsumerManagementConfig,
+) -> None:
+    """Fail closed when InProgress cannot be tied to safe consumer timing."""
+
+    if not delivery.in_progress.enabled:
+        return
+    if consumer_management.backoff_seconds is not None:
+        raise ConfigurationError(
+            "delivery.in_progress.enabled does not yet support "
+            "consumer_management.backoff_seconds; configure AckWait-only timing "
+            "or keep InProgress disabled"
+        )
+    if consumer_management.ack_wait_seconds is None:
+        raise ConfigurationError(
+            "delivery.in_progress.enabled requires consumer_management.ack_wait_seconds "
+            "so the heartbeat interval can be verified before startup"
+        )
+
+    ack_wait_ms = consumer_management.ack_wait_seconds * 1000
+    safe_interval_ms = ack_wait_ms * IN_PROGRESS_ACK_WAIT_SAFETY_RATIO
+    if delivery.in_progress.interval_ms >= safe_interval_ms:
+        raise ConfigurationError(
+            "delivery.in_progress.interval_ms must be meaningfully lower than "
+            "consumer_management.ack_wait_seconds; use an interval below 80% of "
+            "the effective AckWait window"
+        )
 
 
 class DeadLetterConfig(BaseModel):
@@ -3226,6 +3284,10 @@ class AppConfig(BaseModel):
         """Ensure route targets reference declared sink instances when a registry exists."""
 
         if not self.sinks:
+            validate_in_progress_consumer_policy(
+                delivery=self.delivery,
+                consumer_management=self.consumer_management,
+            )
             return self
 
         referenced_targets = set(self.routing.target_names())
@@ -3253,6 +3315,10 @@ class AppConfig(BaseModel):
         if mismatches:
             joined = "; ".join(mismatches)
             raise ValueError(f"routing.target_sink_types must match named sink types: {joined}")
+        validate_in_progress_consumer_policy(
+            delivery=self.delivery,
+            consumer_management=self.consumer_management,
+        )
         return self
 
 

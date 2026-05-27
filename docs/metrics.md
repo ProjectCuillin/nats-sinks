@@ -273,12 +273,12 @@ metric indicates delayed, missing, malformed, or skewed event timestamps.
 
 ## InProgress Metrics
 
-InProgress metrics describe future optional JetStream progress heartbeats for
+InProgress metrics describe optional JetStream progress heartbeats for
 long-running sink writes. The metric contract, snapshot rendering, CLI output,
-and Prometheus text rendering are available now so operators and connector
-authors can build dashboards without inventing names. Runtime InProgress
-heartbeats are still disabled until the separate heartbeat feature is
-implemented and explicitly configured.
+and Prometheus text rendering let operators and connector authors build
+dashboards without inventing names. Runtime InProgress heartbeats are disabled
+by default and emit these metrics only when `delivery.in_progress.enabled=true`
+and the consumer AckWait guardrails pass startup validation.
 
 These metrics are observational only. A progress heartbeat means "work is
 still active." It is not durable sink success, not a message ACK, not a DLQ
@@ -474,9 +474,8 @@ expose a confirmed ACK option. The evaluated future metrics are documented in
 Those future metrics should remain separate from ordinary ACK counters so an
 operator can distinguish "ACK sent" from "ACK confirmation received".
 
-The InProgress metric contract is available, but runtime progress heartbeats
-are not enabled yet. The metrics and operator interpretation guidance are
-documented in the
+The InProgress metric contract is available for the optional runtime heartbeat.
+The metrics and operator interpretation guidance are documented in the
 [InProgress Metrics Runbook](inprogress-metrics-runbook.md), and the timing
 evaluation remains in [InProgress Evaluation](in-progress-evaluation.md).
 These metrics distinguish "work is still active" from "work is successful" so

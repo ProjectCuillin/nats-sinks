@@ -166,6 +166,10 @@ used immediately:
   including multiple seed URLs, reconnect wait, maximum reconnect attempts,
   ping behavior, pending buffer size, drain timeout, and connection event
   metrics.
+- Optional JetStream `InProgress` heartbeats for long-running sink writes.
+  This is disabled by default, starts only while a sink write is active,
+  requires safe AckWait configuration, and never replaces final ACK, NAK, Term,
+  retry, or DLQ behavior.
 - WebSocket NATS transport guardrails for approved `ws://` local labs and
   `wss://` deployments, including mixed transport rejection, credential-free
   URLs, local CA TLS handling, validated optional WebSocket headers, and a
@@ -419,7 +423,13 @@ definitions.
     "retry_backoff_mode": "exponential",
     "retry_backoff_multiplier": 2.0,
     "retry_jitter": "full",
-    "prefer_safe_duplication": true
+    "prefer_safe_duplication": true,
+    "in_progress": {
+      "enabled": false,
+      "interval_ms": 5000,
+      "max_heartbeats": 12,
+      "shutdown_timeout_ms": 5000
+    }
   },
   "dead_letter": {
     "enabled": true,
@@ -1171,7 +1181,8 @@ Phase 2:
 - Expanded live certification runbooks for NATS TLS certificate, NKEY, and
   decentralized JWT deployments across representative server policies.
 - Deeper sequence-based and timestamp-based JetStream replay-start controls.
-- Optional confirmed ACK and `InProgress` support.
+- Optional confirmed ACK support and richer BackOff-aware `InProgress`
+  guardrails.
 - Payload-presence metadata and sink certification for headers-only delivery.
 
 Phase 3:

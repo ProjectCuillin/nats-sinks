@@ -1,14 +1,16 @@
 # InProgress Metrics Runbook
 
 This runbook explains how to interpret the `nats-sinks` InProgress metric
-family. It is written for operators who may later enable optional JetStream
-progress heartbeats around long-running sink writes, and for maintainers who
-need stable metric names before the runtime heartbeat feature is enabled.
+family. It is written for operators who enable optional JetStream progress
+heartbeats around long-running sink writes, and for maintainers who need stable
+metric names across observability connectors.
 
 The current release provides the metric contract, local snapshot support,
 `nats-sink-metrics` rendering, Prometheus text rendering, and operational
-guidance. Runtime InProgress heartbeats remain disabled until the separate
-heartbeat feature is implemented and explicitly configured.
+guidance. Runtime InProgress heartbeats remain disabled by default. They emit
+these metrics only when `delivery.in_progress.enabled=true`,
+`consumer_management.ack_wait_seconds` is explicitly configured, BackOff is not
+configured, and the heartbeat interval is below 80% of AckWait.
 
 ## What InProgress Means
 
@@ -180,7 +182,7 @@ attempts alone.
 
 ## Required Safety Boundaries
 
-Keep these invariants intact when the runtime heartbeat feature is implemented:
+Keep these invariants intact when using or changing the runtime heartbeat:
 
 - ACK only after durable required sink success or successful DLQ handling;
 - NAK, Term, and DLQ decisions stay on their existing failure paths;
