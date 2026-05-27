@@ -168,8 +168,9 @@ used immediately:
   metrics.
 - Optional JetStream `InProgress` heartbeats for long-running sink writes.
   This is disabled by default, starts only while a sink write is active,
-  requires safe AckWait configuration, and never replaces final ACK, NAK, Term,
-  retry, or DLQ behavior.
+  verifies effective AckWait timing before fetch, rejects BackOff timing until
+  explicitly supported, and never replaces final ACK, NAK, Term, retry, or DLQ
+  behavior.
 - WebSocket NATS transport guardrails for approved `ws://` local labs and
   `wss://` deployments, including mixed transport rejection, credential-free
   URLs, local CA TLS handling, validated optional WebSocket headers, and a
@@ -1181,8 +1182,8 @@ Phase 2:
 - Expanded live certification runbooks for NATS TLS certificate, NKEY, and
   decentralized JWT deployments across representative server policies.
 - Deeper sequence-based and timestamp-based JetStream replay-start controls.
-- Optional confirmed ACK support and richer BackOff-aware `InProgress`
-  guardrails.
+- Optional confirmed ACK support and explicit BackOff-aware `InProgress`
+  heartbeat timing.
 - Payload-presence metadata and sink certification for headers-only delivery.
 
 Phase 3:

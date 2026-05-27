@@ -1521,6 +1521,80 @@ def test_in_progress_heartbeat_loads_with_explicit_safe_ack_wait(tmp_path: Path)
     assert config.delivery.in_progress.shutdown_timeout_ms == 250
 
 
+def test_in_progress_heartbeat_allows_bind_only_effective_consumer_verification(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        json.dumps(
+            {
+                "nats": {
+                    "url": "nats://localhost:4222",
+                    "stream": "ORDERS",
+                    "consumer": "file-orders-sink",
+                    "subject": "orders.*",
+                },
+                "consumer_management": {
+                    "mode": "bind_only",
+                },
+                "delivery": {
+                    "in_progress": {
+                        "enabled": True,
+                        "interval_ms": 1000,
+                    }
+                },
+                "sink": {
+                    "type": "file",
+                    "directory": "/var/lib/nats-sinks/events",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    config = load_config(path, env_overrides=False)
+
+    assert config.consumer_management.mode == "bind_only"
+    assert config.consumer_management.ack_wait_seconds is None
+    assert config.delivery.in_progress.enabled is True
+
+
+def test_in_progress_heartbeat_rejects_ephemeral_consumer_policy(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        json.dumps(
+            {
+                "nats": {
+                    "url": "nats://localhost:4222",
+                    "stream": "ORDERS",
+                    "consumer": "file-orders-sink",
+                    "subject": "orders.*",
+                    "durable": False,
+                },
+                "consumer_management": {
+                    "ack_wait_seconds": 10,
+                },
+                "delivery": {
+                    "in_progress": {
+                        "enabled": True,
+                        "interval_ms": 1000,
+                    }
+                },
+                "sink": {
+                    "type": "file",
+                    "directory": "/var/lib/nats-sinks/events",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError, match=r"requires nats\.durable=true"):
+        load_config(path, env_overrides=False)
+
+
 @pytest.mark.parametrize(
     ("consumer_management", "delivery", "expected"),
     [

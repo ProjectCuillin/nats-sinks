@@ -1290,10 +1290,10 @@ class InProgressConfig(BaseModel):
     """Optional JetStream progress heartbeat for long-running sink writes.
 
     Progress heartbeats are disabled by default.  When enabled, the top-level
-    configuration and runner both require an explicit, locally verifiable
-    consumer AckWait policy before any message is fetched.  This keeps the
-    feature fail-closed until richer administrative consumer inspection is
-    implemented.
+    configuration and runner require either an explicit AckWait policy or a
+    bind-only durable consumer whose effective AckWait can be inspected before
+    any message is fetched.  BackOff timing is rejected until it has dedicated
+    guardrails because it changes the effective acknowledgement window.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -1355,11 +1355,17 @@ def validate_in_progress_consumer_policy(
     *,
     delivery: DeliveryConfig,
     consumer_management: ConsumerManagementConfig,
+    durable: bool | None = None,
 ) -> None:
     """Fail closed when InProgress cannot be tied to safe consumer timing."""
 
     if not delivery.in_progress.enabled:
         return
+    if durable is False:
+        raise ConfigurationError(
+            "delivery.in_progress.enabled requires nats.durable=true so the "
+            "effective JetStream consumer policy can be verified before startup"
+        )
     if consumer_management.backoff_seconds is not None:
         raise ConfigurationError(
             "delivery.in_progress.enabled does not yet support "
@@ -1367,9 +1373,12 @@ def validate_in_progress_consumer_policy(
             "or keep InProgress disabled"
         )
     if consumer_management.ack_wait_seconds is None:
+        if consumer_management.mode == "bind_only":
+            return
         raise ConfigurationError(
             "delivery.in_progress.enabled requires consumer_management.ack_wait_seconds "
-            "so the heartbeat interval can be verified before startup"
+            "unless consumer_management.mode='bind_only' verifies an existing durable "
+            "consumer before startup"
         )
 
     ack_wait_ms = consumer_management.ack_wait_seconds * 1000
@@ -3287,6 +3296,7 @@ class AppConfig(BaseModel):
             validate_in_progress_consumer_policy(
                 delivery=self.delivery,
                 consumer_management=self.consumer_management,
+                durable=self.nats.durable,
             )
             return self
 
@@ -3318,6 +3328,7 @@ class AppConfig(BaseModel):
         validate_in_progress_consumer_policy(
             delivery=self.delivery,
             consumer_management=self.consumer_management,
+            durable=self.nats.durable,
         )
         return self
 

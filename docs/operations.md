@@ -294,10 +294,12 @@ success. See
 
 JetStream `InProgress` support is available as an optional disabled-by-default
 heartbeat for long-running sink writes. It is treated as a bounded signal around
-active work, not as a success signal. The current guardrail requires an
-explicit `consumer_management.ack_wait_seconds` value, rejects BackOff-based
-consumer timing, and requires the heartbeat interval to be below 80% of the
-AckWait window. See [InProgress Evaluation](in-progress-evaluation.md). Stable
+active work, not as a success signal. The current guardrail requires either an
+explicit `consumer_management.ack_wait_seconds` value or a `bind_only` durable
+consumer whose effective AckWait can be inspected before fetch. Configured and
+effective BackOff timing are rejected for now, and the heartbeat interval must
+be below 80% of the verified AckWait window. See
+[InProgress Evaluation](in-progress-evaluation.md). Stable
 InProgress metric names and operator guidance are available in the
 [InProgress Metrics Runbook](inprogress-metrics-runbook.md), including shell
 and Prometheus examples that keep payloads, subjects, destinations, and

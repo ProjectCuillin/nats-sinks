@@ -184,6 +184,7 @@ class JetStreamSinkRunner:
         validate_in_progress_consumer_policy(
             delivery=self.delivery,
             consumer_management=self.consumer_management,
+            durable=self.durable,
         )
 
     async def start(self) -> None:
@@ -325,6 +326,7 @@ class JetStreamSinkRunner:
             subject=self.subject,
             durable=self.durable,
             config=self.consumer_management,
+            in_progress=self.delivery.in_progress,
         )
         self._subscription = await self._js.pull_subscribe(
             self.subject,
@@ -370,6 +372,7 @@ class JetStreamSinkRunner:
             durable=self.durable,
             consumer_management=self.consumer_management,
             push_consumer=self.push_consumer,
+            in_progress=self.delivery.in_progress,
         )
         consumer_config = build_push_consumer_config(
             stream=self.stream,

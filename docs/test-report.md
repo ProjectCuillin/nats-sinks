@@ -14,25 +14,27 @@ generated database passwords, or full raw logs from live systems.
 | Field | Value |
 | --- | --- |
 | Overall result | Pass |
-| Report generated | 2026-05-27 issue `#118` validation for upcoming `v0.4.2` development |
+| Report generated | 2026-05-27 issue `#117` validation for upcoming `v0.4.2` development |
 | Project version | `0.4.1` package metadata with `v0.4.2` development changes |
 | Python version | 3.12.4 |
-| Git revision checked | Branch `issue-118-inprogress-heartbeat` based on `release-v0.4.2` |
+| Git revision checked | Branch `issue-117-inprogress-policy-guardrails` based on `release-v0.4.2` |
 | Live NATS details | Environment-gated live tests skipped unless explicitly enabled |
 | Live Oracle Database details | Environment-gated live tests skipped unless explicitly enabled |
 | Live Oracle MySQL details | Environment-gated live tests skipped unless explicitly enabled |
 
-This refresh covered optional JetStream `InProgress` heartbeats for issue
-`#118`, plus a full local regression cycle for the current development branch.
-The new tests prove the heartbeat is disabled by default, starts only during
-active sink writes, stops before final ACK or failure handling, preserves
-normal temporary and permanent failure behavior, handles heartbeat failures as
-metrics-only events, and enforces bounded AckWait guardrails before startup.
+This refresh covered effective JetStream `InProgress` consumer-policy
+guardrails for issue `#117`, plus a full local regression cycle for the current
+development branch. The new tests prove that progress heartbeats fail closed
+unless the runner can verify safe durable consumer timing, that bind-only
+deployments can use an inspected existing AckWait-only consumer, that unsafe or
+non-finite AckWait values are rejected, and that configured or effective BackOff
+policies remain unsupported until BackOff-aware timing is implemented.
 
 ```mermaid
 flowchart LR
     Config[Config validation] --> Guardrail[AckWait-only guardrail]
-    Guardrail --> Write[Active sink write]
+    Guardrail --> Inspect[Effective consumer inspection]
+    Inspect --> Write[Active sink write]
     Write --> Heartbeat[InProgress heartbeat]
     Heartbeat --> Metrics[Aggregate metrics]
     Write --> Stop[Stop heartbeat]
@@ -62,8 +64,8 @@ flowchart LR
 
 | Test Area | Command | Result |
 | --- | --- | --- |
-| InProgress heartbeat and config subset | `python -m pytest tests/unit/test_commit_then_ack_contract.py tests/unit/test_config.py tests/unit/test_metrics.py tests/unit/test_metrics_cli.py tests/unit/test_inprogress_metrics_runbook.py -q` | Pass, `139 passed` |
-| Main repository test suite | `scripts/check.sh` | Pass, `1075 passed, 11 skipped` |
+| InProgress consumer-policy guardrail subset | `python -m pytest tests/unit/test_consumer_management.py tests/unit/test_config.py tests/unit/test_commit_then_ack_contract.py -q` | Pass, `126 passed` |
+| Main repository test suite | `scripts/check.sh` | Pass, `1086 passed, 11 skipped` |
 | Encryption and sink contract subset | `scripts/check.sh` | Pass, `130 passed` |
 | Sink capability subset | `scripts/check.sh` | Pass, `117 passed` |
 | Documentation builds | `scripts/check.sh` | Pass for Read the Docs and GitHub Pages MkDocs builds |
@@ -72,28 +74,28 @@ flowchart LR
 The skipped tests are the existing environment-gated live NATS, Oracle
 Database, Oracle MySQL, and push-consumer integration tests.
 
-## InProgress Heartbeat Evidence
+## InProgress Guardrail Evidence
 
 The new focused coverage verifies:
 
-- `delivery.in_progress` is disabled by default;
-- enabling the heartbeat requires explicit
+- `delivery.in_progress.enabled=true` requires `nats.durable=true`;
+- managed consumers still require explicit
   `consumer_management.ack_wait_seconds`;
-- BackOff-based consumer timing is rejected while this conservative guardrail
-  is in place;
-- heartbeat intervals must remain below 80% of the configured AckWait window;
-- the runner also enforces the guardrail when constructed directly;
-- progress signals run only while `sink.write_batch(...)` is active;
-- progress signals stop before durable success ACK, temporary-failure NAK, and
-  permanent-failure DLQ ACK paths;
-- heartbeat call failures increment InProgress metrics without causing early
-  ACK or hiding the sink result;
-- the heartbeat stops at the configured maximum count;
-- cancellation stops the heartbeat and leaves the original message unacked.
+- bind-only deployments may omit local AckWait only when the existing durable
+  consumer exposes a readable effective AckWait before fetch;
+- missing, malformed, zero, negative, non-finite, or too-small effective
+  AckWait values are rejected before any subscription can fetch work;
+- configured and effective JetStream BackOff policies are rejected until
+  BackOff-aware heartbeat timing is explicitly implemented;
+- created and reconciled consumers are re-read before InProgress heartbeats are
+  allowed;
+- redacted configuration errors describe the policy problem without exposing
+  server addresses, subjects outside configured drift checks, credentials, or
+  payload data.
 
 ## Issues Found During Validation
 
-No new release-blocking issues were found during the `#118` validation cycle.
+No new release-blocking issues were found during the `#117` validation cycle.
 
 ## Documentation Evidence
 
@@ -106,9 +108,11 @@ The following public documentation was updated and built successfully:
 - [Metrics](metrics.md)
 - [InProgress Evaluation](in-progress-evaluation.md)
 - [InProgress Metrics Runbook](inprogress-metrics-runbook.md)
+- [JetStream Topology](jetstream-topology.md)
+- [NATS Permissions](nats-permissions.md)
 - [NATS Feature Gap Analysis](nats-feature-gap-analysis.md)
 - [Roadmap](roadmap.md)
 - [Documentation Home](index.md)
 
 The changelog, backlog metadata, roadmap, latest test report, and public
-InProgress documentation were updated for issue `#118`.
+InProgress documentation were updated for issue `#117`.

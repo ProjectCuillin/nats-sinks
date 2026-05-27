@@ -39,7 +39,8 @@
   rendering, and an operator runbook for distinguishing slow active work from
   durable sink success.
 - Optional disabled-by-default JetStream `InProgress` heartbeat during
-  long-running sink writes, with AckWait-only startup guardrails and bounded
+  long-running sink writes, with effective AckWait-only startup guardrails,
+  bind-only consumer-policy inspection, BackOff rejection, and bounded
   interval, count, and shutdown controls.
 - Local JSON metrics snapshots and the `nats-sink-metrics` inspection CLI for
   table, JSON, JSONL, shell, names, and Prometheus text output.
@@ -215,8 +216,8 @@
   DLQ publication.
 - ACK confirmation metrics and an operator runbook for interpreting durable
   success followed by ACK confirmation failure.
-- BackOff-aware guardrails and richer consumer-policy inspection for optional
-  `InProgress` handling.
+- Explicit BackOff-aware `InProgress` heartbeat timing if future work can prove
+  safe support for JetStream BackOff sequences.
 
 ## Phase 3
 

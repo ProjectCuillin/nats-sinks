@@ -9,8 +9,9 @@ The current release provides the metric contract, local snapshot support,
 `nats-sink-metrics` rendering, Prometheus text rendering, and operational
 guidance. Runtime InProgress heartbeats remain disabled by default. They emit
 these metrics only when `delivery.in_progress.enabled=true`,
-`consumer_management.ack_wait_seconds` is explicitly configured, BackOff is not
-configured, and the heartbeat interval is below 80% of AckWait.
+safe effective AckWait timing is verified before fetch, no configured or
+effective BackOff policy is present, and the heartbeat interval is below 80%
+of AckWait.
 
 ## What InProgress Means
 
