@@ -105,10 +105,15 @@ or protobuf dependency to the base package. That choice keeps the default
 installation small, makes dependency review simpler, and avoids changing the
 runtime footprint for users who do not enable OTLP export.
 
-If a future connector needs a vendor SDK, gRPC transport, protobuf encoder, or
-cloud authentication library, add it behind an optional extra, document why the
-dependency is required, update the generated manifest files, and include tests
-proving the base install still works without that optional connector.
+The Amazon CloudWatch connector follows the same rule by keeping boto3 behind
+the `cloudwatch` optional extra. Dry-run rendering and unit tests work without
+boto3; live export requires `python -m pip install "nats-sinks[cloudwatch]"`.
+
+If a future connector needs another vendor SDK, gRPC transport, protobuf
+encoder, or cloud authentication library, add it behind an optional extra,
+document why the dependency is required, update the generated manifest files,
+and include tests proving the base install still works without that optional
+connector.
 
 ## NATS Python Client Capability Checks
 

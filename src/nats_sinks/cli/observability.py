@@ -28,6 +28,12 @@ from nats_sinks.core.metrics import (
     METRIC_SPECS,
     load_metrics_snapshot,
 )
+from nats_sinks.observability.cloudwatch import (
+    DISABLED_CLOUDWATCH_TEXT,
+    EMPTY_CLOUDWATCH_TEXT,
+    export_cloudwatch_metrics,
+    render_cloudwatch_put_metric_data_requests_json,
+)
 from nats_sinks.observability.elastic import (
     DISABLED_ELASTIC_TEXT,
     EMPTY_ELASTIC_TEXT,
@@ -184,6 +190,7 @@ def _policy_summary(policy: ObservabilityPolicy) -> str:
             f"grafana_alloy_enabled={str(policy.grafana_alloy.enabled).lower()}",
             f"splunk_hec_enabled={str(policy.splunk_hec.enabled).lower()}",
             f"statsd_enabled={str(policy.statsd.enabled).lower()}",
+            f"cloudwatch_enabled={str(policy.cloudwatch.enabled).lower()}",
             f"syslog_enabled={str(policy.syslog.enabled).lower()}",
             f"nats_server_monitoring_enabled={str(policy.nats_server_monitoring.enabled).lower()}",
             "nats_server_monitoring_prometheus_enabled="
@@ -889,6 +896,86 @@ def statsd_export(
         f"message={result.message}"
     )
     if result.message == EMPTY_STATSD_TEXT.strip():
+        return
+    if not result.delivered:
+        raise typer.Exit(3)
+
+
+@app.command("cloudwatch-export")
+def cloudwatch_export(
+    snapshot_file: Annotated[
+        Path,
+        typer.Argument(help="Metrics snapshot JSON written by nats-sink."),
+    ],
+    policy_file: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="Render CloudWatch PutMetricData JSON requests instead of sending them.",
+        ),
+    ] = False,
+    allow_stale: Annotated[
+        bool,
+        typer.Option("--allow-stale", help="Warn but export when the snapshot is stale."),
+    ] = False,
+) -> None:
+    """Export approved metrics to Amazon CloudWatch custom metrics.
+
+    The command reads only a local metrics snapshot and sends policy-approved
+    custom metric data through the optional AWS SDK path. Failures cannot change
+    JetStream ACK, NAK, DLQ, retry, or sink behavior.
+    """
+
+    policy = _load_policy_or_exit(policy_file)
+    snapshot: dict[str, object] | None = None
+    if policy.enabled and policy.cloudwatch.enabled:
+        snapshot = _load_snapshot_or_exit(snapshot_file)
+        try:
+            _check_staleness(
+                snapshot,
+                stale_after_seconds=policy.cloudwatch.stale_after_seconds,
+                allow_stale=allow_stale,
+            )
+        except ValueError as exc:
+            typer.echo(f"Metrics snapshot error: {exc}", err=True)
+            raise typer.Exit(2) from exc
+
+    if not policy.enabled or not policy.cloudwatch.enabled:
+        typer.echo(DISABLED_CLOUDWATCH_TEXT, nl=False)
+        return
+    if snapshot is None:
+        typer.echo(
+            "Amazon CloudWatch export error: enabled CloudWatch export requires a metrics snapshot",
+            err=True,
+        )
+        raise typer.Exit(2)
+
+    if dry_run:
+        try:
+            rendered = render_cloudwatch_put_metric_data_requests_json(snapshot, policy)
+        except (ConfigurationError, ValueError) as exc:
+            typer.echo(f"Amazon CloudWatch render error: {exc}", err=True)
+            raise typer.Exit(2) from exc
+        typer.echo(rendered.decode("utf-8"))
+        return
+
+    try:
+        result = export_cloudwatch_metrics(snapshot, policy)
+    except (ConfigurationError, ValueError) as exc:
+        typer.echo(f"Amazon CloudWatch export error: {exc}", err=True)
+        raise typer.Exit(2) from exc
+
+    typer.echo(
+        "Amazon CloudWatch export: "
+        f"attempted={str(result.attempted).lower()} "
+        f"delivered={str(result.delivered).lower()} "
+        f"attempts={result.attempts} "
+        f"requests={result.requests} "
+        f"metrics={result.metrics} "
+        f"message={result.message}"
+    )
+    if result.message == EMPTY_CLOUDWATCH_TEXT.strip():
         return
     if not result.delivered:
         raise typer.Exit(3)

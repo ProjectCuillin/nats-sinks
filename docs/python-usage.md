@@ -169,7 +169,7 @@ small metrics protocol. `InMemoryMetrics` is useful for tests, local
 diagnostics, and examples. `JsonFileMetrics` writes the same dependency-free
 snapshot that the `nats-sink-metrics` command reads. Production services
 normally adapt the same metric suffixes to Prometheus, OpenTelemetry, StatsD,
-or another approved telemetry system.
+Amazon CloudWatch, or another approved telemetry system.
 
 ```python
 from nats_sinks import InMemoryMetrics, JetStreamSinkRunner, MetricNames

@@ -42,6 +42,8 @@ Observability is documented as a small set of focused pages:
   incident-response environments.
 - [StatsD Integration](statsd.md): explains best-effort UDP and Unix datagram
   export to StatsD-compatible aggregators.
+- [Amazon CloudWatch Integration](cloudwatch.md): explains policy-controlled
+  export to CloudWatch custom metrics through the optional AWS SDK path.
 - [Syslog Bridge](syslog.md): explains best-effort RFC 5424-style UDP and Unix
   datagram export for restricted or legacy syslog pipelines.
 - [NATS Server Monitoring Integration](nats-server-monitoring.md): explains the
@@ -64,6 +66,10 @@ The Splunk HEC connector follows the same rule and emits one bounded
 policy-approved metric event to Splunk's HTTP Event Collector.
 The StatsD connector follows the same rule and emits bounded best-effort
 datagrams to a StatsD-compatible local or network listener.
+The Amazon CloudWatch connector follows the same rule and emits bounded custom
+metric requests through the optional AWS SDK path. The request body contains
+approved metric names, values, units, and reviewed low-cardinality dimensions
+only.
 The syslog bridge follows the same rule and emits bounded RFC 5424-style
 messages to an approved syslog listener without exporting payloads, subjects,
 classification values, labels, mission metadata, or destination details.
@@ -671,6 +677,28 @@ format, service guidance, security notes, and test coverage.
 See [StatsD Integration](statsd.md) for full examples, datagram format,
 transport limitations, service guidance, security notes, and test coverage.
 
+## Amazon CloudWatch Connector Fields
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `cloudwatch.enabled` | `false` | Enables Amazon CloudWatch export when the top-level observability policy is also enabled. |
+| `cloudwatch.metric_namespace` | `nats-sinks/metrics` | CloudWatch custom metric namespace. It must not start with `AWS/`, must not contain colons, and is limited to bounded safe ASCII characters. |
+| `cloudwatch.region` | `null` | AWS region used by the SDK client. Required when CloudWatch export is enabled. Dry-run output does not include this value. |
+| `cloudwatch.unit` | `None` | Unit applied to emitted `MetricDatum` values, such as `Count`, `Seconds`, `Milliseconds`, `Bytes`, `Percent`, or `None`. |
+| `cloudwatch.storage_resolution` | `60` | CloudWatch storage resolution. Supported values are `60` for standard custom metrics and `1` for high-resolution custom metrics. |
+| `cloudwatch.dimensions` | `{}` | Static low-cardinality dimensions added to every metric. Names that look sensitive or high-cardinality, such as `subject`, `classification`, `label`, `message`, `table`, `file`, `host`, `user`, `token`, `secret`, or `key`, are rejected. |
+| `cloudwatch.include_metric_labels_as_dimensions` | `false` | When `true`, prepared `labeled_metrics` rows can export their bounded labels as CloudWatch dimensions. Keep disabled unless subject-family sharing has been reviewed. |
+| `cloudwatch.timeout_seconds` | `5` | Connection and read timeout used when the boto3 client is created. |
+| `cloudwatch.max_retries` | `0` | Bounded connector-level retries after the initial failed `PutMetricData` attempt. |
+| `cloudwatch.retry_backoff_seconds` | `0.25` | Delay between connector-level retry attempts. |
+| `cloudwatch.stale_after_seconds` | `null` | Optional maximum snapshot age before export fails closed unless `--allow-stale` is used. |
+| `cloudwatch.max_metrics_per_request` | `20` | Maximum metric datum objects per request. The local cap cannot exceed the AWS limit of `1000`. |
+| `cloudwatch.max_request_bytes` | `1048576` | Maximum rendered request size. Oversized requests fail closed before the AWS SDK is called. |
+
+See [Amazon CloudWatch Integration](cloudwatch.md) for full examples,
+`PutMetricData` request shape, IAM guidance, cost and dimension notes, service
+guidance, security notes, and test coverage.
+
 ## Syslog Bridge Fields
 
 | Field | Default | Meaning |
@@ -1050,6 +1078,9 @@ Treat observability configuration as production policy:
 - grant the OTLP export service read access to the metrics snapshot, read
   access to the policy, and only the network path required to reach the
   approved OpenTelemetry Collector,
+- grant the Amazon CloudWatch export service read access to the metrics
+  snapshot and policy, and only the AWS identity permissions required to call
+  `cloudwatch:PutMetricData` for the reviewed namespace,
 - keep the main sink service and observability publishing service separate when
   practical.
 
@@ -1061,16 +1092,14 @@ labels, or classified mission details.
 
 The observability core is intentionally connector-neutral. Prometheus textfile,
 Prometheus HTTP, OTLP, Elastic Observability, Grafana Alloy, Splunk HEC, StatsD,
-and NATS monitoring connectors are implemented today.
+Amazon CloudWatch, syslog, and NATS monitoring connectors are implemented
+today.
 Future connectors may include:
 
 - Datadog for hosted operational dashboards,
 - Grafana Agent legacy migration notes where needed for existing estates,
 - Oracle Cloud Infrastructure Monitoring for OCI-native deployments,
-- Amazon CloudWatch for AWS deployments,
-- Azure Monitor for Microsoft cloud deployments,
-- syslog or structured log bridges for restricted networks where pull-based
-  scraping is not available.
+- Azure Monitor for Microsoft cloud deployments.
 
 Each connector should remain policy-driven, disabled by default, and isolated
 from message delivery semantics.

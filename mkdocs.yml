@@ -63,6 +63,7 @@ nav:
       - Grafana Alloy Profile: grafana-alloy.md
       - Splunk HEC Integration: splunk-hec.md
       - StatsD Integration: statsd.md
+      - Amazon CloudWatch Integration: cloudwatch.md
       - Syslog Bridge: syslog.md
       - NATS Server Monitoring: nats-server-monitoring.md
       - Subject-Aware Observability Evaluation: subject-aware-observability-evaluation.md
