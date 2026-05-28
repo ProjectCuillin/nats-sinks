@@ -1,0 +1,35 @@
+{
+  "id": "container-e2e-suite-dataclass-import",
+  "title": "[Bug]: Container e2e suite unit tests should load dataclass script modules safely",
+  "area": "Testing",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.2",
+  "labels": [
+    "deployment",
+    "testing",
+    "sink-oracle"
+  ],
+  "summary": "The new container e2e suite unit tests attempted to load a script module that defines a dataclass without first registering the imported module in sys.modules.",
+  "observed": "The focused test run for issue #316 failed before executing the assertions because Python dataclass processing could not resolve the script module namespace during import.",
+  "expected": "Unit tests that load repository scripts as modules should register the module in sys.modules before executing it, matching the safe pattern already used by other script-loader tests.",
+  "reproduction": "Run python -m pytest tests/unit/test_container_e2e_suite.py -q on the issue #316 branch before the test loader fix.",
+  "failing_test": "The focused test file tests/unit/test_container_e2e_suite.py fails during module import before any container or optional backend dependency is used.",
+  "impact": "The defect blocks the new deterministic orchestration tests and would make the full local validation path fail, but it does not affect production delivery semantics, sink writes, ACK behavior, or live container behavior.",
+  "delivery_semantics": "The failure occurs in local unit-test module loading only. It does not touch JetStream consumption, sink commit behavior, DLQ handling, or ACK decisions.",
+  "security": "The fix must not introduce dynamic execution beyond the existing importlib test-loader pattern and must not expose local paths, container identifiers, credentials, payloads, or private endpoint details in public evidence.",
+  "acceptance": [
+    "The script-loader test helper registers the loaded module in sys.modules before executing it.",
+    "The deterministic container e2e suite tests pass without Docker or optional Oracle backend SDKs.",
+    "The fix remains limited to test harness loading behavior unless production script changes are independently required.",
+    "Sanitized failing and passing test evidence is posted to the GitHub bug report."
+  ],
+  "tests": "Run python -m pytest tests/unit/test_container_e2e_suite.py -q and the focused helper suite covering Oracle NoSQL Database and Oracle Coherence Community Edition container assets.",
+  "documentation": "No public documentation syntax changes are required. Mention the regression in the changelog and latest sanitized test report as part of issue #316 validation.",
+  "closeout": "Mark completed after the regression test passes on the bug branch and the fix is merged back into the issue #316 feature branch.",
+  "relationships": {
+    "related": [
+      "backlog:full-container-e2e-suite-oracle-kv-sinks"
+    ]
+  }
+}
