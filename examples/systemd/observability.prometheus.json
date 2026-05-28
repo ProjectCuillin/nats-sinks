@@ -44,6 +44,28 @@
     "max_request_bytes": 1048576,
     "headers_env": {}
   },
+  "oci_monitoring": {
+    "enabled": false,
+    "metric_namespace": "nats_sinks_metrics",
+    "region": null,
+    "compartment_id": null,
+    "resource_group": null,
+    "auth_mode": "instance_principal",
+    "config_file": null,
+    "profile": "DEFAULT",
+    "batch_atomicity": "ATOMIC",
+    "dimensions": {
+      "source": "nats_sinks"
+    },
+    "metadata": {},
+    "include_metric_labels_as_dimensions": false,
+    "timeout_seconds": 5,
+    "max_retries": 0,
+    "retry_backoff_seconds": 0.25,
+    "stale_after_seconds": 60,
+    "max_metrics_per_request": 20,
+    "max_request_bytes": 1048576
+  },
   "syslog": {
     "enabled": false,
     "transport": "udp",

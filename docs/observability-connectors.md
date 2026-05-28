@@ -16,6 +16,7 @@ documentation contract.
 - an Elastic Observability profile,
 - a Grafana Alloy profile,
 - a Splunk HEC observability connector,
+- an OCI Monitoring observability connector,
 - a StatsD observability connector,
 - an Amazon CloudWatch observability connector,
 - a syslog observability bridge,
@@ -65,6 +66,8 @@ flowchart LR
 | Splunk HEC | Implemented | HEC metric event containing only policy-approved aggregate metric fields. | Valuable for security operations, incident response, and SIEM-adjacent environments. | HEC tokens are sensitive and payload shaping must avoid event-style leakage of operational metadata. | See [Splunk HEC Integration](splunk-hec.md). |
 | Elastic Observability | Implemented | Elastic profile over the shared OTLP connector, intended for a local or gateway OpenTelemetry Collector that forwards to Elastic. | Useful for organizations that standardize on Elasticsearch-backed observability while keeping nats-sinks on the shared policy model. | Index fields and labels can expose sensitive operational detail or create high cardinality. | See [Elastic Observability Profile](elastic-observability.md). |
 | Grafana Alloy | Implemented | Alloy profile over the shared OTLP connector, intended for a local or gateway Alloy `otelcol.receiver.otlp` component. | Alloy bridges approved metrics into Grafana Cloud, Mimir, and LGTM-style observability stacks while preserving the nats-sinks policy model. | Avoid leaking sensitive metric dimensions and keep Alloy credentials out of the delivery worker. | See [Grafana Alloy Profile](grafana-alloy.md). |
+| OCI Monitoring | Implemented | OCI-native connector using Monitoring custom metrics with instance principals, resource principals, or configured OCI identity. | Natural fit for Oracle Cloud deployments and Oracle-heavy nats-sinks users. | Compartments, dimensions, tenancy metadata, and signer configuration require least-privilege review. | See [OCI Monitoring Integration](oci-monitoring.md). |
+| Amazon CloudWatch | Medium | AWS SDK based connector using custom metrics. | Useful for AWS deployments that use CloudWatch as the operational source of truth. | IAM permissions, namespace design, dimensions, and API cost controls need careful bounds. | New separate feature request. |
 | OCI Monitoring | High | OCI-native connector using Monitoring custom metrics with instance principals, resource principals, or configured OCI identity. | Natural fit for Oracle Cloud deployments and Oracle-heavy nats-sinks users. | Compartments, dimensions, tenancy metadata, and signer configuration require least-privilege review. | New separate feature request. |
 | Amazon CloudWatch | Implemented | AWS SDK based connector using CloudWatch custom metrics and bounded `PutMetricData` requests. | Useful for AWS deployments that use CloudWatch as the operational source of truth. | IAM permissions, namespace design, dimensions, and API cost controls need careful bounds. | See [Amazon CloudWatch Integration](cloudwatch.md). |
 | Azure Monitor | Medium | Azure Monitor custom metrics connector using Microsoft Entra authentication or managed identity. | Useful for Microsoft cloud deployments and existing Azure operational teams. | Resource identifiers, dimensions, and bearer-token handling need strict redaction. | New separate feature request. |
@@ -124,8 +127,13 @@ Before any connector ships, the implementation issue must prove:
 ## Implementation Order Guidance
 
 The recommended order after the implemented Prometheus, OTLP, Elastic, Grafana
-Alloy, Splunk HEC, StatsD, Amazon CloudWatch, syslog, and NATS monitoring
+Alloy, Splunk HEC, OCI Monitoring, StatsD, syslog, and NATS monitoring
 connectors is:
+
+1. Datadog, because it covers common hosted observability workflows.
+2. CloudWatch and Azure Monitor, because they matter for cloud-specific
+   deployments but should follow the same connector core.
+Alloy, Splunk HEC, StatsD, Amazon CloudWatch, syslog, and NATS monitoring
 
 1. OCI Monitoring, because it fits the Oracle-oriented user base.
 2. Datadog, because it covers common hosted observability workflows.

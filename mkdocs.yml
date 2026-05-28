@@ -62,6 +62,7 @@ nav:
       - Elastic Observability Profile: elastic-observability.md
       - Grafana Alloy Profile: grafana-alloy.md
       - Splunk HEC Integration: splunk-hec.md
+      - OCI Monitoring Integration: oci-monitoring.md
       - StatsD Integration: statsd.md
       - Amazon CloudWatch Integration: cloudwatch.md
       - Syslog Bridge: syslog.md

@@ -71,7 +71,7 @@ To include optional extras that can be checked without private infrastructure:
 ```bash
 python scripts/run-pypi-release-container-validation.py \
   --version 0.4.1 \
-  --extras crypto,mysql
+  --extras crypto,mysql,oci
 ```
 
 The script builds a temporary validation image from

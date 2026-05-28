@@ -116,7 +116,8 @@ nats-sink-observe init-prometheus-policy \
 The command name includes `prometheus` for backward compatibility with earlier
 releases, but the generated policy is the shared observability policy. It
 includes disabled sections for Prometheus, OTLP, Elastic Observability,
-Grafana Alloy, and NATS server monitoring.
+Grafana Alloy, Splunk HEC, OCI Monitoring, StatsD, syslog, and NATS server
+monitoring.
 
 Validate the policy:
 

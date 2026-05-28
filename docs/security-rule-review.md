@@ -52,7 +52,7 @@ is merged.
 | `Oracle` | `src/nats_sinks/oracle/*`, `tests/unit/test_oracle_*.py`, `docs/oracle-sink.md` |
 | `File` | `src/nats_sinks/file/*`, `tests/unit/test_file_*.py`, `docs/file-sink.md` |
 | `CI` | `.github/workflows/*`, `scripts/check.sh`, `scripts/security.sh`, `scripts/secret-scan.sh` |
-| `Observability` | `src/nats_sinks/observability/*`, `src/nats_sinks/cli/observability.py`, `docs/observability.md`, `docs/prometheus.md`, `docs/otlp.md` |
+| `Observability` | `src/nats_sinks/observability/*`, `src/nats_sinks/cli/observability.py`, `docs/observability.md`, `docs/prometheus.md`, `docs/otlp.md`, `docs/oci-monitoring.md` |
 | `Docs` | `README.md`, `docs/*.md`, `ROBOTS.md`, `AGENTS.md`, `CHANGELOG.md` |
 | `N/A` | No current web, session, upload, native-extension, SSRF, or password-authentication surface. |
 

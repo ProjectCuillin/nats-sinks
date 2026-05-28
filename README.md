@@ -85,6 +85,12 @@ used immediately:
   native Prometheus HTTP scrape endpoint. It also provides a disabled-by-default
   OpenTelemetry OTLP metrics connector, Elastic Observability and Grafana Alloy
   profiles over the shared OTLP core, a disabled-by-default Splunk HEC
+  connector for approved aggregate metrics, a disabled-by-default OCI
+  Monitoring connector for Oracle Cloud Infrastructure custom metrics, a
+  disabled-by-default StatsD connector for best-effort datagram export, a
+  disabled-by-default syslog bridge for bounded RFC 5424-style messages, and a
+  disabled-by-default NATS server monitoring connector for explicitly approved
+  `/healthz`, `/jsz`, and related endpoint fields.
   connector for approved aggregate metrics, a disabled-by-default StatsD
   connector for best-effort datagram export, a disabled-by-default Amazon
   CloudWatch connector for approved custom metrics, a disabled-by-default
@@ -515,6 +521,7 @@ The metrics CLI is documented in
 [Metrics](https://nats-sinks.readthedocs.io/en/latest/metrics/).
 Policy-controlled Prometheus and OpenTelemetry export are part of the
 observability documentation, including the Elastic Observability and Grafana
+Alloy profiles, Splunk HEC connector, OCI Monitoring connector, StatsD
 Alloy profiles, Splunk HEC connector, StatsD connector, Amazon CloudWatch
 connector, and syslog bridge.
 Start with
@@ -527,6 +534,8 @@ or
 [Grafana Alloy Profile](https://nats-sinks.readthedocs.io/en/latest/grafana-alloy/),
 or
 [Splunk HEC Integration](https://nats-sinks.readthedocs.io/en/latest/splunk-hec/),
+or
+[OCI Monitoring Integration](https://nats-sinks.readthedocs.io/en/latest/oci-monitoring/),
 or
 [StatsD Integration](https://nats-sinks.readthedocs.io/en/latest/statsd/),
 or
@@ -851,6 +860,9 @@ subject hints, validate the policy, write policy-filtered Prometheus textfile
 output, run a disabled-by-default native Prometheus HTTP endpoint, and export
 approved metrics to an OpenTelemetry Collector through OTLP/HTTP JSON,
 including Elastic Observability and Grafana Alloy profiles that reuse the shared
+OTLP core, approved aggregate metric export to Splunk HEC, OCI Monitoring
+custom metric export, and best-effort StatsD datagram and syslog message
+export.
 OTLP core, approved aggregate metric export to Splunk HEC, and best-effort
 StatsD datagram, Amazon CloudWatch custom metric, and syslog message export.
 Metrics sharing remains off until the global policy and the selected connector
@@ -864,6 +876,8 @@ or
 [Grafana Alloy Profile](https://nats-sinks.readthedocs.io/en/latest/grafana-alloy/)
 or
 [Splunk HEC Integration](https://nats-sinks.readthedocs.io/en/latest/splunk-hec/)
+or
+[OCI Monitoring Integration](https://nats-sinks.readthedocs.io/en/latest/oci-monitoring/)
 or
 [StatsD Integration](https://nats-sinks.readthedocs.io/en/latest/statsd/)
 or
@@ -1146,6 +1160,8 @@ Phase 1:
   shared OTLP observability core.
 - Disabled-by-default Splunk HEC connector for approved aggregate metrics in
   security operations and incident-response environments.
+- Disabled-by-default OCI Monitoring connector for approved Oracle Cloud
+  Infrastructure custom metrics.
 - Disabled-by-default StatsD connector for approved best-effort UDP or Unix
   datagram metric export.
 - Disabled-by-default Amazon CloudWatch connector for approved custom metrics

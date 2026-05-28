@@ -32,6 +32,7 @@ HEADER = (
 EXTRA_MANIFESTS = {
     "crypto": "requirements-crypto.txt",
     "oracle": "requirements-oracle.txt",
+    "oci": "requirements-oci.txt",
     "test": "requirements-test.txt",
     "dev": "requirements-dev.txt",
     "docs": "requirements-docs.txt",

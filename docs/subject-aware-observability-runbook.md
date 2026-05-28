@@ -44,6 +44,7 @@ must preserve:
 - cardinality caps and overflow behavior are deterministic;
 - connector output contains approved family labels but not raw subjects;
 - observability failures do not change delivery decisions;
+- Prometheus, OTLP, OCI Monitoring, StatsD, syslog, Splunk HEC, and
 - Prometheus, OTLP, StatsD, Amazon CloudWatch, syslog, Splunk HEC, and
   `nats-sink-metrics` render the same prepared low-cardinality rows.
 
@@ -163,6 +164,13 @@ StatsD folds the label into a bounded metric-name component:
 
 ```text
 nats_sinks.messages_written_total.subject_family.certification_orders:2|g
+```
+
+OCI Monitoring can include the label as a bounded dimension only when
+`oci_monitoring.include_metric_labels_as_dimensions` is explicitly enabled:
+
+```json
+{"dimensions":{"deployment":"certification","subject_family":"certification_orders"}}
 ```
 
 Syslog renders the label as a structured-data parameter:

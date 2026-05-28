@@ -130,6 +130,13 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   malformed policy rejection, cardinality caps, sanitized connector and
   `nats-sink-metrics` output, and delivery non-interference before
   subject-family metrics are enabled.
+- Added the OCI Monitoring observability connector for issue #107. The new
+  optional `nats-sinks[oci]` extra keeps the OCI SDK out of the base install,
+  adds disabled-by-default `oci_monitoring` policy controls, renders sanitized
+  `PostMetricData` dry-run requests, supports instance principals, resource
+  principals, or protected OCI SDK config files, enforces bounded dimensions,
+  retries, stale-snapshot checks, and request sizes, and documents OCI-native
+  custom metric export as an Observability sub-page.
 - Added a local-only post-release PyPI artifact validation harness for issue
   #252. The script builds a short-lived Oracle Linux 9 slim validation
   container, installs `nats-sinks` from PyPI instead of the local checkout,

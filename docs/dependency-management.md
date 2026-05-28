@@ -38,6 +38,7 @@ The following files are generated from `pyproject.toml`:
 | `requirements.txt` | Runtime dependencies published by the package. |
 | `requirements-crypto.txt` | Runtime dependencies plus the `crypto` optional dependency group. |
 | `requirements-oracle.txt` | Runtime dependencies plus the `oracle` optional dependency group. |
+| `requirements-oci.txt` | Runtime dependencies plus the `oci` optional dependency group used by live OCI Monitoring export. |
 | `requirements-test.txt` | Runtime dependencies plus the `test` optional dependency group. |
 | `requirements-dev.txt` | Runtime dependencies plus the `dev` optional dependency group. |
 | `requirements-docs.txt` | Runtime dependencies plus the `docs` optional dependency group. |
@@ -105,6 +106,10 @@ or protobuf dependency to the base package. That choice keeps the default
 installation small, makes dependency review simpler, and avoids changing the
 runtime footprint for users who do not enable OTLP export.
 
+OCI Monitoring is the first observability connector with a vendor SDK. The
+`oci` optional extra installs the OCI Python SDK only on hosts that perform
+live OCI Monitoring export; dry-run rendering and the base sink package do not
+require it.
 The Amazon CloudWatch connector follows the same rule by keeping boto3 behind
 the `cloudwatch` optional extra. Dry-run rendering and unit tests work without
 boto3; live export requires `python -m pip install "nats-sinks[cloudwatch]"`.

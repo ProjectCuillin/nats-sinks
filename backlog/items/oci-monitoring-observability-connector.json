@@ -3,7 +3,7 @@
   "title": "[Feature]: Add an OCI Monitoring observability connector",
   "area": "Metrics and observability",
   "priority": "P3 - backlog candidate",
-  "target_release": "unscheduled",
+  "target_release": "v0.4.2",
   "labels": ["observability", "security", "deployment", "testing"],
   "problem": "Oracle Cloud Infrastructure Monitoring is a natural target for OCI deployments and Oracle-heavy nats-sinks users. nats-sinks currently has local snapshots and Prometheus connectors but no OCI-native custom metric connector. Operators may otherwise use scripts that bypass policy controls, over-share dimensions, or use overly broad OCI credentials.",
   "proposal": "Design and implement an optional OCI Monitoring connector that follows the shared observability connector contract. It must be disabled by default, read approved metrics from the local metrics snapshot or shared read-only provider, apply the same observability policy allow and deny lists, use the same stale snapshot, dry-run, timeout, retry, and redaction behavior, and export only policy-approved metric names. The connector should support least-privilege OCI authentication options such as instance principals, resource principals, workload identity where available, or protected configuration references, and it should map approved metrics to OCI custom metrics with bounded dimensions.",

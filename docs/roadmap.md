@@ -65,6 +65,9 @@
 - Splunk HEC observability connector for approved aggregate metrics in
   security operations and incident-response environments, with token values
   sourced from environment variables and HEC export kept outside delivery.
+- OCI Monitoring observability connector for approved Oracle Cloud
+  Infrastructure custom metrics, with optional OCI SDK dependency,
+  least-privilege identity guidance, and export kept outside delivery.
 - StatsD observability connector for approved best-effort UDP or Unix datagram
   metric export, kept outside delivery semantics.
 - Amazon CloudWatch observability connector for approved custom metrics through
@@ -159,6 +162,9 @@
 
 ## Phase 2
 
+- Individual observability connector backlog items for Datadog, Amazon
+  CloudWatch, and Azure Monitor, all following the shared disabled-by-default
+  observability connector contract.
 - Individual observability connector backlog items for Datadog, Oracle Cloud
   Infrastructure Monitoring, and Azure Monitor, all
   following the shared disabled-by-default observability connector contract.

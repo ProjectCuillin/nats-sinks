@@ -45,6 +45,9 @@ oracle = [
 mysql = [
   "mysql-connector-python>=9,<10",
 ]
+oci = [
+  "oci>=2.160,<3",
+]
 cloudwatch = [
   "boto3>=1.34,<2",
 ]
@@ -72,7 +75,7 @@ docs = [
   "pymdown-extensions>=10.9,<11",
 ]
 all = [
-  "nats-sinks[cloudwatch,crypto,mysql,oracle]",
+  "nats-sinks[cloudwatch,crypto,mysql,oci,oracle]",
 ]
 
 [project.urls]
