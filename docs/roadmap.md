@@ -188,11 +188,11 @@
 - Additional Oracle MySQL HeatWave tuning and certification guidance on top of
   the implemented first-party Oracle MySQL sink, including deployment profiles,
   performance notes, and HeatWave-specific operational validation.
-- Oracle Berkeley DB, Oracle NoSQL Database, Oracle Coherence Community
-  Edition, and OCI Streaming sink evaluations as first-party Oracle-family
-  connector candidates. A local Oracle Coherence Community Edition test backend
-  is now available as development infrastructure for the future sink and
-  routing tests, but the sink itself remains backlog work.
+- Oracle Berkeley DB and OCI Streaming sink evaluations as first-party
+  Oracle-family connector candidates. Oracle NoSQL Database and Oracle
+  Coherence Community Edition now have experimental first-party sinks, but both
+  still need deeper live certification evidence before production-ready
+  recommendation.
 - Additional Oracle-family connector evaluations such as Oracle Autonomous AI
   Lakehouse, Oracle AI Data Platform, Oracle JSON document stores, OCI Cache
   Cluster, WebLogic JMS, Oracle TimesTen, Oracle Spatial and Graph profiles,

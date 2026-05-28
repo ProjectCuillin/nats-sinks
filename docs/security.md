@@ -63,9 +63,9 @@ treated as a supply-chain trust decision.
 
 Secure defaults:
 
-- Oracle Database, Oracle MySQL, Oracle Coherence Community Edition, FileSink,
-  and SpoolSink are first-party built-in connectors and do not require plugin
-  discovery.
+- Oracle Database, Oracle MySQL, Oracle NoSQL Database, Oracle Coherence
+  Community Edition, FileSink, and SpoolSink are first-party built-in
+  connectors and do not require plugin discovery.
 - Optional third-party discovery is disabled by default.
 - When discovery is enabled, `plugins.allowed_sinks` must explicitly list each
   external connector name.
@@ -82,10 +82,10 @@ not install connector packages dynamically at runtime, and do not grant the
 service account broader filesystem, network, database, or cloud permissions
 merely because a connector asks for them.
 
-Future Oracle-family sinks such as OCI Object Storage, Oracle MySQL,
-Oracle Berkeley DB, Oracle NoSQL Database, and OCI Streaming are expected to be
-first-party connectors in this repository unless project governance changes
-that posture. Palantir Foundry, Palantir Gotham, and other third-party platform
+Future Oracle-family sinks such as OCI Object Storage, Oracle Berkeley DB, and
+OCI Streaming are expected to be first-party connectors in this repository
+unless project governance changes that posture. Palantir Foundry, Palantir
+Gotham, and other third-party platform
 connectors require the same connector certification evidence before production
 recommendation.
 
@@ -413,6 +413,13 @@ targets require a known sink type, bounded wait values, and sanitized logging.
 Those logs contain sink names and outcome categories only. They must not include
 payloads, credentials, connection strings, raw file paths, private subjects, or
 sensitive classification and label values.
+
+Oracle NoSQL Database configuration is also a trust boundary. Endpoints,
+deployment modes, auth modes, table names, row field names, key prefixes,
+table creation controls, and size limits are allow-list validated before SDK
+handle creation. The sink stores the full normalized event in a configured JSON
+value field and must not log payloads, OCI private-key material, passphrases,
+or table row contents by default.
 
 Key rotation should use explicit `key_id` values. New runtime configuration
 encrypts with the active key, while authorized verification, replay, or

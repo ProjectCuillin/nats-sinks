@@ -33,6 +33,7 @@ from nats_sinks.coherence import CoherenceSink as ReadmeCoherenceSink
 from nats_sinks.file import FileSink as ReadmeFileSink
 from nats_sinks.mysql import MySqlSink as ReadmeMySqlSink
 from nats_sinks.oracle import OracleSink as ReadmeOracleSink
+from nats_sinks.oracle_nosql import OracleNoSqlSink as ReadmeOracleNoSqlSink
 from nats_sinks.spool import SpoolSink as ReadmeSpoolSink
 
 PUBLIC_API_CONTRACT: dict[str, tuple[str, ...]] = {
@@ -83,6 +84,8 @@ PUBLIC_API_CONTRACT: dict[str, tuple[str, ...]] = {
         "NatsSinksError",
         "NoopMetrics",
         "NormalizedPayload",
+        "OracleNoSqlSink",
+        "OracleNoSqlSinkConfig",
         "PayloadEncryptor",
         "PayloadKeyRegistry",
         "PermanentSinkError",
@@ -259,6 +262,23 @@ PUBLIC_API_CONTRACT: dict[str, tuple[str, ...]] = {
         "CoherenceStorageKind",
         "coherence_key_for_envelope",
         "coherence_value_for_envelope",
+    ),
+    "nats_sinks.oracle_nosql": (
+        "ORACLE_NOSQL_EVENT_SCHEMA",
+        "ORACLE_NOSQL_EVENT_SCHEMA_VERSION",
+        "OracleNoSqlAuthMode",
+        "OracleNoSqlClient",
+        "OracleNoSqlClientFactory",
+        "OracleNoSqlDeploymentMode",
+        "OracleNoSqlDuplicatePolicy",
+        "OracleNoSqlDurabilityMode",
+        "OracleNoSqlKeyStrategy",
+        "OracleNoSqlSink",
+        "OracleNoSqlSinkConfig",
+        "oracle_nosql_create_table_statement",
+        "oracle_nosql_key_for_envelope",
+        "oracle_nosql_row_for_envelope",
+        "oracle_nosql_value_for_envelope",
     ),
     "nats_sinks.oracle": (
         "LINEAGE_FIELD_SPECS",
@@ -607,6 +627,7 @@ def test_public_api_smoke_imports_match_readme_examples() -> None:
     assert ReadmeCoherenceSink is nats_sinks.CoherenceSink
     assert ReadmeFileSink is nats_sinks.FileSink
     assert ReadmeMySqlSink.__name__ == "MySqlSink"
+    assert ReadmeOracleNoSqlSink is nats_sinks.OracleNoSqlSink
     assert ReadmeOracleSink.__name__ == "OracleSink"
     assert ReadmeSpoolSink is nats_sinks.SpoolSink
 

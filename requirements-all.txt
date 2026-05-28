@@ -10,3 +10,4 @@ cryptography>=42,<49
 mysql-connector-python>=9,<10
 oci>=2.160,<3
 oracledb>=2.3,<5
+borneo>=5,<6

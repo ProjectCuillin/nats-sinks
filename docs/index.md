@@ -146,6 +146,11 @@ The current release provides the following production-ready foundation:
   pooling, TLS CA support, idempotent `upsert` and `insert_ignore` modes,
   subject-to-table routing, metadata persistence, payload normalization, and
   transaction commit before ACK.
+- `nats_sinks.oracle_nosql.OracleNoSqlSink`, an experimental first-party
+  Oracle NoSQL Database sink that stores one complete normalized event JSON
+  object in a configured JSON value field, with deterministic K/V-style keys,
+  conditional duplicate handling, bounded values, and SDK-backed live test
+  gating.
 - `nats_sinks.coherence.CoherenceSink`, an experimental first-party Oracle
   Coherence Community Edition sink that stores one complete normalized event
   JSON object as a configured cache or map value, with deterministic
@@ -188,6 +193,7 @@ metadata for routing and audit.
 | --- | --- | --- | --- |
 | Oracle Database | `from nats_sinks.oracle import OracleSink` | Persist JetStream messages into Oracle tables with idempotent writes. | Oracle transaction committed. |
 | Oracle MySQL | `from nats_sinks.mysql import MySqlSink` | Persist JetStream messages into Oracle MySQL tables with idempotent writes. | Oracle MySQL transaction committed. |
+| Oracle NoSQL Database | `from nats_sinks.oracle_nosql import OracleNoSqlSink` | Maintain an Oracle NoSQL K/V-style event table using complete event JSON values. | SDK put operation completed; production ACK-gated custody depends on operator-confirmed Oracle NoSQL durability. |
 | Oracle Coherence Community Edition | `from nats_sinks.coherence import CoherenceSink` | Maintain a Coherence cache or map read model using complete event JSON values. | Coherence operation completed; production ACK-gated custody depends on operator-confirmed cluster durability. |
 | Local files | `from nats_sinks.file import FileSink` | Write one JSON or gzip-compressed JSON document per message for local handoff, audit, development, or simple archival flows. | Final file atomically placed after flush and optional `fsync`. |
 | Edge spool | `from nats_sinks.spool import SpoolSink` | Commit encrypted local custody during disconnected operation, then replay later to Oracle, file, or another sink. | Encrypted spool record atomically placed after flush and optional `fsync`. |
@@ -268,6 +274,9 @@ operations without hunting through a long flat list.
   merge mode, metadata columns, Autonomous Database, and transactions.
 - [Oracle MySQL Sink](mysql-sink.md): Oracle MySQL connection settings, TLS,
   schema design, subject-to-table routing, and container-backed testing.
+- [Oracle NoSQL Database Sink](oracle-nosql-sink.md): SDK deployment modes,
+  K/V-style rows, deterministic keys, generated safe DDL, duplicate policies,
+  and live test gating.
 - [File Sink](file-sink.md): atomic local files, deterministic filenames,
   duplicate handling, gzip compression, and handoff patterns.
 - [Named Sinks And Routing](named-sinks.md): declare several destination
@@ -377,7 +386,8 @@ are implemented, tested, documented, and released.
 Planned areas include:
 
 - additional idempotency strategies,
-- HTTP, S3, Kafka, OCI Object Storage, Oracle MySQL, and other sink modules,
+- HTTP, S3, Kafka, OCI Object Storage, Oracle Berkeley DB, OCI Streaming, and
+  other sink modules,
 - Docker and Kubernetes deployment assets,
 - more live certification runbooks for secure NATS authentication deployments,
 - more JetStream consumer tuning options,

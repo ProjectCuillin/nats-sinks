@@ -67,9 +67,9 @@ encryption. Destination modules own destination writes and destination commit
 behavior only.
 
 The current built-in registry includes production-ready Oracle Database,
-Oracle MySQL, file, and edge spool sinks plus experimental Oracle Coherence
-Community Edition, Palantir Foundry Streams, and Palantir Gotham RevDB object
-sinks.
+Oracle MySQL, file, and edge spool sinks plus experimental Oracle NoSQL
+Database, Oracle Coherence Community Edition, Palantir Foundry Streams, and
+Palantir Gotham RevDB object sinks.
 Experimental sinks are still bound by the same commit-then-ACK contract, but
 their documentation must separate local mock certification from live
 destination certification.
@@ -411,12 +411,13 @@ Today, the first-party production connectors are built in:
 | --- | --- | --- | --- |
 | Oracle Database | `oracle` | `nats_sinks.oracle.OracleSink` | Production connector in this repository. |
 | Oracle MySQL | `mysql` | `nats_sinks.mysql.MySqlSink` | Production connector in this repository. |
+| Oracle NoSQL Database | `oracle_nosql` | `nats_sinks.oracle_nosql.OracleNoSqlSink` | Experimental first-party connector in this repository. |
 | Oracle Coherence Community Edition | `coherence` | `nats_sinks.coherence.CoherenceSink` | Experimental first-party connector in this repository. |
 | File | `file` | `nats_sinks.file.FileSink` | Production connector in this repository. |
 | Edge spool | `spool` | `nats_sinks.spool.SpoolSink` | Production connector in this repository. |
 
 Future Oracle-family sinks such as OCI Object Storage, Oracle Berkeley DB,
-Oracle NoSQL Database, and OCI Streaming are intended to be first-party
+and OCI Streaming are intended to be first-party
 connectors in this repository unless project governance decides otherwise
 later. They should use the same connector descriptor and certification tests as
 Oracle Database, Oracle MySQL, Oracle Coherence Community Edition, FileSink,
@@ -548,6 +549,7 @@ Current experimental first-party sinks and their success boundaries:
 
 | Sink | Module | Success boundary |
 | --- | --- | --- |
+| Oracle NoSQL Database | `nats_sinks.oracle_nosql` | Oracle NoSQL SDK put operation completed. Production ACK-gated custody depends on operator-confirmed Oracle NoSQL Database deployment durability. |
 | Oracle Coherence Community Edition | `nats_sinks.coherence` | Configured Coherence cache or map operation completed. Production ACK-gated custody depends on operator-confirmed Coherence cluster durability. |
 
 ## Adding Future Sinks Without Breaking Users
@@ -607,17 +609,15 @@ publish DLQ records, parse CLI arguments, or own process signal handling. Those
 jobs belong to the core runner and CLI.
 
 Keeping those responsibilities outside destination modules makes it possible to
-add future sinks such as Oracle MySQL, HTTP, S3, or Kafka without copying ACK
-logic into every backend.
+add future sinks such as OCI Object Storage, HTTP, S3, or Kafka without copying
+ACK logic into every backend.
 
 ## Future Destinations
 
 Future first-party sinks should live in destination modules such as:
 
 - `nats_sinks.oci_object_storage`
-- `nats_sinks.mysql`
 - `nats_sinks.oci_streaming`
-- `nats_sinks.oracle_nosql`
 - `nats_sinks.berkeley_db`
 
 Future non-Oracle sinks may be first-party modules, carefully reviewed optional

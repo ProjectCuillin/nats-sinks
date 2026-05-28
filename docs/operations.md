@@ -612,7 +612,11 @@ This suite verifies the route-selection matrix, required ACK blocking,
 optional timeout behavior, no-route policies, CLI validation, and redaction
 behavior without contacting live infrastructure. It complements, but does not
 replace, destination-specific Oracle Database, Oracle MySQL, file, spool, or
-future sink certification.
+future sink certification. Oracle NoSQL Database follows the same optional
+target model with `oracle_nosql` defaults of `minimum_wait_ms=1000` and
+`timeout_ms=5000`; treat it as an optional read model until the configured
+Oracle NoSQL Database store, proxy, consistency, backup, and restore posture
+has been reviewed for ACK-gated custody.
 
 For mission and defence-style deployments, prefer a small number of readable
 routes based on normalized subject, priority, classification, labels, and

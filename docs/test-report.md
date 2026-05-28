@@ -14,41 +14,42 @@ generated database passwords, or full raw logs from live systems.
 | Field | Value |
 | --- | --- |
 | Overall result | Pass |
-| Report generated | 2026-05-28 issue `#103` Azure Monitor observability connector validation for upcoming `v0.4.2` development |
+| Report generated | 2026-05-28 issue `#149` Oracle NoSQL Database sink validation for upcoming `v0.4.2` development |
 | Project version | `0.4.1` package metadata with `v0.4.2` development changes |
 | Python version | 3.12.4 |
-| Git revision checked | Branch `issue-103-azure-monitor-observability-connector` based on `release-v0.4.2` |
+| Git revision checked | Branch `issue-149-oracle-nosql-database-sink` based on `release-v0.4.2` |
 | Live NATS details | Environment-gated live tests skipped unless explicitly enabled |
 | Live Oracle Database details | Environment-gated live tests skipped unless explicitly enabled |
 | Live Oracle MySQL details | Environment-gated live tests skipped unless explicitly enabled |
+| Live Oracle NoSQL details | Environment-gated live tests skipped unless explicitly enabled |
 | Live Oracle Coherence details | Environment-gated live tests skipped unless explicitly enabled |
-| Live Azure Monitor details | Not required for default validation; connector coverage used fake HTTP clients and dry-run request rendering |
+| Oracle NoSQL test container details | Not available yet; the sink is covered by fake SDK clients and an explicitly gated live KVLite/Cloud Simulator test path |
 
-This refresh covered the disabled-by-default Azure Monitor custom metrics
-observability connector for issue `#103`. The connector reads only local metrics
-snapshots, applies the shared observability policy, renders bounded Azure
-Monitor custom metric request bodies, and keeps Azure export outside the
-delivery-critical sink runner.
+This refresh covered the experimental first-party Oracle NoSQL Database sink
+for issue `#149`. The sink writes one complete normalized event JSON value into
+a configured Oracle NoSQL table row, derives deterministic keys from approved
+idempotency metadata, validates SDK endpoints and table identifiers before
+startup, and keeps ACK ownership in the core runner.
 
 ```mermaid
 flowchart LR
-    Runner[nats-sink worker] --> Snapshot[Local metrics snapshot]
-    Policy[Observability policy] --> Azure[Azure Monitor connector]
-    Snapshot --> Azure
-    Azure --> Metrics[Azure Monitor custom metrics]
-    Azure -. never controls .-> Runner
+    Runner[nats-sink worker] --> Envelope[Normalized NatsEnvelope]
+    Envelope --> NoSQL[Oracle NoSQL sink]
+    NoSQL --> Row[Key plus JSON value row]
+    Row --> Commit[SDK put succeeded]
+    Commit --> Runner
 ```
 
 ## Core And Repository Validation
 
 | Check | Result |
 | --- | --- |
-| Ruff format | Pass, `269 files already formatted` |
+| Ruff format | Pass, `275 files already formatted` |
 | Ruff lint | Pass |
-| Mypy | Pass, no issues in `112` source files |
+| Mypy | Pass, no issues in `116` source files |
 | Version metadata consistency | Pass for `0.4.1` |
 | Dependency manifests | Pass, manifest files up to date |
-| Backlog metadata | Pass, `145` backlog items validated |
+| Backlog metadata | Pass, `146` backlog items validated |
 | Bug report metadata | Pass, `90` bug reports validated |
 | PyPI-facing Markdown links | Pass |
 | Documentation builds | Pass for Read the Docs and GitHub Pages MkDocs builds |
@@ -60,61 +61,59 @@ flowchart LR
 
 | Test Area | Command | Result |
 | --- | --- | --- |
-| Azure Monitor focused subset | `python -m pytest tests/unit/test_azure_monitor_observability.py tests/unit/test_observability_cli.py tests/unit/test_observability_policy.py tests/unit/test_public_api.py -q` | Pass, `85 passed` |
-| Full unit suite | `python -m pytest tests/unit -q` | Pass, `1213 passed` |
-| Main repository test suite | run by `scripts/check.sh` | Pass, `1218 passed, 12 skipped` |
+| Oracle NoSQL focused subset | `python -m pytest tests/unit/test_oracle_nosql_sink.py tests/unit/test_public_api.py tests/unit/test_routing_policy.py tests/integration/test_oracle_nosql_sink_e2e.py -q` | Pass, `57 passed, 1 skipped` |
+| Full unit suite | `python -m pytest tests/unit -q` | Pass, `1228 passed` |
+| Main repository test suite | run by `scripts/check.sh` | Pass, `1233 passed, 13 skipped` |
 | Commit, encryption, file, and Oracle sink subset | run by `scripts/check.sh` | Pass, `130 passed` |
-| Sink certification and example validation | `scripts/check-sinks.sh` via `scripts/check.sh` | Pass, `163 passed` plus file, Oracle, Oracle Coherence, multi-sink routing, Foundry, and Gotham config validation |
+| Sink certification and example validation | `scripts/check-sinks.sh` via `scripts/check.sh` | Pass, `177 passed` plus file, Oracle, Oracle NoSQL, Oracle Coherence, multi-sink routing, Foundry, and Gotham config validation |
 | Full local validation | `scripts/check.sh` | Pass |
 
 The skipped tests are the existing environment-gated live NATS, Oracle
-Database, Oracle MySQL, Oracle Coherence, and push-consumer integration tests.
+Database, Oracle MySQL, Oracle NoSQL Database, Oracle Coherence, and
+push-consumer integration tests.
 
-## Azure Monitor Connector Evidence
+## Oracle NoSQL Database Sink Evidence
 
 The new focused coverage verifies:
 
-- Azure Monitor export is disabled by default and returns a safe no-op summary;
-- enabled export requires explicit top-level policy enablement, Azure resource
-  ID, resource location, and environment-backed bearer-token variable name;
-- dry-run output renders bounded Azure Monitor custom metric request bodies
-  without reading tokens or printing Azure resource IDs, locations, endpoints,
-  payloads, subjects, table names, file paths, or destination addresses;
-- live export uses a fake HTTP opener in tests, sends a bearer-token header
-  from the configured environment variable, honors timeout settings, and
-  reports only sanitized status categories;
-- shared allow-list, deny-list, observation, and stale-snapshot policies are
-  applied before request construction;
-- static dimensions are explicit, bounded, sorted, and screened for sensitive
-  or high-cardinality names and values;
-- prepared metric labels stay suppressed unless
-  `include_metric_labels_as_dimensions` is explicitly enabled;
-- request-size limits and bounded retries fail closed with actionable errors;
-- CLI output avoids printing bearer tokens, Azure resource IDs, regional
-  endpoints, subjects, payloads, classification values, file paths, table
-  names, or credentials.
+- `sink.type: "oracle_nosql"` is accepted through the normal CLI/config path;
+- endpoints, deployment modes, auth modes, table names, field names, key
+  prefixes, size limits, generated table DDL inputs, and duplicate policies are
+  validated before SDK use;
+- full normalized event metadata is stored in a configured JSON value field;
+- deterministic key strategies cover `idempotency_key`, `stream_sequence`,
+  `message_id`, and `payload_sha256`;
+- duplicate policies cover conditional `skip_existing`, unconditional
+  `replace`, and `fail_existing`;
+- fake SDK writes, optional table creation, timeout handling, client failures,
+  missing optional dependency behavior, and ambiguous SDK results fail closed;
+- sink certification helpers prove write success and duplicate redelivery
+  behavior without live infrastructure;
+- live Oracle NoSQL Database e2e coverage is present but explicitly skipped
+  unless local integration environment variables are set.
 
 ## Issues Found During Validation
 
-No new repository defects were found during the issue `#103` validation cycle.
+No new repository defects were found during the issue `#149` validation cycle.
 The security scan reported existing reviewed `nosec` annotations as warnings,
-and the check remained passing.
+and the check remained passing. The Oracle NoSQL Database Docker test backend
+has not been implemented yet, so no live container-backed Oracle NoSQL test was
+claimed in this report.
 
 ## Documentation Evidence
 
 The following public documentation was updated and built successfully:
 
 - [README](https://github.com/ProjectCuillin/nats-sinks/blob/main/README.md)
-- [Azure Monitor Integration](azure-monitor.md)
+- [Oracle NoSQL Database Sink](oracle-nosql-sink.md)
 - [Configuration](configuration.md)
-- [CLI Reference](cli.md)
-- [Metrics](metrics.md)
-- [Observability](observability.md)
-- [Observability Connector Roadmap](observability-connectors.md)
+- [Idempotency](idempotency.md)
+- [Sink Framework](sink-framework.md)
 - [Operations](operations.md)
-- [Python Usage](python-usage.md)
 - [Security](security.md)
+- [Security Rule Review](security-rule-review.md)
+- [Testing](testing.md)
 - [Documentation Home](index.md)
 
 The changelog, backlog metadata, latest test report, and public documentation
-were updated for issue `#103`.
+were updated for issue `#149`.
