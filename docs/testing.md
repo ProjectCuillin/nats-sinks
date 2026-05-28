@@ -348,7 +348,7 @@ Use optional extras only when they can be validated without private services:
 ```bash
 python scripts/run-pypi-release-container-validation.py \
   --version 0.4.1 \
-  --extras crypto,mysql
+  --extras crypto,mysql,oci
 ```
 
 The script removes the validation container, temporary image, and generated

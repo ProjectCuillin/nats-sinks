@@ -31,8 +31,9 @@ directory, or any future destination backend.
 The `nats-sink-observe` command owns external sharing. It can render a
 Prometheus textfile for node_exporter, run an optional native Prometheus HTTP
 endpoint, or export approved metrics to an OpenTelemetry Collector through
-OTLP/HTTP JSON. These connectors are disabled by default and require an
-explicit allow-list policy before real metrics are shared.
+OTLP/HTTP JSON, OCI Monitoring custom metrics, StatsD, syslog, or another
+implemented observability connector. These connectors are disabled by default
+and require an explicit allow-list policy before real metrics are shared.
 
 ## Why Metrics Matter
 
@@ -78,7 +79,7 @@ The runner emits metric suffixes such as `messages_fetched_total`. A recorder
 stores or exports those values. `JsonFileMetrics` writes a compact local JSON
 document that the metrics CLI can read. Larger deployments can implement the
 same `MetricsRecorder` protocol and send values to Prometheus, OpenTelemetry,
-StatsD, syslog, or a platform-native telemetry service.
+OCI Monitoring, StatsD, syslog, or a platform-native telemetry service.
 
 Metrics are observational only. They must never change ACK ordering, inspect
 plaintext payloads, mutate envelopes, or decide whether a message is successful.
@@ -382,6 +383,7 @@ The observability CLI provides policy and connector commands:
 | `nats-sink-observe elastic-export SNAPSHOT POLICY` | Dry-run or send approved metrics through the Elastic OTLP profile. |
 | `nats-sink-observe grafana-alloy-export SNAPSHOT POLICY` | Dry-run or send approved metrics through the Grafana Alloy profile. |
 | `nats-sink-observe splunk-hec-export SNAPSHOT POLICY` | Dry-run or send approved aggregate metrics to Splunk HEC. |
+| `nats-sink-observe oci-monitoring-export SNAPSHOT POLICY` | Dry-run or send approved custom metrics to OCI Monitoring. |
 | `nats-sink-observe statsd-export SNAPSHOT POLICY` | Dry-run or send approved best-effort metric datagrams to StatsD. |
 | `nats-sink-observe syslog-export SNAPSHOT POLICY` | Dry-run or send approved RFC 5424-style metric messages to syslog. |
 

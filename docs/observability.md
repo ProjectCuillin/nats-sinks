@@ -40,6 +40,9 @@ Observability is documented as a small set of focused pages:
 - [Splunk HEC Integration](splunk-hec.md): explains the Splunk HTTP Event
   Collector connector for approved aggregate metrics in SIEM and
   incident-response environments.
+- [OCI Monitoring Integration](oci-monitoring.md): explains OCI-native custom
+  metric export with instance principals, resource principals, or protected OCI
+  SDK config files.
 - [StatsD Integration](statsd.md): explains best-effort UDP and Unix datagram
   export to StatsD-compatible aggregators.
 - [Syslog Bridge](syslog.md): explains best-effort RFC 5424-style UDP and Unix
@@ -62,6 +65,9 @@ The Grafana Alloy profile follows the same rule and is implemented as an OTLP
 handoff to a separate Alloy collector.
 The Splunk HEC connector follows the same rule and emits one bounded
 policy-approved metric event to Splunk's HTTP Event Collector.
+The OCI Monitoring connector follows the same rule and sends bounded custom
+metric batches to Oracle Cloud Infrastructure Monitoring through the optional
+OCI SDK path.
 The StatsD connector follows the same rule and emits bounded best-effort
 datagrams to a StatsD-compatible local or network listener.
 The syslog bridge follows the same rule and emits bounded RFC 5424-style
@@ -327,6 +333,28 @@ Generated policies are disabled by default:
     "host": "nats-sinks",
     "index": null
   },
+  "oci_monitoring": {
+    "enabled": false,
+    "metric_namespace": "nats_sinks_metrics",
+    "region": null,
+    "compartment_id": null,
+    "resource_group": null,
+    "auth_mode": "instance_principal",
+    "config_file": null,
+    "profile": "DEFAULT",
+    "batch_atomicity": "ATOMIC",
+    "dimensions": {
+      "source": "nats_sinks"
+    },
+    "metadata": {},
+    "include_metric_labels_as_dimensions": false,
+    "timeout_seconds": 5,
+    "max_retries": 0,
+    "retry_backoff_seconds": 0.25,
+    "stale_after_seconds": null,
+    "max_metrics_per_request": 20,
+    "max_request_bytes": 1048576
+  },
   "statsd": {
     "enabled": false,
     "transport": "udp",
@@ -409,6 +437,13 @@ is disabled by default and requires both `enabled=true` and
 containing only approved aggregate metric fields. HEC tokens are referenced by
 environment variable name and resolved only at export time.
 
+The `oci_monitoring` object controls the Oracle Cloud Infrastructure Monitoring
+connector. It is disabled by default and requires both `enabled=true` and
+`oci_monitoring.enabled=true`. The connector sends bounded custom metric
+batches through the optional OCI SDK path. Instance principals and resource
+principals are preferred; SDK config files are supported for controlled local
+labs and protected runtime environments.
+
 The `statsd` object controls the StatsD connector. It is disabled by default
 and requires both `enabled=true` and `statsd.enabled=true`. The connector sends
 one bounded datagram per approved aggregate metric over UDP or a Unix datagram
@@ -455,6 +490,7 @@ the top-level policy.
 | `elastic` | object | Elastic Observability profile settings over the OTLP connector. |
 | `grafana_alloy` | object | Grafana Alloy profile settings over the OTLP connector, including generated River snippet settings. |
 | `splunk_hec` | object | Splunk HTTP Event Collector settings for approved aggregate metric events. |
+| `oci_monitoring` | object | OCI Monitoring settings for approved Oracle Cloud Infrastructure custom metrics. |
 | `statsd` | object | StatsD connector settings for approved best-effort metric datagrams. |
 | `syslog` | object | Syslog bridge settings for approved RFC 5424-style best-effort metric messages. |
 | `nats_server_monitoring` | object | Optional connector settings for selected NATS server monitoring endpoint values. |
@@ -549,9 +585,10 @@ The row says only that the reviewed `orders` family contributed `128` events
 to `messages_written_total`. It does not include the raw subject
 `orders.created`, message IDs, payloads, classifications, file paths, table
 names, endpoint URLs, or credentials. Prometheus renders this as a
-`subject_family` label, OTLP renders it as a data-point attribute, StatsD folds
-it into a bounded metric name component, Splunk HEC folds it into the metric
-field name, and syslog renders it as a structured-data parameter.
+`subject_family` label, OTLP renders it as a data-point attribute, OCI
+Monitoring may render it as a dimension only when explicitly enabled, StatsD
+folds it into a bounded metric name component, Splunk HEC folds it into the
+metric field name, and syslog renders it as a structured-data parameter.
 
 ## Prometheus Connector Fields
 
@@ -651,6 +688,33 @@ generation, service guidance, security notes, and test coverage.
 
 See [Splunk HEC Integration](splunk-hec.md) for full examples, HEC event
 format, service guidance, security notes, and test coverage.
+
+## OCI Monitoring Connector Fields
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `oci_monitoring.enabled` | `false` | Enables OCI Monitoring export when the top-level policy is also enabled. |
+| `oci_monitoring.metric_namespace` | `nats_sinks_metrics` | OCI custom metric namespace. Reserved `oci_` and `oracle_` prefixes are rejected. |
+| `oci_monitoring.region` | `null` | OCI region name. Required when the connector is enabled. |
+| `oci_monitoring.compartment_id` | `null` | Target compartment OCID. Required when enabled and redacted from dry-run output. |
+| `oci_monitoring.resource_group` | `null` | Optional OCI Monitoring resource group. Keep it static and non-sensitive. |
+| `oci_monitoring.auth_mode` | `instance_principal` | Authentication mode. Valid values are `instance_principal`, `resource_principal`, and `config_file`. |
+| `oci_monitoring.config_file` | `null` | OCI SDK config file path. Required only for `auth_mode: "config_file"`. |
+| `oci_monitoring.profile` | `DEFAULT` | OCI SDK config profile used with config-file authentication. |
+| `oci_monitoring.batch_atomicity` | `ATOMIC` | OCI request batch behavior. Valid values are `ATOMIC` and `NON_ATOMIC`. |
+| `oci_monitoring.dimensions` | `{"source": "nats_sinks"}` | Static, low-cardinality dimensions added to each custom metric. At least one safe dimension is required. |
+| `oci_monitoring.metadata` | `{}` | Optional static metric metadata. Sensitive-looking keys are rejected. |
+| `oci_monitoring.include_metric_labels_as_dimensions` | `false` | Adds prepared, policy-reviewed metric labels such as `subject_family` as OCI dimensions. Leave disabled unless the subject-aware runbook has been completed. |
+| `oci_monitoring.timeout_seconds` | `5` | Per-request SDK timeout, validated from greater than `0` through `60` seconds. |
+| `oci_monitoring.max_retries` | `0` | Bounded retries after the initial attempt. |
+| `oci_monitoring.retry_backoff_seconds` | `0.25` | Delay between retry attempts. |
+| `oci_monitoring.stale_after_seconds` | `null` | Optional maximum snapshot age before export fails closed unless `--allow-stale` is used. |
+| `oci_monitoring.max_metrics_per_request` | `20` | Maximum metric data objects per OCI request, capped at `50`. |
+| `oci_monitoring.max_request_bytes` | `1048576` | Maximum rendered request size before SDK model conversion. |
+
+See [OCI Monitoring Integration](oci-monitoring.md) for authentication
+choices, least-privilege OCI policy guidance, dry-run output, service examples,
+and test coverage.
 
 ## StatsD Connector Fields
 
@@ -1047,9 +1111,9 @@ Treat observability configuration as production policy:
   a controlled configuration-management process,
 - grant the Prometheus textfile service read access to the metrics snapshot and
   write access only to the node_exporter textfile directory,
-- grant the OTLP export service read access to the metrics snapshot, read
-  access to the policy, and only the network path required to reach the
-  approved OpenTelemetry Collector,
+- grant the OTLP or OCI Monitoring export service read access to the metrics
+  snapshot, read access to the policy, and only the network or platform
+  identity path required to reach the approved monitoring platform,
 - keep the main sink service and observability publishing service separate when
   practical.
 
@@ -1060,16 +1124,16 @@ labels, or classified mission details.
 ## Future Connectors
 
 The observability core is intentionally connector-neutral. Prometheus textfile,
-Prometheus HTTP, OTLP, Elastic Observability, Grafana Alloy, Splunk HEC, StatsD,
-and NATS monitoring connectors are implemented today.
+Prometheus HTTP, OTLP, Elastic Observability, Grafana Alloy, Splunk HEC, OCI
+Monitoring, StatsD, syslog, and NATS monitoring connectors are implemented
+today.
 Future connectors may include:
 
 - Datadog for hosted operational dashboards,
 - Grafana Agent legacy migration notes where needed for existing estates,
-- Oracle Cloud Infrastructure Monitoring for OCI-native deployments,
 - Amazon CloudWatch for AWS deployments,
 - Azure Monitor for Microsoft cloud deployments,
-- syslog or structured log bridges for restricted networks where pull-based
+- additional structured log bridges for restricted networks where pull-based
   scraping is not available.
 
 Each connector should remain policy-driven, disabled by default, and isolated

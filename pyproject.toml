@@ -45,6 +45,9 @@ oracle = [
 mysql = [
   "mysql-connector-python>=9,<10",
 ]
+oci = [
+  "oci>=2.160,<3",
+]
 test = [
   "cryptography>=42,<49",
   "pytest>=8.2,<10",
@@ -69,7 +72,7 @@ docs = [
   "pymdown-extensions>=10.9,<11",
 ]
 all = [
-  "nats-sinks[crypto,mysql,oracle]",
+  "nats-sinks[crypto,mysql,oci,oracle]",
 ]
 
 [project.urls]

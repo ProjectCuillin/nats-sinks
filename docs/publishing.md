@@ -396,7 +396,7 @@ infrastructure:
 ```bash
 python scripts/run-pypi-release-container-validation.py \
   --version 0.4.1 \
-  --extras crypto,mysql
+  --extras crypto,mysql,oci
 ```
 
 Do not run this as a default GitHub Action. It depends on public registry state

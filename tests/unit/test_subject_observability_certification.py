@@ -44,6 +44,7 @@ def test_subject_observability_certification_report_covers_release_gate() -> Non
     assert report.malformed_policy_rejected is True
     assert report.delivery_probe_before == report.delivery_probe_after
     assert set(report.connector_names) == {
+        "oci_monitoring",
         "otlp",
         "prometheus",
         "splunk_hec",

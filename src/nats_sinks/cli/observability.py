@@ -48,6 +48,12 @@ from nats_sinks.observability.nats_monitoring import (
     render_nats_monitoring_prometheus,
     write_nats_monitoring_snapshot,
 )
+from nats_sinks.observability.oci_monitoring import (
+    DISABLED_OCI_MONITORING_TEXT,
+    EMPTY_OCI_MONITORING_TEXT,
+    export_oci_monitoring_metrics,
+    render_oci_monitoring_post_metric_data_requests_json,
+)
 from nats_sinks.observability.otlp import (
     DISABLED_OTLP_TEXT,
     EMPTY_OTLP_TEXT,
@@ -184,6 +190,7 @@ def _policy_summary(policy: ObservabilityPolicy) -> str:
             f"grafana_alloy_enabled={str(policy.grafana_alloy.enabled).lower()}",
             f"splunk_hec_enabled={str(policy.splunk_hec.enabled).lower()}",
             f"statsd_enabled={str(policy.statsd.enabled).lower()}",
+            f"oci_monitoring_enabled={str(policy.oci_monitoring.enabled).lower()}",
             f"syslog_enabled={str(policy.syslog.enabled).lower()}",
             f"nats_server_monitoring_enabled={str(policy.nats_server_monitoring.enabled).lower()}",
             "nats_server_monitoring_prometheus_enabled="
@@ -889,6 +896,87 @@ def statsd_export(
         f"message={result.message}"
     )
     if result.message == EMPTY_STATSD_TEXT.strip():
+        return
+    if not result.delivered:
+        raise typer.Exit(3)
+
+
+@app.command("oci-monitoring-export")
+def oci_monitoring_export(
+    snapshot_file: Annotated[
+        Path,
+        typer.Argument(help="Metrics snapshot JSON written by nats-sink."),
+    ],
+    policy_file: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="Render sanitized OCI Monitoring PostMetricData JSON instead of sending it.",
+        ),
+    ] = False,
+    allow_stale: Annotated[
+        bool,
+        typer.Option("--allow-stale", help="Warn but export when the snapshot is stale."),
+    ] = False,
+) -> None:
+    """Export approved metrics to Oracle Cloud Infrastructure Monitoring.
+
+    The command reads only a local metrics snapshot and sends policy-approved
+    custom metric data through the optional OCI SDK path. Failures cannot change
+    JetStream ACK, NAK, DLQ, retry, fan-out, idempotency, or sink behavior.
+    """
+
+    policy = _load_policy_or_exit(policy_file)
+    snapshot: dict[str, object] | None = None
+    if policy.enabled and policy.oci_monitoring.enabled:
+        snapshot = _load_snapshot_or_exit(snapshot_file)
+        try:
+            _check_staleness(
+                snapshot,
+                stale_after_seconds=policy.oci_monitoring.stale_after_seconds,
+                allow_stale=allow_stale,
+            )
+        except ValueError as exc:
+            typer.echo(f"Metrics snapshot error: {exc}", err=True)
+            raise typer.Exit(2) from exc
+
+    if not policy.enabled or not policy.oci_monitoring.enabled:
+        typer.echo(DISABLED_OCI_MONITORING_TEXT, nl=False)
+        return
+    if snapshot is None:
+        typer.echo(
+            "OCI Monitoring export error: enabled OCI Monitoring export requires "
+            "a metrics snapshot",
+            err=True,
+        )
+        raise typer.Exit(2)
+
+    if dry_run:
+        try:
+            rendered = render_oci_monitoring_post_metric_data_requests_json(snapshot, policy)
+        except (ConfigurationError, ValueError) as exc:
+            typer.echo(f"OCI Monitoring render error: {exc}", err=True)
+            raise typer.Exit(2) from exc
+        typer.echo(rendered.decode("utf-8"))
+        return
+
+    try:
+        result = export_oci_monitoring_metrics(snapshot, policy)
+    except (ConfigurationError, ValueError) as exc:
+        typer.echo(f"OCI Monitoring export error: {exc}", err=True)
+        raise typer.Exit(2) from exc
+
+    typer.echo(
+        "OCI Monitoring export: "
+        f"attempted={str(result.attempted).lower()} "
+        f"delivered={str(result.delivered).lower()} "
+        f"attempts={result.attempts} "
+        f"requests={result.requests} "
+        f"metrics={result.metrics} "
+        f"message={result.message}"
+    )
+    if result.message == EMPTY_OCI_MONITORING_TEXT.strip():
         return
     if not result.delivered:
         raise typer.Exit(3)

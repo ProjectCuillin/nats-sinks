@@ -18,9 +18,9 @@ policy-filtered Prometheus textfile output or run the optional native
 Prometheus HTTP endpoint. It can also export approved metrics to an
 OpenTelemetry Collector through OTLP/HTTP JSON, including the Elastic
 Observability and Grafana Alloy profiles, and approved aggregate metric events
-through Splunk HEC. It can also send approved best-effort datagrams to
-StatsD-compatible aggregators and RFC 5424-style messages to syslog
-pipelines.
+through Splunk HEC. It can also export approved custom metrics to OCI
+Monitoring, send approved best-effort datagrams to StatsD-compatible
+aggregators, and emit RFC 5424-style messages to syslog pipelines.
 
 For readers new to this project, the CLI does not implement a separate
 delivery engine. It validates configuration, creates the selected sink, builds
@@ -49,6 +49,7 @@ nats-sink-observe elastic-export .local/nats-sinks/metrics.json observability.pr
 nats-sink-observe grafana-alloy-config observability.prometheus.json
 nats-sink-observe grafana-alloy-export .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
 nats-sink-observe splunk-hec-export .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
+nats-sink-observe oci-monitoring-export .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
 nats-sink-observe statsd-export .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
 nats-sink-observe syslog-export .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
 nats-sink-observe nats-monitoring-poll observability.prometheus.json --dry-run
@@ -730,6 +731,41 @@ ACK messages, write payloads to Splunk, or expose the HEC endpoint or token in
 result summaries. Full connector guidance is documented in
 [Splunk HEC Integration](splunk-hec.md).
 
+### `nats-sink-observe oci-monitoring-export`
+
+Exports policy-approved aggregate metrics to OCI Monitoring as custom metrics.
+The command is disabled unless both the top-level observability policy and
+`oci_monitoring.enabled` are true. It uses the same local snapshot, allow and
+deny lists, stale-snapshot checks, timeout bounds, retry bounds, request-size
+bounds, and redaction posture as the other observability connectors.
+
+Dry-run mode prints a sanitized OCI `PostMetricData` request body without
+importing the OCI SDK or opening a network connection:
+
+```bash
+nats-sink-observe oci-monitoring-export \
+  /var/lib/nats-sink/metrics.json \
+  /etc/nats-sinks/observability.prometheus.json \
+  --dry-run
+```
+
+Example dry-run output:
+
+```json
+[{"batch_atomicity":"ATOMIC","metric_data":[{"compartment_id":"<redacted>","datapoints":[{"count":1,"timestamp":"2026-05-27T12:00:00.000Z","value":256.0}],"dimensions":{"deployment":"edge"},"name":"mission_ops_messages_fetched_total","namespace":"nats_sinks_metrics"}]}]
+```
+
+Example success output:
+
+```text
+OCI Monitoring export: attempted=true delivered=true attempts=1 requests=1 metrics=1 message=OCI Monitoring export delivered
+```
+
+The command is an observability connector, not a delivery feature. It does not
+ACK messages, write payloads to OCI Monitoring, expose compartment OCIDs in
+dry-run output, or manage OCI IAM policies. Full connector guidance is
+documented in [OCI Monitoring Integration](oci-monitoring.md).
+
 ### `nats-sink-observe statsd-export`
 
 Exports policy-approved metrics to a StatsD-compatible UDP listener or Unix
@@ -891,7 +927,7 @@ cannot find a metric without a default value.
 `nats-sink-observe` returns `0` on success, `2` for invalid configuration,
 policy, snapshot, textfile output errors, disabled native endpoint startup, or
 profile render errors, and `3` when an enabled Prometheus, OTLP, Elastic,
-Grafana Alloy, Splunk HEC, StatsD, or syslog export exhausts its bounded
-delivery attempts, a policy rejects a stale snapshot in connector-specific
-paths that use delivery-failure exit handling, or a native HTTP dry-run returns
-an error response.
+Grafana Alloy, Splunk HEC, OCI Monitoring, StatsD, or syslog export exhausts
+its bounded delivery attempts, a policy rejects a stale snapshot in
+connector-specific paths that use delivery-failure exit handling, or a native
+HTTP dry-run returns an error response.

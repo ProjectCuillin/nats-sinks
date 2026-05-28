@@ -18,6 +18,9 @@ from dataclasses import dataclass, field
 from nats_sinks.core.envelope import NatsEnvelope
 from nats_sinks.core.errors import ConfigurationError
 from nats_sinks.core.metrics import MetricNames, metrics_snapshot
+from nats_sinks.observability.oci_monitoring import (
+    render_oci_monitoring_post_metric_data_requests_json,
+)
 from nats_sinks.observability.otlp import build_otlp_metrics_document
 from nats_sinks.observability.policy import ObservabilityPolicy
 from nats_sinks.observability.prometheus import render_prometheus_textfile
@@ -241,9 +244,23 @@ def render_subject_observability_connector_outputs(
             splunk_auth_env_field: "NATS_SINKS_CERTIFICATION_HEC_ENV",
         }
     )
+    oci_policy = subject_observability_certification_policy(
+        oci_monitoring={
+            "enabled": True,
+            "metric_namespace": "nats_sinks_metrics",
+            "region": "eu-frankfurt-1",
+            "compartment_id": "ocid1.compartment.oc1..examplecompartment",
+            "dimensions": {"deployment": "certification"},
+            "include_metric_labels_as_dimensions": True,
+        }
+    )
 
     return {
         "prometheus": render_prometheus_textfile(rendered_snapshot, prometheus_policy),
+        "oci_monitoring": render_oci_monitoring_post_metric_data_requests_json(
+            rendered_snapshot,
+            oci_policy,
+        ).decode("utf-8"),
         "otlp": json.dumps(
             build_otlp_metrics_document(rendered_snapshot, otlp_policy),
             sort_keys=True,

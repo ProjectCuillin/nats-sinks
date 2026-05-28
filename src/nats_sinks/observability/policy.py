@@ -44,6 +44,20 @@ NATS_MONITORING_FIELD_MAX_LENGTH = 256
 STATSD_MAX_DATAGRAM_BYTES = 65_507
 STATSD_METRIC_PREFIX_MAX_LENGTH = 128
 STATSD_SOCKET_PATH_MAX_LENGTH = 512
+OCI_MONITORING_MAX_DIMENSIONS = 10
+OCI_MONITORING_MAX_METADATA = 10
+OCI_MONITORING_MAX_METRICS_PER_REQUEST = 50
+OCI_MONITORING_MAX_REQUEST_BYTES = 1_048_576
+OCI_MONITORING_NAMESPACE_MAX_LENGTH = 255
+OCI_MONITORING_REGION_MAX_LENGTH = 64
+OCI_MONITORING_COMPARTMENT_ID_MAX_LENGTH = 255
+OCI_MONITORING_NAME_MAX_LENGTH = 255
+OCI_MONITORING_DIMENSION_KEY_MAX_LENGTH = 256
+OCI_MONITORING_DIMENSION_VALUE_MAX_LENGTH = 512
+OCI_MONITORING_METADATA_VALUE_MAX_LENGTH = 256
+OCI_MONITORING_RESOURCE_GROUP_MAX_LENGTH = 255
+OCI_MONITORING_CONFIG_FILE_MAX_LENGTH = 512
+OCI_MONITORING_PROFILE_MAX_LENGTH = 128
 SYSLOG_MAX_MESSAGE_BYTES = 8_192
 SYSLOG_HOSTNAME_MAX_LENGTH = 255
 SYSLOG_APP_NAME_MAX_LENGTH = 48
@@ -68,6 +82,13 @@ GRAFANA_ALLOY_COMPONENT_LABEL_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
 SPLUNK_HEC_INDEX_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_-]{0,127}$")
 SPLUNK_HEC_METADATA_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.:-]{0,127}$")
 STATSD_METRIC_PREFIX_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.-]{0,127}$")
+OCI_MONITORING_NAMESPACE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,254}$")
+OCI_MONITORING_REGION_RE = re.compile(r"^[a-z]{2,3}(?:-[a-z]+)+-\d$")
+OCI_MONITORING_COMPARTMENT_ID_RE = re.compile(r"^ocid1\.compartment\.[A-Za-z0-9_.-]+$")
+OCI_MONITORING_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.\-$]{0,254}$")
+OCI_MONITORING_DIMENSION_KEY_RE = re.compile(r"^[!-~]{1,256}$")
+OCI_MONITORING_DIMENSION_VALUE_RE = re.compile(r"^[!-~]{1,512}$")
+OCI_MONITORING_CONFIG_PROFILE_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
 SYSLOG_PRINTABLE_RE = re.compile(r"^[!-~]+$")
 SYSLOG_STRUCTURED_DATA_ID_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,32}$")
 SUBJECT_FAMILY_LABEL_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.-]{0,63}$")
@@ -83,6 +104,33 @@ SUBJECT_FAMILY_LABEL_SECRET_PARTS = frozenset(
         "private",
         "secret_token",
         "token",
+    }
+)
+OCI_MONITORING_DIMENSION_SECRET_PARTS = frozenset(
+    {
+        "api_key",
+        "apikey",
+        "bearer",
+        "classification",
+        "compartment",
+        "credential",
+        "file",
+        "host",
+        "key",
+        "label",
+        "message",
+        "mission",
+        "ocid",
+        "password",
+        "path",
+        "private",
+        "resource",
+        "secret",
+        "subject",
+        "table",
+        "tenancy",
+        "token",
+        "user",
     }
 )
 MAX_SUBJECT_AWARE_RULES = 128
@@ -862,6 +910,286 @@ class StatsdObservabilityPolicy(BaseModel):
         return self
 
 
+class OciMonitoringObservabilityPolicy(BaseModel):
+    """Oracle Cloud Infrastructure Monitoring connector settings.
+
+    The connector is disabled by default and belongs to the observability
+    plane. It reads only local metrics snapshots, applies the shared allow-list
+    policy, and sends bounded custom metric batches through the optional OCI
+    Python SDK when explicitly enabled. OCI authentication is selected by
+    runtime mode; policy files must never contain API keys, private keys,
+    tenancy OCIDs, user OCIDs, fingerprints, passphrases, or session tokens.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    metric_namespace: str = "nats_sinks_metrics"
+    region: str | None = None
+    compartment_id: str | None = None
+    resource_group: str | None = None
+    auth_mode: Literal["instance_principal", "resource_principal", "config_file"] = (
+        "instance_principal"
+    )
+    config_file: str | None = None
+    profile: str = "DEFAULT"
+    batch_atomicity: Literal["ATOMIC", "NON_ATOMIC"] = "ATOMIC"
+    dimensions: dict[str, str] = Field(
+        default_factory=lambda: {"source": "nats_sinks"},
+        max_length=OCI_MONITORING_MAX_DIMENSIONS,
+    )
+    metadata: dict[str, str] = Field(default_factory=dict, max_length=OCI_MONITORING_MAX_METADATA)
+    include_metric_labels_as_dimensions: bool = False
+    timeout_seconds: float = Field(default=5.0, gt=0, le=60)
+    max_retries: int = Field(default=0, ge=0, le=10)
+    retry_backoff_seconds: float = Field(default=0.25, ge=0, le=60)
+    stale_after_seconds: float | None = Field(default=None, gt=0, le=86_400)
+    max_metrics_per_request: int = Field(
+        default=20,
+        ge=1,
+        le=OCI_MONITORING_MAX_METRICS_PER_REQUEST,
+    )
+    max_request_bytes: int = Field(
+        default=OCI_MONITORING_MAX_REQUEST_BYTES,
+        ge=1024,
+        le=OCI_MONITORING_MAX_REQUEST_BYTES,
+    )
+
+    @field_validator("metric_namespace")
+    @classmethod
+    def validate_metric_namespace(cls, value: str) -> str:
+        """Validate the OCI Monitoring custom metric namespace."""
+
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("oci_monitoring.metric_namespace must not be empty")
+        if len(rendered) > OCI_MONITORING_NAMESPACE_MAX_LENGTH:
+            raise ValueError(
+                "oci_monitoring.metric_namespace must be at most "
+                f"{OCI_MONITORING_NAMESPACE_MAX_LENGTH} characters"
+            )
+        lowered = rendered.lower()
+        if lowered.startswith(("oci_", "oracle_")):
+            raise ValueError(
+                "oci_monitoring.metric_namespace must not start with reserved prefixes "
+                "oci_ or oracle_"
+            )
+        if not OCI_MONITORING_NAMESPACE_RE.fullmatch(rendered):
+            raise ValueError(
+                "oci_monitoring.metric_namespace must start with a letter and contain "
+                "only letters, digits, and underscores"
+            )
+        return rendered
+
+    @field_validator("region")
+    @classmethod
+    def validate_region(cls, value: str | None) -> str | None:
+        """Validate an optional OCI region without accepting URLs or secrets."""
+
+        if value is None:
+            return None
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("oci_monitoring.region must not be empty")
+        if len(rendered) > OCI_MONITORING_REGION_MAX_LENGTH:
+            raise ValueError(
+                "oci_monitoring.region must be at most "
+                f"{OCI_MONITORING_REGION_MAX_LENGTH} characters"
+            )
+        if any(character in rendered for character in "\x00\n\r\t /:@"):
+            raise ValueError(
+                "oci_monitoring.region must be a plain OCI region name without whitespace, "
+                "URLs, or credentials"
+            )
+        if not OCI_MONITORING_REGION_RE.fullmatch(rendered):
+            raise ValueError(
+                "oci_monitoring.region must look like an OCI region, for example eu-frankfurt-1"
+            )
+        return rendered
+
+    @field_validator("compartment_id")
+    @classmethod
+    def validate_compartment_id(cls, value: str | None) -> str | None:
+        """Validate the compartment OCID required for custom metrics."""
+
+        if value is None:
+            return None
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("oci_monitoring.compartment_id must not be empty")
+        if len(rendered) > OCI_MONITORING_COMPARTMENT_ID_MAX_LENGTH:
+            raise ValueError("oci_monitoring.compartment_id is too long")
+        if any(character in rendered for character in "\x00\n\r\t /:@"):
+            raise ValueError(
+                "oci_monitoring.compartment_id must be a plain compartment OCID without "
+                "whitespace, URLs, or credentials"
+            )
+        if not OCI_MONITORING_COMPARTMENT_ID_RE.fullmatch(rendered):
+            raise ValueError("oci_monitoring.compartment_id must look like a compartment OCID")
+        return rendered
+
+    @field_validator("resource_group")
+    @classmethod
+    def validate_resource_group(cls, value: str | None) -> str | None:
+        """Validate an optional OCI Monitoring resource group."""
+
+        if value is None:
+            return None
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("oci_monitoring.resource_group must not be empty")
+        if len(rendered) > OCI_MONITORING_RESOURCE_GROUP_MAX_LENGTH:
+            raise ValueError("oci_monitoring.resource_group is too long")
+        if not OCI_MONITORING_NAME_RE.fullmatch(rendered):
+            raise ValueError(
+                "oci_monitoring.resource_group must start with a letter and contain only "
+                "letters, digits, dots, underscores, hyphens, or dollar signs"
+            )
+        lowered = rendered.lower()
+        if any(part in lowered for part in OCI_MONITORING_DIMENSION_SECRET_PARTS):
+            raise ValueError("oci_monitoring.resource_group must not look sensitive")
+        return rendered
+
+    @field_validator("config_file")
+    @classmethod
+    def validate_config_file(cls, value: str | None) -> str | None:
+        """Validate an optional OCI SDK config file path."""
+
+        if value is None:
+            return None
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("oci_monitoring.config_file must not be empty")
+        if len(rendered) > OCI_MONITORING_CONFIG_FILE_MAX_LENGTH:
+            raise ValueError("oci_monitoring.config_file is too long")
+        if any(character in rendered for character in "\x00\n\r"):
+            raise ValueError("oci_monitoring.config_file must not contain control characters")
+        if Path(rendered).name in {"", ".", ".."}:
+            raise ValueError("oci_monitoring.config_file must name a file")
+        return rendered
+
+    @field_validator("profile")
+    @classmethod
+    def validate_profile(cls, value: str) -> str:
+        """Validate the optional OCI SDK config profile name."""
+
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("oci_monitoring.profile must not be empty")
+        if len(rendered) > OCI_MONITORING_PROFILE_MAX_LENGTH:
+            raise ValueError("oci_monitoring.profile is too long")
+        if not OCI_MONITORING_CONFIG_PROFILE_RE.fullmatch(rendered):
+            raise ValueError(
+                "oci_monitoring.profile may contain only letters, digits, underscores, "
+                "dots, colons, and hyphens"
+            )
+        return rendered
+
+    @field_validator("dimensions")
+    @classmethod
+    def validate_dimensions(cls, value: dict[str, str]) -> dict[str, str]:
+        """Validate static OCI dimensions as low-cardinality hints."""
+
+        if not value:
+            raise ValueError("oci_monitoring.dimensions must include at least one safe dimension")
+        rendered: dict[str, str] = {}
+        seen_lower: set[str] = set()
+        for raw_name, raw_value in value.items():
+            name = raw_name.strip()
+            dimension_value = raw_value.strip()
+            if not name:
+                raise ValueError("oci_monitoring.dimensions names must not be empty")
+            if not dimension_value:
+                raise ValueError("oci_monitoring.dimensions values must not be empty")
+            if len(name) > OCI_MONITORING_DIMENSION_KEY_MAX_LENGTH:
+                raise ValueError("oci_monitoring.dimensions names are too long")
+            if len(dimension_value) > OCI_MONITORING_DIMENSION_VALUE_MAX_LENGTH:
+                raise ValueError("oci_monitoring.dimensions values are too long")
+            if " " in name or any(character in name for character in "\x00\n\r\t"):
+                raise ValueError(
+                    "oci_monitoring.dimensions names must not contain spaces or control characters"
+                )
+            if any(character in dimension_value for character in "\x00\n\r\t "):
+                raise ValueError(
+                    "oci_monitoring.dimensions values must not contain whitespace "
+                    "or control characters"
+                )
+            if not OCI_MONITORING_DIMENSION_KEY_RE.fullmatch(name):
+                raise ValueError("oci_monitoring.dimensions names must be printable ASCII")
+            if not OCI_MONITORING_DIMENSION_VALUE_RE.fullmatch(dimension_value):
+                raise ValueError("oci_monitoring.dimensions values must be printable ASCII")
+            lowered = name.lower()
+            if any(part in lowered for part in OCI_MONITORING_DIMENSION_SECRET_PARTS):
+                raise ValueError(
+                    "oci_monitoring.dimensions must not include sensitive or high-cardinality names"
+                )
+            if lowered in seen_lower:
+                raise ValueError("oci_monitoring.dimensions names must be unique ignoring case")
+            seen_lower.add(lowered)
+            rendered[name] = dimension_value
+        return rendered
+
+    @field_validator("metadata")
+    @classmethod
+    def validate_metadata(cls, value: dict[str, str]) -> dict[str, str]:
+        """Validate optional OCI metric metadata as non-sensitive static hints."""
+
+        rendered: dict[str, str] = {}
+        seen_lower: set[str] = set()
+        for raw_name, raw_value in value.items():
+            name = raw_name.strip()
+            metadata_value = raw_value.strip()
+            if not name:
+                raise ValueError("oci_monitoring.metadata names must not be empty")
+            if not metadata_value:
+                raise ValueError("oci_monitoring.metadata values must not be empty")
+            if len(name) > OCI_MONITORING_DIMENSION_KEY_MAX_LENGTH:
+                raise ValueError("oci_monitoring.metadata names are too long")
+            if len(metadata_value) > OCI_MONITORING_METADATA_VALUE_MAX_LENGTH:
+                raise ValueError("oci_monitoring.metadata values are too long")
+            if any(character in name for character in "\x00\n\r\t "):
+                raise ValueError("oci_monitoring.metadata names must not contain whitespace")
+            if any(character in metadata_value for character in "\x00\n\r\t "):
+                raise ValueError("oci_monitoring.metadata values must not contain whitespace")
+            if not OCI_MONITORING_DIMENSION_KEY_RE.fullmatch(name):
+                raise ValueError("oci_monitoring.metadata names must be printable ASCII")
+            if not OCI_MONITORING_DIMENSION_VALUE_RE.fullmatch(metadata_value):
+                raise ValueError("oci_monitoring.metadata values must be printable ASCII")
+            lowered = name.lower()
+            if any(part in lowered for part in OCI_MONITORING_DIMENSION_SECRET_PARTS):
+                raise ValueError("oci_monitoring.metadata must not include sensitive names")
+            if lowered in seen_lower:
+                raise ValueError("oci_monitoring.metadata names must be unique ignoring case")
+            seen_lower.add(lowered)
+            rendered[name] = metadata_value
+        return rendered
+
+    @model_validator(mode="after")
+    def validate_enabled_requirements(self) -> OciMonitoringObservabilityPolicy:
+        """Require explicit OCI location and identity settings only when enabled."""
+
+        if not self.enabled:
+            return self
+        if self.region is None:
+            raise ValueError(
+                "oci_monitoring.region is required when oci_monitoring.enabled is true"
+            )
+        if self.compartment_id is None:
+            raise ValueError(
+                "oci_monitoring.compartment_id is required when oci_monitoring.enabled is true"
+            )
+        if self.auth_mode == "config_file" and self.config_file is None:
+            raise ValueError(
+                "oci_monitoring.config_file is required when "
+                "oci_monitoring.auth_mode is config_file"
+            )
+        if self.auth_mode != "config_file" and self.config_file is not None:
+            raise ValueError(
+                "oci_monitoring.config_file may be set only when auth_mode is config_file"
+            )
+        return self
+
+
 class SyslogObservabilityPolicy(BaseModel):
     """Syslog observability bridge settings.
 
@@ -1199,6 +1527,9 @@ class ObservabilityPolicy(BaseModel):
     )
     splunk_hec: SplunkHecObservabilityPolicy = Field(default_factory=SplunkHecObservabilityPolicy)
     statsd: StatsdObservabilityPolicy = Field(default_factory=StatsdObservabilityPolicy)
+    oci_monitoring: OciMonitoringObservabilityPolicy = Field(
+        default_factory=OciMonitoringObservabilityPolicy
+    )
     syslog: SyslogObservabilityPolicy = Field(default_factory=SyslogObservabilityPolicy)
     nats_server_monitoring: NatsServerMonitoringPolicy = Field(
         default_factory=NatsServerMonitoringPolicy
