@@ -144,6 +144,11 @@ Use this baseline for code review and future releases:
   values, labels, mission metadata, hostnames, usernames, table names, file
   paths, message IDs, tenancy details, or credential material. Syslog export
   must be treated as redistribution to an operational logging fabric, not as a
+  OpenTelemetry Collectors, Splunk HEC, StatsD, Amazon CloudWatch, syslog,
+  NATS monitoring snapshots, or any future monitoring platform. OTLP collector
+  variables rather than stored in policy JSON. Amazon CloudWatch export must
+  use least-privilege AWS identity and reviewed dimensions. Syslog export must
+  be treated as redistribution to an operational logging fabric, not as a
   private local debug stream.
   NATS server monitoring endpoint values must also be selected with explicit
   endpoint and field allow lists before they are stored locally or rendered for
@@ -207,6 +212,7 @@ kept in the [Prometheus Integration](prometheus.md) sub-page and
 OpenTelemetry-specific connector guidance kept in the
 [OpenTelemetry OTLP Integration](otlp.md) sub-page. Elastic, Grafana Alloy,
 Splunk HEC, OCI Monitoring, StatsD, and syslog platform guidance is kept in
+Splunk HEC, StatsD, Amazon CloudWatch, and syslog platform guidance is kept in
 their respective observability sub-pages so each sharing boundary has its own
 configuration and security review.
 The NATS server monitoring connector and delivery-boundary decision, including

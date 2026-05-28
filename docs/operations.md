@@ -357,6 +357,8 @@ write a filtered Prometheus textfile for node_exporter, run an optional native
 Prometheus HTTP endpoint, or export approved metrics to an OpenTelemetry
 Collector through OTLP/HTTP JSON, OCI Monitoring custom metrics, StatsD,
 syslog, Splunk HEC, or another implemented observability connector:
+Collector through OTLP/HTTP JSON, StatsD, Amazon CloudWatch, syslog, Splunk
+HEC, or another implemented observability connector:
 
 ```bash
 nats-sink-observe init-prometheus-policy \
@@ -379,6 +381,7 @@ nats-sink-observe otlp-export \
   --dry-run
 
 nats-sink-observe oci-monitoring-export \
+nats-sink-observe cloudwatch-export \
   /var/lib/nats-sink/metrics.json \
   /etc/nats-sinks/observability.prometheus.json \
   --dry-run
@@ -396,6 +399,8 @@ details, [OpenTelemetry OTLP Integration](otlp.md) for collector export,
 [OCI Monitoring Integration](oci-monitoring.md) for Oracle Cloud Infrastructure
 custom metric export, [Syslog Bridge](syslog.md) for bounded RFC 5424-style
 message export, and
+[Amazon CloudWatch Integration](cloudwatch.md) for CloudWatch custom metrics,
+[Syslog Bridge](syslog.md) for bounded RFC 5424-style message export, and
 [Running nats-sink As A Service](service-deployment.md) for the service model.
 When subject-family metrics are considered, follow the
 [Subject-Aware Observability Runbook](subject-aware-observability-runbook.md)

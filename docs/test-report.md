@@ -14,7 +14,7 @@ generated database passwords, or full raw logs from live systems.
 | Field | Value |
 | --- | --- |
 | Overall result | Pass |
-| Report generated | 2026-05-27 issue `#107` validation for upcoming `v0.4.2` development |
+| Report generated | 2026-05-28 issue `#107` merge verification for upcoming `v0.4.2` development |
 | Project version | `0.4.1` package metadata with `v0.4.2` development changes |
 | Python version | 3.12.4 |
 | Git revision checked | Branch `issue-107-oci-monitoring-observability` based on `release-v0.4.2` |
@@ -24,11 +24,12 @@ generated database passwords, or full raw logs from live systems.
 | Live OCI details | No live OCI tenancy was contacted; OCI SDK behavior used local fakes |
 
 This refresh covered the OCI Monitoring observability connector for issue
-`#107`, plus a full local regression cycle for the current development branch.
-The new connector is disabled by default, reads only local metrics snapshots,
-uses the shared observability allow and deny policy, builds bounded OCI
-`PostMetricData` requests, redacts compartment details in dry-run output, and
-keeps OCI export outside JetStream delivery decisions.
+`#107` after rebasing the work on the current `release-v0.4.2` branch, which
+already contained the Amazon CloudWatch observability connector. The OCI
+connector is disabled by default, reads only local metrics snapshots, uses the
+shared observability allow and deny policy, builds bounded OCI `PostMetricData`
+requests, redacts compartment details in dry-run output, and keeps OCI export
+outside JetStream delivery decisions.
 
 ```mermaid
 flowchart LR
@@ -43,32 +44,26 @@ flowchart LR
 
 | Check | Result |
 | --- | --- |
-| Ruff format | Pass, `238 files already formatted` |
+| Ruff format | Pass, `240 files already formatted` |
 | Ruff lint | Pass |
-| Mypy | Pass, no issues in `94` source files |
+| Mypy | Pass, no issues in `95` source files |
 | Version metadata consistency | Pass for `0.4.1` |
 | Dependency manifests | Pass, manifest files up to date |
-| Backlog item validation | Pass, `142` backlog item(s) |
-| Bug report validation | Pass, `89` bug report item(s) |
 | PyPI-facing Markdown links | Pass |
 | Documentation builds | Pass for Read the Docs and GitHub Pages MkDocs builds |
-| Secret scan | Pass, no high-confidence secret material found |
-| Bandit | Pass with reviewed `nosec` annotations for validated SQL identifier builders |
-| Package build | Pass, sdist and wheel built |
-| SBOM generation | Pass, CycloneDX JSON and XML generated |
-| Checksum generation | Pass, `dist/SHA256SUMS` generated |
-| Distribution checksum verification | Pass for retained distributions |
 
 ## Test Results
 
 | Test Area | Command | Result |
 | --- | --- | --- |
-| OCI Monitoring focused subset | `python -m pytest tests/unit/test_oci_monitoring_observability.py tests/unit/test_observability_cli.py tests/unit/test_public_api.py tests/unit/test_subject_observability_certification.py -q` | Pass, `59 passed` |
-| Main repository test suite | `scripts/check.sh` | Pass, `1103 passed, 11 skipped` |
-| Encryption and sink contract subset | `scripts/check.sh` | Pass, `130 passed` |
-| Sink capability subset | `scripts/check.sh` | Pass, `117 passed` |
-| Documentation builds | `scripts/check.sh` | Pass for Read the Docs and GitHub Pages MkDocs builds |
-| Example validation | `scripts/check.sh` | Pass for file and Oracle example validation paths |
+| OCI and CloudWatch focused subset | `python -m pytest tests/unit/test_oci_monitoring_observability.py tests/unit/test_cloudwatch_observability.py tests/unit/test_observability_cli.py tests/unit/test_public_api.py tests/unit/test_subject_observability_certification.py -q` | Pass, `74 passed` |
+| Main repository test suite | `python -m pytest -q` | Pass, `1118 passed, 11 skipped` |
+| Ruff lint | `python -m ruff check .` | Pass |
+| Ruff format check | `python -m ruff format --check .` | Pass, `240 files already formatted` |
+| Type checking | `python -m mypy src` | Pass, no issues in `95` source files |
+| Dependency manifests | `python scripts/update-dependency-manifests.py --check` | Pass |
+| PyPI-facing Markdown links | `python scripts/check-markdown-links.py` | Pass |
+| Documentation builds | `scripts/check-docs.sh` | Pass for Read the Docs and GitHub Pages MkDocs builds |
 
 The skipped tests are the existing environment-gated live NATS, Oracle
 Database, Oracle MySQL, and push-consumer integration tests.
@@ -96,7 +91,8 @@ The new focused coverage verifies:
 
 ## Issues Found During Validation
 
-No new release-blocking issues were found during the `#107` validation cycle.
+No new release-blocking issues were found during the `#107` validation and
+CloudWatch merge-conflict resolution cycle.
 
 ## Documentation Evidence
 

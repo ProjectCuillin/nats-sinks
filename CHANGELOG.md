@@ -12,6 +12,14 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Added
 
+- Added the disabled-by-default Amazon CloudWatch observability connector for
+  issue #102. The new `cloudwatch` policy section exports only approved local
+  metrics snapshot rows through bounded `PutMetricData` request shapes, keeps
+  boto3 behind the optional `cloudwatch` extra, supports dry-run JSON output
+  without AWS credentials, validates namespace, region, dimensions, request
+  size, retries, and stale-snapshot behavior, suppresses prepared labels as
+  dimensions unless explicitly enabled, and documents IAM, cost, throttling,
+  service separation, and testing guidance.
 - Added effective consumer-policy guardrails for optional JetStream
   `InProgress` heartbeats for issue #117. The runner now allows `bind_only`
   deployments to verify AckWait from the existing durable consumer before

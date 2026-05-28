@@ -45,6 +45,7 @@ must preserve:
 - connector output contains approved family labels but not raw subjects;
 - observability failures do not change delivery decisions;
 - Prometheus, OTLP, OCI Monitoring, StatsD, syslog, Splunk HEC, and
+- Prometheus, OTLP, StatsD, Amazon CloudWatch, syslog, Splunk HEC, and
   `nats-sink-metrics` render the same prepared low-cardinality rows.
 
 Run the focused certification suite with:

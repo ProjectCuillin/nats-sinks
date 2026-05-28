@@ -58,6 +58,12 @@ OCI_MONITORING_METADATA_VALUE_MAX_LENGTH = 256
 OCI_MONITORING_RESOURCE_GROUP_MAX_LENGTH = 255
 OCI_MONITORING_CONFIG_FILE_MAX_LENGTH = 512
 OCI_MONITORING_PROFILE_MAX_LENGTH = 128
+CLOUDWATCH_MAX_DIMENSIONS = 10
+CLOUDWATCH_MAX_METRICS_PER_REQUEST = 1_000
+CLOUDWATCH_MAX_REQUEST_BYTES = 1_048_576
+CLOUDWATCH_NAMESPACE_MAX_LENGTH = 255
+CLOUDWATCH_REGION_MAX_LENGTH = 64
+CLOUDWATCH_DIMENSION_MAX_LENGTH = 255
 SYSLOG_MAX_MESSAGE_BYTES = 8_192
 SYSLOG_HOSTNAME_MAX_LENGTH = 255
 SYSLOG_APP_NAME_MAX_LENGTH = 48
@@ -89,6 +95,9 @@ OCI_MONITORING_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.\-$]{0,254}$")
 OCI_MONITORING_DIMENSION_KEY_RE = re.compile(r"^[!-~]{1,256}$")
 OCI_MONITORING_DIMENSION_VALUE_RE = re.compile(r"^[!-~]{1,512}$")
 OCI_MONITORING_CONFIG_PROFILE_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
+CLOUDWATCH_NAMESPACE_RE = re.compile(r"^[A-Za-z0-9_./-]{1,255}$")
+CLOUDWATCH_REGION_RE = re.compile(r"^[a-z]{2}(?:-[a-z]+)+-\d$")
+CLOUDWATCH_DIMENSION_RE = re.compile(r"^[A-Za-z0-9_.:/-]{1,255}$")
 SYSLOG_PRINTABLE_RE = re.compile(r"^[!-~]+$")
 SYSLOG_STRUCTURED_DATA_ID_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,32}$")
 SUBJECT_FAMILY_LABEL_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.-]{0,63}$")
@@ -129,6 +138,29 @@ OCI_MONITORING_DIMENSION_SECRET_PARTS = frozenset(
         "subject",
         "table",
         "tenancy",
+        "token",
+        "user",
+    }
+)
+CLOUDWATCH_DIMENSION_SECRET_PARTS = frozenset(
+    {
+        "api_key",
+        "apikey",
+        "bearer",
+        "classification",
+        "credential",
+        "file",
+        "host",
+        "key",
+        "label",
+        "message",
+        "mission",
+        "password",
+        "path",
+        "private",
+        "secret",
+        "subject",
+        "table",
         "token",
         "user",
     }
@@ -1190,6 +1222,178 @@ class OciMonitoringObservabilityPolicy(BaseModel):
         return self
 
 
+class CloudWatchObservabilityPolicy(BaseModel):
+    """Amazon CloudWatch custom metrics connector settings.
+
+    The connector is disabled by default and belongs to the observability
+    plane. It reads only local metrics snapshots, applies the shared
+    allow-list policy, and sends bounded custom metric batches through the AWS
+    SDK when explicitly enabled. Operators provide AWS authentication through
+    normal SDK credential sources such as instance roles, workload identity,
+    profiles, or environment variables; policy files never contain AWS access
+    keys or account identifiers.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    metric_namespace: str = "nats-sinks/metrics"
+    region: str | None = None
+    unit: Literal[
+        "Seconds",
+        "Microseconds",
+        "Milliseconds",
+        "Bytes",
+        "Kilobytes",
+        "Megabytes",
+        "Gigabytes",
+        "Terabytes",
+        "Bits",
+        "Kilobits",
+        "Megabits",
+        "Gigabits",
+        "Terabits",
+        "Percent",
+        "Count",
+        "Bytes/Second",
+        "Kilobytes/Second",
+        "Megabytes/Second",
+        "Gigabytes/Second",
+        "Terabytes/Second",
+        "Bits/Second",
+        "Kilobits/Second",
+        "Megabits/Second",
+        "Gigabits/Second",
+        "Terabits/Second",
+        "Count/Second",
+        "None",
+    ] = "None"
+    storage_resolution: Literal[1, 60] = 60
+    dimensions: dict[str, str] = Field(
+        default_factory=dict,
+        max_length=CLOUDWATCH_MAX_DIMENSIONS,
+    )
+    include_metric_labels_as_dimensions: bool = False
+    timeout_seconds: float = Field(default=5.0, gt=0, le=60)
+    max_retries: int = Field(default=0, ge=0, le=10)
+    retry_backoff_seconds: float = Field(default=0.25, ge=0, le=60)
+    stale_after_seconds: float | None = Field(default=None, gt=0, le=86_400)
+    max_metrics_per_request: int = Field(
+        default=20,
+        ge=1,
+        le=CLOUDWATCH_MAX_METRICS_PER_REQUEST,
+    )
+    max_request_bytes: int = Field(
+        default=CLOUDWATCH_MAX_REQUEST_BYTES,
+        ge=1024,
+        le=CLOUDWATCH_MAX_REQUEST_BYTES,
+    )
+
+    @field_validator("metric_namespace")
+    @classmethod
+    def validate_metric_namespace(cls, value: str) -> str:
+        """Validate the CloudWatch custom metric namespace."""
+
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("cloudwatch.metric_namespace must not be empty")
+        if len(rendered) > CLOUDWATCH_NAMESPACE_MAX_LENGTH:
+            raise ValueError(
+                "cloudwatch.metric_namespace must be at most "
+                f"{CLOUDWATCH_NAMESPACE_MAX_LENGTH} characters"
+            )
+        if rendered.startswith("AWS/"):
+            raise ValueError("cloudwatch.metric_namespace must not start with AWS/")
+        if ":" in rendered:
+            raise ValueError("cloudwatch.metric_namespace must not contain colons")
+        if any(character in rendered for character in "\x00\n\r\t "):
+            raise ValueError(
+                "cloudwatch.metric_namespace must not contain whitespace or control characters"
+            )
+        if not CLOUDWATCH_NAMESPACE_RE.fullmatch(rendered):
+            raise ValueError(
+                "cloudwatch.metric_namespace may contain only letters, digits, "
+                "underscores, dots, slashes, and hyphens"
+            )
+        return rendered
+
+    @field_validator("region")
+    @classmethod
+    def validate_region(cls, value: str | None) -> str | None:
+        """Validate an optional AWS region without accepting URLs or secrets."""
+
+        if value is None:
+            return None
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("cloudwatch.region must not be empty")
+        if len(rendered) > CLOUDWATCH_REGION_MAX_LENGTH:
+            raise ValueError(
+                f"cloudwatch.region must be at most {CLOUDWATCH_REGION_MAX_LENGTH} characters"
+            )
+        if any(character in rendered for character in "\x00\n\r\t /:@"):
+            raise ValueError(
+                "cloudwatch.region must be a plain AWS region name without whitespace, "
+                "URLs, or credentials"
+            )
+        if not CLOUDWATCH_REGION_RE.fullmatch(rendered):
+            raise ValueError(
+                "cloudwatch.region must look like an AWS region, for example eu-west-1"
+            )
+        return rendered
+
+    @field_validator("dimensions")
+    @classmethod
+    def validate_dimensions(cls, value: dict[str, str]) -> dict[str, str]:
+        """Validate static CloudWatch dimensions as low-cardinality hints."""
+
+        rendered: dict[str, str] = {}
+        seen_lower: set[str] = set()
+        for raw_name, raw_value in value.items():
+            name = raw_name.strip()
+            dimension_value = raw_value.strip()
+            if not name:
+                raise ValueError("cloudwatch.dimensions names must not be empty")
+            if not dimension_value:
+                raise ValueError("cloudwatch.dimensions values must not be empty")
+            if len(name) > CLOUDWATCH_DIMENSION_MAX_LENGTH:
+                raise ValueError("cloudwatch.dimensions names are too long")
+            if len(dimension_value) > CLOUDWATCH_DIMENSION_MAX_LENGTH:
+                raise ValueError("cloudwatch.dimensions values are too long")
+            if any(character in name for character in "\x00\n\r\t "):
+                raise ValueError("cloudwatch.dimensions names must not contain whitespace")
+            if any(character in dimension_value for character in "\x00\n\r\t "):
+                raise ValueError("cloudwatch.dimensions values must not contain whitespace")
+            if not CLOUDWATCH_DIMENSION_RE.fullmatch(name):
+                raise ValueError(
+                    "cloudwatch.dimensions names may contain only letters, digits, "
+                    "underscores, dots, colons, slashes, and hyphens"
+                )
+            if not CLOUDWATCH_DIMENSION_RE.fullmatch(dimension_value):
+                raise ValueError(
+                    "cloudwatch.dimensions values may contain only letters, digits, "
+                    "underscores, dots, colons, slashes, and hyphens"
+                )
+            lowered = name.lower()
+            if any(part in lowered for part in CLOUDWATCH_DIMENSION_SECRET_PARTS):
+                raise ValueError(
+                    "cloudwatch.dimensions must not include sensitive or high-cardinality names"
+                )
+            if lowered in seen_lower:
+                raise ValueError("cloudwatch.dimensions names must be unique ignoring case")
+            seen_lower.add(lowered)
+            rendered[name] = dimension_value
+        return rendered
+
+    @model_validator(mode="after")
+    def validate_enabled_region(self) -> CloudWatchObservabilityPolicy:
+        """Require explicit region selection only when CloudWatch export is enabled."""
+
+        if self.enabled and self.region is None:
+            raise ValueError("cloudwatch.region is required when cloudwatch.enabled is true")
+        return self
+
+
 class SyslogObservabilityPolicy(BaseModel):
     """Syslog observability bridge settings.
 
@@ -1530,6 +1734,7 @@ class ObservabilityPolicy(BaseModel):
     oci_monitoring: OciMonitoringObservabilityPolicy = Field(
         default_factory=OciMonitoringObservabilityPolicy
     )
+    cloudwatch: CloudWatchObservabilityPolicy = Field(default_factory=CloudWatchObservabilityPolicy)
     syslog: SyslogObservabilityPolicy = Field(default_factory=SyslogObservabilityPolicy)
     nats_server_monitoring: NatsServerMonitoringPolicy = Field(
         default_factory=NatsServerMonitoringPolicy

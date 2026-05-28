@@ -89,6 +89,7 @@ def test_validate_and_show_effective_policy(tmp_path: Path) -> None:
     assert show.exit_code == 0
     assert "prometheus_enabled=false" in show.stdout
     assert "oci_monitoring_enabled=false" in show.stdout
+    assert "cloudwatch_enabled=false" in show.stdout
     assert "syslog_enabled=false" in show.stdout
 
 
@@ -911,6 +912,113 @@ def test_syslog_export_rejects_stale_snapshot_without_override(tmp_path: Path) -
     )
 
     result = runner.invoke(app, ["syslog-export", str(snapshot), str(policy), "--dry-run"])
+
+    assert result.exit_code == 3
+    assert "Metrics snapshot is stale" in result.stderr
+
+
+def test_cloudwatch_export_disabled_policy_does_not_need_snapshot(tmp_path: Path) -> None:
+    policy = tmp_path / "observability.prometheus.json"
+    policy.write_text(
+        json.dumps(
+            {
+                "schema": "nats_sinks.observability.policy.v1",
+                "enabled": False,
+                "namespace": "mission_ops",
+                "subjects": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(
+        app,
+        ["cloudwatch-export", str(tmp_path / "missing.json"), str(policy), "--dry-run"],
+    )
+
+    assert result.exit_code == 0
+    assert "Amazon CloudWatch export disabled" in result.stdout
+
+
+def test_cloudwatch_export_dry_run_outputs_bounded_requests(tmp_path: Path) -> None:
+    snapshot = _snapshot(tmp_path / "metrics.json")
+    policy = tmp_path / "observability.prometheus.json"
+    policy.write_text(
+        json.dumps(
+            {
+                "schema": "nats_sinks.observability.policy.v1",
+                "enabled": True,
+                "namespace": "mission_ops",
+                "allowed_metrics": ["messages_fetched_total"],
+                "allowed_metric_patterns": [],
+                "denied_metrics": [],
+                "denied_metric_patterns": [],
+                "include_observations": False,
+                "include_legacy": False,
+                "subjects": [],
+                "cloudwatch": {
+                    "enabled": True,
+                    "metric_namespace": "nats-sinks/metrics",
+                    "region": "eu-west-1",
+                    "dimensions": {"deployment": "edge"},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["cloudwatch-export", str(snapshot), str(policy), "--dry-run"])
+
+    assert result.exit_code == 0
+    body = json.loads(result.stdout)
+    assert body[0]["Namespace"] == "nats-sinks/metrics"
+    assert body[0]["MetricData"][0]["MetricName"] == "mission_ops_messages_fetched_total"
+    assert body[0]["MetricData"][0]["Dimensions"] == [{"Name": "deployment", "Value": "edge"}]
+    assert "oracle_duplicates_total" not in result.stdout
+    assert "eu-west-1" not in result.stdout
+
+
+def test_cloudwatch_export_rejects_stale_snapshot_without_override(tmp_path: Path) -> None:
+    snapshot = tmp_path / "metrics.json"
+    snapshot.write_text(
+        json.dumps(
+            {
+                "schema": "nats_sinks.metrics.snapshot.v1",
+                "namespace": "mission_ops",
+                "generated_at_epoch_seconds": 1.0,
+                "counters": {"messages_fetched_total": 7},
+                "gauges": {},
+                "observations": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    policy = tmp_path / "observability.prometheus.json"
+    policy.write_text(
+        json.dumps(
+            {
+                "schema": "nats_sinks.observability.policy.v1",
+                "enabled": True,
+                "namespace": "mission_ops",
+                "allowed_metrics": ["messages_fetched_total"],
+                "allowed_metric_patterns": [],
+                "denied_metrics": [],
+                "denied_metric_patterns": [],
+                "include_observations": False,
+                "include_legacy": False,
+                "subjects": [],
+                "cloudwatch": {
+                    "enabled": True,
+                    "metric_namespace": "nats-sinks/metrics",
+                    "region": "eu-west-1",
+                    "stale_after_seconds": 1,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["cloudwatch-export", str(snapshot), str(policy), "--dry-run"])
 
     assert result.exit_code == 3
     assert "Metrics snapshot is stale" in result.stderr

@@ -110,6 +110,9 @@ OCI Monitoring is the first observability connector with a vendor SDK. The
 `oci` optional extra installs the OCI Python SDK only on hosts that perform
 live OCI Monitoring export; dry-run rendering and the base sink package do not
 require it.
+The Amazon CloudWatch connector follows the same rule by keeping boto3 behind
+the `cloudwatch` optional extra. Dry-run rendering and unit tests work without
+boto3; live export requires `python -m pip install "nats-sinks[cloudwatch]"`.
 
 If a future connector needs another vendor SDK, gRPC transport, protobuf
 encoder, or cloud authentication library, add it behind an optional extra,

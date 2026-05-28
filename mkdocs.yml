@@ -64,6 +64,7 @@ nav:
       - Splunk HEC Integration: splunk-hec.md
       - OCI Monitoring Integration: oci-monitoring.md
       - StatsD Integration: statsd.md
+      - Amazon CloudWatch Integration: cloudwatch.md
       - Syslog Bridge: syslog.md
       - NATS Server Monitoring: nats-server-monitoring.md
       - Subject-Aware Observability Evaluation: subject-aware-observability-evaluation.md
