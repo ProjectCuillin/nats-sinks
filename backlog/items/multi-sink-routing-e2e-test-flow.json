@@ -3,7 +3,7 @@
   "title": "[Feature]: Add a multi-sink routing end-to-end test flow",
   "area": "Testing",
   "priority": "P3 - backlog candidate",
-  "target_release": "unscheduled",
+  "target_release": "v0.4.2",
   "labels": ["testing", "sink-oracle", "sink-mysql", "sink-file", "sink-new"],
   "problem": "The project is adding routing, fan-out, and named sink configuration. Current tests can validate parts of that behavior, but there is no single end-to-end test round that proves one deterministic message set routes correctly across Oracle Database, Oracle MySQL Database, File, and Oracle Coherence Community Edition destinations. Without this test flow, regressions could route messages to the wrong sink, miss a required sink, expose optional sink behavior incorrectly, or ACK before the required durable targets have completed.",
   "proposal": "Create a local, gated, end-to-end routing test flow that publishes a deterministic fake message set and validates route decisions across multiple named sink instances. The route matrix should combine subject, priority, classification, labels, approved headers, and static configuration gates. The selected sinks must include Oracle Database, Oracle MySQL Database, File, and Oracle Coherence Community Edition when their local backends are available. The flow should prove one-to-one routing, one-to-many fan-out, optional targets with bounded waits, required targets that gate ACK, no-route handling, and backend-specific validation that only expected messages were written.",

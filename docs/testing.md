@@ -64,6 +64,14 @@ Run the focused suite with:
 pytest tests/unit/test_fanout_certification.py tests/unit/test_fanout_sink.py
 ```
 
+Run the multi-sink routing end-to-end probe with:
+
+```bash
+python scripts/run-multi-sink-routing-e2e.py \
+  --mode reduced \
+  --output .local/multi-sink-routing-e2e/report.json
+```
+
 The suite covers:
 
 - one-to-one routing to a single logical sink target;
@@ -77,11 +85,19 @@ The suite covers:
 - `nats-sink validate` coverage for the documented named multi-sink example
   and invalid route, sink, match, optional wait, fan-out, and redaction
   scenarios.
+- a deterministic multi-sink routing flow for Oracle Database, Oracle MySQL
+  Database, File, and Oracle Coherence Community Edition logical targets,
+  using local file-backed probe sinks so no credentials or network calls are
+  needed.
 
 The same suite is part of `scripts/check-sinks.sh` and therefore part of the
 deterministic release readiness path. Live NATS-to-destination fan-out tests
 remain opt-in because they need the same live destination credentials as the
 underlying child sinks.
+
+See [Multi-Sink Routing End-To-End Flow](multi-sink-routing-e2e.md) for the
+route matrix, example configuration, command output, and live-backend layering
+guidance.
 
 Ordered-consumer inspection has focused unit coverage for fail-closed client
 capability detection, redacted default output, explicit payload opt-in, message

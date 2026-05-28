@@ -14,36 +14,38 @@ generated database passwords, or full raw logs from live systems.
 | Field | Value |
 | --- | --- |
 | Overall result | Pass |
-| Report generated | 2026-05-28 issue `#302` Oracle Coherence Community Edition sink validation for upcoming `v0.4.2` development |
+| Report generated | 2026-05-28 issue `#301` multi-sink routing end-to-end validation for upcoming `v0.4.2` development |
 | Project version | `0.4.1` package metadata with `v0.4.2` development changes |
 | Python version | 3.12.4 |
-| Git revision checked | Branch `issue-302-oracle-coherence-ce-sink` based on `release-v0.4.2` |
+| Git revision checked | Branch `issue-301-multi-sink-routing-e2e-test-flow` based on `release-v0.4.2` |
 | Live NATS details | Environment-gated live tests skipped unless explicitly enabled |
 | Live Oracle Database details | Environment-gated live tests skipped unless explicitly enabled |
 | Live Oracle MySQL details | Environment-gated live tests skipped unless explicitly enabled |
-| Live Oracle Coherence details | Local short-lived Oracle Linux 9 slim container smoke and sink e2e tests passed; no live production Coherence cluster was contacted |
+| Live Oracle Coherence details | Environment-gated live tests skipped unless explicitly enabled |
 
-This refresh covered the experimental first-party Oracle Coherence Community
-Edition sink for issue `#302` and the related Oracle Coherence Community
-Edition test backend assets from issue `#303`. The test backend was verified to
-build from Oracle Linux 9 slim only and to resolve explicit Oracle Coherence
-Community Edition runtime, gRPC proxy, and JSON modules during build.
+This refresh covered the deterministic multi-sink routing end-to-end flow for
+issue `#301`. The new reduced mode validates the tracked fan-out
+configuration, routes synthetic messages through the production `FanoutSink`,
+and uses local file-backed probe sinks for Oracle Database, Oracle MySQL
+Database, File, and Oracle Coherence Community Edition logical targets.
 
 ```mermaid
 flowchart LR
     Runner[JetStream runner] --> Envelope[NATS envelope]
-    Envelope --> Coherence[Oracle Coherence sink]
-    Coherence --> Cache[Coherence cache or map]
-    TestImage[Oracle Linux 9 slim test image] --> Cache
+    Envelope --> Fanout[Fan-out sink]
+    Fanout --> Oracle[Oracle Database target]
+    Fanout --> MySQL[Oracle MySQL target]
+    Fanout --> File[File target]
+    Fanout --> Coherence[Oracle Coherence target]
 ```
 
 ## Core And Repository Validation
 
 | Check | Result |
 | --- | --- |
-| Ruff format | Pass, `262 files already formatted` |
+| Ruff format | Pass, `265 files already formatted` |
 | Ruff lint | Pass |
-| Mypy | Pass, no issues in `109` source files |
+| Mypy | Pass, no issues in `110` source files |
 | Version metadata consistency | Pass for `0.4.1` |
 | Dependency manifests | Pass, manifest files up to date |
 | Backlog metadata | Pass, `145` backlog items validated |
@@ -58,61 +60,59 @@ flowchart LR
 
 | Test Area | Command | Result |
 | --- | --- | --- |
-| Oracle Coherence focused subset | `python -m pytest tests/unit/test_oracle_coherence_test_container.py tests/unit/test_coherence_sink.py tests/integration/test_coherence_sink_e2e.py tests/unit/test_cli.py::test_cli_registry_always_exposes_first_party_connectors tests/unit/test_public_api.py::test_documented_public_imports_remain_available tests/unit/test_public_api.py::test_public_exports_include_documented_contract tests/unit/test_public_api.py::test_public_api_smoke_imports_match_readme_examples -q` | Pass, `36 passed, 1 skipped` |
-| Oracle Coherence container smoke | `python scripts/run-oracle-coherence-container-smoke.py --timeout-seconds 300` | Pass, one verified fake JSON key/value entry |
-| Oracle Coherence sink e2e | `python scripts/run-coherence-sink-e2e.py --timeout-seconds 300` | Pass, `1 passed` plus sink e2e success summary |
-| Oracle Coherence example validation | `nats-sink validate examples/oracle-coherence-basic/config.json` | Pass |
-| Main repository test suite | run by `scripts/check.sh` | Pass, `1181 passed, 12 skipped` |
+| Multi-sink focused subset | `python -m pytest tests/unit/test_multi_sink_routing_e2e.py tests/unit/test_fanout_sink.py tests/unit/test_fanout_certification.py tests/unit/test_routing_policy.py -q` | Pass, `63 passed` |
+| Multi-sink reduced e2e runner | `python scripts/run-multi-sink-routing-e2e.py --mode reduced --output .local/multi-sink-routing-e2e/report.json` | Pass, sanitized report generated |
+| Multi-sink example validation | `nats-sink validate examples/multi-sink-routing-e2e/config.json` | Pass |
+| Main repository test suite | run by `scripts/check.sh` | Pass, `1186 passed, 12 skipped` |
 | Commit, encryption, file, and Oracle sink subset | run by `scripts/check.sh` | Pass, `130 passed` |
-| Sink certification and example validation | `scripts/check-sinks.sh` via `scripts/check.sh` | Pass, `158 passed` plus file, Oracle, Oracle Coherence, Foundry, and Gotham config validation |
+| Sink certification and example validation | `scripts/check-sinks.sh` via `scripts/check.sh` | Pass, `163 passed` plus file, Oracle, Oracle Coherence, multi-sink routing, Foundry, and Gotham config validation |
 | Full local validation | `scripts/check.sh` | Pass |
 
 The skipped tests are the existing environment-gated live NATS, Oracle
 Database, Oracle MySQL, Oracle Coherence, and push-consumer integration tests.
 
-## Oracle Coherence Evidence
+## Multi-Sink Routing Evidence
 
 The new focused coverage verifies:
 
-- the Oracle Coherence Community Edition test image uses Oracle Linux 9 slim
-  for every Docker build stage;
-- the test image resolves explicit Oracle Coherence Community Edition runtime,
-  gRPC proxy, and JSON modules;
-- the smoke runner validates repository-local Dockerfile paths, bounded
-  readiness timeouts, safe cache names, fixed `shell=False` subprocess calls,
-  cleanup defaults, preserve behavior, and redacted command failures;
-- the local container smoke test writes, reads, verifies, and removes one
-  complete fake event JSON value;
-- the Coherence sink validates configuration, value size limits, key
-  strategies, duplicate policies, TTL behavior, optional dependency handling,
-  timeout handling, and certification helper behavior;
-- the sink e2e proves the connector can write through the local Oracle Linux 9
-  slim Coherence backend when the optional client is available.
+- the tracked `examples/multi-sink-routing-e2e/config.json` file validates
+  through the production CLI;
+- the route matrix covers subject, priority, classification, `labels_all`,
+  `labels_any`, `labels_none`, approved headers, and a static
+  `Nats-Sinks-Flow` configuration gate;
+- one synthetic message fans out to Oracle Database, Oracle MySQL Database,
+  File, and Oracle Coherence Community Edition logical targets;
+- one NATO UNCLASS synthetic message routes only to `oracle_unclass`;
+- one tasking synthetic message routes only to the Oracle Coherence Community
+  Edition read-model target;
+- no-route and blocked-training-label messages do not write any probe sink in
+  the default `ignore` policy;
+- optional target timeout behavior is observed without blocking required
+  targets;
+- required target failure after partial success raises a temporary failure so
+  the original message remains unacknowledged;
+- duplicate redelivery attempts are counted while duplicate probe evidence is
+  not written again;
+- reports and probe evidence contain no payloads, credentials, local paths, or
+  live destination details.
 
 ## Issues Found During Validation
 
-The initial static check found that the Oracle Coherence test backend was still
-documented and tested as a wrapper around an upstream Coherence image. The
-Dockerfile, smoke runner, documentation, changelog, and unit tests were updated
-so the backend is now Oracle Linux 9 slim based.
-
-Full type checking also exposed three redundant casts in unrelated modules.
-Those were removed and the type check now passes.
+The initial focused test run found two local example-config mistakes in the new
+issue `#301` implementation: a non-existent `batch` section and an unsupported
+File sink `format` field. Both were corrected before the final validation
+cycle. No existing repository defect required a separate bug report.
 
 ## Documentation Evidence
 
 The following public documentation was updated and built successfully:
 
 - [README](https://github.com/ProjectCuillin/nats-sinks/blob/main/README.md)
-- [Oracle Coherence Community Edition Sink](coherence-sink.md)
-- [Oracle Coherence Community Edition Test Backend](oracle-coherence-test-container.md)
-- [Docker](docker.md)
+- [Multi-Sink Routing End-To-End Flow](multi-sink-routing-e2e.md)
 - [Configuration](configuration.md)
 - [Sink Framework](sink-framework.md)
-- [Security](security.md)
 - [Testing](testing.md)
 - [Documentation Home](index.md)
 
-The changelog, backlog metadata, latest test report, examples, and public sink
-documentation were updated for issue `#302` and the Oracle Linux 9 slim
-Coherence test backend correction.
+The changelog, backlog metadata, latest test report, examples, and public
+testing documentation were updated for issue `#301`.

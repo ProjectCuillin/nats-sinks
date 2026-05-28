@@ -1462,6 +1462,19 @@ Validate the tracked example:
 nats-sink validate examples/routing-match-policy/config.json
 ```
 
+Validate the richer multi-sink routing end-to-end example, which includes
+Oracle Database, Oracle MySQL Database, File, and Oracle Coherence Community
+Edition logical targets:
+
+```bash
+nats-sink validate examples/multi-sink-routing-e2e/config.json
+python scripts/run-multi-sink-routing-e2e.py --mode reduced
+```
+
+See [Multi-Sink Routing End-To-End Flow](multi-sink-routing-e2e.md) for the
+complete route matrix, optional target wait behavior, duplicate-redelivery
+evidence, and pipe-friendly report examples.
+
 ### `mission_metadata`
 
 The `mission_metadata` section is disabled by default. Enable it when messages

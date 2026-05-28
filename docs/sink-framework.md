@@ -323,6 +323,13 @@ before ACK, optional timeout before ACK release, no-route policies, CLI
 validation, and redaction behavior. New fan-out-capable sink work should add
 cases there or reuse the same helpers from `nats_sinks.testing`.
 
+`scripts/run-multi-sink-routing-e2e.py` adds a deterministic end-to-end layer
+over the same boundary. It uses local file-backed probe sinks to certify that
+one route matrix can select Oracle Database, Oracle MySQL Database, File, and
+Oracle Coherence Community Edition logical targets without requiring live
+credentials or network access. See
+[Multi-Sink Routing End-To-End Flow](multi-sink-routing-e2e.md).
+
 The route policy uses exact bounded values and the existing NATS wildcard
 subject matcher. It does not load plugins, execute code, evaluate expressions,
 or use regular expressions supplied by configuration.

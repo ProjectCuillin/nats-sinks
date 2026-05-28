@@ -26,6 +26,16 @@ from nats_sinks.testing.load_profile import (
     render_load_profile_report,
     run_load_profile,
 )
+from nats_sinks.testing.multi_sink_routing import (
+    MULTI_SINK_EXAMPLE_CONFIG,
+    MultiSinkRoutingCertificationError,
+    MultiSinkRoutingReport,
+    ReducedSinkRecord,
+    multi_sink_routing_envelopes,
+    run_reduced_multi_sink_routing_flow,
+    run_reduced_multi_sink_routing_flow_sync,
+    write_report,
+)
 from nats_sinks.testing.oracle_benchmark import (
     BenchmarkPhaseTiming,
     OracleBenchmarkOptions,
@@ -85,6 +95,7 @@ from nats_sinks.testing.websocket_harness import (
 )
 
 __all__ = [
+    "MULTI_SINK_EXAMPLE_CONFIG",
     "SUBJECT_OBSERVABILITY_ALLOWED_LABEL",
     "SUBJECT_OBSERVABILITY_OVERFLOW_LABEL",
     "SUBJECT_OBSERVABILITY_RAW_SUBJECTS",
@@ -96,8 +107,11 @@ __all__ = [
     "LoadPhaseTiming",
     "LoadProfileOptions",
     "LoadProfileReport",
+    "MultiSinkRoutingCertificationError",
+    "MultiSinkRoutingReport",
     "OracleBenchmarkOptions",
     "OracleBenchmarkReport",
+    "ReducedSinkRecord",
     "SinkCertificationCase",
     "SubjectObservabilityCertificationReport",
     "SubjectObservabilityDeliveryProbe",
@@ -125,6 +139,7 @@ __all__ = [
     "fanout_certification_envelope",
     "fanout_certification_policy",
     "generate_synthetic_scenario",
+    "multi_sink_routing_envelopes",
     "nats_server_command",
     "port_is_available",
     "render_load_profile_report",
@@ -134,6 +149,8 @@ __all__ = [
     "render_synthetic_report_markdown",
     "run_file_sink_synthetic_scenario",
     "run_load_profile",
+    "run_reduced_multi_sink_routing_flow",
+    "run_reduced_multi_sink_routing_flow_sync",
     "run_subject_observability_certification",
     "sanitize_public_text",
     "sanitized_selected_ports",
@@ -145,4 +162,5 @@ __all__ = [
     "synthetic_report",
     "wait_for_tcp_port",
     "write_nats_websocket_config",
+    "write_report",
 ]
