@@ -12,6 +12,7 @@ pytest \
   tests/unit/test_file_mapping.py \
   tests/unit/test_file_sink.py \
   tests/unit/test_oracle_nosql_sink.py \
+  tests/unit/test_oracle_nosql_test_container.py \
   tests/unit/test_coherence_sink.py \
   tests/unit/test_foundry_sink.py \
   tests/unit/test_gotham_sink.py \
@@ -53,4 +54,12 @@ fi
 if [ "${NATS_SINKS_RUN_ORACLE_NOSQL_E2E:-0}" = "1" ]; then
   NATS_SINKS_ORACLE_NOSQL_INTEGRATION=1 \
     pytest -m integration tests/integration/test_oracle_nosql_sink_e2e.py
+fi
+
+if [ "${NATS_SINKS_RUN_ORACLE_NOSQL_CONTAINER_SMOKE:-0}" = "1" ]; then
+  python scripts/run-oracle-nosql-container-smoke.py
+fi
+
+if [ "${NATS_SINKS_RUN_ORACLE_NOSQL_SINK_E2E:-0}" = "1" ]; then
+  python scripts/run-oracle-nosql-sink-e2e.py
 fi

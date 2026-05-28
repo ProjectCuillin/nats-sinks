@@ -14,43 +14,41 @@ generated database passwords, or full raw logs from live systems.
 | Field | Value |
 | --- | --- |
 | Overall result | Pass |
-| Report generated | 2026-05-28 issue `#149` Oracle NoSQL Database sink validation for upcoming `v0.4.2` development |
+| Report generated | 2026-05-28 issue `#310` Oracle NoSQL Database test backend and issue `#149` container-backed sink verification for upcoming `v0.4.2` development |
 | Project version | `0.4.1` package metadata with `v0.4.2` development changes |
 | Python version | 3.12.4 |
-| Git revision checked | Branch `issue-149-oracle-nosql-database-sink` based on `release-v0.4.2` |
+| Git revision checked | Branch `bug-313-oracle-nosql-kvlite-readiness`, to be merged back into `issue-310-oracle-nosql-test-container` and then `release-v0.4.2` |
 | Live NATS details | Environment-gated live tests skipped unless explicitly enabled |
 | Live Oracle Database details | Environment-gated live tests skipped unless explicitly enabled |
 | Live Oracle MySQL details | Environment-gated live tests skipped unless explicitly enabled |
-| Live Oracle NoSQL details | Environment-gated live tests skipped unless explicitly enabled |
+| Live Oracle NoSQL details | Local short-lived KVLite container smoke and sink e2e tests passed |
 | Live Oracle Coherence details | Environment-gated live tests skipped unless explicitly enabled |
-| Oracle NoSQL test container details | Not available yet; the sink is covered by fake SDK clients and an explicitly gated live KVLite/Cloud Simulator test path |
+| Oracle NoSQL test container details | Official Oracle NoSQL Community Edition KVLite image wrapper, loopback proxy, fake JSON data, cleanup by default |
 
-This refresh covered the experimental first-party Oracle NoSQL Database sink
-for issue `#149`. The sink writes one complete normalized event JSON value into
-a configured Oracle NoSQL table row, derives deterministic keys from approved
-idempotency metadata, validates SDK endpoints and table identifiers before
-startup, and keeps ACK ownership in the core runner.
+This refresh covered the Oracle NoSQL Database KVLite test backend for issue
+`#310`, revisited the Oracle NoSQL Database sink from issue `#149` against
+that backend, and fixed the SDK-level readiness race tracked as issue `#313`.
 
 ```mermaid
 flowchart LR
-    Runner[nats-sink worker] --> Envelope[Normalized NatsEnvelope]
-    Envelope --> NoSQL[Oracle NoSQL sink]
-    NoSQL --> Row[Key plus JSON value row]
-    Row --> Commit[SDK put succeeded]
-    Commit --> Runner
+    Helper[local test helper] --> KVLite[Oracle NoSQL KVLite container]
+    KVLite --> Proxy[loopback HTTP proxy]
+    Proxy --> Smoke[JSON key/value smoke check]
+    Proxy --> SinkE2E[Oracle NoSQL sink e2e]
+    SinkE2E --> Put[SDK put completed]
 ```
 
 ## Core And Repository Validation
 
 | Check | Result |
 | --- | --- |
-| Ruff format | Pass, `275 files already formatted` |
+| Ruff format | Pass, `278` files already formatted after formatting the new scripts |
 | Ruff lint | Pass |
 | Mypy | Pass, no issues in `116` source files |
 | Version metadata consistency | Pass for `0.4.1` |
 | Dependency manifests | Pass, manifest files up to date |
 | Backlog metadata | Pass, `146` backlog items validated |
-| Bug report metadata | Pass, `90` bug reports validated |
+| Bug report metadata | Pass, `91` bug reports validated |
 | PyPI-facing Markdown links | Pass |
 | Documentation builds | Pass for Read the Docs and GitHub Pages MkDocs builds |
 | Security checks | Pass; existing reviewed `nosec` warnings remained non-blocking |
@@ -61,44 +59,49 @@ flowchart LR
 
 | Test Area | Command | Result |
 | --- | --- | --- |
-| Oracle NoSQL focused subset | `python -m pytest tests/unit/test_oracle_nosql_sink.py tests/unit/test_public_api.py tests/unit/test_routing_policy.py tests/integration/test_oracle_nosql_sink_e2e.py -q` | Pass, `57 passed, 1 skipped` |
-| Full unit suite | `python -m pytest tests/unit -q` | Pass, `1228 passed` |
-| Main repository test suite | run by `scripts/check.sh` | Pass, `1233 passed, 13 skipped` |
+| Oracle NoSQL test-backend and sink subset | `python -m pytest tests/unit/test_oracle_nosql_test_container.py tests/unit/test_oracle_nosql_sink.py tests/integration/test_oracle_nosql_sink_e2e.py -q` | Pass, `26 passed, 1 skipped` |
+| Oracle NoSQL test backend smoke | `python scripts/run-oracle-nosql-container-smoke.py --timeout-seconds 300` | Pass, one verified JSON key/value entry |
+| Oracle NoSQL sink container e2e | `python scripts/run-oracle-nosql-sink-e2e.py --timeout-seconds 300` | Pass |
+| Oracle NoSQL container cleanup check | Docker container listing filtered for the local Oracle NoSQL test name | Pass, no retained containers |
+| Sink certification and example validation | `scripts/check-sinks.sh` | Pass, `189 passed` plus file, Oracle, Oracle NoSQL, Oracle Coherence, multi-sink routing, Foundry, and Gotham config validation |
+| Main repository test suite | run by `scripts/check.sh` | Pass, `1245 passed, 13 skipped` |
 | Commit, encryption, file, and Oracle sink subset | run by `scripts/check.sh` | Pass, `130 passed` |
-| Sink certification and example validation | `scripts/check-sinks.sh` via `scripts/check.sh` | Pass, `177 passed` plus file, Oracle, Oracle NoSQL, Oracle Coherence, multi-sink routing, Foundry, and Gotham config validation |
 | Full local validation | `scripts/check.sh` | Pass |
 
 The skipped tests are the existing environment-gated live NATS, Oracle
-Database, Oracle MySQL, Oracle NoSQL Database, Oracle Coherence, and
-push-consumer integration tests.
+Database, Oracle MySQL, Oracle NoSQL Database default integration path, Oracle
+Coherence, and push-consumer integration tests. The Oracle NoSQL container e2e
+path was run separately through its dedicated helper so it could start and
+clean up its own short-lived backend.
 
-## Oracle NoSQL Database Sink Evidence
+## Oracle NoSQL Database Test Backend Evidence
 
-The new focused coverage verifies:
+The new test-backend coverage verifies:
 
-- `sink.type: "oracle_nosql"` is accepted through the normal CLI/config path;
-- endpoints, deployment modes, auth modes, table names, field names, key
-  prefixes, size limits, generated table DDL inputs, and duplicate policies are
-  validated before SDK use;
-- full normalized event metadata is stored in a configured JSON value field;
-- deterministic key strategies cover `idempotency_key`, `stream_sequence`,
-  `message_id`, and `payload_sha256`;
-- duplicate policies cover conditional `skip_existing`, unconditional
-  `replace`, and `fail_existing`;
-- fake SDK writes, optional table creation, timeout handling, client failures,
-  missing optional dependency behavior, and ambiguous SDK results fail closed;
-- sink certification helpers prove write success and duplicate redelivery
-  behavior without live infrastructure;
-- live Oracle NoSQL Database e2e coverage is present but explicitly skipped
-  unless local integration environment variables are set.
+- the default image reference is Oracle's Community Edition image from GitHub
+  Container Registry;
+- there is no repository-local custom Dockerfile for Oracle NoSQL Database;
+- the helper binds only to `127.0.0.1` with a random local port;
+- Docker is invoked through fixed argument lists with `shell=False`;
+- host networking, privileged mode, and Docker socket mounts are not used;
+- transient SDK readiness failures are retried after TCP readiness;
+- persistent SDK readiness failures fail closed with concise output;
+- the smoke record is complete fake event JSON;
+- cleanup removes the short-lived container by default;
+- the sink e2e helper starts the backend, enables the live-gated integration
+  test, and cleans up afterward.
 
 ## Issues Found During Validation
 
-No new repository defects were found during the issue `#149` validation cycle.
-The security scan reported existing reviewed `nosec` annotations as warnings,
-and the check remained passing. The Oracle NoSQL Database Docker test backend
-has not been implemented yet, so no live container-backed Oracle NoSQL test was
-claimed in this report.
+Issue `#313` was found during the first live container run: the helper treated
+an open TCP proxy port as readiness before the Oracle NoSQL Python SDK could
+complete a table request. A failing regression test was added first, the bug
+was raised on GitHub, the helper was fixed to wait for SDK-level readiness, and
+the bug was marked completed with sanitized unit and container evidence.
+
+No additional repository defects were found after the fix. The security scan
+reported existing reviewed `nosec` annotations as warnings, and the check
+remained passing.
 
 ## Documentation Evidence
 
@@ -106,14 +109,13 @@ The following public documentation was updated and built successfully:
 
 - [README](https://github.com/ProjectCuillin/nats-sinks/blob/main/README.md)
 - [Oracle NoSQL Database Sink](oracle-nosql-sink.md)
-- [Configuration](configuration.md)
-- [Idempotency](idempotency.md)
-- [Sink Framework](sink-framework.md)
-- [Operations](operations.md)
-- [Security](security.md)
-- [Security Rule Review](security-rule-review.md)
+- [Oracle NoSQL Database Test Backend](oracle-nosql-test-container.md)
+- [Local Docker Stack](docker.md)
 - [Testing](testing.md)
+- [Sink Framework](sink-framework.md)
+- [Security Rule Review](security-rule-review.md)
+- [Roadmap](roadmap.md)
 - [Documentation Home](index.md)
 
-The changelog, backlog metadata, latest test report, and public documentation
-were updated for issue `#149`.
+The changelog, backlog metadata, bug report metadata, latest test report, and
+public documentation were updated for issues `#310`, `#149`, and `#313`.

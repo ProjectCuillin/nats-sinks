@@ -257,7 +257,11 @@ class _BorneoOracleNoSqlClient:
             ) from exc
 
         provider = _build_authorization_provider(borneo=borneo, config=config)
-        handle_config = borneo.NoSQLHandleConfig(config.endpoint, provider)
+        handle_config = _build_handle_config(
+            borneo=borneo,
+            endpoint=config.endpoint,
+            provider=provider,
+        )
         _maybe_call(handle_config, "set_default_namespace", config.namespace)
         handle = borneo.NoSQLHandle(handle_config)
         return cls(config=config, borneo=borneo, handle=handle)
@@ -343,6 +347,22 @@ def _build_authorization_provider(
     if passphrase is not None:
         kwargs["pass_phrase"] = passphrase
     return iam_module.SignatureProvider(**kwargs)
+
+
+def _build_handle_config(*, borneo: Any, endpoint: str, provider: Any) -> Any:
+    """Create SDK handle config across supported constructor shapes."""
+
+    try:
+        return borneo.NoSQLHandleConfig(endpoint, provider)
+    except TypeError as exc:
+        handle_config = borneo.NoSQLHandleConfig(endpoint)
+        set_provider = getattr(handle_config, "set_authorization_provider", None)
+        if not callable(set_provider):
+            raise ConfigurationError(
+                "Oracle NoSQL Python SDK does not expose authorization-provider setup"
+            ) from exc
+        set_provider(provider)
+        return handle_config
 
 
 def _cloudsim_authorization_provider(borneo: Any, *, tenant_id: str) -> Any:

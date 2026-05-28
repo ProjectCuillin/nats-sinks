@@ -1,0 +1,37 @@
+{
+  "id": "oracle-nosql-kvlite-proxy-readiness",
+  "title": "[Bug]: Oracle NoSQL KVLite helper should wait for SDK readiness",
+  "area": "Testing",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.2",
+  "labels": [
+    "deployment",
+    "testing",
+    "sink-oracle"
+  ],
+  "summary": "The new Oracle NoSQL Database KVLite smoke helper can treat an open TCP proxy port as readiness before the Oracle NoSQL Python SDK can complete a table request.",
+  "observed": "During local issue #310 container smoke testing, the helper reached the SDK table creation step after the proxy accepted TCP connections, but the SDK received a disconnected HTTP response from the local KVLite proxy.",
+  "expected": "The helper should wait for Oracle NoSQL SDK-level readiness, retry transient proxy startup failures within the bounded timeout, and only run smoke or sink e2e writes after a simple table operation can complete.",
+  "reproduction": "Run python scripts/run-oracle-nosql-container-smoke.py against a freshly started Oracle NoSQL Database KVLite container where the proxy socket opens before SDK requests are fully ready.",
+  "failing_test": "Add a focused unit test that simulates transient SDK readiness failures and asserts the helper retries before reporting readiness.",
+  "impact": "The defect affects local test orchestration only. It can make issue #310 and issue #149 container-backed verification flaky or fail early, but it does not change production sink delivery semantics or ACK behavior.",
+  "delivery_semantics": "The defect occurs before any JetStream message is consumed. It does not alter sink write ordering, idempotency, DLQ handling, or commit-then-ACK behavior.",
+  "security": "The fix must keep retry evidence sanitized and must not print local container names, payloads, credentials, or private endpoint details.",
+  "acceptance": [
+    "The helper performs SDK-level readiness checks after the TCP port opens.",
+    "Transient SDK readiness failures are retried within the configured bounded timeout.",
+    "Persistent readiness failures still fail closed with a concise sanitized error.",
+    "The Oracle NoSQL container smoke test and sink e2e helper use the SDK-level readiness check.",
+    "Focused unit tests cover transient and persistent readiness behavior without requiring Docker."
+  ],
+  "tests": "Run python -m pytest tests/unit/test_oracle_nosql_test_container.py -q, then rerun python scripts/run-oracle-nosql-container-smoke.py and python scripts/run-oracle-nosql-sink-e2e.py when Docker and the optional Oracle NoSQL Python SDK are available.",
+  "documentation": "No public command syntax changes are required. Test evidence and the test backend documentation should mention SDK-level readiness.",
+  "closeout": "Mark completed after the readiness retry fix is merged back into the issue #310 feature branch with sanitized unit and container evidence.",
+  "relationships": {
+    "related": [
+      "backlog:oracle-nosql-database-test-container",
+      "backlog:oracle-nosql-database-sink"
+    ]
+  }
+}

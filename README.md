@@ -234,6 +234,11 @@ used immediately:
   random per-run credentials, loopback-only exposure, cleanup by default, and
   deterministic asset tests. See
   [Oracle MySQL Test Container](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/oracle-mysql-test-container.md).
+- A local Oracle NoSQL Database KVLite test backend for Oracle NoSQL Database
+  sink development and e2e testing, using Oracle's documented Community
+  Edition image from GitHub Container Registry, loopback-only exposure,
+  cleanup by default, and JSON key/value verification. See
+  [Oracle NoSQL Database Test Backend](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/oracle-nosql-test-container.md).
 - A production container hardening baseline for the Oracle Linux slim image,
   including non-root UID/GID `10001`, read-only-root-compatible runtime
   guidance, OCI image labels, writable-path documentation, SBOM and
