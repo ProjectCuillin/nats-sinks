@@ -58,6 +58,7 @@ from nats_sinks.core.stream_management import (
 )
 from nats_sinks.file import FileSink
 from nats_sinks.foundry import FoundrySink
+from nats_sinks.gotham import GothamSink
 from nats_sinks.mysql import MySqlSink
 from nats_sinks.oracle import (
     OracleLineageReader,
@@ -148,6 +149,18 @@ def _registry(plugins: SinkPluginConfig | None = None) -> SinkRegistry:
             built_in=True,
             production_ready=False,
             documentation="docs/foundry-sink.md",
+            certification=("commit-then-ack", "unit", "mock-contract"),
+        )
+    )
+    registry.register_connector(
+        SinkConnector(
+            name="gotham",
+            factory=GothamSink.from_mapping,
+            summary="Experimental Palantir Gotham RevDB object sink.",
+            status="experimental",
+            built_in=True,
+            production_ready=False,
+            documentation="docs/gotham-sink.md",
             certification=("commit-then-ack", "unit", "mock-contract"),
         )
     )

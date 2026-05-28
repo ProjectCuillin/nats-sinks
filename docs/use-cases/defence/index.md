@@ -59,6 +59,8 @@ represent the same need.
 - Local file output for disconnected handoff and evidence capture.
 - Experimental Foundry Streams handoff for analytics-platform trials, with
   fake-client certification before any live Foundry certification claim.
+- Experimental Gotham RevDB object handoff for approved object-model trials,
+  with fake-client certification before any live Gotham certification claim.
 - Metrics snapshots and optional observability connectors.
 - Synthetic mission scenario testing for release evidence and future sink
   certification.

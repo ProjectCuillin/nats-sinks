@@ -621,6 +621,32 @@ the connector in production, validate it against an approved Foundry test
 environment with least-privilege application permissions and sanitized
 evidence.
 
+## Palantir Gotham Sink Security
+
+The Palantir Gotham sink is experimental and should be treated as a controlled
+RevDB object handoff boundary. Configure only reviewed Gotham base URLs, use
+`endpoint_allowed_hosts`, and keep tokens, OAuth2 client identifiers, and
+client secrets in environment variables or a protected service environment
+file.
+
+The connector validates endpoint schemes, host allow-lists, object type names,
+property type names, security portion markings, batch sizes, object sizes,
+response sizes, timeout values, and authentication mode combinations before
+attempting a write. It builds the object-create endpoint from a base URL and a
+validated object type so configuration cannot supply arbitrary API paths.
+
+Runtime errors intentionally avoid printing the Gotham endpoint, token values,
+client identifiers, response bodies, object types, property types, primary
+keys, subjects, or payloads. Treat live Gotham responses as untrusted input:
+malformed, oversized, missing-primary-key, rejected, partial, timed-out, or
+ambiguous responses fail closed and prevent ACK until the normal retry,
+redelivery, or DLQ policy completes.
+
+Local fake-client certification is not production certification. Before using
+the connector in production, validate it against an approved Gotham test
+environment with least-privilege application permissions, an approved object
+model, and sanitized evidence.
+
 ## Secure Failure Flow
 
 ```mermaid

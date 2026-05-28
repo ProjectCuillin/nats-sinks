@@ -721,6 +721,28 @@ The local fake-client tests are suitable for release evidence, but they do not
 prove that a customer Foundry tenant, stream schema, branch, authentication
 setup, or permission model is ready for production.
 
+## Palantir Gotham Sink Operations
+
+The experimental Gotham sink should be introduced through mock certification,
+then through a non-production Gotham environment, before any production
+traffic is routed to it. Keep the service identity least-privileged to the
+specific object type and property mutations required for the durable handoff.
+Configure `endpoint_allowed_hosts` so operators can review the intended
+destination host without inspecting secret material.
+
+Monitor sink failures, redeliveries, DLQ counts, and downstream Gotham
+authorization, throttling, ontology validation, and conflict events during
+trials. A valid object-create response with a `primaryKey`, an explicit
+fake-client acceptance, or an explicitly configured duplicate conflict is the
+only local success boundary. Rejected, partial, malformed, oversized,
+timed-out, or ambiguous responses prevent ACK and rely on the normal retry,
+redelivery, or DLQ policy.
+
+The local fake-client tests are suitable for release evidence, but they do not
+prove that a customer Gotham tenant, RevDB object type, property mapping,
+security marking model, authentication setup, or permission model is ready for
+production.
+
 ## Docker Compose Examples
 
 The examples directory includes JSON-formatted Compose files. For the current

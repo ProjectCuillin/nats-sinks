@@ -22,11 +22,12 @@ The current first-party production sinks are:
 - [Edge Spool Sink](spool-sink.md), where success means the encrypted local
   spool record has been committed.
 
-The [Palantir Foundry Sink](foundry-sink.md) is built in but experimental. It
-passes local fake-client certification, but it must not be described as
-production-ready until live Foundry certification evidence exists. Future sinks
-must pass the same certification standard before documentation, metadata, or
-connector descriptors can mark them as production-ready.
+The [Palantir Foundry Sink](foundry-sink.md) and
+[Palantir Gotham Sink](gotham-sink.md) are built in but experimental. They pass
+local fake-client certification, but they must not be described as
+production-ready until live platform-specific certification evidence exists.
+Future sinks must pass the same certification standard before documentation,
+metadata, or connector descriptors can mark them as production-ready.
 
 ## Certification Model
 

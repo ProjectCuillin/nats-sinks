@@ -12,6 +12,7 @@ pytest \
   tests/unit/test_file_mapping.py \
   tests/unit/test_file_sink.py \
   tests/unit/test_foundry_sink.py \
+  tests/unit/test_gotham_sink.py \
   tests/integration/test_file_sink_e2e.py \
   tests/unit/test_fanout_certification.py \
   tests/unit/test_oracle_mapping.py \
@@ -26,6 +27,7 @@ nats-sink validate examples/payload-encryption/file-config.json
 nats-sink test-sink examples/payload-encryption/file-config.json
 nats-sink validate examples/oracle-jetstream/config.json
 nats-sink validate examples/foundry-basic/config.json
+nats-sink validate examples/gotham-basic/config.json
 
 if [ "${NATS_SINKS_RUN_LIVE_ORACLE:-0}" = "1" ]; then
   pytest -m integration tests/integration/test_oracle_sink.py
