@@ -87,6 +87,7 @@ nav:
   - Testing And Quality:
       - Testing: testing.md
       - Oracle MySQL Test Container: oracle-mysql-test-container.md
+      - Oracle Coherence CE Test Backend: oracle-coherence-test-container.md
       - Sink Certification: sink-certification.md
       - Latest Test Report: test-report.md
       - Public API Compatibility: public-api.md

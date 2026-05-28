@@ -406,7 +406,7 @@ Today, the first-party production connectors are built in:
 | Edge spool | `spool` | `nats_sinks.spool.SpoolSink` | Production connector in this repository. |
 
 Future Oracle-family sinks such as OCI Object Storage, Oracle Berkeley DB,
-Oracle NoSQL Database, and OCI Streaming are intended to
+Oracle NoSQL Database, Oracle Coherence Community Edition, and OCI Streaming are intended to
 be first-party connectors in this repository unless project governance decides
 otherwise later. They should use the same connector descriptor and certification
 tests as Oracle Database, Oracle MySQL, FileSink, and SpoolSink, but they do
@@ -416,6 +416,12 @@ The repository includes a local
 [Oracle MySQL test database container](oracle-mysql-test-container.md) used by
 the [Oracle MySQL Sink](mysql-sink.md) e2e certification path. The container is
 test infrastructure, not a production database image.
+
+The repository also includes a local
+[Oracle Coherence Community Edition test backend](oracle-coherence-test-container.md)
+for future Oracle Coherence sink and multi-sink routing certification. It is
+test infrastructure, not a production Coherence deployment and not a sink
+implementation.
 
 Optional third-party connector discovery is intentionally disabled by default.
 When enabled, it uses Python packaging entry points under the group

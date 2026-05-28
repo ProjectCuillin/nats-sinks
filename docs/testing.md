@@ -348,6 +348,46 @@ See [Oracle MySQL Sink](mysql-sink.md) for sink configuration and
 container security model, runtime sequence, capability exception, and
 troubleshooting guidance.
 
+## Oracle Coherence Community Edition Test Backend
+
+The repository includes a local Oracle Coherence Community Edition test backend
+for future Oracle Coherence sink and multi-sink routing work. The backend is a
+test-only wrapper around an explicit Oracle Coherence Community Edition image.
+It starts a short-lived container, exposes the client endpoint only on a random
+loopback port, writes one complete fake event JSON object as a key/value entry,
+reads it back, and removes the container by default.
+
+Run the deterministic asset tests without Docker:
+
+```bash
+python -m pytest tests/unit/test_oracle_coherence_test_container.py -q
+```
+
+Run the optional Docker smoke test when a local Docker daemon and the optional
+Coherence Python client are available. Use an isolated local virtual
+environment for the optional client:
+
+```bash
+python -m venv .local/coherence-smoke-venv
+. .local/coherence-smoke-venv/bin/activate
+python -m pip install coherence-client
+python scripts/run-oracle-coherence-container-smoke.py
+```
+
+Expected sanitized output:
+
+```text
+Oracle Coherence CE container smoke test passed with one verified JSON key/value entry.
+```
+
+This backend does not implement the Oracle Coherence Community Edition sink and
+does not prove production Coherence durability. It is local test infrastructure
+for future sink certification, routing, and fan-out validation.
+
+See [Oracle Coherence Community Edition Test Backend](oracle-coherence-test-container.md)
+for image selection, runtime sequence, optional client setup, smoke-test
+commands, cleanup behavior, and security boundaries.
+
 ## Subject-Aware Observability Certification
 
 Subject-aware observability has its own focused certification suite because
