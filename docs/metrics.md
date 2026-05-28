@@ -389,6 +389,7 @@ The observability CLI provides policy and connector commands:
 | `nats-sink-observe splunk-hec-export SNAPSHOT POLICY` | Dry-run or send approved aggregate metrics to Splunk HEC. |
 | `nats-sink-observe oci-monitoring-export SNAPSHOT POLICY` | Dry-run or send approved custom metrics to OCI Monitoring. |
 | `nats-sink-observe statsd-export SNAPSHOT POLICY` | Dry-run or send approved best-effort metric datagrams to StatsD. |
+| `nats-sink-observe datadog-export SNAPSHOT POLICY` | Dry-run or send approved best-effort DogStatsD datagrams to a Datadog Agent. |
 | `nats-sink-observe cloudwatch-export SNAPSHOT POLICY` | Dry-run or send approved custom metrics to Amazon CloudWatch. |
 | `nats-sink-observe syslog-export SNAPSHOT POLICY` | Dry-run or send approved RFC 5424-style metric messages to syslog. |
 

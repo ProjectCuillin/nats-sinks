@@ -80,7 +80,8 @@ The tests also cover:
   `render_grafana_alloy_otlp_metrics_json`, `export_grafana_alloy_metrics`,
   `render_grafana_alloy_config`, `render_splunk_hec_event_json`,
   `export_splunk_hec_metrics`, `render_statsd_lines`,
-  `export_statsd_metrics`, `render_syslog_messages`,
+  `export_statsd_metrics`, `render_datadog_lines`,
+  `export_datadog_metrics`, `render_syslog_messages`,
   `export_syslog_metrics`, and
   `render_nats_monitoring_prometheus`,
 - sink extension points such as `Sink`, `HealthCheckableSink`,

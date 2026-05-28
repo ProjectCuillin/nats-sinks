@@ -54,7 +54,7 @@ is merged.
 | `Coherence` | `src/nats_sinks/coherence/*`, `tests/unit/test_coherence_sink.py`, `tests/integration/test_coherence_sink_e2e.py`, `docs/coherence-sink.md` |
 | `File` | `src/nats_sinks/file/*`, `tests/unit/test_file_*.py`, `docs/file-sink.md` |
 | `CI` | `.github/workflows/*`, `scripts/check.sh`, `scripts/security.sh`, `scripts/secret-scan.sh` |
-| `Observability` | `src/nats_sinks/observability/*`, `src/nats_sinks/cli/observability.py`, `docs/observability.md`, `docs/prometheus.md`, `docs/otlp.md`, `docs/oci-monitoring.md` |
+| `Observability` | `src/nats_sinks/observability/*`, `src/nats_sinks/cli/observability.py`, `docs/observability.md`, `docs/prometheus.md`, `docs/otlp.md`, `docs/oci-monitoring.md`, `docs/datadog.md` |
 | `Docs` | `README.md`, `docs/*.md`, `ROBOTS.md`, `AGENTS.md`, `CHANGELOG.md` |
 | `N/A` | No current web, session, upload, native-extension, SSRF, or password-authentication surface. |
 

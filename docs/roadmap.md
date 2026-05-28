@@ -70,6 +70,8 @@
   least-privilege identity guidance, and export kept outside delivery.
 - StatsD observability connector for approved best-effort UDP or Unix datagram
   metric export, kept outside delivery semantics.
+- Datadog observability connector for approved DogStatsD metric datagrams to a
+  local or explicitly approved Datadog Agent listener.
 - Amazon CloudWatch observability connector for approved custom metrics through
   bounded `PutMetricData` requests and the optional AWS SDK path.
 - Syslog observability bridge for approved bounded RFC 5424-style metric
@@ -162,12 +164,9 @@
 
 ## Phase 2
 
-- Individual observability connector backlog items for Datadog, Amazon
-  CloudWatch, and Azure Monitor, all following the shared disabled-by-default
+- Individual observability connector backlog items for Azure Monitor and any
+  additional future connectors, all following the shared disabled-by-default
   observability connector contract.
-- Individual observability connector backlog items for Datadog, Oracle Cloud
-  Infrastructure Monitoring, and Azure Monitor, all
-  following the shared disabled-by-default observability connector contract.
 - Headers-only JetStream delivery support split into validated consumer
   configuration, payload-presence metadata, and sink or DLQ certification.
 - Additional mission-support documentation examples for future operator
