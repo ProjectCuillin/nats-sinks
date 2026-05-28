@@ -428,6 +428,12 @@ The repository includes a local
 the [Oracle MySQL Sink](mysql-sink.md) e2e certification path. The container is
 test infrastructure, not a production database image.
 
+The repository includes a local
+[Oracle NoSQL Database test backend](oracle-nosql-test-container.md) used by
+the [Oracle NoSQL Database Sink](oracle-nosql-sink.md) container-backed e2e
+path. It wraps Oracle's documented Community Edition KVLite image and is test
+infrastructure, not a production Oracle NoSQL deployment.
+
 The repository also includes a local
 [Oracle Coherence Community Edition test backend](oracle-coherence-test-container.md)
 for future Oracle Coherence sink and multi-sink routing certification. It is

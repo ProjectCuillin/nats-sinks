@@ -12,6 +12,13 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Added
 
+- Added the local Oracle NoSQL Database KVLite test backend for issue #310
+  and the container-backed Oracle NoSQL sink e2e harness that revisits issue
+  #149. The new helpers use Oracle's documented Community Edition image from
+  GitHub Container Registry, bind the HTTP proxy to a random loopback port,
+  verify one complete fake event JSON key/value row, run the Oracle NoSQL sink
+  live-gated integration test against the short-lived backend, clean up by
+  default, and document the local-only non-secure KVLite boundary.
 - Added the experimental first-party Oracle NoSQL Database sink for issue
   #149. The new `oracle_nosql` sink type stores one complete normalized event
   JSON object in a configured Oracle NoSQL table value field, validates SDK
@@ -216,6 +223,11 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Fixed
 
+- Fixed Oracle NoSQL Database KVLite test backend readiness for issue #313 by
+  waiting for SDK-level table/write/read readiness after the proxy TCP port
+  opens. This prevents the local smoke and sink e2e helpers from racing a
+  proxy socket that accepts connections before Oracle NoSQL SDK requests are
+  ready.
 - Fixed GitHub CI compatibility with Ruff `PLW0108` by removing an unnecessary
   connector entry-point sort lambda while preserving deterministic connector
   loading behavior.

@@ -51,7 +51,7 @@ is merged.
 | `Envelope` | `src/nats_sinks/core/envelope.py`, `src/nats_sinks/core/consumer.py`, `tests/unit/test_envelope.py` |
 | `Encryption` | `src/nats_sinks/core/encryption.py`, `tests/unit/test_encryption.py`, `docs/payload-encryption.md` |
 | `Oracle` | `src/nats_sinks/oracle/*`, `tests/unit/test_oracle_*.py`, `docs/oracle-sink.md` |
-| `Oracle NoSQL` | `src/nats_sinks/oracle_nosql/*`, `tests/unit/test_oracle_nosql_sink.py`, `docs/oracle-nosql-sink.md` |
+| `Oracle NoSQL` | `src/nats_sinks/oracle_nosql/*`, `tests/unit/test_oracle_nosql_sink.py`, `tests/unit/test_oracle_nosql_test_container.py`, `docs/oracle-nosql-sink.md`, `docs/oracle-nosql-test-container.md` |
 | `Coherence` | `src/nats_sinks/coherence/*`, `tests/unit/test_coherence_sink.py`, `tests/integration/test_coherence_sink_e2e.py`, `docs/coherence-sink.md` |
 | `File` | `src/nats_sinks/file/*`, `tests/unit/test_file_*.py`, `docs/file-sink.md` |
 | `CI` | `.github/workflows/*`, `scripts/check.sh`, `scripts/security.sh`, `scripts/secret-scan.sh` |

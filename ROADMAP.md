@@ -206,8 +206,9 @@ release, and closed only after the containing release is published.
   itself remains backlog work.
 - Oracle Berkeley DB and OCI Streaming sink evaluations as first-party
   Oracle-family connector candidates. Oracle NoSQL Database and Oracle
-  Coherence Community Edition now have experimental first-party sinks, but both
-  still need deeper live certification evidence before production-ready
+  Coherence Community Edition now have experimental first-party sinks. Oracle
+  NoSQL Database now has local KVLite container-backed e2e evidence, but deeper
+  deployment-mode certification remains required before production-ready
   recommendation.
 - Additional Oracle-family connector evaluations such as Oracle Autonomous AI
   Lakehouse, Oracle AI Data Platform, Oracle JSON document stores, OCI Cache

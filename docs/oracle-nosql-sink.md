@@ -296,18 +296,39 @@ minimum_wait_ms=1000
 timeout_ms=5000
 ```
 
-## Local Live Test Gating
+## Local Container Verification
 
-Normal unit tests use fake SDK clients and make no network calls. Live Oracle
-NoSQL Database testing must be explicitly enabled after a local KVLite, Cloud
-Simulator, or Oracle NoSQL Database proxy target exists. The related local test
-container feature is tracked separately so the sink implementation can remain
-testable before that backend is available.
+Normal unit tests use fake SDK clients and make no network calls. Local
+container-backed testing uses the Oracle NoSQL Database KVLite test backend
+documented in [Oracle NoSQL Database Test Backend](oracle-nosql-test-container.md).
 
-Oracle documentation describes KVLite container startup with the Community
-Edition image and a proxy port exposed for SDK clients. Keep that container
-loopback-only for local tests, use generated local names, clean up by default,
-and never commit container layers or runtime database files.
+Run a backend-only smoke test:
+
+```bash
+python scripts/run-oracle-nosql-container-smoke.py
+```
+
+Expected output:
+
+```text
+Oracle NoSQL Database container smoke test passed with one verified JSON key/value entry.
+```
+
+Run the sink e2e test against a fresh short-lived KVLite container:
+
+```bash
+python scripts/run-oracle-nosql-sink-e2e.py
+```
+
+Expected output:
+
+```text
+Oracle NoSQL sink container e2e test passed.
+```
+
+Both helpers are local-only, bind the Oracle NoSQL proxy to `127.0.0.1`, use
+fake event data, and remove the container by default. Do not commit container
+layers, runtime database files, generated logs, or preserved debug artifacts.
 
 ## Limitations
 
