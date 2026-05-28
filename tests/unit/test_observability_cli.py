@@ -73,6 +73,7 @@ def test_init_prometheus_policy_generates_disabled_policy(tmp_path: Path) -> Non
     assert data["prometheus"]["enabled"] is False
     assert data["datadog"]["enabled"] is False
     assert data["oci_monitoring"]["enabled"] is False
+    assert data["azure_monitor"]["enabled"] is False
     assert data["syslog"]["enabled"] is False
     assert data["subjects"][0]["subject"] == "orders.*"
 
@@ -91,6 +92,7 @@ def test_validate_and_show_effective_policy(tmp_path: Path) -> None:
     assert "prometheus_enabled=false" in show.stdout
     assert "oci_monitoring_enabled=false" in show.stdout
     assert "cloudwatch_enabled=false" in show.stdout
+    assert "azure_monitor_enabled=false" in show.stdout
     assert "datadog_enabled=false" in show.stdout
     assert "syslog_enabled=false" in show.stdout
 
@@ -1115,6 +1117,119 @@ def test_cloudwatch_export_rejects_stale_snapshot_without_override(tmp_path: Pat
 
     assert result.exit_code == 3
     assert "Metrics snapshot is stale" in result.stderr
+
+
+def test_azure_monitor_export_disabled_policy_does_not_need_snapshot(tmp_path: Path) -> None:
+    policy = tmp_path / "observability.prometheus.json"
+    policy.write_text(ObservabilityPolicy().model_dump_json(by_alias=True), encoding="utf-8")
+
+    result = runner.invoke(
+        app,
+        ["azure-monitor-export", str(tmp_path / "missing.json"), str(policy), "--dry-run"],
+    )
+
+    assert result.exit_code == 0
+    assert "Azure Monitor export disabled" in result.stdout
+
+
+def test_azure_monitor_export_dry_run_outputs_bounded_requests(tmp_path: Path) -> None:
+    snapshot = _snapshot(tmp_path / "metrics.json")
+    policy = tmp_path / "observability.prometheus.json"
+    resource_id = (
+        "/subscriptions/00000000-0000-0000-0000-000000000000/"
+        "resourceGroups/rg-observability/providers/Microsoft.Storage/storageAccounts/natssinks"
+    )
+    policy.write_text(
+        json.dumps(
+            {
+                "schema": "nats_sinks.observability.policy.v1",
+                "enabled": True,
+                "namespace": "mission_ops",
+                "allowed_metrics": ["messages_fetched_total"],
+                "allowed_metric_patterns": [],
+                "denied_metrics": [],
+                "denied_metric_patterns": [],
+                "include_observations": False,
+                "include_legacy": False,
+                "subjects": [],
+                "azure_monitor": {
+                    "enabled": True,
+                    "resource_id": resource_id,
+                    "location": "westeurope",
+                    "token_env": "AZURE_MONITOR_BEARER_TOKEN",
+                    "metric_namespace": "nats-sinks/metrics",
+                    "dimensions": {"deployment": "edge"},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["azure-monitor-export", str(snapshot), str(policy), "--dry-run"])
+
+    assert result.exit_code == 0
+    body = json.loads(result.stdout)
+    base_data = body[0]["data"]["baseData"]
+    assert base_data["metric"] == "mission_ops_messages_fetched_total"
+    assert base_data["namespace"] == "nats-sinks/metrics"
+    assert base_data["dimNames"] == ["deployment"]
+    assert base_data["series"][0]["dimValues"] == ["edge"]
+    assert "oracle_duplicates_total" not in result.stdout
+    assert "westeurope" not in result.stdout
+    assert resource_id not in result.stdout
+    assert "AZURE_MONITOR_BEARER_TOKEN" not in result.stdout
+
+
+def test_azure_monitor_export_rejects_stale_snapshot_without_override(tmp_path: Path) -> None:
+    snapshot = tmp_path / "metrics.json"
+    snapshot.write_text(
+        json.dumps(
+            {
+                "schema": "nats_sinks.metrics.snapshot.v1",
+                "namespace": "mission_ops",
+                "generated_at_epoch_seconds": 1.0,
+                "counters": {"messages_fetched_total": 7},
+                "gauges": {},
+                "observations": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    policy = tmp_path / "observability.prometheus.json"
+    policy.write_text(
+        json.dumps(
+            {
+                "schema": "nats_sinks.observability.policy.v1",
+                "enabled": True,
+                "namespace": "mission_ops",
+                "allowed_metrics": ["messages_fetched_total"],
+                "allowed_metric_patterns": [],
+                "denied_metrics": [],
+                "denied_metric_patterns": [],
+                "include_observations": False,
+                "include_legacy": False,
+                "subjects": [],
+                "azure_monitor": {
+                    "enabled": True,
+                    "resource_id": (
+                        "/subscriptions/00000000-0000-0000-0000-000000000000/"
+                        "resourceGroups/rg-observability/providers/Microsoft.Storage/"
+                        "storageAccounts/natssinks"
+                    ),
+                    "location": "westeurope",
+                    "token_env": "AZURE_MONITOR_BEARER_TOKEN",
+                    "stale_after_seconds": 1,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["azure-monitor-export", str(snapshot), str(policy), "--dry-run"])
+
+    assert result.exit_code == 3
+    assert "Metrics snapshot is stale" in result.stderr
+    assert "westeurope" not in result.stderr
 
 
 def test_nats_monitoring_poll_dry_run_outputs_sanitized_snapshot(

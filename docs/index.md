@@ -96,18 +96,17 @@ The current release provides the following production-ready foundation:
   observability policies, reviewing metric and subject sharing, and writing
   policy-filtered Prometheus textfiles for node_exporter or running the
   optional native Prometheus HTTP endpoint. It can also export approved
-  metrics to an OpenTelemetry Collector through OTLP/HTTP JSON and to OCI
-  Monitoring as Oracle Cloud Infrastructure custom metrics.
-  metrics to an OpenTelemetry Collector through OTLP/HTTP JSON or to Amazon
-  CloudWatch custom metrics through the optional AWS SDK path.
+  metrics through OTLP/HTTP JSON, OCI Monitoring, Amazon CloudWatch, Azure
+  Monitor, StatsD, Datadog, Splunk HEC, Elastic, Grafana Alloy, syslog, and
+  NATS server monitoring connectors.
 - Basic metrics counters and timing observations for fetched, prepared,
   written, ACKed, NAKed, failed, DLQ, sink write, ACK error, and active batch
   behavior. The built-in runner can write a local JSON snapshot when
   configured, Oracle duplicate/conflict counters are readable through the same
   snapshot and CLI, and external observability sharing is controlled by a
   separate policy that is disabled by default for Prometheus textfile,
-  Prometheus HTTP, OTLP, OCI Monitoring, and NATS monitoring connectors.
-  Prometheus HTTP, OTLP, Amazon CloudWatch, and NATS monitoring connectors.
+  Prometheus HTTP, OTLP, OCI Monitoring, Amazon CloudWatch, Azure Monitor, and
+  NATS monitoring connectors.
 - Optional JetStream advisory observation for selected advisory subjects, with
   aggregate counters for delivery and cluster signals while keeping advisory
   payloads and subject details out of exported metrics by default.
@@ -319,6 +318,8 @@ operations without hunting through a long flat list.
   bounded DogStatsD datagrams to a local or approved Datadog Agent listener.
 - [Amazon CloudWatch Integration](cloudwatch.md): export approved aggregate
   metrics to CloudWatch custom metrics with bounded `PutMetricData` requests.
+- [Azure Monitor Integration](azure-monitor.md): export approved aggregate
+  metrics to Azure Monitor custom metrics for one reviewed Azure resource.
 - [Syslog Bridge](syslog.md): export approved aggregate metrics as bounded
   RFC 5424-style messages to syslog pipelines.
 - [NATS Server Monitoring](nats-server-monitoring.md): understand why endpoints
@@ -328,8 +329,7 @@ operations without hunting through a long flat list.
   and delivery non-interference before enabling subject-aware export.
 - [Future Observability Connectors](observability-connectors.md): review the
   shared connector contract, implemented connector evaluation, and the
-  remaining staged connector backlog for Azure Monitor and other future
-  connectors.
+  remaining staged connector backlog for future observability platforms.
 
 ### Deployment, Security, And Quality
 

@@ -28,6 +28,12 @@ from nats_sinks.core.metrics import (
     METRIC_SPECS,
     load_metrics_snapshot,
 )
+from nats_sinks.observability.azure_monitor import (
+    DISABLED_AZURE_MONITOR_TEXT,
+    EMPTY_AZURE_MONITOR_TEXT,
+    export_azure_monitor_metrics,
+    render_azure_monitor_metric_requests_json,
+)
 from nats_sinks.observability.cloudwatch import (
     DISABLED_CLOUDWATCH_TEXT,
     EMPTY_CLOUDWATCH_TEXT,
@@ -205,6 +211,7 @@ def _policy_summary(policy: ObservabilityPolicy) -> str:
             f"datadog_enabled={str(policy.datadog.enabled).lower()}",
             f"oci_monitoring_enabled={str(policy.oci_monitoring.enabled).lower()}",
             f"cloudwatch_enabled={str(policy.cloudwatch.enabled).lower()}",
+            f"azure_monitor_enabled={str(policy.azure_monitor.enabled).lower()}",
             f"syslog_enabled={str(policy.syslog.enabled).lower()}",
             f"nats_server_monitoring_enabled={str(policy.nats_server_monitoring.enabled).lower()}",
             "nats_server_monitoring_prometheus_enabled="
@@ -1151,6 +1158,88 @@ def cloudwatch_export(
         f"message={result.message}"
     )
     if result.message == EMPTY_CLOUDWATCH_TEXT.strip():
+        return
+    if not result.delivered:
+        raise typer.Exit(3)
+
+
+@app.command("azure-monitor-export")
+def azure_monitor_export(
+    snapshot_file: Annotated[
+        Path,
+        typer.Argument(help="Metrics snapshot JSON written by nats-sink."),
+    ],
+    policy_file: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="Render sanitized Azure Monitor custom metric JSON instead of posting it.",
+        ),
+    ] = False,
+    allow_stale: Annotated[
+        bool,
+        typer.Option("--allow-stale", help="Warn but export when the snapshot is stale."),
+    ] = False,
+) -> None:
+    """Export approved metrics to Azure Monitor custom metrics.
+
+    The command reads only a local metrics snapshot and sends policy-approved
+    custom metric data to one explicitly configured Azure resource. Failures
+    cannot change JetStream ACK, NAK, DLQ, retry, fan-out, idempotency, or sink
+    behavior.
+    """
+
+    policy = _load_policy_or_exit(policy_file)
+    snapshot: dict[str, object] | None = None
+    if policy.enabled and policy.azure_monitor.enabled:
+        snapshot = _load_snapshot_or_exit(snapshot_file)
+        try:
+            _check_staleness(
+                snapshot,
+                stale_after_seconds=policy.azure_monitor.stale_after_seconds,
+                allow_stale=allow_stale,
+            )
+        except ValueError as exc:
+            typer.echo(f"Metrics snapshot error: {exc}", err=True)
+            raise typer.Exit(2) from exc
+
+    if not policy.enabled or not policy.azure_monitor.enabled:
+        typer.echo(DISABLED_AZURE_MONITOR_TEXT, nl=False)
+        return
+    if snapshot is None:
+        typer.echo(
+            "Azure Monitor export error: enabled Azure Monitor export requires a metrics snapshot",
+            err=True,
+        )
+        raise typer.Exit(2)
+
+    if dry_run:
+        try:
+            rendered = render_azure_monitor_metric_requests_json(snapshot, policy)
+        except (ConfigurationError, ValueError) as exc:
+            typer.echo(f"Azure Monitor render error: {exc}", err=True)
+            raise typer.Exit(2) from exc
+        typer.echo(rendered.decode("utf-8"))
+        return
+
+    try:
+        result = export_azure_monitor_metrics(snapshot, policy)
+    except (ConfigurationError, ValueError) as exc:
+        typer.echo(f"Azure Monitor export error: {exc}", err=True)
+        raise typer.Exit(2) from exc
+
+    typer.echo(
+        "Azure Monitor export: "
+        f"attempted={str(result.attempted).lower()} "
+        f"delivered={str(result.delivered).lower()} "
+        f"attempts={result.attempts} "
+        f"requests={result.requests} "
+        f"metrics={result.metrics} "
+        f"status={result.status_code if result.status_code is not None else 'none'} "
+        f"message={result.message}"
+    )
+    if result.message == EMPTY_AZURE_MONITOR_TEXT.strip():
         return
     if not result.delivered:
         raise typer.Exit(3)

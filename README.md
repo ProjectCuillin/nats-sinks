@@ -90,8 +90,9 @@ used immediately:
   disabled-by-default StatsD connector for best-effort datagram export, a
   disabled-by-default Datadog DogStatsD connector for approved Agent-bound
   metric datagrams, a disabled-by-default Amazon CloudWatch connector for
-  approved custom metrics, a disabled-by-default
-  syslog bridge for bounded RFC 5424-style messages, and a disabled-by-default
+  approved custom metrics, a disabled-by-default Azure Monitor connector for
+  approved custom metrics, a disabled-by-default syslog bridge for bounded
+  RFC 5424-style messages, and a disabled-by-default
   NATS server monitoring connector for explicitly approved `/healthz`, `/jsz`,
   and related endpoint fields.
 - Optional core payload encryption for AES-256-GCM and AES-256-CCM before
@@ -533,7 +534,8 @@ The metrics CLI is documented in
 Policy-controlled Prometheus and OpenTelemetry export are part of the
 observability documentation, including the Elastic Observability and Grafana
 Alloy profiles, Splunk HEC connector, OCI Monitoring connector, StatsD
-connector, Datadog connector, Amazon CloudWatch connector, and syslog bridge.
+connector, Datadog connector, Amazon CloudWatch connector, Azure Monitor
+connector, and syslog bridge.
 Start with
 [Observability](https://nats-sinks.readthedocs.io/en/latest/observability/),
 then use
@@ -552,6 +554,8 @@ or
 [Datadog Integration](https://nats-sinks.readthedocs.io/en/latest/datadog/),
 or
 [Amazon CloudWatch Integration](https://nats-sinks.readthedocs.io/en/latest/cloudwatch/),
+or
+[Azure Monitor Integration](https://nats-sinks.readthedocs.io/en/latest/azure-monitor/),
 or
 [Syslog Bridge](https://nats-sinks.readthedocs.io/en/latest/syslog/)
 for connector details.
@@ -874,7 +878,7 @@ approved metrics to an OpenTelemetry Collector through OTLP/HTTP JSON,
 including Elastic Observability and Grafana Alloy profiles that reuse the shared
 OTLP core, approved aggregate metric export to Splunk HEC, OCI Monitoring
 custom metric export, and best-effort StatsD, Datadog DogStatsD, Amazon
-CloudWatch, and syslog export.
+CloudWatch, Azure Monitor, and syslog export.
 Metrics sharing remains off until the global policy and the selected connector
 are explicitly enabled. See
 [Observability](https://nats-sinks.readthedocs.io/en/latest/observability/),
@@ -894,6 +898,8 @@ or
 [Datadog Integration](https://nats-sinks.readthedocs.io/en/latest/datadog/)
 or
 [Amazon CloudWatch Integration](https://nats-sinks.readthedocs.io/en/latest/cloudwatch/)
+or
+[Azure Monitor Integration](https://nats-sinks.readthedocs.io/en/latest/azure-monitor/)
 or
 [Syslog Bridge](https://nats-sinks.readthedocs.io/en/latest/syslog/)
 for connector guidance.
@@ -1185,6 +1191,8 @@ Phase 1:
   Agent-bound metric datagrams with explicit low-cardinality tag controls.
 - Disabled-by-default Amazon CloudWatch connector for approved custom metrics
   through the optional AWS SDK path.
+- Disabled-by-default Azure Monitor connector for approved custom metrics
+  through a bounded REST path and environment-backed bearer-token reference.
 - Disabled-by-default syslog bridge for approved bounded RFC 5424-style metric
   messages over UDP or Unix datagram sockets.
 - Disabled-by-default NATS server monitoring connector for approved endpoint

@@ -70,6 +70,14 @@ CLOUDWATCH_MAX_REQUEST_BYTES = 1_048_576
 CLOUDWATCH_NAMESPACE_MAX_LENGTH = 255
 CLOUDWATCH_REGION_MAX_LENGTH = 64
 CLOUDWATCH_DIMENSION_MAX_LENGTH = 255
+AZURE_MONITOR_MAX_DIMENSIONS = 10
+AZURE_MONITOR_MAX_REQUEST_BYTES = 1_048_576
+AZURE_MONITOR_NAMESPACE_MAX_LENGTH = 255
+AZURE_MONITOR_LOCATION_MAX_LENGTH = 64
+AZURE_MONITOR_RESOURCE_ID_MAX_LENGTH = 2_048
+AZURE_MONITOR_MIN_RESOURCE_ID_SEGMENTS = 8
+AZURE_MONITOR_NAME_MAX_LENGTH = 255
+AZURE_MONITOR_DIMENSION_MAX_LENGTH = 255
 SYSLOG_MAX_MESSAGE_BYTES = 8_192
 SYSLOG_HOSTNAME_MAX_LENGTH = 255
 SYSLOG_APP_NAME_MAX_LENGTH = 48
@@ -107,6 +115,10 @@ OCI_MONITORING_CONFIG_PROFILE_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
 CLOUDWATCH_NAMESPACE_RE = re.compile(r"^[A-Za-z0-9_./-]{1,255}$")
 CLOUDWATCH_REGION_RE = re.compile(r"^[a-z]{2}(?:-[a-z]+)+-\d$")
 CLOUDWATCH_DIMENSION_RE = re.compile(r"^[A-Za-z0-9_.:/-]{1,255}$")
+AZURE_MONITOR_NAMESPACE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_./-]{0,254}$")
+AZURE_MONITOR_LOCATION_RE = re.compile(r"^[a-z][a-z0-9]{1,63}$")
+AZURE_MONITOR_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,254}$")
+AZURE_MONITOR_DIMENSION_RE = re.compile(r"^[A-Za-z0-9_.:/-]{1,255}$")
 SYSLOG_PRINTABLE_RE = re.compile(r"^[!-~]+$")
 SYSLOG_STRUCTURED_DATA_ID_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,32}$")
 SUBJECT_FAMILY_LABEL_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.-]{0,63}$")
@@ -170,6 +182,32 @@ CLOUDWATCH_DIMENSION_SECRET_PARTS = frozenset(
         "secret",
         "subject",
         "table",
+        "token",
+        "user",
+    }
+)
+AZURE_MONITOR_DIMENSION_SECRET_PARTS = frozenset(
+    {
+        "api_key",
+        "apikey",
+        "bearer",
+        "classification",
+        "credential",
+        "file",
+        "host",
+        "key",
+        "label",
+        "message",
+        "mission",
+        "password",
+        "path",
+        "private",
+        "resource",
+        "secret",
+        "subject",
+        "subscription",
+        "table",
+        "tenant",
         "token",
         "user",
     }
@@ -1566,6 +1604,216 @@ class CloudWatchObservabilityPolicy(BaseModel):
         return self
 
 
+class AzureMonitorObservabilityPolicy(BaseModel):
+    """Azure Monitor custom metrics connector settings.
+
+    The connector is disabled by default and belongs to the observability
+    plane. It reads only local metrics snapshots, applies the shared
+    allow-list policy, and sends bounded custom metric requests to an explicitly
+    configured Azure resource. Policy files reference a bearer-token
+    environment variable and must not contain Microsoft Entra tokens, tenant
+    identifiers, client secrets, subscription-level routing secrets, payloads,
+    subjects, classification values, or message identifiers.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    resource_id: str | None = None
+    location: str | None = None
+    metric_namespace: str = "nats-sinks/metrics"
+    token_env: str | None = None
+    dimensions: dict[str, str] = Field(
+        default_factory=dict,
+        max_length=AZURE_MONITOR_MAX_DIMENSIONS,
+    )
+    include_metric_labels_as_dimensions: bool = False
+    timeout_seconds: float = Field(default=5.0, gt=0, le=60)
+    max_retries: int = Field(default=0, ge=0, le=10)
+    retry_backoff_seconds: float = Field(default=0.25, ge=0, le=60)
+    stale_after_seconds: float | None = Field(default=None, gt=0, le=86_400)
+    max_request_bytes: int = Field(
+        default=AZURE_MONITOR_MAX_REQUEST_BYTES,
+        ge=1024,
+        le=AZURE_MONITOR_MAX_REQUEST_BYTES,
+    )
+    verify_tls: Literal[True] = True
+
+    @field_validator("resource_id")
+    @classmethod
+    def validate_resource_id(cls, value: str | None) -> str | None:
+        """Validate an Azure resource ID without accepting URLs or subscriptions alone."""
+
+        if value is None:
+            return None
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("azure_monitor.resource_id must not be empty")
+        if len(rendered) > AZURE_MONITOR_RESOURCE_ID_MAX_LENGTH:
+            raise ValueError("azure_monitor.resource_id is too long")
+        if not rendered.startswith("/"):
+            raise ValueError("azure_monitor.resource_id must start with /subscriptions/")
+        if any(character in rendered for character in "\x00\n\r\t ?#\\%"):
+            raise ValueError(
+                "azure_monitor.resource_id must not contain whitespace, encoded slashes, "
+                "query strings, fragments, or control characters"
+            )
+        if "://" in rendered:
+            raise ValueError("azure_monitor.resource_id must be an Azure resource ID, not a URL")
+
+        segments = rendered.strip("/").split("/")
+        lowered = [segment.lower() for segment in segments]
+        if len(segments) < AZURE_MONITOR_MIN_RESOURCE_ID_SEGMENTS:
+            raise ValueError("azure_monitor.resource_id must identify a concrete Azure resource")
+        if any(not segment for segment in segments):
+            raise ValueError("azure_monitor.resource_id must not contain empty path segments")
+        if lowered[0] != "subscriptions":
+            raise ValueError("azure_monitor.resource_id must start with /subscriptions/")
+        if lowered[2] != "resourcegroups":
+            raise ValueError("azure_monitor.resource_id must include a resource group")
+        if lowered[4] != "providers":
+            raise ValueError("azure_monitor.resource_id must include a provider")
+        return rendered
+
+    @field_validator("location")
+    @classmethod
+    def validate_location(cls, value: str | None) -> str | None:
+        """Validate an Azure Monitor regional endpoint location."""
+
+        if value is None:
+            return None
+        rendered = value.strip().lower()
+        if not rendered:
+            raise ValueError("azure_monitor.location must not be empty")
+        if len(rendered) > AZURE_MONITOR_LOCATION_MAX_LENGTH:
+            raise ValueError("azure_monitor.location is too long")
+        if any(character in rendered for character in "\x00\n\r\t /:@.-"):
+            raise ValueError(
+                "azure_monitor.location must be a plain Azure location name without "
+                "URLs, hostnames, punctuation, whitespace, or credentials"
+            )
+        if not AZURE_MONITOR_LOCATION_RE.fullmatch(rendered):
+            raise ValueError(
+                "azure_monitor.location must look like an Azure location, for example westeurope"
+            )
+        return rendered
+
+    @field_validator("metric_namespace")
+    @classmethod
+    def validate_metric_namespace(cls, value: str) -> str:
+        """Validate the Azure Monitor custom metric namespace."""
+
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("azure_monitor.metric_namespace must not be empty")
+        if len(rendered) > AZURE_MONITOR_NAMESPACE_MAX_LENGTH:
+            raise ValueError(
+                "azure_monitor.metric_namespace must be at most "
+                f"{AZURE_MONITOR_NAMESPACE_MAX_LENGTH} characters"
+            )
+        if rendered.lower().startswith(("azure/", "microsoft/")):
+            raise ValueError(
+                "azure_monitor.metric_namespace must not start with reserved Azure prefixes"
+            )
+        if ":" in rendered:
+            raise ValueError("azure_monitor.metric_namespace must not contain colons")
+        if any(character in rendered for character in "\x00\n\r\t "):
+            raise ValueError(
+                "azure_monitor.metric_namespace must not contain whitespace or control characters"
+            )
+        if not AZURE_MONITOR_NAMESPACE_RE.fullmatch(rendered):
+            raise ValueError(
+                "azure_monitor.metric_namespace may contain only letters, digits, "
+                "underscores, dots, slashes, and hyphens, and must start with a letter"
+            )
+        return rendered
+
+    @field_validator("token_env")
+    @classmethod
+    def validate_token_env(cls, value: str | None) -> str | None:
+        """Validate the bearer-token reference as an environment variable name."""
+
+        if value is None:
+            return None
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("azure_monitor.token_env must not be empty")
+        if len(rendered) > OTLP_HEADER_ENV_MAX_LENGTH:
+            raise ValueError("azure_monitor.token_env is too long")
+        if not ENVIRONMENT_VARIABLE_NAME_RE.fullmatch(rendered):
+            raise ValueError("azure_monitor.token_env must be an environment variable name")
+        return rendered
+
+    @field_validator("dimensions")
+    @classmethod
+    def validate_dimensions(cls, value: dict[str, str]) -> dict[str, str]:
+        """Validate static Azure dimensions as bounded low-cardinality metadata."""
+
+        rendered: dict[str, str] = {}
+        seen_lower: set[str] = set()
+        for raw_name, raw_value in value.items():
+            name = raw_name.strip()
+            dimension_value = raw_value.strip()
+            if not name:
+                raise ValueError("azure_monitor.dimensions names must not be empty")
+            if not dimension_value:
+                raise ValueError("azure_monitor.dimensions values must not be empty")
+            if len(name) > AZURE_MONITOR_DIMENSION_MAX_LENGTH:
+                raise ValueError("azure_monitor.dimensions names are too long")
+            if len(dimension_value) > AZURE_MONITOR_DIMENSION_MAX_LENGTH:
+                raise ValueError("azure_monitor.dimensions values are too long")
+            if any(character in name for character in "\x00\n\r\t "):
+                raise ValueError("azure_monitor.dimensions names must not contain whitespace")
+            if any(character in dimension_value for character in "\x00\n\r\t "):
+                raise ValueError("azure_monitor.dimensions values must not contain whitespace")
+            if not AZURE_MONITOR_DIMENSION_RE.fullmatch(name):
+                raise ValueError(
+                    "azure_monitor.dimensions names may contain only letters, digits, "
+                    "underscores, dots, colons, slashes, and hyphens"
+                )
+            if not AZURE_MONITOR_DIMENSION_RE.fullmatch(dimension_value):
+                raise ValueError(
+                    "azure_monitor.dimensions values may contain only letters, digits, "
+                    "underscores, dots, colons, slashes, and hyphens"
+                )
+            lowered = name.lower()
+            if any(part in lowered for part in AZURE_MONITOR_DIMENSION_SECRET_PARTS):
+                raise ValueError(
+                    "azure_monitor.dimensions must not include sensitive or high-cardinality names"
+                )
+            if any(
+                part in dimension_value.lower() for part in AZURE_MONITOR_DIMENSION_SECRET_PARTS
+            ):
+                raise ValueError(
+                    "azure_monitor.dimensions values must not look sensitive or high-cardinality"
+                )
+            if lowered in seen_lower:
+                raise ValueError("azure_monitor.dimensions names must be unique ignoring case")
+            seen_lower.add(lowered)
+            rendered[name] = dimension_value
+        return rendered
+
+    @model_validator(mode="after")
+    def validate_enabled_requirements(self) -> AzureMonitorObservabilityPolicy:
+        """Require explicit resource, location, and token source only when enabled."""
+
+        if not self.enabled:
+            return self
+        if self.resource_id is None:
+            raise ValueError(
+                "azure_monitor.resource_id is required when azure_monitor.enabled is true"
+            )
+        if self.location is None:
+            raise ValueError(
+                "azure_monitor.location is required when azure_monitor.enabled is true"
+            )
+        if self.token_env is None:
+            raise ValueError(
+                "azure_monitor.token_env is required when azure_monitor.enabled is true"
+            )
+        return self
+
+
 class SyslogObservabilityPolicy(BaseModel):
     """Syslog observability bridge settings.
 
@@ -1908,6 +2156,9 @@ class ObservabilityPolicy(BaseModel):
         default_factory=OciMonitoringObservabilityPolicy
     )
     cloudwatch: CloudWatchObservabilityPolicy = Field(default_factory=CloudWatchObservabilityPolicy)
+    azure_monitor: AzureMonitorObservabilityPolicy = Field(
+        default_factory=AzureMonitorObservabilityPolicy
+    )
     syslog: SyslogObservabilityPolicy = Field(default_factory=SyslogObservabilityPolicy)
     nats_server_monitoring: NatsServerMonitoringPolicy = Field(
         default_factory=NatsServerMonitoringPolicy

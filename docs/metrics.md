@@ -32,12 +32,10 @@ Community Edition, the file sink directory, or any future destination backend.
 The `nats-sink-observe` command owns external sharing. It can render a
 Prometheus textfile for node_exporter, run an optional native Prometheus HTTP
 endpoint, or export approved metrics to an OpenTelemetry Collector through
-OTLP/HTTP JSON, OCI Monitoring custom metrics, StatsD, syslog, or another
+OTLP/HTTP JSON, OCI Monitoring custom metrics, Amazon CloudWatch custom
+metrics, Azure Monitor custom metrics, StatsD, Datadog, syslog, or another
 implemented observability connector. These connectors are disabled by default
 and require an explicit allow-list policy before real metrics are shared.
-OTLP/HTTP JSON or to Amazon CloudWatch custom metrics through the optional AWS
-SDK path. These connectors are disabled by default and require an explicit
-allow-list policy before real metrics are shared.
 
 ## Why Metrics Matter
 
@@ -391,6 +389,7 @@ The observability CLI provides policy and connector commands:
 | `nats-sink-observe statsd-export SNAPSHOT POLICY` | Dry-run or send approved best-effort metric datagrams to StatsD. |
 | `nats-sink-observe datadog-export SNAPSHOT POLICY` | Dry-run or send approved best-effort DogStatsD datagrams to a Datadog Agent. |
 | `nats-sink-observe cloudwatch-export SNAPSHOT POLICY` | Dry-run or send approved custom metrics to Amazon CloudWatch. |
+| `nats-sink-observe azure-monitor-export SNAPSHOT POLICY` | Dry-run or send approved custom metrics to Azure Monitor. |
 | `nats-sink-observe syslog-export SNAPSHOT POLICY` | Dry-run or send approved RFC 5424-style metric messages to syslog. |
 
 The global version flag is available too:

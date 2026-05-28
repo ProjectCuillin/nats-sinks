@@ -14,36 +14,38 @@ generated database passwords, or full raw logs from live systems.
 | Field | Value |
 | --- | --- |
 | Overall result | Pass |
-| Report generated | 2026-05-28 issue `#104` Datadog observability connector validation for upcoming `v0.4.2` development |
+| Report generated | 2026-05-28 issue `#103` Azure Monitor observability connector validation for upcoming `v0.4.2` development |
 | Project version | `0.4.1` package metadata with `v0.4.2` development changes |
 | Python version | 3.12.4 |
-| Git revision checked | Branch `issue-104-datadog-observability-connector` based on `release-v0.4.2` |
+| Git revision checked | Branch `issue-103-azure-monitor-observability-connector` based on `release-v0.4.2` |
 | Live NATS details | Environment-gated live tests skipped unless explicitly enabled |
 | Live Oracle Database details | Environment-gated live tests skipped unless explicitly enabled |
 | Live Oracle MySQL details | Environment-gated live tests skipped unless explicitly enabled |
 | Live Oracle Coherence details | Environment-gated live tests skipped unless explicitly enabled |
+| Live Azure Monitor details | Not required for default validation; connector coverage used fake HTTP clients and dry-run request rendering |
 
-This refresh covered the disabled-by-default Datadog DogStatsD observability
-connector for issue `#104`. The connector reads only local metrics snapshots,
-applies the shared observability policy, renders bounded DogStatsD datagrams,
-and keeps Datadog export outside the delivery-critical sink runner.
+This refresh covered the disabled-by-default Azure Monitor custom metrics
+observability connector for issue `#103`. The connector reads only local metrics
+snapshots, applies the shared observability policy, renders bounded Azure
+Monitor custom metric request bodies, and keeps Azure export outside the
+delivery-critical sink runner.
 
 ```mermaid
 flowchart LR
     Runner[nats-sink worker] --> Snapshot[Local metrics snapshot]
-    Policy[Observability policy] --> Datadog[Datadog connector]
-    Snapshot --> Datadog
-    Datadog --> Agent[Datadog Agent DogStatsD listener]
-    Datadog -. never controls .-> Runner
+    Policy[Observability policy] --> Azure[Azure Monitor connector]
+    Snapshot --> Azure
+    Azure --> Metrics[Azure Monitor custom metrics]
+    Azure -. never controls .-> Runner
 ```
 
 ## Core And Repository Validation
 
 | Check | Result |
 | --- | --- |
-| Ruff format | Pass, `267 files already formatted` |
+| Ruff format | Pass, `269 files already formatted` |
 | Ruff lint | Pass |
-| Mypy | Pass, no issues in `111` source files |
+| Mypy | Pass, no issues in `112` source files |
 | Version metadata consistency | Pass for `0.4.1` |
 | Dependency manifests | Pass, manifest files up to date |
 | Backlog metadata | Pass, `145` backlog items validated |
@@ -58,8 +60,9 @@ flowchart LR
 
 | Test Area | Command | Result |
 | --- | --- | --- |
-| Datadog focused subset | `python -m pytest tests/unit/test_datadog_observability.py tests/unit/test_observability_policy.py tests/unit/test_observability_cli.py tests/unit/test_public_api.py -q` | Pass, `80 passed` |
-| Main repository test suite | run by `scripts/check.sh` | Pass, `1201 passed, 12 skipped` |
+| Azure Monitor focused subset | `python -m pytest tests/unit/test_azure_monitor_observability.py tests/unit/test_observability_cli.py tests/unit/test_observability_policy.py tests/unit/test_public_api.py -q` | Pass, `85 passed` |
+| Full unit suite | `python -m pytest tests/unit -q` | Pass, `1213 passed` |
+| Main repository test suite | run by `scripts/check.sh` | Pass, `1218 passed, 12 skipped` |
 | Commit, encryption, file, and Oracle sink subset | run by `scripts/check.sh` | Pass, `130 passed` |
 | Sink certification and example validation | `scripts/check-sinks.sh` via `scripts/check.sh` | Pass, `163 passed` plus file, Oracle, Oracle Coherence, multi-sink routing, Foundry, and Gotham config validation |
 | Full local validation | `scripts/check.sh` | Pass |
@@ -67,26 +70,33 @@ flowchart LR
 The skipped tests are the existing environment-gated live NATS, Oracle
 Database, Oracle MySQL, Oracle Coherence, and push-consumer integration tests.
 
-## Datadog Connector Evidence
+## Azure Monitor Connector Evidence
 
 The new focused coverage verifies:
 
-- Datadog export is disabled by default and returns a safe no-op summary;
-- enabled export applies the shared observability allow list, deny list,
-  observation, and stale-snapshot policies;
-- DogStatsD dry-run output uses stable names and gauges for snapshot values;
-- static Datadog tags are explicit, bounded, sorted, and screened for
-  sensitive or high-cardinality names;
+- Azure Monitor export is disabled by default and returns a safe no-op summary;
+- enabled export requires explicit top-level policy enablement, Azure resource
+  ID, resource location, and environment-backed bearer-token variable name;
+- dry-run output renders bounded Azure Monitor custom metric request bodies
+  without reading tokens or printing Azure resource IDs, locations, endpoints,
+  payloads, subjects, table names, file paths, or destination addresses;
+- live export uses a fake HTTP opener in tests, sends a bearer-token header
+  from the configured environment variable, honors timeout settings, and
+  reports only sanitized status categories;
+- shared allow-list, deny-list, observation, and stale-snapshot policies are
+  applied before request construction;
+- static dimensions are explicit, bounded, sorted, and screened for sensitive
+  or high-cardinality names and values;
 - prepared metric labels stay suppressed unless
-  `include_metric_labels_as_tags` is explicitly enabled;
-- UDP and Unix datagram transports use bounded timeouts and retries;
-- datagram size limits fail closed with actionable errors;
-- CLI output avoids printing Agent addresses, socket paths, tags, subjects,
-  payloads, classification values, file paths, table names, or credentials.
+  `include_metric_labels_as_dimensions` is explicitly enabled;
+- request-size limits and bounded retries fail closed with actionable errors;
+- CLI output avoids printing bearer tokens, Azure resource IDs, regional
+  endpoints, subjects, payloads, classification values, file paths, table
+  names, or credentials.
 
 ## Issues Found During Validation
 
-No new repository defects were found during the issue `#104` validation cycle.
+No new repository defects were found during the issue `#103` validation cycle.
 The security scan reported existing reviewed `nosec` annotations as warnings,
 and the check remained passing.
 
@@ -95,15 +105,16 @@ and the check remained passing.
 The following public documentation was updated and built successfully:
 
 - [README](https://github.com/ProjectCuillin/nats-sinks/blob/main/README.md)
-- [Datadog Integration](datadog.md)
+- [Azure Monitor Integration](azure-monitor.md)
 - [Configuration](configuration.md)
 - [CLI Reference](cli.md)
 - [Metrics](metrics.md)
 - [Observability](observability.md)
 - [Observability Connector Roadmap](observability-connectors.md)
 - [Operations](operations.md)
+- [Python Usage](python-usage.md)
 - [Security](security.md)
 - [Documentation Home](index.md)
 
 The changelog, backlog metadata, latest test report, and public documentation
-were updated for issue `#104`.
+were updated for issue `#103`.

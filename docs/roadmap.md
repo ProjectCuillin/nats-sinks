@@ -74,6 +74,9 @@
   local or explicitly approved Datadog Agent listener.
 - Amazon CloudWatch observability connector for approved custom metrics through
   bounded `PutMetricData` requests and the optional AWS SDK path.
+- Azure Monitor observability connector for approved custom metrics through a
+  bounded REST path, environment-backed bearer-token reference, and one
+  reviewed Azure resource scope.
 - Syslog observability bridge for approved bounded RFC 5424-style metric
   messages over UDP or Unix datagram sockets, kept outside delivery semantics.
 - NATS server monitoring diagnostic connector for selected endpoints such as

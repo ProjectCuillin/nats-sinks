@@ -130,10 +130,8 @@ Prometheus textfile service/timer assets, installs the disabled native
 Prometheus HTTP service asset, installs the disabled OTLP service/timer assets,
 installs the disabled NATS monitoring service/timer assets, and enables only
 the main sink service. Prometheus, OTLP, Elastic Observability, Grafana Alloy,
-Splunk HEC, OCI Monitoring, StatsD, syslog, and NATS monitoring sharing remain
-disabled until the observability policy and the selected observability service
-are explicitly enabled.
-Splunk HEC, StatsD, Amazon CloudWatch, syslog, and NATS monitoring sharing
+Splunk HEC, OCI Monitoring, StatsD, Datadog, Amazon CloudWatch, Azure Monitor,
+syslog, and NATS monitoring sharing
 remain disabled until the observability policy and the selected observability
 service are explicitly enabled.
 
@@ -362,6 +360,13 @@ observability policy, plus only the AWS identity permissions needed to call
 `cloudwatch:PutMetricData` for the reviewed namespace. See
 [Amazon CloudWatch Integration](cloudwatch.md) for request shape, IAM guidance,
 dimension controls, and service guidance.
+
+For Azure Monitor, run `nats-sink-observe azure-monitor-export` as a separate
+oneshot service or timer with read access to the metrics snapshot and
+observability policy, plus only the Azure identity permissions needed to post
+custom metrics for the reviewed resource. See
+[Azure Monitor Integration](azure-monitor.md) for REST request shape, bearer
+token handling, dimension controls, and service guidance.
 
 For syslog, run `nats-sink-observe syslog-export` as a separate oneshot
 service or timer with read access to the metrics snapshot and observability

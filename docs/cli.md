@@ -17,13 +17,11 @@ core config, list metric names and subject hints, validate policy, and render
 policy-filtered Prometheus textfile output or run the optional native
 Prometheus HTTP endpoint. It can also export approved metrics to an
 OpenTelemetry Collector through OTLP/HTTP JSON, including the Elastic
-Observability and Grafana Alloy profiles, and approved aggregate metric events
-through Splunk HEC. It can also export approved custom metrics to OCI
-Monitoring, send approved best-effort datagrams to StatsD-compatible
-aggregators, and emit RFC 5424-style messages to syslog pipelines.
-through Splunk HEC. It can also send approved best-effort datagrams to
-StatsD-compatible aggregators, send approved custom metrics to Amazon
-CloudWatch, and emit RFC 5424-style messages to syslog pipelines.
+Observability and Grafana Alloy profiles, approved aggregate metric events
+through Splunk HEC, approved custom metrics to OCI Monitoring, Amazon
+CloudWatch, and Azure Monitor, approved best-effort datagrams to
+StatsD-compatible aggregators or a Datadog Agent, and RFC 5424-style messages
+to syslog pipelines.
 
 For readers new to this project, the CLI does not implement a separate
 delivery engine. It validates configuration, creates the selected sink, builds
@@ -54,7 +52,9 @@ nats-sink-observe grafana-alloy-export .local/nats-sinks/metrics.json observabil
 nats-sink-observe splunk-hec-export .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
 nats-sink-observe oci-monitoring-export .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
 nats-sink-observe statsd-export .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
+nats-sink-observe datadog-export .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
 nats-sink-observe cloudwatch-export .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
+nats-sink-observe azure-monitor-export .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
 nats-sink-observe syslog-export .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
 nats-sink-observe nats-monitoring-poll observability.prometheus.json --dry-run
 ```
@@ -890,6 +890,66 @@ prove alert evaluation, dashboard rendering, or downstream retention. Full
 connector guidance is documented in
 [Amazon CloudWatch Integration](cloudwatch.md).
 
+### `nats-sink-observe azure-monitor-export`
+
+Exports policy-approved metrics to Azure Monitor custom metrics through the
+regional Azure Monitor REST endpoint for one reviewed Azure resource. The
+command is disabled unless both the top-level observability policy and
+`azure_monitor.enabled` are true. It uses the same local snapshot, allow and
+deny lists, stale-snapshot checks, timeout bounds, retry bounds, request-size
+bounds, and redaction posture as the other observability connectors.
+
+Dry-run mode prints the Azure Monitor request bodies without loading a bearer
+token or calling Azure:
+
+```bash
+nats-sink-observe azure-monitor-export \
+  /var/lib/nats-sink/metrics.json \
+  /etc/nats-sinks/observability.prometheus.json \
+  --dry-run
+```
+
+Example dry-run output:
+
+```json
+[
+  {
+    "data": {
+      "baseData": {
+        "dimNames": [
+          "deployment"
+        ],
+        "metric": "nats_sinks_messages_fetched_total",
+        "namespace": "nats-sinks/metrics",
+        "series": [
+          {
+            "count": 1,
+            "dimValues": [
+              "edge"
+            ],
+            "max": 256.0,
+            "min": 256.0,
+            "sum": 256.0
+          }
+        ]
+      }
+    },
+    "time": "2026-05-28T12:00:00.000Z"
+  }
+]
+```
+
+Example success output:
+
+```text
+Azure Monitor export: attempted=true delivered=true attempts=1 requests=1 metrics=1 status=200 message=Azure Monitor export delivered
+```
+
+The command is an observability connector, not a delivery feature. Successful
+local export means Azure Monitor accepted the HTTP request; it does not prove
+alert evaluation, dashboard rendering, or downstream retention. Full connector
+guidance is documented in [Azure Monitor Integration](azure-monitor.md).
+
 ### `nats-sink-observe syslog-export`
 
 Exports policy-approved metrics as RFC 5424-style syslog messages over UDP or
@@ -1015,10 +1075,7 @@ cannot find a metric without a default value.
 
 `nats-sink-observe` returns `0` on success, `2` for invalid configuration,
 policy, snapshot, textfile output errors, disabled native endpoint startup, or
-profile render errors, and `3` when an enabled Prometheus, OTLP, Elastic,
-Grafana Alloy, Splunk HEC, OCI Monitoring, StatsD, or syslog export exhausts
-its bounded delivery attempts, a policy rejects a stale snapshot in
-Grafana Alloy, Splunk HEC, StatsD, Amazon CloudWatch, or syslog export
-exhausts its bounded delivery attempts, a policy rejects a stale snapshot in
-connector-specific paths that use delivery-failure exit handling, or a native
-HTTP dry-run returns an error response.
+profile render errors, and `3` when an enabled Prometheus HTTP dry-run returns
+an error response, a stale snapshot is rejected, or an enabled OTLP, Elastic,
+Grafana Alloy, Splunk HEC, OCI Monitoring, StatsD, Datadog, Amazon CloudWatch,
+Azure Monitor, or syslog export exhausts bounded delivery attempts.

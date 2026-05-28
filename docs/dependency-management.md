@@ -113,6 +113,9 @@ require it.
 The Amazon CloudWatch connector follows the same rule by keeping boto3 behind
 the `cloudwatch` optional extra. Dry-run rendering and unit tests work without
 boto3; live export requires `python -m pip install "nats-sinks[cloudwatch]"`.
+The Azure Monitor connector currently uses the Python standard library HTTP
+stack and an environment-backed bearer token, so it adds no Azure SDK
+dependency to the base package.
 
 If a future connector needs another vendor SDK, gRPC transport, protobuf
 encoder, or cloud authentication library, add it behind an optional extra,
