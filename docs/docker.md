@@ -135,6 +135,46 @@ See [Oracle Coherence Community Edition Test Backend](oracle-coherence-test-cont
 for the base-image choice, security posture, runtime sequence, expected output,
 and limitations.
 
+## Oracle NoSQL Database Test Backend
+
+The project includes a local-only Oracle NoSQL Database KVLite backend for the
+experimental Oracle NoSQL Database sink:
+
+```bash
+python scripts/run-oracle-nosql-container-smoke.py
+```
+
+The smoke runner uses Oracle's documented Community Edition KVLite image from
+GitHub Container Registry, starts a short-lived container with `KV_PROXY_PORT`
+set to `8080`, binds the HTTP proxy to a random `127.0.0.1` port, writes one
+complete fake event JSON object to a key/value-style table, reads it back, and
+removes the container by default.
+
+Run the Oracle NoSQL sink e2e test against a fresh KVLite container:
+
+```bash
+python scripts/run-oracle-nosql-sink-e2e.py
+```
+
+Expected successful output:
+
+```text
+Oracle NoSQL sink container e2e test passed.
+```
+
+Install the optional Oracle NoSQL Python SDK first:
+
+```bash
+python -m pip install -e ".[oracle-nosql]"
+```
+
+The helper intentionally wraps the official image instead of building a custom
+Oracle NoSQL image. It therefore does not make a local claim about the base OS
+layer of the Oracle-provided image. See
+[Oracle NoSQL Database Test Backend](oracle-nosql-test-container.md) for the
+image strategy, local-only security posture, JSON verification, expected
+output, and troubleshooting.
+
 ## Manual Compose Workflow
 
 You can also run the stack manually:

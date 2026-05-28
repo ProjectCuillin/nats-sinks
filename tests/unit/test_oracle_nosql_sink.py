@@ -353,6 +353,43 @@ async def test_oracle_nosql_sink_missing_optional_dependency_fails_closed(
         await sink.start()
 
 
+def test_oracle_nosql_handle_config_supports_current_sdk_shape() -> None:
+    """The adapter should support SDKs that set authorization after construction."""
+
+    class HandleConfig:
+        def __init__(self, endpoint: str) -> None:
+            self.endpoint = endpoint
+            self.provider: object | None = None
+
+        def set_authorization_provider(self, provider: object) -> None:
+            self.provider = provider
+
+    class FakeBorneo:
+        def __getattr__(self, name: str) -> object:
+            if name == "NoSQLHandleConfig":
+                return self.no_sql_handle_config
+            raise AttributeError(name)
+
+        def no_sql_handle_config(
+            self,
+            endpoint: str,
+            provider: object | None = None,
+        ) -> HandleConfig:
+            if provider is not None:
+                raise TypeError("single-argument constructor shape")
+            return HandleConfig(endpoint)
+
+    provider = object()
+    config = oracle_nosql_sink_module._build_handle_config(
+        borneo=FakeBorneo(),
+        endpoint="http://127.0.0.1:8080",
+        provider=provider,
+    )
+
+    assert config.endpoint == "http://127.0.0.1:8080"
+    assert config.provider is provider
+
+
 def test_oracle_nosql_put_result_parsing_fails_closed_on_ambiguity() -> None:
     class AmbiguousResult:
         pass

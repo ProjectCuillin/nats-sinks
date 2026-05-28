@@ -364,6 +364,57 @@ See [Oracle MySQL Sink](mysql-sink.md) for sink configuration and
 container security model, runtime sequence, capability exception, and
 troubleshooting guidance.
 
+## Oracle NoSQL Database Sink And Test Backend
+
+The repository includes a local Oracle NoSQL Database KVLite backend and a
+container-backed e2e test for the experimental first-party Oracle NoSQL
+Database sink. The backend wraps Oracle's documented Community Edition KVLite
+image from GitHub Container Registry and is local test infrastructure only.
+
+Run the deterministic asset tests without Docker:
+
+```bash
+python -m pytest tests/unit/test_oracle_nosql_test_container.py -q
+```
+
+Run the optional Docker smoke test when a local Docker daemon and the optional
+Oracle NoSQL Python SDK are available:
+
+```bash
+python -m pip install -e ".[oracle-nosql]"
+python scripts/run-oracle-nosql-container-smoke.py
+```
+
+Expected sanitized output:
+
+```text
+Oracle NoSQL Database container smoke test passed with one verified JSON key/value entry.
+```
+
+Run the Oracle NoSQL sink e2e test against a fresh short-lived KVLite
+container:
+
+```bash
+python scripts/run-oracle-nosql-sink-e2e.py
+```
+
+Expected sanitized output:
+
+```text
+Oracle NoSQL sink container e2e test passed.
+```
+
+That e2e runner starts the same short-lived KVLite backend, binds the HTTP
+proxy to a random loopback port, enables the live-gated
+`tests/integration/test_oracle_nosql_sink_e2e.py` test, creates the narrow
+key/value table through generated safe DDL, writes the same normalized
+envelope twice, and removes the container by default.
+
+See [Oracle NoSQL Database Sink](oracle-nosql-sink.md) for sink configuration
+and [Oracle NoSQL Database Test Backend](oracle-nosql-test-container.md) for
+the image strategy, local-only security posture, JSON verification, cleanup
+behavior, and troubleshooting guidance.
+
 ## Oracle Coherence Community Edition Test Backend
 
 The repository includes a local Oracle Coherence Community Edition test backend
@@ -737,7 +788,7 @@ available level:
 | --- | --- | --- | --- |
 | Oracle | SQL, mapping, routing, payload, idempotency, encrypted payload storage, and contract tests. | `nats-sink validate examples/oracle-jetstream/config.json`; live `test-sink` when Oracle env is available. | Live NATS-to-Oracle e2e when `.local` integration env is available. |
 | Oracle MySQL | SQL, mapping, routing, payload, idempotency, TLS configuration, metrics, and contract tests. | `nats-sink validate examples/oracle-mysql-basic/config.json`; `python scripts/run-oracle-mysql-container-smoke.py`. | Local short-lived Oracle MySQL container e2e with `python scripts/run-mysql-sink-e2e.py`. |
-| Oracle NoSQL Database | Config validation, key strategy, JSON value mapping, generated table DDL, duplicate policy, timeout handling, optional dependency failure, fan-out defaults, and contract tests with fake SDK clients. | `nats-sink validate examples/oracle-nosql-basic/config.json`. | Environment-gated KVLite or Cloud Simulator e2e after the Oracle NoSQL Database test container feature is implemented. |
+| Oracle NoSQL Database | Config validation, key strategy, JSON value mapping, generated table DDL, duplicate policy, timeout handling, optional dependency failure, fan-out defaults, test-container asset checks, and contract tests with fake SDK clients. | `nats-sink validate examples/oracle-nosql-basic/config.json`; `python scripts/run-oracle-nosql-container-smoke.py`. | Local short-lived Oracle NoSQL Database KVLite container e2e with `python scripts/run-oracle-nosql-sink-e2e.py`. |
 | Oracle Coherence Community Edition | Config validation, key strategy, JSON value mapping, duplicate policy, timeout handling, optional dependency failure, fan-out defaults, and contract tests. | `nats-sink validate examples/oracle-coherence-basic/config.json`; `python scripts/run-oracle-coherence-container-smoke.py`. | Local short-lived Oracle Coherence Community Edition container e2e with `python scripts/run-coherence-sink-e2e.py`. |
 | File | Path mapping, payload, duplicate policy, compression, encryption, healthcheck, filesystem errors, and fuzz-style path safety tests. | `nats-sink validate examples/file-basic/config.json`; `nats-sink test-sink examples/file-basic/config.json`. | Local deterministic runner-to-file e2e in `tests/integration/test_file_sink_e2e.py`, with uncompressed, gzip, and encrypted output. |
 
