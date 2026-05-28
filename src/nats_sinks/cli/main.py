@@ -57,6 +57,7 @@ from nats_sinks.core.stream_management import (
     build_stream_management_plan,
 )
 from nats_sinks.file import FileSink
+from nats_sinks.foundry import FoundrySink
 from nats_sinks.mysql import MySqlSink
 from nats_sinks.oracle import (
     OracleLineageReader,
@@ -136,6 +137,18 @@ def _registry(plugins: SinkPluginConfig | None = None) -> SinkRegistry:
             requires_extra="crypto",
             documentation="docs/spool-sink.md",
             certification=("commit-then-ack", "unit", "replay"),
+        )
+    )
+    registry.register_connector(
+        SinkConnector(
+            name="foundry",
+            factory=FoundrySink.from_mapping,
+            summary="Experimental Palantir Foundry Streams sink.",
+            status="experimental",
+            built_in=True,
+            production_ready=False,
+            documentation="docs/foundry-sink.md",
+            certification=("commit-then-ack", "unit", "mock-contract"),
         )
     )
     if plugins is not None and plugins.enabled:

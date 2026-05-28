@@ -192,8 +192,9 @@
   Lakehouse, Oracle AI Data Platform, Oracle JSON document stores, OCI Cache
   Cluster, WebLogic JMS, Oracle TimesTen, Oracle Spatial and Graph profiles,
   Oracle application connector families, and OCI PostgreSQL profile decisions.
-- Palantir Foundry and Palantir Gotham sink evaluations with local fake-client
-  or contract-harness testing before any live certification claim.
+- Palantir Gotham sink evaluation plus future live-certification work for the
+  experimental Palantir Foundry Streams sink. The Foundry connector now has a
+  local fake-client contract harness, but no production certification claim.
 - Elasticsearch or OpenSearch, Snowflake, BigQuery, Azure object storage,
   Kafka, MongoDB, Redis, and Cassandra-compatible sink evaluations at low
   priority so the project can learn from common Kafka-style connector patterns

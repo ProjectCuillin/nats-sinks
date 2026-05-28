@@ -12,9 +12,10 @@ where it will write.
 ## Minimal Configuration
 
 The minimal example uses the local file sink because it does not require a
-database or credentials. Oracle Database and Oracle MySQL use the same generic
-runtime sections and add destination-specific fields inside the `sink` object.
-When a deployment needs to prepare several destinations for routing and future
+database or credentials. Oracle Database, Oracle MySQL, the edge spool sink,
+and the experimental Palantir Foundry sink use the same generic runtime
+sections and add destination-specific fields inside the `sink` object. When a
+deployment needs to prepare several destinations for routing and future
 fan-out, it can also declare additional named instances in the top-level
 `sinks` object.
 
@@ -1990,14 +1991,15 @@ remaining fields to the selected sink validator.
 
 | Field | Required | Default | Valid values | Description |
 | --- | --- | --- | --- | --- |
-| `type` | yes | none | `file`, `oracle`, `mysql`, or `spool` in the current release. | Selects the production sink implementation. Future sinks should add new values without changing the generic core sections. |
+| `type` | yes | none | `file`, `oracle`, `mysql`, `spool`, or experimental `foundry` in the current release. | Selects the sink implementation. Future sinks should add new values without changing the generic core sections. |
 
 All other fields under `sink` are sink-specific:
 
 - `file` fields are documented in [File Sink](file-sink.md),
 - `oracle` fields are documented in [Oracle Sink](oracle-sink.md),
 - `mysql` fields are documented in [Oracle MySQL Sink](mysql-sink.md),
-- `spool` fields are documented in [Edge Spool Sink](spool-sink.md).
+- `spool` fields are documented in [Edge Spool Sink](spool-sink.md),
+- `foundry` fields are documented in [Palantir Foundry Sink](foundry-sink.md).
 
 ### `plugins`
 
@@ -2005,7 +2007,7 @@ The `plugins` section controls optional discovery for externally installed sink
 connectors. It is disabled by default because Python plugin loading is a
 code-execution and supply-chain trust boundary. You do not need this section
 for the built-in Oracle Database sink, built-in Oracle MySQL sink, built-in
-FileSink, or built-in SpoolSink.
+FileSink, built-in SpoolSink, or built-in experimental Foundry sink.
 
 | Field | Required | Default | Valid values | Description |
 | --- | --- | --- | --- | --- |

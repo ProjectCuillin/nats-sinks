@@ -14,103 +14,105 @@ generated database passwords, or full raw logs from live systems.
 | Field | Value |
 | --- | --- |
 | Overall result | Pass |
-| Report generated | 2026-05-28 issue `#107` merge verification for upcoming `v0.4.2` development |
+| Report generated | 2026-05-28 issue `#150` Foundry sink validation for upcoming `v0.4.2` development |
 | Project version | `0.4.1` package metadata with `v0.4.2` development changes |
 | Python version | 3.12.4 |
-| Git revision checked | Branch `issue-107-oci-monitoring-observability` based on `release-v0.4.2` |
+| Git revision checked | Branch `issue-150-palantir-foundry-sink` based on `release-v0.4.2` |
 | Live NATS details | Environment-gated live tests skipped unless explicitly enabled |
 | Live Oracle Database details | Environment-gated live tests skipped unless explicitly enabled |
 | Live Oracle MySQL details | Environment-gated live tests skipped unless explicitly enabled |
-| Live OCI details | No live OCI tenancy was contacted; OCI SDK behavior used local fakes |
+| Live Foundry details | No live Foundry tenant was contacted; validation used local fake clients and contract tests |
 
-This refresh covered the OCI Monitoring observability connector for issue
-`#107` after rebasing the work on the current `release-v0.4.2` branch, which
-already contained the Amazon CloudWatch observability connector. The OCI
-connector is disabled by default, reads only local metrics snapshots, uses the
-shared observability allow and deny policy, builds bounded OCI `PostMetricData`
-requests, redacts compartment details in dry-run output, and keeps OCI export
-outside JetStream delivery decisions.
+This refresh covered the experimental Palantir Foundry Streams sink for issue
+`#150`. The implementation keeps Foundry support disabled unless configured,
+validates stream push URLs and allowed hosts before any HTTP request is built,
+requires secrets to come from environment variables, bounds request and
+response sizes, retries only within explicit budgets, and treats local
+fake-client certification as separate from future live Foundry certification.
 
 ```mermaid
 flowchart LR
-    Worker[nats-sink worker] --> Snapshot[Local metrics snapshot]
-    Policy[Observability policy] --> OCI[nats-sink-observe oci-monitoring-export]
-    Snapshot --> OCI
-    OCI --> Monitoring[OCI Monitoring custom metrics]
-    OCI -. never controls .-> Worker
+    Runner[JetStream runner] --> Envelope[NATS envelope]
+    Envelope --> Mapper[Foundry record mapper]
+    Mapper --> Client[Foundry stream client]
+    Client --> Target[Foundry Streams push endpoint]
+    Client -. local tests use .-> Fake[Fake contract client]
 ```
 
 ## Core And Repository Validation
 
 | Check | Result |
 | --- | --- |
-| Ruff format | Pass, `240 files already formatted` |
+| Ruff format | Pass, `247 files already formatted` |
 | Ruff lint | Pass |
-| Mypy | Pass, no issues in `95` source files |
+| Mypy | Pass, no issues in `100` source files |
 | Version metadata consistency | Pass for `0.4.1` |
 | Dependency manifests | Pass, manifest files up to date |
+| Backlog metadata | Pass, `142` backlog items validated |
+| Bug report metadata | Pass, `90` bug reports validated |
 | PyPI-facing Markdown links | Pass |
 | Documentation builds | Pass for Read the Docs and GitHub Pages MkDocs builds |
+| Security checks | Pass; existing reviewed `nosec` warnings remained non-blocking |
+| Package build | Pass, source distribution and wheel built |
+| SBOM and checksums | Pass, CycloneDX JSON/XML and checksum manifest generated |
 
 ## Test Results
 
 | Test Area | Command | Result |
 | --- | --- | --- |
-| OCI and CloudWatch focused subset | `python -m pytest tests/unit/test_oci_monitoring_observability.py tests/unit/test_cloudwatch_observability.py tests/unit/test_observability_cli.py tests/unit/test_public_api.py tests/unit/test_subject_observability_certification.py -q` | Pass, `74 passed` |
-| Main repository test suite | `python -m pytest -q` | Pass, `1118 passed, 11 skipped` |
-| Ruff lint | `python -m ruff check .` | Pass |
-| Ruff format check | `python -m ruff format --check .` | Pass, `240 files already formatted` |
-| Type checking | `python -m mypy src` | Pass, no issues in `95` source files |
-| Dependency manifests | `python scripts/update-dependency-manifests.py --check` | Pass |
-| PyPI-facing Markdown links | `python scripts/check-markdown-links.py` | Pass |
-| Documentation builds | `scripts/check-docs.sh` | Pass for Read the Docs and GitHub Pages MkDocs builds |
+| Foundry static regression | `python -m pytest tests/unit/test_foundry_static_security.py -q` | Pass, `1 passed` |
+| Foundry focused subset | `python -m pytest tests/unit/test_foundry_static_security.py tests/unit/test_foundry_sink.py -q` | Pass, `15 passed` |
+| Main repository test suite | `python -m pytest -q` | Pass, `1133 passed, 11 skipped` |
+| Commit, encryption, file, and Oracle sink subset | run by `scripts/check.sh` | Pass, `130 passed` |
+| Sink certification and example validation | `scripts/check-sinks.sh` via `scripts/check.sh` | Pass, `131 passed` plus file, Oracle, and Foundry config validation |
+| Full local validation | `scripts/check.sh` | Pass |
 
 The skipped tests are the existing environment-gated live NATS, Oracle
 Database, Oracle MySQL, and push-consumer integration tests.
 
-## OCI Monitoring Evidence
+## Foundry Evidence
 
 The new focused coverage verifies:
 
-- OCI Monitoring export is disabled by default and does not require a metrics
-  snapshot when disabled;
-- only policy-approved metric names are rendered or exported;
-- deny rules win over allow rules;
-- timing observations are included only when the shared policy allows them;
-- default static dimensions are applied when no custom dimensions are given;
-- prepared `subject_family` labels become OCI dimensions only when explicitly
-  enabled;
-- request splitting respects `max_metrics_per_request`;
-- oversized requests fail closed through `max_request_bytes`;
-- dry-run output redacts compartment OCIDs and does not print region or signer
-  details;
-- fake OCI clients cover success, bounded retry, timeout, and rejected-metric
-  response paths without contacting a live tenancy;
-- unsafe namespaces, missing enabled-region or compartment settings, sensitive
-  dimensions, and empty dimension sets are rejected at policy validation time.
+- Foundry sink configuration rejects ambiguous or unsafe URLs;
+- HTTPS is required outside explicit loopback-only local testing;
+- endpoint allow-listing is enforced before HTTP requests are made;
+- authentication uses environment variable names instead of inline token
+  values;
+- record field names, batch sizes, payload sizes, and response sizes are
+  bounded;
+- duplicate record fields and ambiguous partial acceptance fail closed;
+- fake-client contract tests prove successful writes, duplicate redelivery,
+  retryable failures, and permanent failures;
+- runner-level tests preserve commit-then-ACK behavior for Foundry writes;
+- the reviewed `urllib.request.urlopen` boundary carries the Bandit `B310`
+  suppression required by the security gate.
 
 ## Issues Found During Validation
 
-No new release-blocking issues were found during the `#107` validation and
-CloudWatch merge-conflict resolution cycle.
+One managed bug was found and fixed during validation:
+
+- GitHub issue `#298`: the Foundry HTTP client used a reviewed,
+  config-validated `urlopen` boundary, but Bandit required the `B310`
+  suppression on the exact evaluated line. A focused failing regression test was
+  added first, the annotation was corrected, `scripts/security.sh` passed, and
+  full `scripts/check.sh` passed afterward.
 
 ## Documentation Evidence
 
 The following public documentation was updated and built successfully:
 
 - [README](https://github.com/ProjectCuillin/nats-sinks/blob/main/README.md)
-- [Observability](observability.md)
-- [OCI Monitoring Integration](oci-monitoring.md)
-- [Metrics](metrics.md)
-- [CLI](cli.md)
-- [Operations](operations.md)
-- [Service Deployment](service-deployment.md)
+- [Foundry Sink](foundry-sink.md)
+- [Configuration](configuration.md)
+- [Sink Framework](sink-framework.md)
+- [Sink Certification](sink-certification.md)
 - [Security](security.md)
-- [Dependency Management](dependency-management.md)
-- [Subject-Aware Observability Runbook](subject-aware-observability-runbook.md)
-- [Future Observability Connectors](observability-connectors.md)
+- [Operations](operations.md)
+- [Testing](testing.md)
+- [Defence Use Cases](use-cases/defence/index.md)
 - [Roadmap](roadmap.md)
 - [Documentation Home](index.md)
 
-The changelog, backlog metadata, roadmap, latest test report, and public
-observability documentation were updated for issue `#107`.
+The changelog, backlog metadata, managed bug report, latest test report,
+examples, and public sink documentation were updated for issue `#150`.

@@ -1,0 +1,30 @@
+{
+  "id": "foundry-http-urlopen-bandit-b310",
+  "title": "[Bug]: Foundry HTTP client needs reviewed Bandit B310 suppression on urlopen",
+  "area": "Future sink",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.2",
+  "labels": ["security", "testing", "sink-new", "issue-150"],
+  "summary": "The new Palantir Foundry HTTP client validates endpoint schemes and hosts before constructing requests, but Bandit still reports B310 on the urllib urlopen call during the full repository security gate.",
+  "observed": "The full local check script failed in scripts/security.sh with Bandit B310 at src/nats_sinks/foundry/client.py on the request.urlopen call.",
+  "expected": "The reviewed urlopen call should carry an explicit Bandit B310 suppression on the exact line Bandit evaluates, with a nearby explanation that Foundry URLs are config-validated before use.",
+  "reproduction": "Run scripts/check.sh after adding the experimental Foundry sink. The security step reports B310 for the Foundry HTTP client.",
+  "failing_test": "Add a focused unit test that inspects src/nats_sinks/foundry/client.py and fails unless the request.urlopen line carries a reviewed nosec B310 annotation.",
+  "impact": "The defect blocks release validation for issue #150 and could encourage ad hoc security suppression unless the reviewed boundary is documented in code and protected by a regression test.",
+  "delivery_semantics": "The defect is limited to static-analysis annotation placement. It does not alter Foundry request construction, sink writes, retry behavior, ACK ordering, DLQ behavior, or idempotency keys.",
+  "security": "The fix must keep the existing URL validation model: only HTTPS endpoints are allowed outside explicit loopback testing, URL userinfo, fragments, and query strings are rejected, and endpoint_allowed_hosts remains available for least-privilege review.",
+  "acceptance": [
+    "The Foundry HTTP urlopen line carries a reviewed Bandit B310 suppression.",
+    "A focused regression test protects the annotation placement.",
+    "scripts/security.sh passes after the fix.",
+    "scripts/check.sh passes after the fix.",
+    "Issue #150 release evidence mentions the security-gate regression and fix."
+  ],
+  "tests": "Run the focused annotation regression test, scripts/security.sh, and scripts/check.sh.",
+  "documentation": "No public documentation change is required beyond changelog and test-report evidence because this is a static-analysis hygiene fix inside the new Foundry connector.",
+  "closeout": "Mark completed after the regression test and full local check pass with sanitized evidence.",
+  "relationships": {
+    "related": ["#150"]
+  }
+}

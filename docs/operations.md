@@ -702,6 +702,25 @@ streams, but it is not a retention or privacy control. Compressed files still
 need the same access controls, backup policy, and rotation policy as
 uncompressed files.
 
+## Palantir Foundry Sink Operations
+
+The experimental Foundry sink should be introduced through mock certification,
+then through a non-production Foundry environment, before any production
+traffic is routed to it. Keep the service identity least-privileged to the
+specific stream push target and configure `endpoint_allowed_hosts` so
+operators can review the intended destination host without inspecting secret
+material.
+
+Monitor sink failures, redeliveries, DLQ counts, and downstream Foundry
+throttling or authorization events during trials. A 2xx response or explicit
+fake-client acceptance is the only local success boundary; rejected, partial,
+malformed, oversized, timed-out, or ambiguous responses prevent ACK and rely on
+the normal retry, redelivery, or DLQ policy.
+
+The local fake-client tests are suitable for release evidence, but they do not
+prove that a customer Foundry tenant, stream schema, branch, authentication
+setup, or permission model is ready for production.
+
 ## Docker Compose Examples
 
 The examples directory includes JSON-formatted Compose files. For the current

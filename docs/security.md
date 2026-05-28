@@ -597,6 +597,30 @@ transfer decisions in approved systems outside this package. If you use the
 blueprint, enforce path normalization, bounded file counts, bounded payload
 sizes, and secret-free manifests before committing the package.
 
+## Palantir Foundry Sink Security
+
+The Palantir Foundry sink is experimental and should be treated as a controlled
+integration boundary. Configure only reviewed Foundry stream push endpoints,
+use `endpoint_allowed_hosts`, and keep tokens, OAuth2 client identifiers, and
+client secrets in environment variables or a protected service environment
+file.
+
+The connector validates endpoint schemes, host allow-lists, field names,
+batch sizes, record sizes, response sizes, timeout values, and authentication
+mode combinations before attempting a write. It rejects private URL query
+strings and URL userinfo so tokens do not move through the endpoint field.
+
+Runtime errors intentionally avoid printing the Foundry endpoint, token values,
+client identifiers, response bodies, stream resource identifiers, subjects, or
+payloads. Treat live Foundry responses as untrusted input: malformed,
+oversized, rejected, partial, or ambiguous responses fail closed and prevent
+ACK until the normal retry, redelivery, or DLQ policy completes.
+
+Local fake-client certification is not production certification. Before using
+the connector in production, validate it against an approved Foundry test
+environment with least-privilege application permissions and sanitized
+evidence.
+
 ## Secure Failure Flow
 
 ```mermaid

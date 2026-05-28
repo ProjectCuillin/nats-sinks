@@ -219,6 +219,35 @@ export NATS_SINKS_FILE_E2E_DELETE_AFTER=false
 pytest tests/integration/test_file_sink_e2e.py
 ```
 
+## Palantir Foundry Mock Certification
+
+The experimental Palantir Foundry sink is certified locally with a fake
+`FoundryStreamClient`. This test path does not connect to Foundry and does not
+require tenant URLs, credentials, client identifiers, resource identifiers, or
+private response bodies.
+
+```bash
+python -m pytest tests/unit/test_foundry_sink.py -q
+```
+
+The focused suite covers:
+
+- configuration validation for HTTPS endpoints, endpoint allow-listing,
+  bearer-token environment variables, OAuth2 client-credentials fields, record
+  field names, and size limits;
+- record mapping for payloads, payload metadata, priority, classification,
+  labels, NATS metadata, mission metadata, security labels, and custody
+  metadata;
+- deterministic idempotency key strategies and fail-closed behavior when a
+  selected strategy lacks required metadata;
+- fake-client success, permanent rejection, temporary failure, ambiguous
+  partial acceptance, batching, and duplicate redelivery;
+- runner-level ACK evidence proving Foundry acceptance happens before ACK and
+  sink failure prevents ACK.
+
+Mock certification is necessary before live certification, but it is not a
+substitute for testing against an approved Foundry environment.
+
 The test creates a unique child directory under `NATS_SINKS_FILE_E2E_DIRECTORY`
 for each run. Keep that directory under `.local/` or another ignored location
 when retaining files.
