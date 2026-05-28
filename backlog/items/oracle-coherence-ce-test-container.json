@@ -1,0 +1,36 @@
+{
+  "id": "oracle-coherence-ce-test-container",
+  "title": "[Feature]: Add an Oracle Coherence Community Edition test backend container",
+  "area": "Testing",
+  "priority": "P3 - backlog candidate",
+  "target_release": "v0.4.2",
+  "labels": ["deployment", "security", "testing", "sink-oracle"],
+  "problem": "The future Oracle Coherence Community Edition sink needs a repeatable local backend before implementation can be certified. Developers need a short-lived test container that starts a Coherence cluster with a client-facing proxy, supports JSON object values in a key/value map, and can be used without real operational endpoints or long-lived credentials. Without a maintained container flow, sink tests may depend on manual clusters, stale ports, unclear cleanup, or backend settings that do not match documented behavior.",
+  "proposal": "Create a test-only Oracle Coherence Community Edition backend container and helper scripts. Research found that the official Coherence Community Edition project publishes container images, supports polyglot clients, and supports gRPC proxy access for the Python client. The container work should evaluate the official image first and use a custom Oracle-based image only when the official image cannot satisfy repeatable local test requirements. The test backend must enable a named map or cache suitable for storing a complete normalized event JSON object as the value of a key/value entry. It should provide readiness checks, random names or ports where practical, cleanup by default, and sanitized output.",
+  "users": "Maintainers preparing the Oracle Coherence Community Edition sink, developers running local sink certification, release engineers validating optional container-backed tests, and security reviewers checking test isolation and cleanup behavior.",
+  "delivery_semantics": "This feature does not change JetStream delivery behavior and must not add sink ACK handling. Its purpose is to provide a local Oracle Coherence Community Edition backend for future sink and routing tests. The future sink must still prove that ACK happens only after required sink success, and this container must not be treated as production durability evidence by itself.",
+  "security": "The container flow must use fake local-only data, avoid privileged mode, avoid host networking by default, avoid Docker socket mounts, expose only the required local client endpoint, and remove containers and temporary storage by default. Logs and test evidence must not include secrets, live service details, payloads, private endpoints, host-specific identifiers, or certificate material. Any generated credentials or test keys must be random, redacted, short lived, and cleaned up unless an explicit local debug flag preserves artifacts.",
+  "acceptance": [
+    "A dedicated Oracle Coherence Community Edition test backend Dockerfile or documented official image wrapper exists.",
+    "The selected image source and version are explicit, documented, and easy to update.",
+    "A local test helper starts a fresh short-lived backend with collision-resistant naming and cleanup by default.",
+    "Readiness checks prove that the client-facing proxy is available before sink tests run.",
+    "The smoke test writes a complete fake event JSON object as a map value, reads it back, and verifies the expected key and value.",
+    "The smoke test proves cleanup of the backend container and temporary storage by default, with an explicit preserve flag for debugging.",
+    "Deterministic unit tests inspect scripts for fixed argument lists, bounded timeouts, redaction, cleanup defaults, and no shell injection.",
+    "Optional Docker tests are gated so normal unit tests do not require a local Docker daemon.",
+    "Documentation explains how this backend supports the future Oracle Coherence Community Edition sink and what remains out of scope."
+  ],
+  "tests": "Add deterministic unit tests for the Dockerfile or image wrapper and all helper scripts. Cover image selection, explicit version declaration, random container naming, random local endpoint selection when supported, readiness timeout behavior, smoke-test key and JSON value validation, cleanup-by-default behavior, preserve flag behavior, fixed Docker command argument lists with shell disabled, sanitized output, and clear skip behavior when Docker is unavailable. Add an optional local Docker smoke test that starts Oracle Coherence Community Edition, writes and reads a fake JSON object, and removes all temporary resources by default.",
+  "documentation": "Add documentation under the testing or deployment tree for the Oracle Coherence Community Edition test backend. Include build or pull guidance, smoke-test commands, expected sanitized output, JSON value verification, cleanup behavior, troubleshooting, security boundaries, and how future sink and fan-out tests should consume the backend. Update docs/testing.md, docs/docker.md, docs/sink-framework.md, docs/roadmap.md, ROADMAP.md, and CHANGELOG.md when implementation starts.",
+  "closeout": "Close only after the release containing the Oracle Coherence Community Edition test backend is published. Include release tag, selected image source and version, script paths, tests run, Docker smoke evidence, documentation links, known limitations, and confirmation that the sink itself remains separate unless implemented under its own issue.",
+  "relationships": {
+    "blocks": [
+      "backlog:oracle-coherence-ce-sink",
+      "backlog:multi-sink-routing-e2e-test-flow"
+    ],
+    "related": [
+      "backlog:sink-certification-contract-and-tests"
+    ]
+  }
+}

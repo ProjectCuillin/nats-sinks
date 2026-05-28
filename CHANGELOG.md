@@ -12,6 +12,12 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Added
 
+- Added a local Oracle Coherence Community Edition test backend for issue
+  #303. The new wrapper Dockerfile and smoke runner use an explicit Coherence
+  CE image, start a short-lived backend with random local naming and loopback
+  port selection, verify one complete fake event JSON object as a key/value
+  entry through the optional Coherence Python client, clean up by default, and
+  document the backend as test infrastructure for future sink and routing work.
 - Added the experimental Palantir Gotham RevDB object sink for issue #151. The
   new `gotham` sink type targets Gotham object creation through a narrow HTTP
   client boundary, validates endpoint allow-lists, environment-backed bearer

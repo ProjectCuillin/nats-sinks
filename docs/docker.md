@@ -107,6 +107,33 @@ Python dependencies may include native extension wheels. It keeps source-code
 mounts out of the Python import path so the check exercises the same artifact
 that external users receive from PyPI.
 
+## Oracle Coherence Community Edition Test Backend
+
+The project also includes a test-only Oracle Coherence Community Edition
+backend for future sink certification:
+
+```bash
+python scripts/run-oracle-coherence-container-smoke.py
+```
+
+The smoke runner builds a small wrapper image around the explicit Oracle
+Coherence Community Edition test image, starts a short-lived container with a
+random loopback port, verifies one full fake event JSON object as a key/value
+entry through the Coherence Python client, and removes the container by
+default.
+
+Install the optional client in an isolated local virtual environment before
+running the live smoke test:
+
+```bash
+python -m venv .local/coherence-smoke-venv
+. .local/coherence-smoke-venv/bin/activate
+python -m pip install coherence-client
+```
+
+See [Oracle Coherence Community Edition Test Backend](oracle-coherence-test-container.md)
+for the security posture, runtime sequence, expected output, and limitations.
+
 ## Manual Compose Workflow
 
 You can also run the stack manually:
