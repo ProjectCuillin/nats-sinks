@@ -968,10 +968,11 @@ publish only approved metric names:
 [Grafana Alloy Profile](grafana-alloy.md),
 [Splunk HEC Integration](splunk-hec.md),
 [StatsD Integration](statsd.md),
+[Datadog Integration](datadog.md),
 [Amazon CloudWatch Integration](cloudwatch.md), and
 [Syslog Bridge](syslog.md). The default generated policy keeps all Prometheus,
-OTLP, Elastic, Grafana Alloy, Splunk HEC, StatsD, Amazon CloudWatch, syslog,
-and NATS server monitoring sharing disabled. The same observability policy also
+OTLP, Elastic, Grafana Alloy, Splunk HEC, StatsD, Datadog, Amazon CloudWatch,
+syslog, and NATS server monitoring sharing disabled. The same observability policy also
 controls the optional NATS server monitoring connector for selected `/healthz`,
 `/jsz`, and related endpoint fields. That connector is separate from
 `nats-sink run` and must be enabled explicitly through `nats_server_monitoring`.

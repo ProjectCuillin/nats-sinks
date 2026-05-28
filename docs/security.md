@@ -134,39 +134,34 @@ Use this baseline for code review and future releases:
   timestamps, event freshness observations, source clock-skew values, failure
   counters, duplicate counters, and write timings can reveal operational tempo
   even without payloads. Use disabled-by-default observability policies and
-  allow lists before publishing to Prometheus,
-  OpenTelemetry Collectors, Splunk HEC, OCI Monitoring, StatsD, syslog, NATS
-  monitoring snapshots, or any future monitoring platform. OTLP collector
-  endpoints must not contain credentials, non-loopback endpoints must use
-  HTTPS, and optional collector headers must be sourced from environment
-  variables rather than stored in policy JSON. OCI Monitoring export must use
-  least-privilege OCI identity, protected SDK config files only when needed,
-  and low-cardinality dimensions that do not expose subjects, classification
-  values, labels, mission metadata, hostnames, usernames, table names, file
-  paths, message IDs, tenancy details, or credential material. Syslog export
-  must be treated as redistribution to an operational logging fabric, not as a
-  OpenTelemetry Collectors, Splunk HEC, StatsD, Amazon CloudWatch, syslog,
-  NATS monitoring snapshots, or any future monitoring platform. OTLP collector
-  variables rather than stored in policy JSON. Amazon CloudWatch export must
-  use least-privilege AWS identity and reviewed dimensions. Syslog export must
-  be treated as redistribution to an operational logging fabric, not as a
-  private local debug stream.
-  NATS server monitoring endpoint values must also be selected with explicit
-  endpoint and field allow lists before they are stored locally or rendered for
-  Prometheus. JetStream advisories are also
-  treated as sensitive operational signals: the optional advisory observer is
-  disabled by default, subscribes only to configured advisory subjects, parses
-  bounded JSON payloads, and emits aggregate counters without exporting stream
-  names, consumer names, sequence numbers, or advisory payload bodies.
+  allow lists before publishing to Prometheus, OpenTelemetry Collectors,
+  Elastic, Grafana Alloy, Splunk HEC, OCI Monitoring, StatsD, Datadog,
+  Amazon CloudWatch, syslog, NATS monitoring snapshots, or any future
+  monitoring platform. OTLP collector endpoints must not contain credentials,
+  non-loopback endpoints must use HTTPS, and optional collector headers must be
+  sourced from environment variables rather than stored in policy JSON. OCI
+  Monitoring export must use least-privilege OCI identity, protected SDK config
+  files only when needed, and low-cardinality dimensions that do not expose
+  subjects, classification values, labels, mission metadata, hostnames,
+  usernames, table names, file paths, message IDs, tenancy details, or
+  credential material. Datadog tags and CloudWatch dimensions must stay
+  explicitly reviewed, low-cardinality, and free of sensitive metadata. Syslog
+  export must be treated as redistribution to an operational logging fabric,
+  not as a private local debug stream. NATS server monitoring endpoint values
+  must also be selected with explicit endpoint and field allow lists before
+  they are stored locally or rendered for Prometheus. JetStream advisories are
+  also treated as sensitive operational signals: the optional advisory observer
+  is disabled by default, subscribes only to configured advisory subjects,
+  parses bounded JSON payloads, and emits aggregate counters without exporting
+  stream names, consumer names, sequence numbers, or advisory payload bodies.
   Fan-out metrics must remain aggregate by default: do not export route names,
   child sink names, classification values, labels, file paths, or destination
-  identifiers without a reviewed allow-list policy.
-  Subject-family observability must use the disabled-by-default
-  `subject_metrics` policy and prepared `labeled_metrics` rows. Exporters must
-  not derive labels directly from raw NATS subjects, payloads, message IDs,
-  classifications, file paths, table names, or credentials. Run the
-  subject-aware certification tests and follow the
-  [Subject-Aware Observability Runbook](subject-aware-observability-runbook.md)
+  identifiers without a reviewed allow-list policy. Subject-family
+  observability must use the disabled-by-default `subject_metrics` policy and
+  prepared `labeled_metrics` rows. Exporters must not derive labels directly
+  from raw NATS subjects, payloads, message IDs, classifications, file paths,
+  table names, or credentials. Run the subject-aware certification tests and
+  follow the [Subject-Aware Observability Runbook](subject-aware-observability-runbook.md)
   before enabling a subject-family sharing boundary.
 - Treat local spool directories as protected custody locations. Spool records
   are encrypted by default, but operators must still restrict filesystem
@@ -212,10 +207,9 @@ Policy-controlled metric and selected NATS monitoring export is documented in
 kept in the [Prometheus Integration](prometheus.md) sub-page and
 OpenTelemetry-specific connector guidance kept in the
 [OpenTelemetry OTLP Integration](otlp.md) sub-page. Elastic, Grafana Alloy,
-Splunk HEC, OCI Monitoring, StatsD, and syslog platform guidance is kept in
-Splunk HEC, StatsD, Amazon CloudWatch, and syslog platform guidance is kept in
-their respective observability sub-pages so each sharing boundary has its own
-configuration and security review.
+Splunk HEC, OCI Monitoring, StatsD, Datadog, Amazon CloudWatch, and syslog
+platform guidance is kept in their respective observability sub-pages so each
+sharing boundary has its own configuration and security review.
 The NATS server monitoring connector and delivery-boundary decision, including
 `/jsz` and `/healthz` handling, are documented in
 [NATS Server Monitoring Integration](nats-server-monitoring.md).

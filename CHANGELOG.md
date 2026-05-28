@@ -62,6 +62,14 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   size, retries, and stale-snapshot behavior, suppresses prepared labels as
   dimensions unless explicitly enabled, and documents IAM, cost, throttling,
   service separation, and testing guidance.
+- Added the disabled-by-default Datadog observability connector for issue #104.
+  The new `datadog` policy section exports approved local metrics snapshots as
+  bounded DogStatsD datagrams to a local or approved Datadog Agent listener,
+  supports dry-run output without Datadog API credentials, validates transport,
+  metric prefixes, low-cardinality static tags, datagram sizes, retries, and
+  stale-snapshot behavior, suppresses prepared metric labels as tags unless
+  explicitly enabled, and documents Agent operation, tag confidentiality,
+  cardinality, and testing guidance.
 - Added effective consumer-policy guardrails for optional JetStream
   `InProgress` heartbeats for issue #117. The runner now allows `bind_only`
   deployments to verify AckWait from the existing durable consumer before

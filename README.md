@@ -88,12 +88,9 @@ used immediately:
   connector for approved aggregate metrics, a disabled-by-default OCI
   Monitoring connector for Oracle Cloud Infrastructure custom metrics, a
   disabled-by-default StatsD connector for best-effort datagram export, a
-  disabled-by-default syslog bridge for bounded RFC 5424-style messages, and a
-  disabled-by-default NATS server monitoring connector for explicitly approved
-  `/healthz`, `/jsz`, and related endpoint fields.
-  connector for approved aggregate metrics, a disabled-by-default StatsD
-  connector for best-effort datagram export, a disabled-by-default Amazon
-  CloudWatch connector for approved custom metrics, a disabled-by-default
+  disabled-by-default Datadog DogStatsD connector for approved Agent-bound
+  metric datagrams, a disabled-by-default Amazon CloudWatch connector for
+  approved custom metrics, a disabled-by-default
   syslog bridge for bounded RFC 5424-style messages, and a disabled-by-default
   NATS server monitoring connector for explicitly approved `/healthz`, `/jsz`,
   and related endpoint fields.
@@ -536,8 +533,7 @@ The metrics CLI is documented in
 Policy-controlled Prometheus and OpenTelemetry export are part of the
 observability documentation, including the Elastic Observability and Grafana
 Alloy profiles, Splunk HEC connector, OCI Monitoring connector, StatsD
-Alloy profiles, Splunk HEC connector, StatsD connector, Amazon CloudWatch
-connector, and syslog bridge.
+connector, Datadog connector, Amazon CloudWatch connector, and syslog bridge.
 Start with
 [Observability](https://nats-sinks.readthedocs.io/en/latest/observability/),
 then use
@@ -552,6 +548,8 @@ or
 [OCI Monitoring Integration](https://nats-sinks.readthedocs.io/en/latest/oci-monitoring/),
 or
 [StatsD Integration](https://nats-sinks.readthedocs.io/en/latest/statsd/),
+or
+[Datadog Integration](https://nats-sinks.readthedocs.io/en/latest/datadog/),
 or
 [Amazon CloudWatch Integration](https://nats-sinks.readthedocs.io/en/latest/cloudwatch/),
 or
@@ -875,10 +873,8 @@ output, run a disabled-by-default native Prometheus HTTP endpoint, and export
 approved metrics to an OpenTelemetry Collector through OTLP/HTTP JSON,
 including Elastic Observability and Grafana Alloy profiles that reuse the shared
 OTLP core, approved aggregate metric export to Splunk HEC, OCI Monitoring
-custom metric export, and best-effort StatsD datagram and syslog message
-export.
-OTLP core, approved aggregate metric export to Splunk HEC, and best-effort
-StatsD datagram, Amazon CloudWatch custom metric, and syslog message export.
+custom metric export, and best-effort StatsD, Datadog DogStatsD, Amazon
+CloudWatch, and syslog export.
 Metrics sharing remains off until the global policy and the selected connector
 are explicitly enabled. See
 [Observability](https://nats-sinks.readthedocs.io/en/latest/observability/),
@@ -894,6 +890,8 @@ or
 [OCI Monitoring Integration](https://nats-sinks.readthedocs.io/en/latest/oci-monitoring/)
 or
 [StatsD Integration](https://nats-sinks.readthedocs.io/en/latest/statsd/)
+or
+[Datadog Integration](https://nats-sinks.readthedocs.io/en/latest/datadog/)
 or
 [Amazon CloudWatch Integration](https://nats-sinks.readthedocs.io/en/latest/cloudwatch/)
 or
@@ -1183,6 +1181,8 @@ Phase 1:
   Infrastructure custom metrics.
 - Disabled-by-default StatsD connector for approved best-effort UDP or Unix
   datagram metric export.
+- Disabled-by-default Datadog DogStatsD connector for approved best-effort
+  Agent-bound metric datagrams with explicit low-cardinality tag controls.
 - Disabled-by-default Amazon CloudWatch connector for approved custom metrics
   through the optional AWS SDK path.
 - Disabled-by-default syslog bridge for approved bounded RFC 5424-style metric

@@ -97,6 +97,11 @@ def test_generated_policy_is_disabled_and_copies_safe_subject_hints(tmp_path: Pa
     assert policy.statsd.transport == "udp"
     assert policy.statsd.host == "127.0.0.1"
     assert policy.statsd.port == 8125
+    assert policy.datadog.enabled is False
+    assert policy.datadog.transport == "udp"
+    assert policy.datadog.host == "127.0.0.1"
+    assert policy.datadog.port == 8125
+    assert policy.datadog.include_metric_labels_as_tags is False
     assert policy.syslog.enabled is False
     assert policy.syslog.transport == "udp"
     assert policy.syslog.host == "127.0.0.1"

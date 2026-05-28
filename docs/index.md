@@ -315,6 +315,8 @@ operations without hunting through a long flat list.
   metrics to Oracle Cloud Infrastructure Monitoring as custom metrics.
 - [StatsD Integration](statsd.md): export approved aggregate metrics as
   best-effort UDP or Unix datagrams to StatsD-compatible aggregators.
+- [Datadog Integration](datadog.md): export approved aggregate metrics as
+  bounded DogStatsD datagrams to a local or approved Datadog Agent listener.
 - [Amazon CloudWatch Integration](cloudwatch.md): export approved aggregate
   metrics to CloudWatch custom metrics with bounded `PutMetricData` requests.
 - [Syslog Bridge](syslog.md): export approved aggregate metrics as bounded
@@ -325,10 +327,9 @@ operations without hunting through a long flat list.
   certify disabled defaults, sanitized subject-family labels, connector parity,
   and delivery non-interference before enabling subject-aware export.
 - [Future Observability Connectors](observability-connectors.md): review the
-  shared connector contract and the staged connector backlog for Datadog,
-  CloudWatch, Azure Monitor, and other future connectors.
-  shared connector contract and the staged connector backlog for Datadog, OCI
-  Monitoring, Azure Monitor, and other future connectors.
+  shared connector contract, implemented connector evaluation, and the
+  remaining staged connector backlog for Azure Monitor and other future
+  connectors.
 
 ### Deployment, Security, And Quality
 

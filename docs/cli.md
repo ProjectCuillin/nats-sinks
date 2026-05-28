@@ -806,6 +806,42 @@ transport is best-effort, so successful local sending must not be treated as
 durable telemetry custody. Full connector guidance is documented in
 [StatsD Integration](statsd.md).
 
+### `nats-sink-observe datadog-export`
+
+Exports policy-approved metrics as DogStatsD datagrams to a local or explicitly
+approved Datadog Agent listener. The command is disabled unless both the
+top-level observability policy and `datadog.enabled` are true. It uses the same
+local snapshot, allow and deny lists, stale-snapshot checks, timeout bounds,
+retry bounds, datagram-size bounds, and redaction posture as the other
+observability connectors.
+
+Dry-run mode prints DogStatsD lines without opening a socket:
+
+```bash
+nats-sink-observe datadog-export \
+  /var/lib/nats-sink/metrics.json \
+  /etc/nats-sinks/observability.prometheus.json \
+  --dry-run
+```
+
+Example dry-run output:
+
+```text
+nats_sinks.messages_fetched_total:256|g|#environment:test,service:nats-sinks
+nats_sinks.messages_acked_total:256|g|#environment:test,service:nats-sinks
+```
+
+Example success output:
+
+```text
+Datadog export: attempted=true delivered=true attempts=1 datagrams=2 message=Datadog export delivered
+```
+
+The command is an observability connector, not a delivery feature. DogStatsD
+transport is best-effort, Datadog tags are opt-in and bounded, and successful
+local sending must not be treated as durable telemetry custody. Full connector
+guidance is documented in [Datadog Integration](datadog.md).
+
 ### `nats-sink-observe cloudwatch-export`
 
 Exports policy-approved metrics to Amazon CloudWatch custom metrics through

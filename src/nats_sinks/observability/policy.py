@@ -44,6 +44,12 @@ NATS_MONITORING_FIELD_MAX_LENGTH = 256
 STATSD_MAX_DATAGRAM_BYTES = 65_507
 STATSD_METRIC_PREFIX_MAX_LENGTH = 128
 STATSD_SOCKET_PATH_MAX_LENGTH = 512
+DATADOG_MAX_DATAGRAM_BYTES = 65_507
+DATADOG_MAX_TAGS = 10
+DATADOG_METRIC_PREFIX_MAX_LENGTH = 128
+DATADOG_SOCKET_PATH_MAX_LENGTH = 512
+DATADOG_TAG_KEY_MAX_LENGTH = 128
+DATADOG_TAG_VALUE_MAX_LENGTH = 128
 OCI_MONITORING_MAX_DIMENSIONS = 10
 OCI_MONITORING_MAX_METADATA = 10
 OCI_MONITORING_MAX_METRICS_PER_REQUEST = 50
@@ -88,6 +94,9 @@ GRAFANA_ALLOY_COMPONENT_LABEL_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
 SPLUNK_HEC_INDEX_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_-]{0,127}$")
 SPLUNK_HEC_METADATA_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.:-]{0,127}$")
 STATSD_METRIC_PREFIX_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.-]{0,127}$")
+DATADOG_METRIC_PREFIX_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.-]{0,127}$")
+DATADOG_TAG_KEY_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_./-]{0,127}$")
+DATADOG_TAG_VALUE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.:/-]{0,127}$")
 OCI_MONITORING_NAMESPACE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,254}$")
 OCI_MONITORING_REGION_RE = re.compile(r"^[a-z]{2,3}(?:-[a-z]+)+-\d$")
 OCI_MONITORING_COMPARTMENT_ID_RE = re.compile(r"^ocid1\.compartment\.[A-Za-z0-9_.-]+$")
@@ -143,6 +152,29 @@ OCI_MONITORING_DIMENSION_SECRET_PARTS = frozenset(
     }
 )
 CLOUDWATCH_DIMENSION_SECRET_PARTS = frozenset(
+    {
+        "api_key",
+        "apikey",
+        "bearer",
+        "classification",
+        "credential",
+        "file",
+        "host",
+        "key",
+        "label",
+        "message",
+        "mission",
+        "password",
+        "path",
+        "private",
+        "secret",
+        "subject",
+        "table",
+        "token",
+        "user",
+    }
+)
+DATADOG_TAG_SECRET_PARTS = frozenset(
     {
         "api_key",
         "apikey",
@@ -942,6 +974,146 @@ class StatsdObservabilityPolicy(BaseModel):
         return self
 
 
+class DatadogObservabilityPolicy(BaseModel):
+    """Datadog DogStatsD observability connector settings.
+
+    The connector emits one DogStatsD datagram per policy-approved aggregate
+    metric. It is intentionally best-effort and observational. The preferred
+    deployment path is a local Datadog Agent DogStatsD listener, so nats-sinks
+    does not need Datadog API keys and does not connect to the Datadog API.
+    Static tags are opt-in, bounded, and validated as low-cardinality metadata.
+    Prepared metric labels stay suppressed unless an operator explicitly enables
+    them after subject-aware observability review.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    transport: Literal["udp", "unixgram"] = "udp"
+    host: str = "127.0.0.1"
+    port: int = Field(default=8125, ge=1, le=65_535)
+    socket_path: str | None = None
+    metric_prefix: str | None = None
+    tags: dict[str, str] = Field(default_factory=dict, max_length=DATADOG_MAX_TAGS)
+    include_metric_labels_as_tags: bool = False
+    timeout_seconds: float = Field(default=1.0, gt=0, le=60)
+    max_retries: int = Field(default=0, ge=0, le=10)
+    retry_backoff_seconds: float = Field(default=0.25, ge=0, le=60)
+    stale_after_seconds: float | None = Field(default=None, gt=0, le=86_400)
+    max_datagram_bytes: int = Field(default=1432, ge=128, le=DATADOG_MAX_DATAGRAM_BYTES)
+
+    @field_validator("host")
+    @classmethod
+    def validate_host(cls, value: str) -> str:
+        """Validate the DogStatsD UDP target host without accepting paths."""
+
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("datadog.host must not be empty")
+        if any(character in rendered for character in "\x00\n\r\t /"):
+            raise ValueError(
+                "datadog.host must not contain whitespace, slashes, or control characters"
+            )
+        return rendered
+
+    @field_validator("socket_path")
+    @classmethod
+    def validate_socket_path(cls, value: str | None) -> str | None:
+        """Validate the optional Unix datagram socket path."""
+
+        if value is None:
+            return None
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("datadog.socket_path must not be empty")
+        if len(rendered) > DATADOG_SOCKET_PATH_MAX_LENGTH:
+            raise ValueError(
+                f"datadog.socket_path must be at most {DATADOG_SOCKET_PATH_MAX_LENGTH} characters"
+            )
+        if any(character in rendered for character in "\x00\n\r"):
+            raise ValueError("datadog.socket_path must not contain control characters")
+        if Path(rendered).name in {"", ".", ".."}:
+            raise ValueError("datadog.socket_path must name a socket path")
+        return rendered
+
+    @field_validator("metric_prefix")
+    @classmethod
+    def validate_metric_prefix(cls, value: str | None) -> str | None:
+        """Validate an optional DogStatsD metric prefix."""
+
+        if value is None:
+            return None
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("datadog.metric_prefix must not be empty")
+        if len(rendered) > DATADOG_METRIC_PREFIX_MAX_LENGTH:
+            raise ValueError(
+                f"datadog.metric_prefix must be at most {DATADOG_METRIC_PREFIX_MAX_LENGTH} "
+                "characters"
+            )
+        if not DATADOG_METRIC_PREFIX_RE.fullmatch(rendered):
+            raise ValueError(
+                "datadog.metric_prefix must start with a letter or underscore and contain "
+                "only letters, digits, underscores, dots, and hyphens"
+            )
+        return rendered.strip(".")
+
+    @field_validator("tags")
+    @classmethod
+    def validate_tags(cls, value: dict[str, str]) -> dict[str, str]:
+        """Validate static Datadog tags as bounded low-cardinality metadata."""
+
+        rendered: dict[str, str] = {}
+        seen_lower: set[str] = set()
+        for raw_key, raw_value in value.items():
+            key = raw_key.strip()
+            tag_value = raw_value.strip()
+            if not key:
+                raise ValueError("datadog.tags keys must not be empty")
+            if not tag_value:
+                raise ValueError("datadog.tags values must not be empty")
+            if len(key) > DATADOG_TAG_KEY_MAX_LENGTH:
+                raise ValueError("datadog.tags keys are too long")
+            if len(tag_value) > DATADOG_TAG_VALUE_MAX_LENGTH:
+                raise ValueError("datadog.tags values are too long")
+            if any(character in key for character in "\x00\n\r\t ,|#"):
+                raise ValueError("datadog.tags keys must not contain separators or controls")
+            if any(character in tag_value for character in "\x00\n\r\t ,|#"):
+                raise ValueError("datadog.tags values must not contain separators or controls")
+            if not DATADOG_TAG_KEY_RE.fullmatch(key):
+                raise ValueError(
+                    "datadog.tags keys must start with a letter and contain only letters, "
+                    "digits, underscores, dots, slashes, or hyphens"
+                )
+            if not DATADOG_TAG_VALUE_RE.fullmatch(tag_value):
+                raise ValueError(
+                    "datadog.tags values must start with a letter and contain only letters, "
+                    "digits, underscores, dots, colons, slashes, or hyphens"
+                )
+            lowered = key.lower()
+            if any(part in lowered for part in DATADOG_TAG_SECRET_PARTS):
+                raise ValueError(
+                    "datadog.tags must not include sensitive or high-cardinality names"
+                )
+            if any(part in tag_value.lower() for part in DATADOG_TAG_SECRET_PARTS):
+                raise ValueError("datadog.tags values must not look sensitive or high-cardinality")
+            if lowered in seen_lower:
+                raise ValueError("datadog.tags keys must be unique ignoring case")
+            seen_lower.add(lowered)
+            rendered[key] = tag_value
+        return rendered
+
+    @model_validator(mode="after")
+    def validate_transport_settings(self) -> DatadogObservabilityPolicy:
+        """Require transport-specific settings only when Datadog is enabled."""
+
+        if not self.enabled:
+            return self
+        if self.transport == "unixgram" and self.socket_path is None:
+            raise ValueError("datadog.socket_path is required when datadog.transport is unixgram")
+        return self
+
+
 class OciMonitoringObservabilityPolicy(BaseModel):
     """Oracle Cloud Infrastructure Monitoring connector settings.
 
@@ -1731,6 +1903,7 @@ class ObservabilityPolicy(BaseModel):
     )
     splunk_hec: SplunkHecObservabilityPolicy = Field(default_factory=SplunkHecObservabilityPolicy)
     statsd: StatsdObservabilityPolicy = Field(default_factory=StatsdObservabilityPolicy)
+    datadog: DatadogObservabilityPolicy = Field(default_factory=DatadogObservabilityPolicy)
     oci_monitoring: OciMonitoringObservabilityPolicy = Field(
         default_factory=OciMonitoringObservabilityPolicy
     )

@@ -374,6 +374,21 @@ Generated policies are disabled by default:
     "stale_after_seconds": null,
     "max_datagram_bytes": 1432
   },
+  "datadog": {
+    "enabled": false,
+    "transport": "udp",
+    "host": "127.0.0.1",
+    "port": 8125,
+    "socket_path": null,
+    "metric_prefix": null,
+    "tags": {},
+    "include_metric_labels_as_tags": false,
+    "timeout_seconds": 1,
+    "max_retries": 0,
+    "retry_backoff_seconds": 0.25,
+    "stale_after_seconds": null,
+    "max_datagram_bytes": 1432
+  },
   "syslog": {
     "enabled": false,
     "transport": "udp",
@@ -456,6 +471,12 @@ one bounded datagram per approved aggregate metric over UDP or a Unix datagram
 socket. StatsD is best-effort observability and must not be treated as durable
 delivery evidence.
 
+The `datadog` object controls the Datadog DogStatsD connector. It is disabled
+by default and requires both `enabled=true` and `datadog.enabled=true`. The
+connector sends one bounded DogStatsD datagram per approved aggregate metric to
+a local or approved Datadog Agent listener. Tags are opt-in and bounded because
+they can expose sensitive metadata or create high-cardinality cost.
+
 The `syslog` object controls the syslog bridge. It is disabled by default and
 requires both `enabled=true` and `syslog.enabled=true`. The connector sends one
 bounded RFC 5424-style message per approved aggregate metric over UDP or a Unix
@@ -498,6 +519,7 @@ the top-level policy.
 | `splunk_hec` | object | Splunk HTTP Event Collector settings for approved aggregate metric events. |
 | `oci_monitoring` | object | OCI Monitoring settings for approved Oracle Cloud Infrastructure custom metrics. |
 | `statsd` | object | StatsD connector settings for approved best-effort metric datagrams. |
+| `datadog` | object | Datadog DogStatsD connector settings for approved best-effort metric datagrams and reviewed low-cardinality tags. |
 | `syslog` | object | Syslog bridge settings for approved RFC 5424-style best-effort metric messages. |
 | `nats_server_monitoring` | object | Optional connector settings for selected NATS server monitoring endpoint values. |
 
@@ -594,7 +616,8 @@ names, endpoint URLs, or credentials. Prometheus renders this as a
 `subject_family` label, OTLP renders it as a data-point attribute, OCI
 Monitoring may render it as a dimension only when explicitly enabled, StatsD
 folds it into a bounded metric name component, Splunk HEC folds it into the
-metric field name, and syslog renders it as a structured-data parameter.
+metric field name, Datadog may render it as a DogStatsD tag only when
+explicitly enabled, and syslog renders it as a structured-data parameter.
 
 ## Prometheus Connector Fields
 
@@ -740,6 +763,27 @@ and test coverage.
 
 See [StatsD Integration](statsd.md) for full examples, datagram format,
 transport limitations, service guidance, security notes, and test coverage.
+
+## Datadog Connector Fields
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `datadog.enabled` | `false` | Enables Datadog export when the top-level observability policy is also enabled. |
+| `datadog.transport` | `udp` | Transport mode. Supported values are `udp` and `unixgram`. |
+| `datadog.host` | `127.0.0.1` | UDP Datadog Agent host. Keep loopback unless an approved network path exists. |
+| `datadog.port` | `8125` | UDP Datadog Agent port, validated from `1` through `65535`. |
+| `datadog.socket_path` | `null` | Unix datagram socket path. Required when `transport` is `unixgram`. |
+| `datadog.metric_prefix` | `null` | Optional DogStatsD metric prefix. When unset, the policy namespace is used. |
+| `datadog.tags` | `{}` | Optional static low-cardinality tags. Sensitive-looking names or values are rejected. |
+| `datadog.include_metric_labels_as_tags` | `false` | Adds prepared, policy-reviewed metric labels such as `subject_family` as DogStatsD tags. Leave disabled unless the subject-aware runbook has been completed. |
+| `datadog.timeout_seconds` | `1` | Socket timeout, validated from greater than `0` through `60` seconds. |
+| `datadog.max_retries` | `0` | Bounded retries after the initial send attempt. |
+| `datadog.retry_backoff_seconds` | `0.25` | Delay between retry attempts when a local send operation fails. |
+| `datadog.stale_after_seconds` | `null` | Optional maximum snapshot age before export fails closed unless `--allow-stale` is used. |
+| `datadog.max_datagram_bytes` | `1432` | Maximum size for each rendered DogStatsD datagram. |
+
+See [Datadog Integration](datadog.md) for full examples, DogStatsD datagram
+format, tag limitations, Agent guidance, security notes, and test coverage.
 
 ## Amazon CloudWatch Connector Fields
 
