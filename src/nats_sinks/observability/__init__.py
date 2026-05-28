@@ -10,6 +10,19 @@ Prometheus.  This keeps delivery semantics independent from monitoring tools
 and lets operators run observability as a separate Linux service.
 """
 
+from nats_sinks.observability.cloudwatch import (
+    CLOUDWATCH_PROFILE_NAME,
+    DISABLED_CLOUDWATCH_TEXT,
+    EMPTY_CLOUDWATCH_TEXT,
+    CloudWatchExportResult,
+    build_boto3_cloudwatch_client,
+    build_cloudwatch_metric_data,
+    build_cloudwatch_put_metric_data_requests,
+    ensure_cloudwatch_enabled,
+    export_cloudwatch_metrics,
+    filter_cloudwatch_metric_rows,
+    render_cloudwatch_put_metric_data_requests_json,
+)
 from nats_sinks.observability.elastic import (
     DISABLED_ELASTIC_TEXT,
     ELASTIC_OTLP_SCOPE_NAME,
@@ -59,6 +72,7 @@ from nats_sinks.observability.otlp import (
 from nats_sinks.observability.policy import (
     NATS_MONITORING_ALLOWED_ENDPOINTS,
     OBSERVABILITY_POLICY_SCHEMA,
+    CloudWatchObservabilityPolicy,
     ElasticObservabilityPolicy,
     GrafanaAlloyObservabilityPolicy,
     NatsServerMonitoringPolicy,
@@ -136,6 +150,8 @@ from nats_sinks.observability.syslog import (
 )
 
 __all__ = [
+    "CLOUDWATCH_PROFILE_NAME",
+    "DISABLED_CLOUDWATCH_TEXT",
     "DISABLED_ELASTIC_TEXT",
     "DISABLED_GRAFANA_ALLOY_TEXT",
     "DISABLED_OTLP_TEXT",
@@ -143,6 +159,7 @@ __all__ = [
     "DISABLED_STATSD_TEXT",
     "DISABLED_SYSLOG_TEXT",
     "ELASTIC_OTLP_SCOPE_NAME",
+    "EMPTY_CLOUDWATCH_TEXT",
     "EMPTY_ELASTIC_TEXT",
     "EMPTY_GRAFANA_ALLOY_TEXT",
     "EMPTY_OTLP_TEXT",
@@ -158,6 +175,8 @@ __all__ = [
     "STATSD_PROFILE_NAME",
     "SUBJECT_FAMILY_LABEL_NAME",
     "SYSLOG_PROFILE_NAME",
+    "CloudWatchExportResult",
+    "CloudWatchObservabilityPolicy",
     "ElasticObservabilityPolicy",
     "GrafanaAlloyObservabilityPolicy",
     "NatsMonitoringEndpointObservation",
@@ -182,6 +201,9 @@ __all__ = [
     "SyslogObservabilityPolicy",
     "aggregate_subject_family_counter",
     "attach_labeled_metric_rows",
+    "build_boto3_cloudwatch_client",
+    "build_cloudwatch_metric_data",
+    "build_cloudwatch_put_metric_data_requests",
     "build_elastic_otlp_metrics_document",
     "build_grafana_alloy_otlp_metrics_document",
     "build_nats_monitoring_url",
@@ -193,6 +215,7 @@ __all__ = [
     "build_syslog_datagrams",
     "build_syslog_message",
     "collect_nats_monitoring_snapshot",
+    "ensure_cloudwatch_enabled",
     "ensure_elastic_enabled",
     "ensure_grafana_alloy_enabled",
     "ensure_nats_monitoring_enabled",
@@ -202,6 +225,7 @@ __all__ = [
     "ensure_statsd_enabled",
     "ensure_syslog_enabled",
     "evaluate_subject_observability_policy",
+    "export_cloudwatch_metrics",
     "export_elastic_observability_metrics",
     "export_grafana_alloy_metrics",
     "export_otlp_metrics",
@@ -209,6 +233,7 @@ __all__ = [
     "export_statsd_metrics",
     "export_syslog_metrics",
     "extract_nats_monitoring_fields",
+    "filter_cloudwatch_metric_rows",
     "filter_elastic_metric_rows",
     "filter_grafana_alloy_metric_rows",
     "filter_metric_rows",
@@ -219,6 +244,7 @@ __all__ = [
     "load_nats_monitoring_snapshot",
     "load_observability_policy",
     "observability_policy_template",
+    "render_cloudwatch_put_metric_data_requests_json",
     "render_elastic_otlp_metrics_json",
     "render_grafana_alloy_config",
     "render_grafana_alloy_otlp_metrics_json",

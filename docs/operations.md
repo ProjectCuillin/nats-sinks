@@ -355,8 +355,8 @@ rather than ad hoc shell redirection or one-off scripts. The separate
 `nats-sink-observe` CLI can generate a disabled policy from runtime config,
 write a filtered Prometheus textfile for node_exporter, run an optional native
 Prometheus HTTP endpoint, or export approved metrics to an OpenTelemetry
-Collector through OTLP/HTTP JSON, StatsD, syslog, Splunk HEC, or another
-implemented observability connector:
+Collector through OTLP/HTTP JSON, StatsD, Amazon CloudWatch, syslog, Splunk
+HEC, or another implemented observability connector:
 
 ```bash
 nats-sink-observe init-prometheus-policy \
@@ -378,6 +378,11 @@ nats-sink-observe otlp-export \
   /etc/nats-sinks/observability.prometheus.json \
   --dry-run
 
+nats-sink-observe cloudwatch-export \
+  /var/lib/nats-sink/metrics.json \
+  /etc/nats-sinks/observability.prometheus.json \
+  --dry-run
+
 nats-sink-observe syslog-export \
   /var/lib/nats-sink/metrics.json \
   /etc/nats-sinks/observability.prometheus.json \
@@ -388,6 +393,7 @@ The observability service should run separately from the sink worker where
 possible. See [Observability](observability.md) for the sharing model, the
 [Prometheus Integration](prometheus.md) observability sub-page for connector
 details, [OpenTelemetry OTLP Integration](otlp.md) for collector export,
+[Amazon CloudWatch Integration](cloudwatch.md) for CloudWatch custom metrics,
 [Syslog Bridge](syslog.md) for bounded RFC 5424-style message export, and
 [Running nats-sink As A Service](service-deployment.md) for the service model.
 When subject-family metrics are considered, follow the

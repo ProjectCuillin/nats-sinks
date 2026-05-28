@@ -44,8 +44,8 @@ must preserve:
 - cardinality caps and overflow behavior are deterministic;
 - connector output contains approved family labels but not raw subjects;
 - observability failures do not change delivery decisions;
-- Prometheus, OTLP, StatsD, syslog, Splunk HEC, and `nats-sink-metrics` render
-  the same prepared low-cardinality rows.
+- Prometheus, OTLP, StatsD, Amazon CloudWatch, syslog, Splunk HEC, and
+  `nats-sink-metrics` render the same prepared low-cardinality rows.
 
 Run the focused certification suite with:
 

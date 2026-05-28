@@ -96,14 +96,15 @@ The current release provides the following production-ready foundation:
   observability policies, reviewing metric and subject sharing, and writing
   policy-filtered Prometheus textfiles for node_exporter or running the
   optional native Prometheus HTTP endpoint. It can also export approved
-  metrics to an OpenTelemetry Collector through OTLP/HTTP JSON.
+  metrics to an OpenTelemetry Collector through OTLP/HTTP JSON or to Amazon
+  CloudWatch custom metrics through the optional AWS SDK path.
 - Basic metrics counters and timing observations for fetched, prepared,
   written, ACKed, NAKed, failed, DLQ, sink write, ACK error, and active batch
   behavior. The built-in runner can write a local JSON snapshot when
   configured, Oracle duplicate/conflict counters are readable through the same
   snapshot and CLI, and external observability sharing is controlled by a
   separate policy that is disabled by default for Prometheus textfile,
-  Prometheus HTTP, OTLP, and NATS monitoring connectors.
+  Prometheus HTTP, OTLP, Amazon CloudWatch, and NATS monitoring connectors.
 - Optional JetStream advisory observation for selected advisory subjects, with
   aggregate counters for delivery and cluster signals while keeping advisory
   payloads and subject details out of exported metrics by default.
@@ -303,6 +304,8 @@ operations without hunting through a long flat list.
   Splunk HTTP Event Collector for security operations and incident response.
 - [StatsD Integration](statsd.md): export approved aggregate metrics as
   best-effort UDP or Unix datagrams to StatsD-compatible aggregators.
+- [Amazon CloudWatch Integration](cloudwatch.md): export approved aggregate
+  metrics to CloudWatch custom metrics with bounded `PutMetricData` requests.
 - [Syslog Bridge](syslog.md): export approved aggregate metrics as bounded
   RFC 5424-style messages to syslog pipelines.
 - [NATS Server Monitoring](nats-server-monitoring.md): understand why endpoints
@@ -312,8 +315,7 @@ operations without hunting through a long flat list.
   and delivery non-interference before enabling subject-aware export.
 - [Future Observability Connectors](observability-connectors.md): review the
   shared connector contract and the staged connector backlog for Datadog, OCI
-  Monitoring, CloudWatch, Azure Monitor, and other future
-  connectors.
+  Monitoring, Azure Monitor, and other future connectors.
 
 ### Deployment, Security, And Quality
 

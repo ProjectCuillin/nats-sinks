@@ -31,8 +31,9 @@ directory, or any future destination backend.
 The `nats-sink-observe` command owns external sharing. It can render a
 Prometheus textfile for node_exporter, run an optional native Prometheus HTTP
 endpoint, or export approved metrics to an OpenTelemetry Collector through
-OTLP/HTTP JSON. These connectors are disabled by default and require an
-explicit allow-list policy before real metrics are shared.
+OTLP/HTTP JSON or to Amazon CloudWatch custom metrics through the optional AWS
+SDK path. These connectors are disabled by default and require an explicit
+allow-list policy before real metrics are shared.
 
 ## Why Metrics Matter
 
@@ -383,6 +384,7 @@ The observability CLI provides policy and connector commands:
 | `nats-sink-observe grafana-alloy-export SNAPSHOT POLICY` | Dry-run or send approved metrics through the Grafana Alloy profile. |
 | `nats-sink-observe splunk-hec-export SNAPSHOT POLICY` | Dry-run or send approved aggregate metrics to Splunk HEC. |
 | `nats-sink-observe statsd-export SNAPSHOT POLICY` | Dry-run or send approved best-effort metric datagrams to StatsD. |
+| `nats-sink-observe cloudwatch-export SNAPSHOT POLICY` | Dry-run or send approved custom metrics to Amazon CloudWatch. |
 | `nats-sink-observe syslog-export SNAPSHOT POLICY` | Dry-run or send approved RFC 5424-style metric messages to syslog. |
 
 The global version flag is available too:
