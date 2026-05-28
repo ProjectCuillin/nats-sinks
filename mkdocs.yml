@@ -43,6 +43,7 @@ nav:
   - Sinks:
       - Oracle Sink: oracle-sink.md
       - Oracle MySQL Sink: mysql-sink.md
+      - Oracle NoSQL Database Sink: oracle-nosql-sink.md
       - Oracle Coherence Community Edition Sink: coherence-sink.md
       - File Sink: file-sink.md
       - Edge Spool Sink: spool-sink.md

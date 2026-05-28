@@ -109,9 +109,13 @@ FileSink, and SpoolSink. Oracle duplicate handling is documented in
 columns, `insert_ignore`, `insert`, and `append` behavior. Oracle MySQL
 duplicate handling is documented in [Oracle MySQL Sink](mysql-sink.md),
 including `upsert`, `insert_ignore`, idempotency key columns, and table routes.
-The experimental Oracle Coherence Community Edition sink documents K/V
-duplicate behavior in [Oracle Coherence Community Edition Sink](coherence-sink.md),
-including `skip_existing`, `replace`, and `fail_existing` policies. File
+The experimental Oracle NoSQL Database sink documents K/V-style table
+duplicate behavior in [Oracle NoSQL Database Sink](oracle-nosql-sink.md),
+including conditional `skip_existing`, unconditional `replace`, and
+`fail_existing` policies. The experimental Oracle Coherence Community Edition
+sink documents K/V duplicate behavior in
+[Oracle Coherence Community Edition Sink](coherence-sink.md), including
+`skip_existing`, `replace`, and `fail_existing` policies. File
 duplicate handling is documented in [File Sink](file-sink.md), including
 deterministic file names and `skip_existing`, `overwrite`, and `fail` policies.
 Edge spool duplicate handling is documented in [Edge Spool Sink](spool-sink.md),

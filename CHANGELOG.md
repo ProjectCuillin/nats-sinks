@@ -12,6 +12,16 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Added
 
+- Added the experimental first-party Oracle NoSQL Database sink for issue
+  #149. The new `oracle_nosql` sink type stores one complete normalized event
+  JSON object in a configured Oracle NoSQL table value field, validates SDK
+  endpoints, deployment/auth modes, table and field identifiers, key prefixes,
+  generated table DDL, duplicate policies, timeouts, and row size limits,
+  derives deterministic keys from approved idempotency metadata, supports
+  `skip_existing`, `replace`, and `fail_existing` duplicate behavior, keeps
+  the Oracle NoSQL Python SDK behind the optional `oracle-nosql` extra,
+  includes fake-client unit and certification tests, and documents live KVLite
+  or Cloud Simulator gating for future container-backed validation.
 - Added the deterministic multi-sink routing end-to-end flow for issue #301.
   The new `scripts/run-multi-sink-routing-e2e.py` runner validates the tracked
   fan-out config, drives the production `FanoutSink` with local file-backed

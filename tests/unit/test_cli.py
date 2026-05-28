@@ -198,6 +198,7 @@ def test_cli_registry_always_exposes_first_party_connectors() -> None:
         "gotham",
         "mysql",
         "oracle",
+        "oracle_nosql",
         "spool",
     )
     assert registry.connector("coherence").requires_extra == "coherence"
@@ -206,6 +207,8 @@ def test_cli_registry_always_exposes_first_party_connectors() -> None:
     assert registry.connector("foundry").production_ready is False
     assert registry.connector("gotham").production_ready is False
     assert registry.connector("mysql").requires_extra == "mysql"
+    assert registry.connector("oracle_nosql").requires_extra == "oracle-nosql"
+    assert registry.connector("oracle_nosql").production_ready is False
     assert registry.connector("oracle").production_ready is True
     assert registry.connector("spool").requires_extra == "crypto"
 

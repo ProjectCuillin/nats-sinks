@@ -204,11 +204,11 @@ release, and closed only after the containing release is published.
   account guidance. A local Oracle MySQL test database container is now
   available as development infrastructure for this future sink, but the sink
   itself remains backlog work.
-- Oracle Berkeley DB, Oracle NoSQL Database, Oracle Coherence Community
-  Edition, and OCI Streaming sink evaluations as first-party Oracle-family
-  connector candidates. A local Oracle Coherence Community Edition test backend
-  is now available as development infrastructure for the future sink and
-  routing tests, but the sink itself remains backlog work.
+- Oracle Berkeley DB and OCI Streaming sink evaluations as first-party
+  Oracle-family connector candidates. Oracle NoSQL Database and Oracle
+  Coherence Community Edition now have experimental first-party sinks, but both
+  still need deeper live certification evidence before production-ready
+  recommendation.
 - Additional Oracle-family connector evaluations such as Oracle Autonomous AI
   Lakehouse, Oracle AI Data Platform, Oracle JSON document stores, OCI Cache
   Cluster, WebLogic JMS, Oracle TimesTen, Oracle Spatial and Graph profiles,

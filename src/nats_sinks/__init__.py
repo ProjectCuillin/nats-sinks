@@ -172,6 +172,7 @@ from nats_sinks.core.size_policy import (
     evaluate_size_policy,
 )
 from nats_sinks.file import FileSink
+from nats_sinks.oracle_nosql import OracleNoSqlSink, OracleNoSqlSinkConfig
 from nats_sinks.sinks.base import FlushableSink, HealthCheckableSink, SchemaAwareSink, Sink
 from nats_sinks.sinks.connectors import (
     SINK_CONNECTOR_API_VERSION,
@@ -245,6 +246,8 @@ __all__ = [
     "NatsSinksError",
     "NoopMetrics",
     "NormalizedPayload",
+    "OracleNoSqlSink",
+    "OracleNoSqlSinkConfig",
     "PayloadEncryptor",
     "PayloadKeyRegistry",
     "PayloadOriginalFormat",

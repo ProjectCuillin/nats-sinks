@@ -123,6 +123,11 @@ used immediately:
   connection pooling, TLS CA support, `upsert` and `insert_ignore` idempotent
   modes, subject-to-table routing, metadata persistence, payload
   normalization, and explicit transaction commit before ACK.
+- `nats_sinks.oracle_nosql.OracleNoSqlSink`, an experimental first-party
+  Oracle NoSQL Database sink that stores one complete normalized event JSON
+  object in a configured JSON value field, with deterministic K/V-style keys,
+  conditional duplicate handling, bounded values, and SDK-backed live test
+  gating.
 - `nats_sinks.coherence.CoherenceSink`, an experimental first-party Oracle
   Coherence Community Edition sink that stores one complete normalized event
   JSON object as the value of a configured cache or map key, with deterministic
@@ -961,6 +966,10 @@ Destination-specific details are split into dedicated pages:
   DDL, least-privilege users, idempotent `upsert` and `insert_ignore` modes,
   subject-to-table routing, payload storage, metadata columns, and the local
   container-backed e2e test.
+- [Oracle NoSQL Database Sink](https://nats-sinks.readthedocs.io/en/latest/oracle-nosql-sink/)
+  covers Oracle NoSQL Database SDK modes, K/V-style table shape, deterministic
+  keys, conditional duplicate policies, generated safe DDL, JSON value storage,
+  and live test gating.
 - [Oracle Coherence Community Edition Sink](https://nats-sinks.readthedocs.io/en/latest/coherence-sink/)
   covers Coherence cache and map configuration, deterministic key strategies,
   duplicate policies, JSON value storage, value limits, and local
@@ -1217,7 +1226,9 @@ Phase 2:
 
 - More idempotency strategies.
 - First-party Oracle-family sink designs for OCI Object Storage,
-  Oracle Berkeley DB, Oracle NoSQL Database, and OCI Streaming.
+  Oracle Berkeley DB, and OCI Streaming, plus deeper live certification for
+  the experimental Oracle NoSQL Database and Oracle Coherence Community
+  Edition sinks.
 - Live-certification follow-up for the experimental Palantir Foundry Streams
   sink and experimental Palantir Gotham RevDB object sink.
 - Additional Oracle MySQL HeatWave tuning and certification guidance.

@@ -48,6 +48,9 @@ mysql = [
 coherence = [
   "coherence-client>=2,<3",
 ]
+oracle-nosql = [
+  "borneo>=5,<6",
+]
 oci = [
   "oci>=2.160,<3",
 ]
@@ -78,7 +81,7 @@ docs = [
   "pymdown-extensions>=10.9,<11",
 ]
 all = [
-  "nats-sinks[cloudwatch,coherence,crypto,mysql,oci,oracle]",
+  "nats-sinks[cloudwatch,coherence,crypto,mysql,oci,oracle,oracle-nosql]",
 ]
 
 [project.urls]
@@ -126,7 +129,7 @@ show_error_codes = true
 packages = ["nats_sinks"]
 
 [[tool.mypy.overrides]]
-module = ["coherence.*", "mysql.*", "nats.*", "oracledb.*"]
+module = ["borneo.*", "coherence.*", "mysql.*", "nats.*", "oracledb.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

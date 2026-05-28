@@ -12,9 +12,10 @@ where it will write.
 ## Minimal Configuration
 
 The minimal example uses the local file sink because it does not require a
-database or credentials. Oracle Database, Oracle MySQL, the edge spool sink,
-and the experimental Palantir Foundry sink use the same generic runtime
-sections and add destination-specific fields inside the `sink` object. When a
+database or credentials. Oracle Database, Oracle MySQL, Oracle NoSQL Database,
+the edge spool sink, and the experimental Palantir Foundry sink use the same
+generic runtime sections and add destination-specific fields inside the `sink`
+object. When a
 deployment needs to prepare several destinations for routing and future
 fan-out, it can also declare additional named instances in the top-level
 `sinks` object.
@@ -333,7 +334,7 @@ The top-level sections are:
 | `encryption` | no | Optional core payload encryption before messages are passed to any sink. |
 | `size_policy` | no | Optional destination-neutral payload, header, metadata, label, record, and batch-size bounds evaluated before any sink write. Disabled by default. |
 | `pre_sink_policy` | no | Optional fail-closed validation gate evaluated after normalization and core payload transformation, but before any sink write. |
-| `plugins` | no | Optional allow-listed discovery for externally installed sink connectors. Disabled by default. Built-in Oracle Database, Oracle MySQL, Oracle Coherence Community Edition, file, and spool sinks do not need this section. |
+| `plugins` | no | Optional allow-listed discovery for externally installed sink connectors. Disabled by default. Built-in Oracle Database, Oracle MySQL, Oracle NoSQL Database, Oracle Coherence Community Edition, file, and spool sinks do not need this section. |
 | `sinks` | no | Optional registry of named sink instances used by route validation, redacted output, named health checks, and active multi-sink fan-out. See [Named Sinks And Routing](named-sinks.md). |
 | `sink` | yes | Destination-specific sink configuration. `sink.type` chooses the sink implementation. |
 
@@ -1322,7 +1323,7 @@ optional copy is guaranteed.
 Optional targets require `target_sink_types` so the loader can apply and show
 bounded per-sink-type defaults in the effective redacted configuration. The
 currently recognized sink types are `coherence`, `file`, `mysql`, `oracle`,
-and `spool`.
+`oracle_nosql`, and `spool`.
 Unknown target references, unknown sink types, negative waits, excessive waits,
 and `timeout_ms` values lower than `minimum_wait_ms` are rejected by
 `nats-sink validate`.
@@ -1332,7 +1333,7 @@ and `timeout_ms` values lower than `minimum_wait_ms` are rejected by
 | `enabled` | no | `false` | `true` or `false`. | Enables route selection. Disabled policies select no targets. |
 | `mode` | no | `first` | `first` or `all`. | `first` selects the first matching route. `all` selects every matching route and de-duplicates target names while preserving route order. |
 | `no_match` | no | `reject` | `reject`, `ignore`, or `default_route`. | Explicit action when no route matches. In active fan-out, `reject` raises a permanent sink failure, `ignore` drops the message from fan-out delivery, and `default_route` selects the configured fallback targets. |
-| `target_sink_types` | no | `{}` | Object mapping logical target names to `coherence`, `file`, `mysql`, `oracle`, or `spool`. | Required when optional route targets are configured. Used to validate target references and apply optional ACK-gate defaults. |
+| `target_sink_types` | no | `{}` | Object mapping logical target names to `coherence`, `file`, `mysql`, `oracle`, `oracle_nosql`, or `spool`. | Required when optional route targets are configured. Used to validate target references and apply optional ACK-gate defaults. |
 | `default_targets` | no | `[]` | String, target object, or list of those values. | Fallback targets used only when `no_match` is `default_route`. |
 | `routes` | no | `[]` | List of route objects. | Ordered route definitions. Required when `enabled` is true. At most 128 routes. |
 
@@ -1361,6 +1362,7 @@ Optional target defaults:
 | `spool` | `100` | `1000` | Local spool side effects are normally fast and bounded. |
 | `oracle` | `1000` | `5000` | Network-backed transactional writes need a longer grace window. |
 | `mysql` | `1000` | `5000` | Oracle MySQL writes have similar network and transaction timing concerns. |
+| `oracle_nosql` | `1000` | `5000` | Oracle NoSQL Database writes are network-backed and commonly used as optional K/V side copies until live durability is reviewed. |
 | `coherence` | `1000` | `5000` | Oracle Coherence Community Edition writes are network-backed and often used as read-model side copies. |
 
 ### Active Fan-Out Sink
@@ -2018,6 +2020,8 @@ All other fields under `sink` are sink-specific:
 - `file` fields are documented in [File Sink](file-sink.md),
 - `oracle` fields are documented in [Oracle Sink](oracle-sink.md),
 - `mysql` fields are documented in [Oracle MySQL Sink](mysql-sink.md),
+- `oracle_nosql` fields are documented in
+  [Oracle NoSQL Database Sink](oracle-nosql-sink.md),
 - `coherence` fields are documented in
   [Oracle Coherence Community Edition Sink](coherence-sink.md),
 - `spool` fields are documented in [Edge Spool Sink](spool-sink.md),
@@ -2030,9 +2034,9 @@ The `plugins` section controls optional discovery for externally installed sink
 connectors. It is disabled by default because Python plugin loading is a
 code-execution and supply-chain trust boundary. You do not need this section
 for the built-in Oracle Database sink, built-in Oracle MySQL sink, built-in
-Oracle Coherence Community Edition sink, built-in FileSink, built-in
-SpoolSink, built-in experimental Foundry sink, or built-in experimental Gotham
-sink.
+Oracle NoSQL Database sink, built-in Oracle Coherence Community Edition sink,
+built-in FileSink, built-in SpoolSink, built-in experimental Foundry sink, or
+built-in experimental Gotham sink.
 
 | Field | Required | Default | Valid values | Description |
 | --- | --- | --- | --- | --- |
@@ -2063,9 +2067,9 @@ contain a module path or class path. This is intentional: runtime configuration
 must not be able to choose arbitrary imports.
 
 First-party future Oracle-family sinks, such as OCI Object Storage,
-Oracle Berkeley DB, Oracle NoSQL Database, and OCI Streaming, are
-expected to be added as built-in connectors in this repository unless project
-governance changes that decision. They should not require `plugins.enabled`.
+Oracle Berkeley DB, and OCI Streaming, are expected to be added as built-in
+connectors in this repository unless project governance changes that decision.
+They should not require `plugins.enabled`.
 
 ## Delivery Settings
 
@@ -2121,6 +2125,10 @@ secret-handling guidance, and examples. The current production sinks are:
   options, TLS certificate handling, table routing, payload modes, column
   mappings, idempotent `upsert` and `insert_ignore` modes, and the local
   container-backed e2e test live in [Oracle MySQL Sink](mysql-sink.md).
+- `"type": "oracle_nosql"` for the experimental Oracle NoSQL Database sink.
+  Endpoint validation, SDK deployment modes, deterministic K/V-style row keys,
+  JSON value storage, generated safe table DDL, duplicate policies, and live
+  test gating live in [Oracle NoSQL Database Sink](oracle-nosql-sink.md).
 - `"type": "coherence"` for the experimental Oracle Coherence Community
   Edition sink. Cache or map selection, deterministic key strategies, duplicate
   policies, JSON value limits, and the local container-backed e2e test live in
@@ -2135,8 +2143,8 @@ secret-handling guidance, and examples. The current production sinks are:
 This separation is part of the compatibility contract. Adding a future
 `http`, `s3`, or another database sink should add new sink-specific fields
 under `"sink"` without requiring existing Oracle Database, Oracle MySQL, Oracle
-Coherence Community Edition, file, or spool users to change the rest of their
-configuration.
+NoSQL Database, Oracle Coherence Community Edition, file, or spool users to
+change the rest of their configuration.
 
 ## Payload Storage Modes
 

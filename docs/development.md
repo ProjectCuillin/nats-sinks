@@ -159,8 +159,8 @@ writing destination-specific code:
    local config directories.
 
 First-party Oracle-family sinks, including proposed OCI Object Storage,
-Oracle MySQL, Oracle Berkeley DB, Oracle NoSQL Database, and OCI Streaming,
-should live in this repository unless governance decides otherwise. External
+Oracle Berkeley DB, and OCI Streaming, should live in this repository unless
+governance decides otherwise. External
 connectors should use the `nats_sinks.sinks` entry-point group and should not be
 enabled in production without an explicit `plugins.allowed_sinks` entry and
 connector certification evidence. A sink can be experimental without

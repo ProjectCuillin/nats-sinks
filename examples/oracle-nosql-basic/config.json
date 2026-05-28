@@ -1,0 +1,17 @@
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "EVENTS",
+    "consumer": "oracle-nosql-sink",
+    "subject": "events.>"
+  },
+  "sink": {
+    "type": "oracle_nosql",
+    "endpoint": "127.0.0.1:8080",
+    "deployment_mode": "kvstore",
+    "table_name": "nats_sinks_events",
+    "key_strategy": "stream_sequence",
+    "duplicate_policy": "skip_existing",
+    "auto_create": false
+  }
+}
