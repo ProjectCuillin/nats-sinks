@@ -24,7 +24,7 @@ import inspect
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, TypeAlias, cast
+from typing import Any, TypeAlias
 
 from nats_sinks.core.envelope import NatsEnvelope
 from nats_sinks.sinks.base import Sink
@@ -236,7 +236,7 @@ async def _maybe_await(
         return
     result = callback(sink, messages)
     if inspect.isawaitable(result):
-        await cast(Awaitable[None], result)
+        await result
 
 
 def _safe_record_text(record: Any) -> str:

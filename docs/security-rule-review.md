@@ -16,7 +16,8 @@ The rules were evaluated against the current project shape:
 - a Python package and CLI,
 - JSON configuration loading,
 - NATS JetStream consumption,
-- Oracle and file sink implementations,
+- Oracle Database, Oracle MySQL, Oracle Coherence Community Edition, file, and
+  edge spool sink implementations,
 - payload encryption,
 - message metadata,
 - metrics snapshots and policy-controlled observability export,
@@ -50,6 +51,7 @@ is merged.
 | `Envelope` | `src/nats_sinks/core/envelope.py`, `src/nats_sinks/core/consumer.py`, `tests/unit/test_envelope.py` |
 | `Encryption` | `src/nats_sinks/core/encryption.py`, `tests/unit/test_encryption.py`, `docs/payload-encryption.md` |
 | `Oracle` | `src/nats_sinks/oracle/*`, `tests/unit/test_oracle_*.py`, `docs/oracle-sink.md` |
+| `Coherence` | `src/nats_sinks/coherence/*`, `tests/unit/test_coherence_sink.py`, `tests/integration/test_coherence_sink_e2e.py`, `docs/coherence-sink.md` |
 | `File` | `src/nats_sinks/file/*`, `tests/unit/test_file_*.py`, `docs/file-sink.md` |
 | `CI` | `.github/workflows/*`, `scripts/check.sh`, `scripts/security.sh`, `scripts/secret-scan.sh` |
 | `Observability` | `src/nats_sinks/observability/*`, `src/nats_sinks/cli/observability.py`, `docs/observability.md`, `docs/prometheus.md`, `docs/otlp.md`, `docs/oci-monitoring.md` |
@@ -60,7 +62,7 @@ is merged.
 
 | ID | Guidance summary | Status | Evidence or disposition |
 | --- | --- | --- | --- |
-| SD-001 | Treat all external input as hostile until validated, normalized, authorized, and safely handled. | Applied | Config, Envelope, Oracle, File, Docs |
+| SD-001 | Treat all external input as hostile until validated, normalized, authorized, and safely handled. | Applied | Config, Envelope, Oracle, Coherence, File, Docs |
 | SD-002 | Apply least privilege for users, services, database accounts, containers, CI jobs, and cloud identities. | Already covered | Oracle least-privilege docs, CI permissions, Docs |
 | SD-003 | Fail closed by default for authentication, authorization, validation, configuration, dependency loading, and policy failures. | Applied | Config, Logging, Runner, tests |
 | SD-004 | Use defense in depth across validation, authorization, rate limiting, logging, monitoring, isolation, dependency scanning, and runtime controls. | Partially covered | CI, Config, Logging, Observability, Docs; rate limiting remains roadmap |
@@ -70,7 +72,7 @@ is merged.
 | SD-008 | Make secure behavior the default and risky behavior explicit opt-in. | Already covered | payload logging false, TLS verify true, idempotent modes, File skip_existing |
 | SD-009 | Treat internal systems as potentially hostile. | Applied | Docs, Envelope normalization, DLQ safety |
 | SD-010 | Document security invariants in code, tests, and architecture notes. | Applied | ROBOTS, AGENTS, commit-then-ACK docs, tests |
-| SD-011 | Validate all input at trust boundaries. | Applied | Config, CLI, Envelope, Oracle, File |
+| SD-011 | Validate all input at trust boundaries. | Applied | Config, CLI, Envelope, Oracle, Coherence, File |
 | SD-012 | Use allow-list validation for values, formats, types, lengths, ranges, extensions, schemes, and enums. | Already covered | Pydantic literals, SQL identifier regex, file extension validators |
 | SD-013 | Reject malformed input early instead of repairing or guessing. | Applied | Config duplicate-key/null-root/size checks |
 | SD-014 | Normalize paths, URLs, encodings, Unicode, hostnames, and filenames before validation or comparison. | Already covered | File path resolution, subject component sanitizer, UTF-8 config validation |

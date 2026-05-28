@@ -352,10 +352,11 @@ troubleshooting guidance.
 
 The repository includes a local Oracle Coherence Community Edition test backend
 for future Oracle Coherence sink and multi-sink routing work. The backend is a
-test-only wrapper around an explicit Oracle Coherence Community Edition image.
-It starts a short-lived container, exposes the client endpoint only on a random
-loopback port, writes one complete fake event JSON object as a key/value entry,
-reads it back, and removes the container by default.
+test-only Oracle Linux 9 slim image that resolves the Oracle Coherence
+Community Edition runtime, gRPC proxy, and JSON modules during build. It starts
+a short-lived container, exposes the client endpoint only on a random loopback
+port, writes one complete fake event JSON object as a key/value entry, reads it
+back, and removes the container by default.
 
 Run the deterministic asset tests without Docker:
 
@@ -385,8 +386,9 @@ does not prove production Coherence durability. It is local test infrastructure
 for future sink certification, routing, and fan-out validation.
 
 See [Oracle Coherence Community Edition Test Backend](oracle-coherence-test-container.md)
-for image selection, runtime sequence, optional client setup, smoke-test
-commands, cleanup behavior, and security boundaries.
+for Oracle Linux 9 slim base-image selection, runtime module selection, runtime
+sequence, optional client setup, smoke-test commands, cleanup behavior, and
+security boundaries.
 
 ## Subject-Aware Observability Certification
 
@@ -719,6 +721,7 @@ available level:
 | --- | --- | --- | --- |
 | Oracle | SQL, mapping, routing, payload, idempotency, encrypted payload storage, and contract tests. | `nats-sink validate examples/oracle-jetstream/config.json`; live `test-sink` when Oracle env is available. | Live NATS-to-Oracle e2e when `.local` integration env is available. |
 | Oracle MySQL | SQL, mapping, routing, payload, idempotency, TLS configuration, metrics, and contract tests. | `nats-sink validate examples/oracle-mysql-basic/config.json`; `python scripts/run-oracle-mysql-container-smoke.py`. | Local short-lived Oracle MySQL container e2e with `python scripts/run-mysql-sink-e2e.py`. |
+| Oracle Coherence Community Edition | Config validation, key strategy, JSON value mapping, duplicate policy, timeout handling, optional dependency failure, fan-out defaults, and contract tests. | `nats-sink validate examples/oracle-coherence-basic/config.json`; `python scripts/run-oracle-coherence-container-smoke.py`. | Local short-lived Oracle Coherence Community Edition container e2e with `python scripts/run-coherence-sink-e2e.py`. |
 | File | Path mapping, payload, duplicate policy, compression, encryption, healthcheck, filesystem errors, and fuzz-style path safety tests. | `nats-sink validate examples/file-basic/config.json`; `nats-sink test-sink examples/file-basic/config.json`. | Local deterministic runner-to-file e2e in `tests/integration/test_file_sink_e2e.py`, with uncompressed, gzip, and encrypted output. |
 
 If a live external-service test is not run, the latest test report must say so

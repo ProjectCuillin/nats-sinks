@@ -27,6 +27,7 @@ import typer
 from pydantic import ValidationError as PydanticValidationError
 
 from nats_sinks import __version__
+from nats_sinks.coherence import CoherenceSink
 from nats_sinks.core.config import AppConfig, SinkPluginConfig, load_config, redacted_config
 from nats_sinks.core.errors import ConfigurationError, NatsSinksError
 from nats_sinks.core.fanout_sink import FanoutSink
@@ -87,9 +88,10 @@ def _version_callback(value: bool) -> None:
 def _registry(plugins: SinkPluginConfig | None = None) -> SinkRegistry:
     """Build the explicit sink connector registry.
 
-    Oracle Database, Oracle MySQL, and FileSink are first-party built-ins and are always
-    registered.  External connectors are loaded only when the JSON config
-    explicitly enables plugin discovery and allow-lists the connector name.
+    Oracle Database, Oracle MySQL, Oracle Coherence CE, and FileSink are
+    first-party built-ins and are always registered. External connectors are
+    loaded only when the JSON config explicitly enables plugin discovery and
+    allow-lists the connector name.
     """
 
     registry = SinkRegistry()
@@ -126,6 +128,19 @@ def _registry(plugins: SinkPluginConfig | None = None) -> SinkRegistry:
             requires_extra="mysql",
             documentation="docs/mysql-sink.md",
             certification=("commit-then-ack", "unit", "integration", "container-e2e"),
+        )
+    )
+    registry.register_connector(
+        SinkConnector(
+            name="coherence",
+            factory=CoherenceSink.from_mapping,
+            summary="Built-in Oracle Coherence Community Edition sink.",
+            status="experimental",
+            built_in=True,
+            production_ready=False,
+            requires_extra="coherence",
+            documentation="docs/coherence-sink.md",
+            certification=("commit-then-ack", "unit", "container-e2e"),
         )
     )
     registry.register_connector(

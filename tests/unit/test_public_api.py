@@ -29,6 +29,7 @@ from nats_sinks import (
 from nats_sinks import (
     Sink as ReadmeSink,
 )
+from nats_sinks.coherence import CoherenceSink as ReadmeCoherenceSink
 from nats_sinks.file import FileSink as ReadmeFileSink
 from nats_sinks.mysql import MySqlSink as ReadmeMySqlSink
 from nats_sinks.oracle import OracleSink as ReadmeOracleSink
@@ -41,6 +42,8 @@ PUBLIC_API_CONTRACT: dict[str, tuple[str, ...]] = {
         "ConsumerDrift",
         "ConsumerManagementConfig",
         "ConsumerManagementResult",
+        "CoherenceSink",
+        "CoherenceSinkConfig",
         "CUSTODY_SCHEMA",
         "CUSTODY_SUPPORTED_ALGORITHMS",
         "CustodyConfig",
@@ -242,6 +245,20 @@ PUBLIC_API_CONTRACT: dict[str, tuple[str, ...]] = {
         "FileSink",
         "FileSinkConfig",
         "FileWriteMode",
+    ),
+    "nats_sinks.coherence": (
+        "COHERENCE_EVENT_SCHEMA",
+        "COHERENCE_EVENT_SCHEMA_VERSION",
+        "CoherenceDuplicatePolicy",
+        "CoherenceDurabilityMode",
+        "CoherenceKeyStrategy",
+        "CoherenceSerializer",
+        "CoherenceSessionFactory",
+        "CoherenceSink",
+        "CoherenceSinkConfig",
+        "CoherenceStorageKind",
+        "coherence_key_for_envelope",
+        "coherence_value_for_envelope",
     ),
     "nats_sinks.oracle": (
         "LINEAGE_FIELD_SPECS",
@@ -563,6 +580,7 @@ def test_public_api_smoke_imports_match_readme_examples() -> None:
     assert ReadmeJetStreamSinkRunner is nats_sinks.JetStreamSinkRunner
     assert ReadmeNatsEnvelope is nats_sinks.NatsEnvelope
     assert ReadmeSink is nats_sinks.Sink
+    assert ReadmeCoherenceSink is nats_sinks.CoherenceSink
     assert ReadmeFileSink is nats_sinks.FileSink
     assert ReadmeMySqlSink.__name__ == "MySqlSink"
     assert ReadmeOracleSink.__name__ == "OracleSink"

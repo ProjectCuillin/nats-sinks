@@ -2,9 +2,10 @@
 
 `nats-sinks` includes a small metrics layer for operators and developers who
 need to understand how a sink process is behaving. Metrics are intentionally
-destination-neutral where possible: Oracle Database, Oracle MySQL, file, and
-future sinks share the same core counters, gauges, observations, and Python
-hooks, while destination-specific counters use clear prefixes such as
+destination-neutral where possible: Oracle Database, Oracle MySQL, Oracle
+Coherence Community Edition, file, and future sinks share the same core
+counters, gauges, observations, and Python hooks, while destination-specific
+counters use clear prefixes such as
 `oracle_*` and `mysql_*`.
 
 The current release provides a dependency-free local snapshot recorder and a
@@ -25,8 +26,8 @@ nats-sink-observe init-prometheus-policy \
 This command is separate from `nats-sink`. The `nats-sink` command runs and
 manages sink processing. The `nats-sink-metrics` command reads a local JSON
 metrics snapshot and renders it in human-readable or script-friendly formats.
-It never connects to NATS, Oracle Database, Oracle MySQL, the file sink
-directory, or any future destination backend.
+It never connects to NATS, Oracle Database, Oracle MySQL, Oracle Coherence
+Community Edition, the file sink directory, or any future destination backend.
 
 The `nats-sink-observe` command owns external sharing. It can render a
 Prometheus textfile for node_exporter, run an optional native Prometheus HTTP

@@ -18,6 +18,7 @@ framework users may construct sinks, but ACK decisions remain in the core
 runner and are never delegated to destination code.
 """
 
+from nats_sinks.coherence import CoherenceSink, CoherenceSinkConfig
 from nats_sinks.core.ack_gate import (
     FanoutAckGateError,
     FanoutAckGateResult,
@@ -203,6 +204,8 @@ __all__ = [
     "SINK_CONNECTOR_ENTRY_POINT_GROUP",
     "SUPPORTED_MESSAGE_AUTHENTICITY_ALGORITHMS",
     "AckError",
+    "CoherenceSink",
+    "CoherenceSinkConfig",
     "ConfigurationError",
     "ConsumerDrift",
     "ConsumerManagementConfig",

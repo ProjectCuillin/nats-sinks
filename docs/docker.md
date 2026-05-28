@@ -116,11 +116,11 @@ backend for future sink certification:
 python scripts/run-oracle-coherence-container-smoke.py
 ```
 
-The smoke runner builds a small wrapper image around the explicit Oracle
-Coherence Community Edition test image, starts a short-lived container with a
-random loopback port, verifies one full fake event JSON object as a key/value
-entry through the Coherence Python client, and removes the container by
-default.
+The smoke runner builds a small Oracle Linux 9 slim based test image, resolves
+the explicit Oracle Coherence Community Edition runtime modules during build,
+starts a short-lived container with a random loopback port, verifies one full
+fake event JSON object as a key/value entry through the Coherence Python
+client, and removes the container by default.
 
 Install the optional client in an isolated local virtual environment before
 running the live smoke test:
@@ -132,7 +132,8 @@ python -m pip install coherence-client
 ```
 
 See [Oracle Coherence Community Edition Test Backend](oracle-coherence-test-container.md)
-for the security posture, runtime sequence, expected output, and limitations.
+for the base-image choice, security posture, runtime sequence, expected output,
+and limitations.
 
 ## Manual Compose Workflow
 

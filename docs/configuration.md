@@ -333,7 +333,7 @@ The top-level sections are:
 | `encryption` | no | Optional core payload encryption before messages are passed to any sink. |
 | `size_policy` | no | Optional destination-neutral payload, header, metadata, label, record, and batch-size bounds evaluated before any sink write. Disabled by default. |
 | `pre_sink_policy` | no | Optional fail-closed validation gate evaluated after normalization and core payload transformation, but before any sink write. |
-| `plugins` | no | Optional allow-listed discovery for externally installed sink connectors. Disabled by default. Built-in Oracle, file, and spool sinks do not need this section. |
+| `plugins` | no | Optional allow-listed discovery for externally installed sink connectors. Disabled by default. Built-in Oracle Database, Oracle MySQL, Oracle Coherence Community Edition, file, and spool sinks do not need this section. |
 | `sinks` | no | Optional registry of named sink instances used by route validation, redacted output, named health checks, and active multi-sink fan-out. See [Named Sinks And Routing](named-sinks.md). |
 | `sink` | yes | Destination-specific sink configuration. `sink.type` chooses the sink implementation. |
 
@@ -1299,10 +1299,12 @@ The target names are logical sink names. When the active sink uses
 `"type": "fanout"`, those names bind to concrete child sink instances in the
 top-level `sinks` registry or in the compact inline `sink.sinks` form. For
 example, `oracle_secret` can point at one Oracle Database schema,
-`oracle_unclass` at another Oracle Database table or database, and
+`oracle_unclass` at another Oracle Database table or database,
+`coherence_read_model` at an Oracle Coherence Community Edition cache, and
 `file_secret_audit` at a controlled local file destination. The individual
-sink connection, table, filesystem, and durability settings remain in
-sink-specific configuration blocks such as [Oracle Sink](oracle-sink.md) and
+sink connection, table, cache, filesystem, and durability settings remain in
+sink-specific configuration blocks such as [Oracle Sink](oracle-sink.md),
+[Oracle Coherence Community Edition Sink](coherence-sink.md), and
 [File Sink](file-sink.md).
 
 The route target list accepts either a string or an object. A string is the
@@ -1316,7 +1318,8 @@ optional copy is guaranteed.
 
 Optional targets require `target_sink_types` so the loader can apply and show
 bounded per-sink-type defaults in the effective redacted configuration. The
-currently recognized sink types are `file`, `mysql`, `oracle`, and `spool`.
+currently recognized sink types are `coherence`, `file`, `mysql`, `oracle`,
+and `spool`.
 Unknown target references, unknown sink types, negative waits, excessive waits,
 and `timeout_ms` values lower than `minimum_wait_ms` are rejected by
 `nats-sink validate`.
@@ -1326,7 +1329,7 @@ and `timeout_ms` values lower than `minimum_wait_ms` are rejected by
 | `enabled` | no | `false` | `true` or `false`. | Enables route selection. Disabled policies select no targets. |
 | `mode` | no | `first` | `first` or `all`. | `first` selects the first matching route. `all` selects every matching route and de-duplicates target names while preserving route order. |
 | `no_match` | no | `reject` | `reject`, `ignore`, or `default_route`. | Explicit action when no route matches. In active fan-out, `reject` raises a permanent sink failure, `ignore` drops the message from fan-out delivery, and `default_route` selects the configured fallback targets. |
-| `target_sink_types` | no | `{}` | Object mapping logical target names to `file`, `mysql`, `oracle`, or `spool`. | Required when optional route targets are configured. Used to validate target references and apply optional ACK-gate defaults. |
+| `target_sink_types` | no | `{}` | Object mapping logical target names to `coherence`, `file`, `mysql`, `oracle`, or `spool`. | Required when optional route targets are configured. Used to validate target references and apply optional ACK-gate defaults. |
 | `default_targets` | no | `[]` | String, target object, or list of those values. | Fallback targets used only when `no_match` is `default_route`. |
 | `routes` | no | `[]` | List of route objects. | Ordered route definitions. Required when `enabled` is true. At most 128 routes. |
 
@@ -1355,6 +1358,7 @@ Optional target defaults:
 | `spool` | `100` | `1000` | Local spool side effects are normally fast and bounded. |
 | `oracle` | `1000` | `5000` | Network-backed transactional writes need a longer grace window. |
 | `mysql` | `1000` | `5000` | Oracle MySQL writes have similar network and transaction timing concerns. |
+| `coherence` | `1000` | `5000` | Oracle Coherence Community Edition writes are network-backed and often used as read-model side copies. |
 
 ### Active Fan-Out Sink
 
@@ -1991,13 +1995,15 @@ remaining fields to the selected sink validator.
 
 | Field | Required | Default | Valid values | Description |
 | --- | --- | --- | --- | --- |
-| `type` | yes | none | `file`, `oracle`, `mysql`, `spool`, or experimental `foundry` and `gotham` in the current release. | Selects the sink implementation. Future sinks should add new values without changing the generic core sections. |
+| `type` | yes | none | `file`, `oracle`, `mysql`, `coherence`, `spool`, or experimental `foundry` and `gotham` in the current release. | Selects the sink implementation. Future sinks should add new values without changing the generic core sections. |
 
 All other fields under `sink` are sink-specific:
 
 - `file` fields are documented in [File Sink](file-sink.md),
 - `oracle` fields are documented in [Oracle Sink](oracle-sink.md),
 - `mysql` fields are documented in [Oracle MySQL Sink](mysql-sink.md),
+- `coherence` fields are documented in
+  [Oracle Coherence Community Edition Sink](coherence-sink.md),
 - `spool` fields are documented in [Edge Spool Sink](spool-sink.md),
 - `foundry` fields are documented in [Palantir Foundry Sink](foundry-sink.md),
 - `gotham` fields are documented in [Palantir Gotham Sink](gotham-sink.md).
@@ -2008,8 +2014,9 @@ The `plugins` section controls optional discovery for externally installed sink
 connectors. It is disabled by default because Python plugin loading is a
 code-execution and supply-chain trust boundary. You do not need this section
 for the built-in Oracle Database sink, built-in Oracle MySQL sink, built-in
-FileSink, built-in SpoolSink, built-in experimental Foundry sink, or built-in
-experimental Gotham sink.
+Oracle Coherence Community Edition sink, built-in FileSink, built-in
+SpoolSink, built-in experimental Foundry sink, or built-in experimental Gotham
+sink.
 
 | Field | Required | Default | Valid values | Description |
 | --- | --- | --- | --- | --- |
@@ -2098,6 +2105,10 @@ secret-handling guidance, and examples. The current production sinks are:
   options, TLS certificate handling, table routing, payload modes, column
   mappings, idempotent `upsert` and `insert_ignore` modes, and the local
   container-backed e2e test live in [Oracle MySQL Sink](mysql-sink.md).
+- `"type": "coherence"` for the experimental Oracle Coherence Community
+  Edition sink. Cache or map selection, deterministic key strategies, duplicate
+  policies, JSON value limits, and the local container-backed e2e test live in
+  [Oracle Coherence Community Edition Sink](coherence-sink.md).
 - `"type": "file"` for local JSON file output. File durability, duplicate
   policies, deterministic file names, optional gzip compression, and filesystem
   safety live in [File Sink](file-sink.md).
@@ -2107,8 +2118,9 @@ secret-handling guidance, and examples. The current production sinks are:
 
 This separation is part of the compatibility contract. Adding a future
 `http`, `s3`, or another database sink should add new sink-specific fields
-under `"sink"` without requiring existing Oracle Database, Oracle MySQL, file,
-or spool users to change the rest of their configuration.
+under `"sink"` without requiring existing Oracle Database, Oracle MySQL, Oracle
+Coherence Community Edition, file, or spool users to change the rest of their
+configuration.
 
 ## Payload Storage Modes
 

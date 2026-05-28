@@ -12,12 +12,23 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Added
 
+- Added the experimental first-party Oracle Coherence Community Edition sink
+  for issue #302. The new `coherence` sink type stores one complete normalized
+  event JSON object as a configured Coherence cache or map value, validates
+  cache names, key prefixes, serializer mode, TTLs, duplicate policy,
+  timeouts, and value limits, derives deterministic keys from approved
+  idempotency metadata, supports `skip_existing`, `replace`, and
+  `fail_existing` duplicate behavior, keeps the Coherence Python client behind
+  the optional `coherence` extra, includes fake-client unit and certification
+  tests plus a local container-backed e2e runner, and documents when Coherence
+  can be ACK-gated custody versus an optional fan-out read-model target.
 - Added a local Oracle Coherence Community Edition test backend for issue
-  #303. The new wrapper Dockerfile and smoke runner use an explicit Coherence
-  CE image, start a short-lived backend with random local naming and loopback
-  port selection, verify one complete fake event JSON object as a key/value
-  entry through the optional Coherence Python client, clean up by default, and
-  document the backend as test infrastructure for future sink and routing work.
+  #303. The new Oracle Linux 9 slim based Dockerfile and smoke runner resolve
+  explicit Coherence CE runtime modules during build, start a short-lived
+  backend with random local naming and loopback port selection, verify one
+  complete fake event JSON object as a key/value entry through the optional
+  Coherence Python client, clean up by default, and document the backend as
+  test infrastructure for future sink and routing work.
 - Added the experimental Palantir Gotham RevDB object sink for issue #151. The
   new `gotham` sink type targets Gotham object creation through a narrow HTTP
   client boundary, validates endpoint allow-lists, environment-backed bearer

@@ -21,7 +21,7 @@ import importlib
 import json
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Literal, cast
+from typing import Any, Literal
 
 from nats_sinks.core.errors import ConfigurationError, DestinationUnavailableError
 from nats_sinks.oracle.config import OracleColumnMapping, OracleSinkConfig
@@ -190,7 +190,7 @@ def normalize_lineage_field(field: str) -> LineageField:
     if normalized not in LINEAGE_FIELD_SPECS:
         allowed = ", ".join(sorted(LINEAGE_FIELD_SPECS))
         raise ConfigurationError(f"lineage field must be one of: {allowed}")
-    return cast(LineageField, normalized)
+    return normalized
 
 
 def validate_lineage_value(value: str) -> str:
