@@ -12,6 +12,16 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Added
 
+- Added the deterministic multi-sink routing end-to-end flow for issue #301.
+  The new `scripts/run-multi-sink-routing-e2e.py` runner validates the tracked
+  fan-out config, drives the production `FanoutSink` with local file-backed
+  probe sinks, proves subject, priority, classification, label, header, and
+  static gate matching across Oracle Database, Oracle MySQL Database, File,
+  and Oracle Coherence Community Edition logical targets, exercises one-to-one
+  routing, one-to-many fan-out, no-route handling, optional sink timeouts,
+  required sink failure after partial success, duplicate redelivery safety,
+  and writes sanitized pipe-friendly report output without payloads,
+  credentials, destination details, or local paths.
 - Added the experimental first-party Oracle Coherence Community Edition sink
   for issue #302. The new `coherence` sink type stores one complete normalized
   event JSON object as a configured Coherence cache or map value, validates
