@@ -9,6 +9,7 @@ set -eu
 # local environment files and external services.
 
 pytest \
+  tests/unit/test_container_e2e_suite.py \
   tests/unit/test_file_mapping.py \
   tests/unit/test_file_sink.py \
   tests/unit/test_oracle_nosql_sink.py \
@@ -45,6 +46,10 @@ fi
 
 if [ "${NATS_SINKS_RUN_LIVE_E2E:-0}" = "1" ]; then
   scripts/run-oracle-e2e.sh
+fi
+
+if [ "${NATS_SINKS_RUN_CONTAINER_E2E:-0}" = "1" ]; then
+  python scripts/run-container-e2e-suite.py
 fi
 
 if [ "${NATS_SINKS_RUN_COHERENCE_E2E:-0}" = "1" ]; then
