@@ -189,7 +189,10 @@ class HttpFoundryStreamClient:
         timeout_seconds: float,
     ) -> tuple[bytes, int]:
         try:
-            with request.urlopen(request_obj, timeout=timeout_seconds) as response:  # noqa: S310
+            with request.urlopen(  # nosec B310 # noqa: S310 - URLs are config-validated.
+                request_obj,
+                timeout=timeout_seconds,
+            ) as response:
                 status = int(getattr(response, "status", response.getcode()))
                 response_body = response.read(self.config.max_response_bytes + 1)
         except error.HTTPError as exc:
