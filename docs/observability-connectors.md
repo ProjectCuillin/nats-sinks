@@ -20,6 +20,7 @@ documentation contract.
 - a StatsD observability connector,
 - a Datadog observability connector,
 - an Amazon CloudWatch observability connector,
+- an Azure Monitor observability connector,
 - a syslog observability bridge,
 - a NATS server monitoring snapshot connector.
 
@@ -69,7 +70,7 @@ flowchart LR
 | Grafana Alloy | Implemented | Alloy profile over the shared OTLP connector, intended for a local or gateway Alloy `otelcol.receiver.otlp` component. | Alloy bridges approved metrics into Grafana Cloud, Mimir, and LGTM-style observability stacks while preserving the nats-sinks policy model. | Avoid leaking sensitive metric dimensions and keep Alloy credentials out of the delivery worker. | See [Grafana Alloy Profile](grafana-alloy.md). |
 | OCI Monitoring | Implemented | OCI-native connector using Monitoring custom metrics with instance principals, resource principals, or configured OCI identity. | Natural fit for Oracle Cloud deployments and Oracle-heavy nats-sinks users. | Compartments, dimensions, tenancy metadata, and signer configuration require least-privilege review. | See [OCI Monitoring Integration](oci-monitoring.md). |
 | Amazon CloudWatch | Implemented | AWS SDK based connector using CloudWatch custom metrics and bounded `PutMetricData` requests. | Useful for AWS deployments that use CloudWatch as the operational source of truth. | IAM permissions, namespace design, dimensions, and API cost controls need careful bounds. | See [Amazon CloudWatch Integration](cloudwatch.md). |
-| Azure Monitor | Medium | Azure Monitor custom metrics connector using Microsoft Entra authentication or managed identity. | Useful for Microsoft cloud deployments and existing Azure operational teams. | Resource identifiers, dimensions, and bearer-token handling need strict redaction. | New separate feature request. |
+| Azure Monitor | Implemented | REST custom metrics connector using a Microsoft Entra bearer token supplied from an environment variable. | Useful for Microsoft cloud deployments and existing Azure operational teams. | Resource identifiers, locations, dimensions, and bearer-token handling need strict redaction. | See [Azure Monitor Integration](azure-monitor.md). |
 | Syslog | Implemented | RFC 5424-style structured-data bridge for restricted networks over UDP or Unix datagrams. | Useful where pull-based scraping and cloud APIs are not available. | Syslog has transport and format pitfalls; messages must be bounded and sanitized. | See [Syslog Bridge](syslog.md). |
 
 ## Source Notes
@@ -126,11 +127,9 @@ Before any connector ships, the implementation issue must prove:
 ## Implementation Order Guidance
 
 The recommended order after the implemented Prometheus, OTLP, Elastic, Grafana
-Alloy, Splunk HEC, OCI Monitoring, StatsD, Datadog, Amazon CloudWatch, syslog,
-and NATS monitoring connectors is:
+Alloy, Splunk HEC, OCI Monitoring, StatsD, Datadog, Amazon CloudWatch, Azure
+Monitor, syslog, and NATS monitoring connectors is:
 
-1. Azure Monitor, because it matters for Microsoft cloud deployments and should
-   follow the same connector core.
-2. Additional connector candidates only after they can reuse the shared policy,
+1. Additional connector candidates only after they can reuse the shared policy,
    bounded export, dry-run, and documentation model proven by the implemented
    connectors.

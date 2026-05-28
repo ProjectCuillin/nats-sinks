@@ -356,8 +356,8 @@ rather than ad hoc shell redirection or one-off scripts. The separate
 write a filtered Prometheus textfile for node_exporter, run an optional native
 Prometheus HTTP endpoint, or export approved metrics to an OpenTelemetry
 Collector through OTLP/HTTP JSON, Elastic Observability, Grafana Alloy, Splunk
-HEC, OCI Monitoring, StatsD, Datadog DogStatsD, Amazon CloudWatch, syslog, or
-another implemented observability connector:
+HEC, OCI Monitoring, StatsD, Datadog DogStatsD, Amazon CloudWatch, Azure
+Monitor, syslog, or another implemented observability connector:
 
 ```bash
 nats-sink-observe init-prometheus-policy \
@@ -399,6 +399,11 @@ nats-sink-observe cloudwatch-export \
   /etc/nats-sinks/observability.prometheus.json \
   --dry-run
 
+nats-sink-observe azure-monitor-export \
+  /var/lib/nats-sink/metrics.json \
+  /etc/nats-sinks/observability.prometheus.json \
+  --dry-run
+
 nats-sink-observe syslog-export \
   /var/lib/nats-sink/metrics.json \
   /etc/nats-sinks/observability.prometheus.json \
@@ -413,6 +418,7 @@ details, [OpenTelemetry OTLP Integration](otlp.md) for collector export,
 custom metric export, [StatsD Integration](statsd.md) for generic datagram
 export, [Datadog Integration](datadog.md) for DogStatsD Agent export,
 [Amazon CloudWatch Integration](cloudwatch.md) for CloudWatch custom metrics,
+[Azure Monitor Integration](azure-monitor.md) for Azure Monitor custom metrics,
 [Syslog Bridge](syslog.md) for bounded RFC 5424-style message export, and
 [Running nats-sink As A Service](service-deployment.md) for the service model.
 When subject-family metrics are considered, follow the

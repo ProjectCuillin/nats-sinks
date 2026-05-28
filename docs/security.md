@@ -136,7 +136,7 @@ Use this baseline for code review and future releases:
   even without payloads. Use disabled-by-default observability policies and
   allow lists before publishing to Prometheus, OpenTelemetry Collectors,
   Elastic, Grafana Alloy, Splunk HEC, OCI Monitoring, StatsD, Datadog,
-  Amazon CloudWatch, syslog, NATS monitoring snapshots, or any future
+  Amazon CloudWatch, Azure Monitor, syslog, NATS monitoring snapshots, or any future
   monitoring platform. OTLP collector endpoints must not contain credentials,
   non-loopback endpoints must use HTTPS, and optional collector headers must be
   sourced from environment variables rather than stored in policy JSON. OCI
@@ -144,8 +144,10 @@ Use this baseline for code review and future releases:
   files only when needed, and low-cardinality dimensions that do not expose
   subjects, classification values, labels, mission metadata, hostnames,
   usernames, table names, file paths, message IDs, tenancy details, or
-  credential material. Datadog tags and CloudWatch dimensions must stay
-  explicitly reviewed, low-cardinality, and free of sensitive metadata. Syslog
+  credential material. Datadog tags, CloudWatch dimensions, and Azure Monitor
+  dimensions must stay explicitly reviewed, low-cardinality, and free of
+  sensitive metadata. Azure Monitor resource IDs, locations, and bearer tokens
+  must not appear in dry-run output, logs, issues, or release evidence. Syslog
   export must be treated as redistribution to an operational logging fabric,
   not as a private local debug stream. NATS server monitoring endpoint values
   must also be selected with explicit endpoint and field allow lists before
@@ -207,7 +209,8 @@ Policy-controlled metric and selected NATS monitoring export is documented in
 kept in the [Prometheus Integration](prometheus.md) sub-page and
 OpenTelemetry-specific connector guidance kept in the
 [OpenTelemetry OTLP Integration](otlp.md) sub-page. Elastic, Grafana Alloy,
-Splunk HEC, OCI Monitoring, StatsD, Datadog, Amazon CloudWatch, and syslog
+Splunk HEC, OCI Monitoring, StatsD, Datadog, Amazon CloudWatch, Azure Monitor,
+and syslog
 platform guidance is kept in their respective observability sub-pages so each
 sharing boundary has its own configuration and security review.
 The NATS server monitoring connector and delivery-boundary decision, including

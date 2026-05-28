@@ -69,6 +69,7 @@ nav:
       - StatsD Integration: statsd.md
       - Datadog Integration: datadog.md
       - Amazon CloudWatch Integration: cloudwatch.md
+      - Azure Monitor Integration: azure-monitor.md
       - Syslog Bridge: syslog.md
       - NATS Server Monitoring: nats-server-monitoring.md
       - Subject-Aware Observability Evaluation: subject-aware-observability-evaluation.md

@@ -62,6 +62,16 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   size, retries, and stale-snapshot behavior, suppresses prepared labels as
   dimensions unless explicitly enabled, and documents IAM, cost, throttling,
   service separation, and testing guidance.
+- Added the disabled-by-default Azure Monitor observability connector for
+  issue #103. The new `azure_monitor` policy section exports only approved
+  local metrics snapshot rows through bounded Azure Monitor custom metrics
+  REST request shapes, uses an environment-backed Microsoft Entra bearer token
+  without adding an Azure SDK dependency, supports dry-run JSON output without
+  tokens or Azure resource IDs, validates resource IDs, locations, namespaces,
+  dimensions, request size, retries, and stale-snapshot behavior, suppresses
+  prepared labels as dimensions unless explicitly enabled, and documents
+  identity, resource scope, throttling, service separation, and testing
+  guidance.
 - Added the disabled-by-default Datadog observability connector for issue #104.
   The new `datadog` policy section exports approved local metrics snapshots as
   bounded DogStatsD datagrams to a local or approved Datadog Agent listener,

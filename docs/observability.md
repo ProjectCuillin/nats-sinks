@@ -47,6 +47,8 @@ Observability is documented as a small set of focused pages:
   export to StatsD-compatible aggregators.
 - [Amazon CloudWatch Integration](cloudwatch.md): explains policy-controlled
   export to CloudWatch custom metrics through the optional AWS SDK path.
+- [Azure Monitor Integration](azure-monitor.md): explains policy-controlled
+  export to Azure Monitor custom metrics through a bounded REST connector.
 - [Syslog Bridge](syslog.md): explains best-effort RFC 5424-style UDP and Unix
   datagram export for restricted or legacy syslog pipelines.
 - [NATS Server Monitoring Integration](nats-server-monitoring.md): explains the
@@ -76,6 +78,10 @@ The Amazon CloudWatch connector follows the same rule and emits bounded custom
 metric requests through the optional AWS SDK path. The request body contains
 approved metric names, values, units, and reviewed low-cardinality dimensions
 only.
+The Azure Monitor connector follows the same rule and emits bounded custom
+metric requests to one explicitly configured Azure resource through the Azure
+Monitor REST path. The request body contains approved metric names, values, and
+reviewed low-cardinality dimensions only.
 The syslog bridge follows the same rule and emits bounded RFC 5424-style
 messages to an approved syslog listener without exporting payloads, subjects,
 classification values, labels, mission metadata, or destination details.
@@ -520,6 +526,7 @@ the top-level policy.
 | `oci_monitoring` | object | OCI Monitoring settings for approved Oracle Cloud Infrastructure custom metrics. |
 | `statsd` | object | StatsD connector settings for approved best-effort metric datagrams. |
 | `datadog` | object | Datadog DogStatsD connector settings for approved best-effort metric datagrams and reviewed low-cardinality tags. |
+| `azure_monitor` | object | Azure Monitor custom metrics settings for one approved Azure resource. |
 | `syslog` | object | Syslog bridge settings for approved RFC 5424-style best-effort metric messages. |
 | `nats_server_monitoring` | object | Optional connector settings for selected NATS server monitoring endpoint values. |
 
@@ -805,6 +812,28 @@ format, tag limitations, Agent guidance, security notes, and test coverage.
 
 See [Amazon CloudWatch Integration](cloudwatch.md) for full examples,
 `PutMetricData` request shape, IAM guidance, cost and dimension notes, service
+guidance, security notes, and test coverage.
+
+## Azure Monitor Connector Fields
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `azure_monitor.enabled` | `false` | Enables Azure Monitor export when the top-level observability policy is also enabled. |
+| `azure_monitor.resource_id` | `null` | Azure resource ID that owns the custom metrics. Required when Azure Monitor export is enabled. Dry-run output does not include this value. |
+| `azure_monitor.location` | `null` | Azure resource location used to choose the regional Azure Monitor endpoint. Required when Azure Monitor export is enabled. Dry-run output does not include this value. |
+| `azure_monitor.metric_namespace` | `nats-sinks/metrics` | Azure custom metric namespace. It must not use reserved Azure prefixes, must not contain colons, and is limited to bounded safe ASCII characters. |
+| `azure_monitor.token_env` | `null` | Environment variable containing the Microsoft Entra bearer token. Required when Azure Monitor export is enabled. |
+| `azure_monitor.dimensions` | `{}` | Static low-cardinality dimensions added to every metric. Sensitive-looking or high-cardinality names and values are rejected. |
+| `azure_monitor.include_metric_labels_as_dimensions` | `false` | When `true`, prepared `labeled_metrics` rows can export their bounded labels as Azure dimensions. Keep disabled unless subject-family sharing has been reviewed. |
+| `azure_monitor.timeout_seconds` | `5` | HTTP timeout for each Azure Monitor request. |
+| `azure_monitor.max_retries` | `0` | Bounded connector-level retries after a failed request set. |
+| `azure_monitor.retry_backoff_seconds` | `0.25` | Delay between connector-level retry attempts. |
+| `azure_monitor.stale_after_seconds` | `null` | Optional maximum snapshot age before export fails closed unless `--allow-stale` is used. |
+| `azure_monitor.max_request_bytes` | `1048576` | Maximum rendered request size. Oversized requests fail closed before any HTTP request is made. |
+| `azure_monitor.verify_tls` | `true` | TLS verification is always enabled. |
+
+See [Azure Monitor Integration](azure-monitor.md) for full examples, REST
+request shape, Microsoft Entra token guidance, dimension notes, service
 guidance, security notes, and test coverage.
 
 ## Syslog Bridge Fields
@@ -1192,6 +1221,9 @@ Treat observability configuration as production policy:
 - grant the Amazon CloudWatch export service read access to the metrics
   snapshot and policy, and only the AWS identity permissions required to call
   `cloudwatch:PutMetricData` for the reviewed namespace,
+- grant the Azure Monitor export service read access to the metrics snapshot
+  and policy, plus only the Azure identity permissions required to publish
+  custom metrics for the reviewed Azure resource,
 - keep the main sink service and observability publishing service separate when
   practical.
 
@@ -1203,20 +1235,14 @@ labels, or classified mission details.
 
 The observability core is intentionally connector-neutral. Prometheus textfile,
 Prometheus HTTP, OTLP, Elastic Observability, Grafana Alloy, Splunk HEC, OCI
-Monitoring, StatsD, syslog, and NATS monitoring connectors are implemented
-Prometheus HTTP, OTLP, Elastic Observability, Grafana Alloy, Splunk HEC, StatsD,
-Amazon CloudWatch, syslog, and NATS monitoring connectors are implemented
-today.
+Monitoring, StatsD, Datadog, Amazon CloudWatch, Azure Monitor, syslog, and NATS
+monitoring connectors are implemented today.
+
 Future connectors may include:
 
-- Datadog for hosted operational dashboards,
-- Grafana Agent legacy migration notes where needed for existing estates,
-- Amazon CloudWatch for AWS deployments,
-- Azure Monitor for Microsoft cloud deployments,
+- Grafana Agent legacy migration notes where needed for existing estates;
 - additional structured log bridges for restricted networks where pull-based
   scraping is not available.
-- Oracle Cloud Infrastructure Monitoring for OCI-native deployments,
-- Azure Monitor for Microsoft cloud deployments.
 
 Each connector should remain policy-driven, disabled by default, and isolated
 from message delivery semantics.

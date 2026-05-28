@@ -10,6 +10,20 @@ Prometheus.  This keeps delivery semantics independent from monitoring tools
 and lets operators run observability as a separate Linux service.
 """
 
+from nats_sinks.observability.azure_monitor import (
+    AZURE_MONITOR_PROFILE_NAME,
+    DISABLED_AZURE_MONITOR_TEXT,
+    EMPTY_AZURE_MONITOR_TEXT,
+    AzureMonitorExportResult,
+    azure_monitor_metrics_endpoint,
+    build_azure_monitor_metric_documents,
+    build_azure_monitor_metric_requests,
+    ensure_azure_monitor_enabled,
+    export_azure_monitor_metrics,
+    filter_azure_monitor_metric_rows,
+    render_azure_monitor_metric_requests_json,
+    resolve_azure_monitor_headers,
+)
 from nats_sinks.observability.cloudwatch import (
     CLOUDWATCH_PROFILE_NAME,
     DISABLED_CLOUDWATCH_TEXT,
@@ -98,6 +112,7 @@ from nats_sinks.observability.otlp import (
 from nats_sinks.observability.policy import (
     NATS_MONITORING_ALLOWED_ENDPOINTS,
     OBSERVABILITY_POLICY_SCHEMA,
+    AzureMonitorObservabilityPolicy,
     CloudWatchObservabilityPolicy,
     DatadogObservabilityPolicy,
     ElasticObservabilityPolicy,
@@ -178,8 +193,10 @@ from nats_sinks.observability.syslog import (
 )
 
 __all__ = [
+    "AZURE_MONITOR_PROFILE_NAME",
     "CLOUDWATCH_PROFILE_NAME",
     "DATADOG_PROFILE_NAME",
+    "DISABLED_AZURE_MONITOR_TEXT",
     "DISABLED_CLOUDWATCH_TEXT",
     "DISABLED_DATADOG_TEXT",
     "DISABLED_ELASTIC_TEXT",
@@ -190,6 +207,7 @@ __all__ = [
     "DISABLED_STATSD_TEXT",
     "DISABLED_SYSLOG_TEXT",
     "ELASTIC_OTLP_SCOPE_NAME",
+    "EMPTY_AZURE_MONITOR_TEXT",
     "EMPTY_CLOUDWATCH_TEXT",
     "EMPTY_DATADOG_TEXT",
     "EMPTY_ELASTIC_TEXT",
@@ -209,6 +227,8 @@ __all__ = [
     "STATSD_PROFILE_NAME",
     "SUBJECT_FAMILY_LABEL_NAME",
     "SYSLOG_PROFILE_NAME",
+    "AzureMonitorExportResult",
+    "AzureMonitorObservabilityPolicy",
     "CloudWatchExportResult",
     "CloudWatchObservabilityPolicy",
     "DatadogExportResult",
@@ -239,6 +259,9 @@ __all__ = [
     "SyslogObservabilityPolicy",
     "aggregate_subject_family_counter",
     "attach_labeled_metric_rows",
+    "azure_monitor_metrics_endpoint",
+    "build_azure_monitor_metric_documents",
+    "build_azure_monitor_metric_requests",
     "build_boto3_cloudwatch_client",
     "build_cloudwatch_metric_data",
     "build_cloudwatch_put_metric_data_requests",
@@ -259,6 +282,7 @@ __all__ = [
     "build_syslog_message",
     "collect_nats_monitoring_snapshot",
     "datadog_metric_name",
+    "ensure_azure_monitor_enabled",
     "ensure_cloudwatch_enabled",
     "ensure_datadog_enabled",
     "ensure_elastic_enabled",
@@ -271,6 +295,7 @@ __all__ = [
     "ensure_statsd_enabled",
     "ensure_syslog_enabled",
     "evaluate_subject_observability_policy",
+    "export_azure_monitor_metrics",
     "export_cloudwatch_metrics",
     "export_datadog_metrics",
     "export_elastic_observability_metrics",
@@ -281,6 +306,7 @@ __all__ = [
     "export_statsd_metrics",
     "export_syslog_metrics",
     "extract_nats_monitoring_fields",
+    "filter_azure_monitor_metric_rows",
     "filter_cloudwatch_metric_rows",
     "filter_datadog_metric_rows",
     "filter_elastic_metric_rows",
@@ -294,6 +320,7 @@ __all__ = [
     "load_nats_monitoring_snapshot",
     "load_observability_policy",
     "observability_policy_template",
+    "render_azure_monitor_metric_requests_json",
     "render_cloudwatch_put_metric_data_requests_json",
     "render_datadog_lines",
     "render_elastic_otlp_metrics_json",
@@ -307,6 +334,7 @@ __all__ = [
     "render_splunk_hec_event_json",
     "render_statsd_lines",
     "render_syslog_messages",
+    "resolve_azure_monitor_headers",
     "resolve_elastic_headers",
     "resolve_grafana_alloy_headers",
     "resolve_otlp_headers",
