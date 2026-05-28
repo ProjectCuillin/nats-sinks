@@ -57,6 +57,8 @@ represent the same need.
 - Payload wrapping for non-JSON text and bytes.
 - Optional payload encryption before sink delivery.
 - Local file output for disconnected handoff and evidence capture.
+- Experimental Foundry Streams handoff for analytics-platform trials, with
+  fake-client certification before any live Foundry certification claim.
 - Metrics snapshots and optional observability connectors.
 - Synthetic mission scenario testing for release evidence and future sink
   certification.

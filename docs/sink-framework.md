@@ -40,6 +40,7 @@ flowchart TB
     subgraph Destinations[Destination modules]
         Oracle[nats_sinks.oracle]
         File[nats_sinks.file]
+        Foundry[nats_sinks.foundry experimental]
         Future[future sinks]
     end
 
@@ -47,6 +48,7 @@ flowchart TB
     CLI --> Config --> Runner
     Runner --> Envelope --> Protocol
     Protocol --> Oracle
+    Protocol --> Foundry
     Protocol --> Future
     Runner --> DLQ
     Runner --> Metrics
@@ -60,6 +62,12 @@ metrics hooks. It also owns destination-neutral per-message transformations,
 including priority/classification/labels metadata resolution and optional payload
 encryption. Destination modules own destination writes and destination commit
 behavior only.
+
+The current built-in registry includes production-ready Oracle Database,
+Oracle MySQL, file, and edge spool sinks plus an experimental Palantir Foundry
+Streams sink. Experimental sinks are still bound by the same commit-then-ACK
+contract, but their documentation must separate local mock certification from
+live destination certification.
 
 ## Named Sink Registry
 

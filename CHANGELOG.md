@@ -12,6 +12,13 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Added
 
+- Added the experimental Palantir Foundry Streams sink for issue #150. The new
+  `foundry` sink type targets push-based stream ingestion through a narrow HTTP
+  client boundary, validates endpoint allow-lists, environment-backed bearer
+  token or OAuth2 client-credentials auth, record field names, batch and
+  response limits, maps normalized payload and metadata into Foundry records,
+  includes fake-client contract tests and sink certification, and documents
+  that mock certification is not live Foundry certification.
 - Added the disabled-by-default Amazon CloudWatch observability connector for
   issue #102. The new `cloudwatch` policy section exports only approved local
   metrics snapshot rows through bounded `PutMetricData` request shapes, keeps

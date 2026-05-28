@@ -3,7 +3,7 @@
   "title": "[Feature]: Add a Palantir Foundry sink",
   "area": "Future sink",
   "priority": "P2 - next minor release candidate",
-  "target_release": "unscheduled",
+  "target_release": "v0.4.2",
   "labels": ["sink-new", "security", "testing", "documentation"],
   "problem": "Palantir Foundry is a high-value operational data platform in many mission, industrial, and government environments. nats-sinks does not currently provide a sink that can hand selected JetStream events into Foundry datasets, objects, or supported ingestion APIs while preserving commit-then-acknowledge behavior and clear auditability.",
   "proposal": "Research, design, and later implement a Palantir Foundry sink behind an optional dependency or HTTP client layer. The first phase should identify the supported Foundry write targets, authentication model, API permissions, dataset or object write constraints, and whether an official SDK is appropriate. Because public documentation and customer-specific Foundry deployments may differ, the implementation must include a local fake Foundry client or contract test harness that mimics the small API surface used by nats-sinks without requiring access to a live Foundry environment. The sink should be a first-class connector using the safe connector framework and certification tests, but it should not claim production readiness until tested against an approved Foundry environment.",

@@ -11,15 +11,22 @@ connectors. It is written for maintainers, external contributors, reviewers,
 and operators who need to understand what evidence exists before trusting a
 sink in an at-least-once JetStream delivery path.
 
-The two first-party production sinks are:
+The current first-party production sinks are:
 
 - [Oracle Sink](oracle-sink.md), where success means the Oracle transaction has
   committed.
+- [Oracle MySQL Sink](mysql-sink.md), where success means the Oracle MySQL
+  transaction has committed.
 - [File Sink](file-sink.md), where success means every configured file has been
   flushed, optionally fsynced, and atomically placed at its final path.
+- [Edge Spool Sink](spool-sink.md), where success means the encrypted local
+  spool record has been committed.
 
-Future sinks must pass the same certification standard before documentation,
-metadata, or connector descriptors can mark them as production-ready.
+The [Palantir Foundry Sink](foundry-sink.md) is built in but experimental. It
+passes local fake-client certification, but it must not be described as
+production-ready until live Foundry certification evidence exists. Future sinks
+must pass the same certification standard before documentation, metadata, or
+connector descriptors can mark them as production-ready.
 
 ## Certification Model
 

@@ -45,6 +45,7 @@ nav:
       - Oracle MySQL Sink: mysql-sink.md
       - File Sink: file-sink.md
       - Edge Spool Sink: spool-sink.md
+      - Palantir Foundry Sink: foundry-sink.md
   - Data Handling:
       - Message Authenticity: message-authenticity.md
       - Payload Encryption: payload-encryption.md

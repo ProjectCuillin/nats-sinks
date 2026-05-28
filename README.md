@@ -133,15 +133,19 @@ used immediately:
   sink for disconnected operation, bounded local custody, deterministic
   idempotency, priority-aware replay, and explicit replay into a final
   destination sink when connectivity returns.
+- `nats_sinks.foundry.FoundrySink`, an experimental Palantir Foundry Streams
+  sink that maps normalized envelopes into push-ingestion records through a
+  narrow HTTP client boundary, with fake-client contract tests before any live
+  Foundry certification claim.
 - A safe sink connector framework with first-party Oracle Database,
-  Oracle MySQL, file, and spool
+  Oracle MySQL, file, spool, and experimental Foundry
   connectors, stable `SinkConnector` metadata, explicit `SinkRegistry` resolution, and
   disabled-by-default allow-listed entry-point discovery for reviewed external
   connectors.
 - A named multi-sink configuration registry that lets one JSON file declare
-  several Oracle Database, Oracle MySQL, file, or spool sink instances for
-  route validation, redacted review, named health checks, and active fan-out
-  execution.
+  several Oracle Database, Oracle MySQL, file, spool, or experimental Foundry
+  sink instances for route validation, redacted review, named health checks,
+  and active fan-out execution.
 - The active `fanout` sink type, which dispatches each normalized envelope to
   the selected child sinks and returns success only after every required target
   has durably completed. Optional targets have bounded wait controls and are
@@ -1191,8 +1195,8 @@ Phase 2:
 - More idempotency strategies.
 - First-party Oracle-family sink designs for OCI Object Storage,
   Oracle Berkeley DB, Oracle NoSQL Database, and OCI Streaming.
-- High-priority Palantir Foundry and Palantir Gotham connector evaluations
-  with local contract mocks before any live certification claim.
+- Palantir Gotham connector evaluation and live-certification follow-up for
+  the experimental Palantir Foundry Streams sink.
 - Additional Oracle MySQL HeatWave tuning and certification guidance.
 - HTTP sink.
 - S3 sink design with deterministic object keys.
