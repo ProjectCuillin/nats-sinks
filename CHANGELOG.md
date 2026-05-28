@@ -12,6 +12,14 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Added
 
+- Added the experimental Palantir Gotham RevDB object sink for issue #151. The
+  new `gotham` sink type targets Gotham object creation through a narrow HTTP
+  client boundary, validates endpoint allow-lists, environment-backed bearer
+  token or OAuth2 client-credentials auth, object type names, property type
+  mappings, security markings, batch and response limits, maps normalized
+  payload and selected metadata into Gotham object-create requests, includes
+  fake-client contract tests and sink certification, and documents that mock
+  certification is not live Gotham certification.
 - Added the experimental Palantir Foundry Streams sink for issue #150. The new
   `foundry` sink type targets push-based stream ingestion through a narrow HTTP
   client boundary, validates endpoint allow-lists, environment-backed bearer

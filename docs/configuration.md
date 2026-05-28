@@ -1991,7 +1991,7 @@ remaining fields to the selected sink validator.
 
 | Field | Required | Default | Valid values | Description |
 | --- | --- | --- | --- | --- |
-| `type` | yes | none | `file`, `oracle`, `mysql`, `spool`, or experimental `foundry` in the current release. | Selects the sink implementation. Future sinks should add new values without changing the generic core sections. |
+| `type` | yes | none | `file`, `oracle`, `mysql`, `spool`, or experimental `foundry` and `gotham` in the current release. | Selects the sink implementation. Future sinks should add new values without changing the generic core sections. |
 
 All other fields under `sink` are sink-specific:
 
@@ -1999,7 +1999,8 @@ All other fields under `sink` are sink-specific:
 - `oracle` fields are documented in [Oracle Sink](oracle-sink.md),
 - `mysql` fields are documented in [Oracle MySQL Sink](mysql-sink.md),
 - `spool` fields are documented in [Edge Spool Sink](spool-sink.md),
-- `foundry` fields are documented in [Palantir Foundry Sink](foundry-sink.md).
+- `foundry` fields are documented in [Palantir Foundry Sink](foundry-sink.md),
+- `gotham` fields are documented in [Palantir Gotham Sink](gotham-sink.md).
 
 ### `plugins`
 
@@ -2007,7 +2008,8 @@ The `plugins` section controls optional discovery for externally installed sink
 connectors. It is disabled by default because Python plugin loading is a
 code-execution and supply-chain trust boundary. You do not need this section
 for the built-in Oracle Database sink, built-in Oracle MySQL sink, built-in
-FileSink, built-in SpoolSink, or built-in experimental Foundry sink.
+FileSink, built-in SpoolSink, built-in experimental Foundry sink, or built-in
+experimental Gotham sink.
 
 | Field | Required | Default | Valid values | Description |
 | --- | --- | --- | --- | --- |

@@ -248,6 +248,36 @@ The focused suite covers:
 Mock certification is necessary before live certification, but it is not a
 substitute for testing against an approved Foundry environment.
 
+## Palantir Gotham Mock Certification
+
+The experimental Palantir Gotham sink is certified locally with a fake
+`GothamObjectClient`. This test path does not connect to Gotham and does not
+require tenant URLs, credentials, client identifiers, object type names,
+property type names, primary keys, or private response bodies.
+
+```bash
+python -m pytest tests/unit/test_gotham_sink.py -q
+```
+
+The focused suite covers:
+
+- configuration validation for HTTPS base URLs, endpoint allow-listing,
+  bearer-token environment variables, OAuth2 client-credentials fields, object
+  type names, property type mappings, security portion markings, and size
+  limits;
+- object-create mapping for payloads, payload metadata, selected NATS
+  metadata, classification, labels, security markings, and deterministic
+  external IDs;
+- deterministic idempotency strategies and fail-closed behavior when a
+  selected strategy lacks required metadata;
+- fake-client success, duplicate redelivery, permanent rejection, temporary
+  failure, ambiguous partial acceptance, and batching;
+- runner-level ACK evidence proving Gotham acceptance happens before ACK and
+  sink failure prevents ACK.
+
+Mock certification is necessary before live certification, but it is not a
+substitute for testing against an approved Gotham environment and object model.
+
 The test creates a unique child directory under `NATS_SINKS_FILE_E2E_DIRECTORY`
 for each run. Keep that directory under `.local/` or another ignored location
 when retaining files.

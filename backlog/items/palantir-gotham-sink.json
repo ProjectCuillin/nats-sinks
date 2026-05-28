@@ -3,7 +3,7 @@
   "title": "[Feature]: Add a Palantir Gotham sink",
   "area": "Future sink",
   "priority": "P2 - next minor release candidate",
-  "target_release": "unscheduled",
+  "target_release": "v0.4.2",
   "labels": ["sink-new", "security", "testing", "documentation"],
   "problem": "Palantir Gotham is used in mission and national-security settings where selected operational events may need to be handed to Gotham-backed workflows or object models. nats-sinks does not currently provide a Gotham connector and must be careful not to imply tactical automation, targeting, or weapons-release behavior.",
   "proposal": "Research, design, and later implement a Palantir Gotham sink only for approved durable data handoff use cases. Public Gotham API documentation should be evaluated to identify safe write targets, authentication, response validation, and object model constraints. Because Gotham environments are highly deployment-specific, the first implementation step should be a contract-oriented fake Gotham client and a strict adapter boundary. A production connector should not be certified until it has been validated against an approved non-production Gotham environment with appropriate permissions.",

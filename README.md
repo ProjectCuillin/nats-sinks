@@ -137,15 +137,19 @@ used immediately:
   sink that maps normalized envelopes into push-ingestion records through a
   narrow HTTP client boundary, with fake-client contract tests before any live
   Foundry certification claim.
+- `nats_sinks.gotham.GothamSink`, an experimental Palantir Gotham RevDB object
+  sink that maps normalized envelopes into configured object properties through
+  a narrow HTTP client boundary, with fake-client contract tests before any
+  live Gotham certification claim.
 - A safe sink connector framework with first-party Oracle Database,
-  Oracle MySQL, file, spool, and experimental Foundry
+  Oracle MySQL, file, spool, and experimental Foundry and Gotham
   connectors, stable `SinkConnector` metadata, explicit `SinkRegistry` resolution, and
   disabled-by-default allow-listed entry-point discovery for reviewed external
   connectors.
 - A named multi-sink configuration registry that lets one JSON file declare
   several Oracle Database, Oracle MySQL, file, spool, or experimental Foundry
-  sink instances for route validation, redacted review, named health checks,
-  and active fan-out execution.
+  and Gotham sink instances for route validation, redacted review, named health
+  checks, and active fan-out execution.
 - The active `fanout` sink type, which dispatches each normalized envelope to
   the selected child sinks and returns success only after every required target
   has durably completed. Optional targets have bounded wait controls and are
@@ -1195,8 +1199,8 @@ Phase 2:
 - More idempotency strategies.
 - First-party Oracle-family sink designs for OCI Object Storage,
   Oracle Berkeley DB, Oracle NoSQL Database, and OCI Streaming.
-- Palantir Gotham connector evaluation and live-certification follow-up for
-  the experimental Palantir Foundry Streams sink.
+- Live-certification follow-up for the experimental Palantir Foundry Streams
+  sink and experimental Palantir Gotham RevDB object sink.
 - Additional Oracle MySQL HeatWave tuning and certification guidance.
 - HTTP sink.
 - S3 sink design with deterministic object keys.

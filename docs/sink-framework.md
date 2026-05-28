@@ -41,6 +41,7 @@ flowchart TB
         Oracle[nats_sinks.oracle]
         File[nats_sinks.file]
         Foundry[nats_sinks.foundry experimental]
+        Gotham[nats_sinks.gotham experimental]
         Future[future sinks]
     end
 
@@ -49,11 +50,13 @@ flowchart TB
     Runner --> Envelope --> Protocol
     Protocol --> Oracle
     Protocol --> Foundry
+    Protocol --> Gotham
     Protocol --> Future
     Runner --> DLQ
     Runner --> Metrics
 Registry --> Oracle
 Registry --> File
+Registry --> Gotham
 ```
 
 The core layer owns NATS connectivity, JetStream consumer behavior, batching,
@@ -65,9 +68,10 @@ behavior only.
 
 The current built-in registry includes production-ready Oracle Database,
 Oracle MySQL, file, and edge spool sinks plus an experimental Palantir Foundry
-Streams sink. Experimental sinks are still bound by the same commit-then-ACK
-contract, but their documentation must separate local mock certification from
-live destination certification.
+Streams sink and an experimental Palantir Gotham RevDB object sink.
+Experimental sinks are still bound by the same commit-then-ACK contract, but
+their documentation must separate local mock certification from live
+destination certification.
 
 ## Named Sink Registry
 

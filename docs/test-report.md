@@ -14,28 +14,29 @@ generated database passwords, or full raw logs from live systems.
 | Field | Value |
 | --- | --- |
 | Overall result | Pass |
-| Report generated | 2026-05-28 issue `#150` Foundry sink validation for upcoming `v0.4.2` development |
+| Report generated | 2026-05-28 issue `#151` Gotham sink validation for upcoming `v0.4.2` development |
 | Project version | `0.4.1` package metadata with `v0.4.2` development changes |
 | Python version | 3.12.4 |
-| Git revision checked | Branch `issue-150-palantir-foundry-sink` based on `release-v0.4.2` |
+| Git revision checked | Branch `issue-151-palantir-gotham-sink` based on `release-v0.4.2` |
 | Live NATS details | Environment-gated live tests skipped unless explicitly enabled |
 | Live Oracle Database details | Environment-gated live tests skipped unless explicitly enabled |
 | Live Oracle MySQL details | Environment-gated live tests skipped unless explicitly enabled |
-| Live Foundry details | No live Foundry tenant was contacted; validation used local fake clients and contract tests |
+| Live Gotham details | No live Gotham tenant was contacted; validation used local fake clients and contract tests |
 
-This refresh covered the experimental Palantir Foundry Streams sink for issue
-`#150`. The implementation keeps Foundry support disabled unless configured,
-validates stream push URLs and allowed hosts before any HTTP request is built,
-requires secrets to come from environment variables, bounds request and
-response sizes, retries only within explicit budgets, and treats local
-fake-client certification as separate from future live Foundry certification.
+This refresh covered the experimental Palantir Gotham RevDB object sink for
+issue `#151`. The implementation keeps Gotham support disabled unless
+configured, validates base URLs and allowed hosts before any HTTP request is
+built, requires credentials to come from environment variables, bounds request
+and response sizes, maps normalized events into configured Gotham object
+properties, and treats local fake-client certification as separate from future
+live Gotham certification.
 
 ```mermaid
 flowchart LR
     Runner[JetStream runner] --> Envelope[NATS envelope]
-    Envelope --> Mapper[Foundry record mapper]
-    Mapper --> Client[Foundry stream client]
-    Client --> Target[Foundry Streams push endpoint]
+    Envelope --> Mapper[Gotham object mapper]
+    Mapper --> Client[Gotham object client]
+    Client --> Target[Gotham RevDB object create API]
     Client -. local tests use .-> Fake[Fake contract client]
 ```
 
@@ -43,9 +44,9 @@ flowchart LR
 
 | Check | Result |
 | --- | --- |
-| Ruff format | Pass, `247 files already formatted` |
+| Ruff format | Pass, `253 files already formatted` |
 | Ruff lint | Pass |
-| Mypy | Pass, no issues in `100` source files |
+| Mypy | Pass, no issues in `105` source files |
 | Version metadata consistency | Pass for `0.4.1` |
 | Dependency manifests | Pass, manifest files up to date |
 | Backlog metadata | Pass, `142` backlog items validated |
@@ -60,50 +61,44 @@ flowchart LR
 
 | Test Area | Command | Result |
 | --- | --- | --- |
-| Foundry static regression | `python -m pytest tests/unit/test_foundry_static_security.py -q` | Pass, `1 passed` |
-| Foundry focused subset | `python -m pytest tests/unit/test_foundry_static_security.py tests/unit/test_foundry_sink.py -q` | Pass, `15 passed` |
-| Main repository test suite | `python -m pytest -q` | Pass, `1133 passed, 11 skipped` |
+| Gotham focused subset | `python -m pytest tests/unit/test_gotham_sink.py tests/unit/test_foundry_static_security.py tests/unit/test_cli.py tests/unit/test_public_api.py -q` | Pass, `37 passed` |
+| Gotham example validation | `nats-sink validate examples/gotham-basic/config.json` | Pass |
+| Main repository test suite | `python -m pytest -q` | Pass, `1148 passed, 11 skipped` |
 | Commit, encryption, file, and Oracle sink subset | run by `scripts/check.sh` | Pass, `130 passed` |
-| Sink certification and example validation | `scripts/check-sinks.sh` via `scripts/check.sh` | Pass, `131 passed` plus file, Oracle, and Foundry config validation |
+| Sink certification and example validation | `scripts/check-sinks.sh` via `scripts/check.sh` | Pass, `145 passed` plus file, Oracle, Foundry, and Gotham config validation |
 | Full local validation | `scripts/check.sh` | Pass |
 
 The skipped tests are the existing environment-gated live NATS, Oracle
 Database, Oracle MySQL, and push-consumer integration tests.
 
-## Foundry Evidence
+## Gotham Evidence
 
 The new focused coverage verifies:
 
-- Foundry sink configuration rejects ambiguous or unsafe URLs;
+- Gotham sink configuration rejects ambiguous or unsafe base URLs;
 - HTTPS is required outside explicit loopback-only local testing;
 - endpoint allow-listing is enforced before HTTP requests are made;
 - authentication uses environment variable names instead of inline token
   values;
-- record field names, batch sizes, payload sizes, and response sizes are
-  bounded;
-- duplicate record fields and ambiguous partial acceptance fail closed;
+- object type names, property type mappings, security markings, batch sizes,
+  object sizes, and response sizes are bounded;
+- duplicate external IDs and oversized object requests fail closed;
 - fake-client contract tests prove successful writes, duplicate redelivery,
-  retryable failures, and permanent failures;
-- runner-level tests preserve commit-then-ACK behavior for Foundry writes;
+  retryable failures, permanent failures, and ambiguous results;
+- runner-level tests preserve commit-then-ACK behavior for Gotham writes;
 - the reviewed `urllib.request.urlopen` boundary carries the Bandit `B310`
   suppression required by the security gate.
 
 ## Issues Found During Validation
 
-One managed bug was found and fixed during validation:
-
-- GitHub issue `#298`: the Foundry HTTP client used a reviewed,
-  config-validated `urlopen` boundary, but Bandit required the `B310`
-  suppression on the exact evaluated line. A focused failing regression test was
-  added first, the annotation was corrected, `scripts/security.sh` passed, and
-  full `scripts/check.sh` passed afterward.
+No new release-blocking issues were found during the `#151` validation cycle.
 
 ## Documentation Evidence
 
 The following public documentation was updated and built successfully:
 
 - [README](https://github.com/ProjectCuillin/nats-sinks/blob/main/README.md)
-- [Foundry Sink](foundry-sink.md)
+- [Gotham Sink](gotham-sink.md)
 - [Configuration](configuration.md)
 - [Sink Framework](sink-framework.md)
 - [Sink Certification](sink-certification.md)
@@ -114,5 +109,5 @@ The following public documentation was updated and built successfully:
 - [Roadmap](roadmap.md)
 - [Documentation Home](index.md)
 
-The changelog, backlog metadata, managed bug report, latest test report,
-examples, and public sink documentation were updated for issue `#150`.
+The changelog, backlog metadata, latest test report, examples, and public sink
+documentation were updated for issue `#151`.
