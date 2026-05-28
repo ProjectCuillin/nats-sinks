@@ -18,7 +18,7 @@ import os
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Protocol, cast
+from typing import Any, Protocol
 from urllib import error, parse, request
 
 from nats_sinks.core.errors import (
@@ -309,4 +309,4 @@ def _optional_non_negative_int(
         raise DestinationUnavailableError(f"Foundry stream push response has invalid {field}")
     if value < 0:
         raise DestinationUnavailableError(f"Foundry stream push response has negative {field}")
-    return cast(int, value)
+    return value

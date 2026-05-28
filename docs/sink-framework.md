@@ -67,8 +67,9 @@ encryption. Destination modules own destination writes and destination commit
 behavior only.
 
 The current built-in registry includes production-ready Oracle Database,
-Oracle MySQL, file, and edge spool sinks plus an experimental Palantir Foundry
-Streams sink and an experimental Palantir Gotham RevDB object sink.
+Oracle MySQL, file, and edge spool sinks plus experimental Oracle Coherence
+Community Edition, Palantir Foundry Streams, and Palantir Gotham RevDB object
+sinks.
 Experimental sinks are still bound by the same commit-then-ACK contract, but
 their documentation must separate local mock certification from live
 destination certification.
@@ -391,6 +392,7 @@ flowchart LR
     BuiltIn --> File[FileSink]
     BuiltIn --> Oracle[OracleSink]
     BuiltIn --> MySQL[MySqlSink]
+    BuiltIn --> Coherence[CoherenceSink]
     BuiltIn --> Spool[SpoolSink]
     Optional --> ThirdParty[Reviewed external connector]
     ThirdParty --> Contract[Sink protocol and certification tests]
@@ -402,15 +404,16 @@ Today, the first-party production connectors are built in:
 | --- | --- | --- | --- |
 | Oracle Database | `oracle` | `nats_sinks.oracle.OracleSink` | Production connector in this repository. |
 | Oracle MySQL | `mysql` | `nats_sinks.mysql.MySqlSink` | Production connector in this repository. |
+| Oracle Coherence Community Edition | `coherence` | `nats_sinks.coherence.CoherenceSink` | Experimental first-party connector in this repository. |
 | File | `file` | `nats_sinks.file.FileSink` | Production connector in this repository. |
 | Edge spool | `spool` | `nats_sinks.spool.SpoolSink` | Production connector in this repository. |
 
 Future Oracle-family sinks such as OCI Object Storage, Oracle Berkeley DB,
-Oracle NoSQL Database, Oracle Coherence Community Edition, and OCI Streaming are intended to
-be first-party connectors in this repository unless project governance decides
-otherwise later. They should use the same connector descriptor and certification
-tests as Oracle Database, Oracle MySQL, FileSink, and SpoolSink, but they do
-not need external plugin discovery.
+Oracle NoSQL Database, and OCI Streaming are intended to be first-party
+connectors in this repository unless project governance decides otherwise
+later. They should use the same connector descriptor and certification tests as
+Oracle Database, Oracle MySQL, Oracle Coherence Community Edition, FileSink,
+and SpoolSink, but they do not need external plugin discovery.
 
 The repository includes a local
 [Oracle MySQL test database container](oracle-mysql-test-container.md) used by
@@ -533,6 +536,12 @@ Current production sinks and their durable success boundaries:
 | Oracle MySQL | `nats_sinks.mysql` | Oracle MySQL transaction committed. |
 | File | `nats_sinks.file` | Output file atomically placed after temporary write, flush, and configured fsync behavior. |
 | Edge spool | `nats_sinks.spool` | Encrypted spool record atomically placed after temporary write, flush, and configured fsync behavior. |
+
+Current experimental first-party sinks and their success boundaries:
+
+| Sink | Module | Success boundary |
+| --- | --- | --- |
+| Oracle Coherence Community Edition | `nats_sinks.coherence` | Configured Coherence cache or map operation completed. Production ACK-gated custody depends on operator-confirmed Coherence cluster durability. |
 
 ## Adding Future Sinks Without Breaking Users
 

@@ -4,9 +4,10 @@ Message authenticity verification is an optional core runtime gate that checks
 whether a NATS message body and selected metadata fields were signed by an
 approved producer before the message reaches any sink.
 
-This feature is destination-neutral. Oracle, file, spool, and future sinks do
-not implement their own signature checks for the normal runtime path. The core
-runner verifies the message first. Only verified messages are passed to
+This feature is destination-neutral. Oracle Database, Oracle MySQL, Oracle
+Coherence Community Edition, file, spool, and future sinks do not implement
+their own signature checks for the normal runtime path. The core runner
+verifies the message first. Only verified messages are passed to
 `sink.write_batch(...)`.
 
 The core rule still applies:
@@ -35,7 +36,8 @@ Message authenticity adds a producer-level check:
   headers,
 - the nats-sinks core verifies the signature before optional payload
   encryption, custody hashing, policy checks, priority lanes, or sink writes,
-- rejected messages never reach Oracle, file, spool, or future sinks.
+- rejected messages never reach Oracle Database, Oracle MySQL, Oracle
+  Coherence Community Edition, file, spool, or future sinks.
 
 For mission-support and sensor-driven data fabrics, this helps distinguish
 broker access from event provenance. A NATS account may be allowed to publish
@@ -368,4 +370,3 @@ Use message authenticity as one layer in a broader control set:
 Do not use message authenticity to hide data. Use payload encryption for
 stored-body confidentiality and destination access controls for metadata,
 rows, files, and operational records.
-

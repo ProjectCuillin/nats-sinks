@@ -191,7 +191,17 @@ def test_cli_metrics_hook_attaches_mysql_sink_counters() -> None:
 def test_cli_registry_always_exposes_first_party_connectors() -> None:
     registry = _registry()
 
-    assert registry.names() == ("file", "foundry", "gotham", "mysql", "oracle", "spool")
+    assert registry.names() == (
+        "coherence",
+        "file",
+        "foundry",
+        "gotham",
+        "mysql",
+        "oracle",
+        "spool",
+    )
+    assert registry.connector("coherence").requires_extra == "coherence"
+    assert registry.connector("coherence").production_ready is False
     assert registry.connector("file").built_in is True
     assert registry.connector("foundry").production_ready is False
     assert registry.connector("gotham").production_ready is False

@@ -15,7 +15,9 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DOCKERFILE = REPO_ROOT / "examples" / "oracle-coherence-ce-test" / "Dockerfile"
+POM_FILE = REPO_ROOT / "examples" / "oracle-coherence-ce-test" / "pom.xml"
 SMOKE_SCRIPT = REPO_ROOT / "scripts" / "run-oracle-coherence-container-smoke.py"
+SINK_E2E_SCRIPT = REPO_ROOT / "scripts" / "run-coherence-sink-e2e.py"
 
 
 def _load_smoke_script() -> ModuleType:
@@ -32,20 +34,62 @@ def _load_smoke_script() -> ModuleType:
     return module
 
 
-def test_oracle_coherence_dockerfile_wraps_explicit_official_image() -> None:
-    """The test backend should use an explicit Oracle Coherence CE image."""
+def _load_sink_e2e_script() -> ModuleType:
+    """Load the sink e2e runner as a module for focused behavior checks."""
+
+    spec = importlib.util.spec_from_file_location(
+        "run_coherence_sink_e2e",
+        SINK_E2E_SCRIPT,
+    )
+    if spec is None or spec.loader is None:
+        raise AssertionError("Unable to load Oracle Coherence sink e2e script.")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_oracle_coherence_dockerfile_uses_oracle_linux_9_slim_only() -> None:
+    """The test backend should be built only from Oracle Linux 9 slim stages."""
 
     dockerfile = DOCKERFILE.read_text(encoding="utf-8")
+    from_lines = [line for line in dockerfile.splitlines() if line.startswith("FROM ")]
 
     assert "SPDX-License-Identifier: Apache-2.0" in dockerfile
-    assert 'ARG ORACLE_COHERENCE_CE_IMAGE="ghcr.io/oracle/coherence-ce:25.03.1"' in dockerfile
-    assert "FROM ${ORACLE_COHERENCE_CE_IMAGE}" in dockerfile
-    assert 'org.opencontainers.image.base.name="ghcr.io/oracle/coherence-ce:25.03.1"' in dockerfile
+    assert (
+        'ARG ORACLE_LINUX_BASE_IMAGE="container-registry.oracle.com/os/oraclelinux:9-slim"'
+        in dockerfile
+    )
+    assert from_lines == [
+        "FROM ${ORACLE_LINUX_BASE_IMAGE} AS coherence-deps",
+        "FROM ${ORACLE_LINUX_BASE_IMAGE}",
+    ]
+    assert (
+        'org.opencontainers.image.base.name="container-registry.oracle.com/os/oraclelinux:9-slim"'
+        in dockerfile
+    )
+    assert 'ARG ORACLE_COHERENCE_CE_VERSION="25.03.1"' in dockerfile
+    assert "coherence-grpc-proxy" not in dockerfile
+    assert "DefaultCacheServer" in dockerfile
     assert "HEALTHCHECK NONE" in dockerfile
+    assert "ghcr.io/oracle/coherence-ce" not in dockerfile
     assert "python:" not in dockerfile
     assert "debian:" not in dockerfile
     assert "ubuntu:" not in dockerfile
     assert "alpine:" not in dockerfile
+
+
+def test_oracle_coherence_runtime_pom_pins_ce_runtime_modules() -> None:
+    """The Oracle Linux image should resolve the reviewed Coherence CE modules."""
+
+    pom = POM_FILE.read_text(encoding="utf-8")
+
+    assert "SPDX-License-Identifier: Apache-2.0" in pom
+    assert "<coherence.version>25.03.1</coherence.version>" in pom
+    assert "<artifactId>coherence-bom</artifactId>" in pom
+    assert "<artifactId>coherence</artifactId>" in pom
+    assert "<artifactId>coherence-grpc-proxy</artifactId>" in pom
+    assert "<artifactId>coherence-json</artifactId>" in pom
+    assert "com.oracle.coherence.ce" in pom
 
 
 def test_oracle_coherence_smoke_script_declares_runtime_contract() -> None:
@@ -53,7 +97,8 @@ def test_oracle_coherence_smoke_script_declares_runtime_contract() -> None:
 
     module = _load_smoke_script()
 
-    assert module.OFFICIAL_COHERENCE_CE_IMAGE == "ghcr.io/oracle/coherence-ce:25.03.1"
+    assert module.ORACLE_LINUX_BASE_IMAGE == "container-registry.oracle.com/os/oraclelinux:9-slim"
+    assert module.ORACLE_COHERENCE_CE_VERSION == "25.03.1"
     assert module.DEFAULT_CONTAINER_GRPC_PORT == 1408
     assert module.DEFAULT_IMAGE_TAG == "nats-sinks-oracle-coherence-ce-test:local"
     assert module.DEFAULT_CACHE_NAME == "nats_sinks_smoke_events"
@@ -217,3 +262,42 @@ def test_oracle_coherence_smoke_script_preserve_skips_cleanup(
     module.cleanup("coherence-test-container", preserve=True)
 
     assert calls == []
+
+
+def test_oracle_coherence_sink_e2e_script_uses_safe_local_test_contract() -> None:
+    """The sink e2e runner should remain a local, gated, no-shell workflow."""
+
+    script = SINK_E2E_SCRIPT.read_text(encoding="utf-8")
+
+    assert "NATS_SINKS_COHERENCE_INTEGRATION" in script
+    assert "tests/integration/test_coherence_sink_e2e.py" in script
+    assert "shell=False" in script
+    assert "shell=True" not in script
+    assert "run-oracle-coherence-container-smoke.py" in script
+    assert "--preserve-artifacts" in script
+
+
+def test_oracle_coherence_sink_e2e_sets_environment_for_pytest(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The sink e2e runner should pass only bounded local test settings."""
+
+    module = _load_sink_e2e_script()
+    captured: dict[str, object] = {}
+
+    def fake_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return subprocess.CompletedProcess(args=["pytest"], returncode=0, stdout="ok\n", stderr="")
+
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+
+    module._run_pytest(address="127.0.0.1:1408", cache_name="nats_sinks_sink_e2e")
+
+    kwargs = captured["kwargs"]
+    assert isinstance(kwargs, dict)
+    env = kwargs["env"]
+    assert isinstance(env, dict)
+    assert env["NATS_SINKS_COHERENCE_INTEGRATION"] == "1"
+    assert env["NATS_SINKS_COHERENCE_ADDRESS"] == "127.0.0.1:1408"
+    assert env["NATS_SINKS_COHERENCE_CACHE_NAME"] == "nats_sinks_sink_e2e"

@@ -4,9 +4,10 @@
 """Build and smoke-test the Oracle Coherence Community Edition test backend.
 
 The script is intentionally test-only. It starts a fresh short-lived Oracle
-Coherence Community Edition container, waits for the local gRPC endpoint, writes
-one complete fake event JSON object as the value of a key/value entry, reads it
-back, and removes the container by default.
+Coherence Community Edition container built on Oracle Linux 9 slim, waits for
+the local gRPC endpoint, writes one complete fake event JSON object as the
+value of a key/value entry, reads it back, and removes the container by
+default.
 """
 
 from __future__ import annotations
@@ -34,7 +35,8 @@ MAX_TIMEOUT_SECONDS = 900
 FAILED_OUTPUT_TAIL_CHARS = 4000
 CACHE_NAME_MAX_LENGTH = 64
 CACHE_NAME_CHARS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")
-OFFICIAL_COHERENCE_CE_IMAGE = "ghcr.io/oracle/coherence-ce:25.03.1"
+ORACLE_LINUX_BASE_IMAGE = "container-registry.oracle.com/os/oraclelinux:9-slim"
+ORACLE_COHERENCE_CE_VERSION = "25.03.1"
 
 os.environ.setdefault("GRPC_VERBOSITY", "ERROR")
 os.environ.setdefault("GRPC_ENABLE_FORK_SUPPORT", "0")
@@ -340,6 +342,10 @@ def main() -> int:
             [
                 "docker",
                 "build",
+                "--build-arg",
+                f"ORACLE_LINUX_BASE_IMAGE={ORACLE_LINUX_BASE_IMAGE}",
+                "--build-arg",
+                f"ORACLE_COHERENCE_CE_VERSION={ORACLE_COHERENCE_CE_VERSION}",
                 "-t",
                 args.image_tag,
                 "-f",

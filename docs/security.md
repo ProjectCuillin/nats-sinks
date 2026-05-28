@@ -63,8 +63,9 @@ treated as a supply-chain trust decision.
 
 Secure defaults:
 
-- Oracle Database, FileSink, and SpoolSink are first-party built-in connectors
-  and do not require plugin discovery.
+- Oracle Database, Oracle MySQL, Oracle Coherence Community Edition, FileSink,
+  and SpoolSink are first-party built-in connectors and do not require plugin
+  discovery.
 - Optional third-party discovery is disabled by default.
 - When discovery is enabled, `plugins.allowed_sinks` must explicitly list each
   external connector name.
@@ -351,9 +352,10 @@ Authenticity rules are subject scoped, algorithm allow-listed, and fail closed
 by default. HMAC-SHA256 uses constant-time comparison for shared-secret
 deployments. Ed25519 lets the sink runtime hold only public verification key
 material while producers keep private signing keys. A verification rejection is
-a permanent pre-sink failure: the message never reaches Oracle, file, spool, or
-future sinks, and the original JetStream message is ACKed only after successful
-DLQ publication when DLQ is configured. See
+a permanent pre-sink failure: the message never reaches Oracle Database,
+Oracle MySQL, Oracle Coherence Community Edition, file, spool, or future sinks,
+and the original JetStream message is ACKed only after successful DLQ
+publication when DLQ is configured. See
 [Message Authenticity](message-authenticity.md).
 
 Optional tamper-evident custody metadata can help auditors detect unexpected

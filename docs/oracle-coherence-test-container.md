@@ -1,10 +1,10 @@
 # Oracle Coherence Community Edition Test Backend
 
 The Oracle Coherence Community Edition test backend is a local development and
-validation asset for the future first-party Oracle Coherence Community Edition
-sink. It gives maintainers a repeatable, short-lived key/value backend for
-connector certification and multi-sink routing tests. It is not a production
-Coherence deployment and it does not implement the sink itself.
+validation asset for the first-party Oracle Coherence Community Edition sink.
+It gives maintainers a repeatable, short-lived key/value backend for connector
+certification and multi-sink routing tests. It is not a production Coherence
+deployment and it does not prove production cluster durability.
 
 Oracle Coherence Community Edition exposes map-like data structures through
 polyglot clients. The official Python client uses gRPC and supports storing
@@ -18,31 +18,47 @@ compared by the smoke runner.
 
 The feature adds:
 
-- `examples/oracle-coherence-ce-test/Dockerfile`, a small wrapper around an
-  explicit Oracle Coherence Community Edition image;
+- `examples/oracle-coherence-ce-test/Dockerfile`, a test-only Oracle Linux 9
+  slim image that resolves the required Oracle Coherence Community Edition
+  runtime modules during build;
+- `examples/oracle-coherence-ce-test/pom.xml`, the Maven dependency contract
+  for the Coherence CE runtime, gRPC proxy, and JSON modules;
 - `scripts/run-oracle-coherence-container-smoke.py`, a local smoke runner that
-  builds the wrapper image, starts a fresh backend, waits for the gRPC endpoint,
+  builds the test image, starts a fresh backend, waits for the gRPC endpoint,
   writes and reads one JSON key/value entry, and removes the container by
   default;
 - deterministic unit tests that inspect the Dockerfile and smoke runner without
   requiring Docker;
-- documentation for how future sink and routing tests should consume the local
-  backend.
+- documentation for how sink and routing tests should consume the local
+  backend;
+- `scripts/run-coherence-sink-e2e.py`, which starts the same backend and runs
+  the Oracle Coherence Community Edition sink integration test.
 
-The selected reference image is:
+The selected base image is:
 
 ```text
-ghcr.io/oracle/coherence-ce:25.03.1
+container-registry.oracle.com/os/oraclelinux:9-slim
 ```
 
-The wrapper exists so the project owns a stable local test artifact and can add
-labels, checks, or test-only hardening without changing the upstream image.
+The selected Oracle Coherence Community Edition runtime version is:
+
+```text
+25.03.1
+```
+
+The Dockerfile intentionally uses Oracle Linux 9 slim for both build and
+runtime stages. It installs only the local test runtime requirements, resolves
+the Oracle Coherence Community Edition runtime jars from Maven Central through
+the reviewed `pom.xml`, and starts `com.tangosol.net.DefaultCacheServer`
+directly. The `coherence-grpc-proxy` module is included on the classpath so the
+client-facing gRPC proxy starts with the server.
 
 ## Security Model
 
 The smoke runner is designed for local test safety:
 
 - all data is fake and deterministic;
+- the image is built from Oracle Linux 9 slim only;
 - container names and host ports are random per run;
 - the container publishes the client endpoint only on loopback;
 - Docker privileged mode, host networking, and Docker socket mounts are not
@@ -66,7 +82,7 @@ sequenceDiagram
     participant C as Coherence CE container
     participant P as Python client
 
-    S->>D: Build wrapper image
+    S->>D: Build Oracle Linux 9 slim test image
     S->>D: Start short-lived container
     D->>C: Expose gRPC endpoint on loopback
     S->>C: Wait for TCP readiness
@@ -110,7 +126,9 @@ Expected output:
 
 These tests cover:
 
-- explicit Oracle Coherence Community Edition image selection;
+- explicit Oracle Linux 9 slim base-image selection;
+- explicit Oracle Coherence Community Edition runtime version and Maven module
+  selection;
 - the client-facing gRPC port contract;
 - repository-local Dockerfile validation;
 - bounded readiness timeouts;
@@ -168,12 +186,11 @@ test material.
 
 This backend does not:
 
-- implement the Oracle Coherence Community Edition sink;
 - change NATS, JetStream, ACK, retry, or DLQ behavior;
 - prove production durability for a Coherence cluster;
 - configure live Coherence security or persistence;
 - certify routing or fan-out by itself.
 
-Those behaviors belong to the future sink implementation and the multi-sink
-routing end-to-end test flow. This backend is the local target those features
-can use once they are implemented.
+Those behaviors belong to the sink implementation, sink-specific tests, and the
+multi-sink routing end-to-end test flow. This backend is the local target those
+features can use without relying on a shared live service.

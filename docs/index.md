@@ -147,6 +147,11 @@ The current release provides the following production-ready foundation:
   pooling, TLS CA support, idempotent `upsert` and `insert_ignore` modes,
   subject-to-table routing, metadata persistence, payload normalization, and
   transaction commit before ACK.
+- `nats_sinks.coherence.CoherenceSink`, an experimental first-party Oracle
+  Coherence Community Edition sink that stores one complete normalized event
+  JSON object as a configured cache or map value, with deterministic
+  idempotency keys, duplicate handling, bounded values, and container-backed
+  local e2e testing.
 - `nats_sinks.file.FileSink`, a production local file sink with atomic JSON
   file placement, deterministic filenames, duplicate handling, optional gzip
   compression, metadata persistence, and the same payload normalization contract
@@ -155,14 +160,14 @@ The current release provides the following production-ready foundation:
   for disconnected operation, bounded local custody, deterministic idempotency,
   priority-aware replay, and forwarding into a final destination sink.
 - A safe sink connector framework with first-party Oracle Database,
-  Oracle MySQL, file, and spool connector descriptors, explicit registry
-  resolution, public connector metadata, and
+  Oracle MySQL, Oracle Coherence Community Edition, file, and spool connector
+  descriptors, explicit registry resolution, public connector metadata, and
   disabled-by-default allow-listed entry-point discovery for reviewed external
   connectors.
 - A named multi-sink configuration registry that lets one JSON file declare
-  several Oracle Database, Oracle MySQL, file, or spool sink instances for
-  route validation, redacted review, named health checks, and active fan-out
-  execution.
+  several Oracle Database, Oracle MySQL, Oracle Coherence Community Edition,
+  file, or spool sink instances for route validation, redacted review, named
+  health checks, and active fan-out execution.
 - A disabled-by-default generic route-match policy selector and opt-in
   `fanout` sink that can match normalized subject, priority, classification,
   labels, and approved non-secret headers to logical target names and bounded
@@ -184,6 +189,7 @@ metadata for routing and audit.
 | --- | --- | --- | --- |
 | Oracle Database | `from nats_sinks.oracle import OracleSink` | Persist JetStream messages into Oracle tables with idempotent writes. | Oracle transaction committed. |
 | Oracle MySQL | `from nats_sinks.mysql import MySqlSink` | Persist JetStream messages into Oracle MySQL tables with idempotent writes. | Oracle MySQL transaction committed. |
+| Oracle Coherence Community Edition | `from nats_sinks.coherence import CoherenceSink` | Maintain a Coherence cache or map read model using complete event JSON values. | Coherence operation completed; production ACK-gated custody depends on operator-confirmed cluster durability. |
 | Local files | `from nats_sinks.file import FileSink` | Write one JSON or gzip-compressed JSON document per message for local handoff, audit, development, or simple archival flows. | Final file atomically placed after flush and optional `fsync`. |
 | Edge spool | `from nats_sinks.spool import SpoolSink` | Commit encrypted local custody during disconnected operation, then replay later to Oracle, file, or another sink. | Encrypted spool record atomically placed after flush and optional `fsync`. |
 

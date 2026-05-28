@@ -1,0 +1,23 @@
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "EVENTS",
+    "consumer": "coherence-sink",
+    "subject": "events.>"
+  },
+  "sink": {
+    "type": "coherence",
+    "address": "127.0.0.1:1408",
+    "cache_name": "nats_sinks_events",
+    "storage": "cache",
+    "serializer": "json",
+    "key_strategy": "idempotency_key",
+    "duplicate_policy": "skip_existing",
+    "payload_mode": "json_or_envelope",
+    "max_value_bytes": 1048576,
+    "request_timeout_seconds": 10,
+    "ready_timeout_seconds": 30,
+    "session_disconnect_seconds": 30,
+    "durability": "operator_confirmed"
+  }
+}

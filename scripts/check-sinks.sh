@@ -11,6 +11,7 @@ set -eu
 pytest \
   tests/unit/test_file_mapping.py \
   tests/unit/test_file_sink.py \
+  tests/unit/test_coherence_sink.py \
   tests/unit/test_foundry_sink.py \
   tests/unit/test_gotham_sink.py \
   tests/integration/test_file_sink_e2e.py \
@@ -26,6 +27,7 @@ nats-sink test-sink examples/file-basic/config.json
 nats-sink validate examples/payload-encryption/file-config.json
 nats-sink test-sink examples/payload-encryption/file-config.json
 nats-sink validate examples/oracle-jetstream/config.json
+nats-sink validate examples/oracle-coherence-basic/config.json
 nats-sink validate examples/foundry-basic/config.json
 nats-sink validate examples/gotham-basic/config.json
 
@@ -35,4 +37,8 @@ fi
 
 if [ "${NATS_SINKS_RUN_LIVE_E2E:-0}" = "1" ]; then
   scripts/run-oracle-e2e.sh
+fi
+
+if [ "${NATS_SINKS_RUN_COHERENCE_E2E:-0}" = "1" ]; then
+  python scripts/run-coherence-sink-e2e.py
 fi

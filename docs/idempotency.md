@@ -103,14 +103,19 @@ as success rather than creating duplicate business effects.
 
 ## Current Scope
 
-The current production implementations are Oracle, FileSink, and SpoolSink. Oracle
-duplicate handling is documented in [Oracle Sink](oracle-sink.md), including
-`merge`, configurable merge update columns, `insert_ignore`, `insert`, and
-`append` behavior. File duplicate handling is documented in
-[File Sink](file-sink.md), including deterministic file names and
-`skip_existing`, `overwrite`, and `fail` policies. Edge spool duplicate
-handling is documented in [Edge Spool Sink](spool-sink.md), including
-deterministic idempotency-key filenames, encrypted replay records,
+The current production implementations are Oracle Database, Oracle MySQL,
+FileSink, and SpoolSink. Oracle duplicate handling is documented in
+[Oracle Sink](oracle-sink.md), including `merge`, configurable merge update
+columns, `insert_ignore`, `insert`, and `append` behavior. Oracle MySQL
+duplicate handling is documented in [Oracle MySQL Sink](mysql-sink.md),
+including `upsert`, `insert_ignore`, idempotency key columns, and table routes.
+The experimental Oracle Coherence Community Edition sink documents K/V
+duplicate behavior in [Oracle Coherence Community Edition Sink](coherence-sink.md),
+including `skip_existing`, `replace`, and `fail_existing` policies. File
+duplicate handling is documented in [File Sink](file-sink.md), including
+deterministic file names and `skip_existing`, `overwrite`, and `fail` policies.
+Edge spool duplicate handling is documented in [Edge Spool Sink](spool-sink.md),
+including deterministic idempotency-key filenames, encrypted replay records,
 `skip_existing`, and replay cleanup after target sink success.
 Destination-specific key-column, filename, or payload-field details are kept on
 the sink pages so future sinks can document their own backend-native approach

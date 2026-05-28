@@ -5,6 +5,7 @@
 -r requirements.txt
 
 boto3>=1.34,<2
+coherence-client>=2,<3
 cryptography>=42,<49
 mysql-connector-python>=9,<10
 oci>=2.160,<3

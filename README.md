@@ -125,6 +125,11 @@ used immediately:
   connection pooling, TLS CA support, `upsert` and `insert_ignore` idempotent
   modes, subject-to-table routing, metadata persistence, payload
   normalization, and explicit transaction commit before ACK.
+- `nats_sinks.coherence.CoherenceSink`, an experimental first-party Oracle
+  Coherence Community Edition sink that stores one complete normalized event
+  JSON object as the value of a configured cache or map key, with deterministic
+  idempotency keys, duplicate handling, bounded values, and container-backed
+  local e2e testing.
 - `nats_sinks.file.FileSink`, the production local file sink with deterministic
   filenames, atomic temporary-file placement, optional `fsync`, duplicate
   handling, optional Python standard-library gzip compression, metadata
@@ -142,14 +147,15 @@ used immediately:
   a narrow HTTP client boundary, with fake-client contract tests before any
   live Gotham certification claim.
 - A safe sink connector framework with first-party Oracle Database,
-  Oracle MySQL, file, spool, and experimental Foundry and Gotham
-  connectors, stable `SinkConnector` metadata, explicit `SinkRegistry` resolution, and
-  disabled-by-default allow-listed entry-point discovery for reviewed external
-  connectors.
+  Oracle MySQL, Oracle Coherence Community Edition, file, spool, and
+  experimental Foundry and Gotham connectors, stable `SinkConnector` metadata,
+  explicit `SinkRegistry` resolution, and disabled-by-default allow-listed
+  entry-point discovery for reviewed external connectors.
 - A named multi-sink configuration registry that lets one JSON file declare
-  several Oracle Database, Oracle MySQL, file, spool, or experimental Foundry
-  and Gotham sink instances for route validation, redacted review, named health
-  checks, and active fan-out execution.
+  several Oracle Database, Oracle MySQL, Oracle Coherence Community Edition,
+  file, spool, or experimental Foundry and Gotham sink instances for route
+  validation, redacted review, named health checks, and active fan-out
+  execution.
 - The active `fanout` sink type, which dispatches each normalized envelope to
   the selected child sinks and returns success only after every required target
   has durably completed. Optional targets have bounded wait controls and are
@@ -951,6 +957,10 @@ Destination-specific details are split into dedicated pages:
   DDL, least-privilege users, idempotent `upsert` and `insert_ignore` modes,
   subject-to-table routing, payload storage, metadata columns, and the local
   container-backed e2e test.
+- [Oracle Coherence Community Edition Sink](https://nats-sinks.readthedocs.io/en/latest/coherence-sink/)
+  covers Coherence cache and map configuration, deterministic key strategies,
+  duplicate policies, JSON value storage, value limits, and local
+  container-backed e2e testing.
 - [File Sink](https://nats-sinks.readthedocs.io/en/latest/file-sink/) covers
   local file output, atomic write behavior, deterministic file names, duplicate
   policies, gzip compression, filesystem safety, and file-specific performance
@@ -968,10 +978,11 @@ The generic sink framework is documented separately in
 [Sink Framework](https://nats-sinks.readthedocs.io/en/latest/sink-framework/)
 and the reusable release gate is documented in
 [Sink Certification](https://nats-sinks.readthedocs.io/en/latest/sink-certification/).
-That boundary is deliberate: Oracle Database, Oracle MySQL, file, and spool sinks use the same core
-delivery semantics, the same envelope contract, and the same
-commit-then-acknowledge rule. Future sinks must provide comparable
-certification evidence before they are described as production-ready.
+That boundary is deliberate: Oracle Database, Oracle MySQL, Oracle Coherence
+Community Edition, file, and spool sinks use the same core delivery semantics,
+the same envelope contract, and the same commit-then-acknowledge rule. Future
+sinks must provide comparable certification evidence before they are described
+as production-ready.
 
 Generic data-handling features such as
 [payload encryption](https://nats-sinks.readthedocs.io/en/latest/payload-encryption/),
