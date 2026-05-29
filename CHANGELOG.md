@@ -29,6 +29,13 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   behind the optional `s3` extra, includes fake-client unit and certification
   coverage without network calls, and documents least privilege, privacy, and
   live-test gating.
+- Added defence and mission-support documentation blueprints for persisting
+  authorized Link 16 / TADIL-J J-series tactical message events and
+  LOGFAS-related mission logistics events into Oracle Database. The pages keep
+  radio, cryptographic, tactical, protected-interface, and classified semantics
+  outside the project scope while documenting commit-then-ACK persistence,
+  idempotent Oracle writes, retry and DLQ handling, security labelling, and
+  isolated defence cloud deployment considerations.
 - Added explicit headers-only payload-presence handling and confirmed
   acknowledgement controls for issues #111, #112, #113, #114, #115, and #116.
   `NatsEnvelope` now distinguishes producer-empty payloads from JetStream

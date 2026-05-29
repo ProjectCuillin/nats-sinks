@@ -10,7 +10,9 @@ metadata available for later audit, triage, replay, and analytics.
 The same core behavior can support many mission-oriented data flows:
 
 - sensor-fusion event persistence,
+- Link 16 / TADIL-J J-series message persistence after authorized ingestion,
 - platform telemetry archival,
+- LOGFAS-related logistics event persistence after approved integration,
 - command-and-control data fabric handoff,
 - sensor-to-shooter workflow evidence,
 - kill-chain or kill-mesh coordination-event custody,
@@ -69,6 +71,8 @@ represent the same need.
 
 - [Mission Metadata](../../mission-metadata.md)
 - [F2T2EA Event Phase Tagging](f2t2ea-event-phase-tagging.md)
+- [Persisting Link 16 / TADIL-J J-Series Messages To Oracle Database](link16-j-series-oracle.md)
+- [Persisting LOGFAS-Related Mission Logistics Events To Oracle Database](logfas-logistics-oracle.md)
 - [Sensor Event Custody](sensor-event-custody.md)
 - [Classification And Labels](classification-and-labels.md)
 - [Chain Of Custody](chain-of-custody.md)
