@@ -82,6 +82,7 @@ mypy src
 python scripts/check-markdown-links.py
 pytest
 scripts/check-sinks.sh
+NATS_SINKS_RUN_CONTAINER_E2E=1 scripts/check-sinks.sh
 bandit -q -r src
 python -m build
 scripts/sbom.sh
@@ -93,6 +94,11 @@ scripts/check-docs.sh
 The docs helper builds both canonical documentation targets in isolated
 temporary output directories. That avoids collisions between overlapping
 MkDocs runs that would otherwise clean the same `site/` directory.
+
+The container e2e command is a local release-validation step. Run it when
+Docker is available and the optional Oracle NoSQL Database and Oracle
+Coherence clients are installed. If it cannot be run, record that explicitly in
+`docs/test-report.md` rather than implying container-backed e2e evidence.
 
 Also confirm that local GitHub CLI authentication is valid before pushing tags:
 

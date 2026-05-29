@@ -814,6 +814,36 @@ proves a sink respects the framework boundary, receives only `NatsEnvelope`
 objects, does not own JetStream ACK behavior, and returns success only after
 the sink-specific durable assertion has passed.
 
+To include the local container-backed key/value sink e2e suite, install the
+optional backend clients, make sure Docker is running, and enable the explicit
+container gate:
+
+```bash
+python -m pip install -e ".[coherence,oracle-nosql]"
+NATS_SINKS_RUN_CONTAINER_E2E=1 scripts/check-sinks.sh
+```
+
+That gate runs:
+
+- `python scripts/run-oracle-nosql-sink-e2e.py`, which starts a fresh Oracle
+  NoSQL Database KVLite container and verifies the Oracle NoSQL Database sink;
+- `python scripts/run-coherence-sink-e2e.py`, which builds and starts the
+  Oracle Coherence Community Edition test container and verifies the Oracle
+  Coherence Community Edition sink.
+
+Expected successful tail output:
+
+```text
+Oracle NoSQL sink container e2e test passed.
+Oracle Coherence sink e2e test passed.
+Full container-backed sink e2e suite passed.
+```
+
+The gate is local and opt-in. It is not a GitHub Actions default and it does
+not run unless `NATS_SINKS_RUN_CONTAINER_E2E=1` is set. The backend helpers
+bind to loopback, use fake data, bound readiness waits, and remove containers
+by default.
+
 To include live Oracle checks, source the ignored local integration environment
 files first and set:
 

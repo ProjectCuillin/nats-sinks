@@ -1093,6 +1093,21 @@ The docs helper builds the Read the Docs and GitHub Pages variants in isolated
 temporary directories. That prevents overlapping MkDocs runs from cleaning the
 same `site/` directory.
 
+The local sink certification suite remains Docker-free by default:
+
+```bash
+scripts/check-sinks.sh
+```
+
+To include the container-backed Oracle NoSQL Database and Oracle Coherence
+Community Edition sink e2e flows in the same local check pass, install the
+optional backend clients and enable the explicit container gate:
+
+```bash
+python -m pip install -e ".[coherence,oracle-nosql]"
+NATS_SINKS_RUN_CONTAINER_E2E=1 scripts/check-sinks.sh
+```
+
 Manual live NATS connection testing is documented in
 [NATS Connections And Authentication](https://nats-sinks.readthedocs.io/en/latest/nats-connections/) and
 [Testing](https://nats-sinks.readthedocs.io/en/latest/testing/). The tracked helper script is

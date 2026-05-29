@@ -112,6 +112,19 @@ environment for `tests/integration/test_oracle_nosql_sink_e2e.py`, enables
 sink's `skip_existing` duplicate policy to prove redelivery-safe duplicate
 handling.
 
+The Oracle NoSQL Database sink e2e helper is also part of the full local
+container-backed key/value sink e2e suite:
+
+```bash
+python -m pip install -e ".[coherence,oracle-nosql]"
+NATS_SINKS_RUN_CONTAINER_E2E=1 scripts/check-sinks.sh
+```
+
+That suite uses this Oracle NoSQL Database KVLite container and the Oracle
+Coherence Community Edition test container in one release-validation pass.
+Normal `scripts/check-sinks.sh` runs do not start Docker unless the explicit
+`NATS_SINKS_RUN_CONTAINER_E2E` gate is set.
+
 ## Custom Image Reference
 
 Use `--image-ref` to test a different Oracle NoSQL Database image reference:

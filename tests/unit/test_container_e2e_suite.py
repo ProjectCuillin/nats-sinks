@@ -129,7 +129,7 @@ def test_check_sinks_exposes_single_full_container_e2e_gate() -> None:
 
     script = CHECK_SINKS_SCRIPT.read_text(encoding="utf-8")
 
-    assert 'NATS_SINKS_RUN_CONTAINER_E2E:-0' in script
+    assert "NATS_SINKS_RUN_CONTAINER_E2E:-0" in script
     assert "python scripts/run-container-e2e-suite.py" in script
     assert "NATS_SINKS_RUN_CONTAINER_E2E" not in script.split("pytest \\\n", maxsplit=1)[0]
     assert "NATS_SINKS_RUN_COHERENCE_E2E" in script

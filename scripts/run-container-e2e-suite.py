@@ -119,8 +119,7 @@ def run_backend(
     )
     if completed.returncode != 0:
         raise ContainerE2eSuiteError(
-            f"{runner.name} container-backed sink e2e failed "
-            f"with exit code {completed.returncode}."
+            f"{runner.name} container-backed sink e2e failed with exit code {completed.returncode}."
         )
 
 
