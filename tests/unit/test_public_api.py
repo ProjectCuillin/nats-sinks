@@ -38,6 +38,7 @@ from nats_sinks.spool import SpoolSink as ReadmeSpoolSink
 
 PUBLIC_API_CONTRACT: dict[str, tuple[str, ...]] = {
     "nats_sinks": (
+        "AckConfirmationConfig",
         "AckError",
         "ConfigurationError",
         "ConsumerDrift",
@@ -163,6 +164,7 @@ PUBLIC_API_CONTRACT: dict[str, tuple[str, ...]] = {
         "write_metrics_snapshot",
     ),
     "nats_sinks.core": (
+        "AckConfirmationConfig",
         "DEFAULT_ADVISORY_SUBJECTS",
         "ConsumerDrift",
         "ConsumerManagementResult",
@@ -553,6 +555,7 @@ DOCUMENTED_IMPORT_CONTRACT: dict[str, tuple[str, ...]] = {
     "nats_sinks.cli.metrics": ("app",),
     "nats_sinks.cli.observability": ("app",),
     "nats_sinks.core.config": (
+        "AckConfirmationConfig",
         "AppConfig",
         "ConsumerManagementConfig",
         "CustodyConfig",

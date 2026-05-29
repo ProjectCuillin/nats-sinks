@@ -346,7 +346,7 @@ separate so downstream controls can reason about each class of data.
 | `stored_at_epoch_ns` | `STORED_AT_EPOCH_NS` | Time when Oracle row mapping prepared the row for storage. |
 | `payload` | `PAYLOAD_JSON` | Normalized payload JSON value. |
 | `headers` | `HEADERS_JSON` | Message headers as JSON. |
-| `metadata` | `METADATA_JSON` | Full generic metadata snapshot. |
+| `metadata` | `METADATA_JSON` | Full generic metadata snapshot, including payload-presence state for headers-only delivery. |
 | `mission_metadata` | `MISSION_METADATA_JSON` | Optional validated mission metadata JSON object resolved by the core runtime. Missing mission metadata is stored as JSON `null`. |
 | `security_labels` | `SECURITY_LABELS_JSON` | Optional validated data-centric security label profile resolved by the core runtime. Missing security labels are stored as JSON `null`. |
 

@@ -58,7 +58,7 @@ ACK the original only after DLQ publication succeeds.
 
 - Disabled by default.
 - Never used after successful sink writes; successful durable work still uses
-  normal ACK or future optional AckSync.
+  normal ACK or the optional confirmed ACK path.
 - Never sent before required DLQ publication succeeds.
 - Never sent when DLQ publication fails.
 - Never used for temporary sink failures.

@@ -285,12 +285,11 @@ side copy timed out, required ACK gate released". They are counts and timing
 signals only; they do not include subjects, payloads, sink names,
 classification values, labels, or destination identifiers.
 
-Confirmed JetStream acknowledgement support has been evaluated for a future
-release, but it is not enabled today. If that option is implemented later, it
-will provide stronger evidence that the server accepted the post-commit ACK,
-while still allowing redelivery if confirmation fails after durable sink
-success. See
-[Acknowledgement Confirmation Evaluation](acknowledgement-confirmation.md).
+Confirmed JetStream acknowledgement support is available through the
+disabled-by-default `delivery.ack_confirmation` option. It provides stronger
+evidence that the server accepted the post-commit ACK, while still allowing
+redelivery if confirmation fails after durable sink or DLQ success. See
+[Acknowledgement Confirmation](acknowledgement-confirmation.md).
 
 JetStream `InProgress` support is available as an optional disabled-by-default
 heartbeat for long-running sink writes. It is treated as a bounded signal around

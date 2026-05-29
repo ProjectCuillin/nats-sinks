@@ -42,6 +42,7 @@ from nats_sinks.core.authenticity import (
 )
 from nats_sinks.core.config import (
     FANOUT_OPTIONAL_ACK_DEFAULTS,
+    AckConfirmationConfig,
     MetricsConfig,
     PushConsumerConfig,
     RouteHeaderMatchConfig,
@@ -154,6 +155,7 @@ __all__ = [
     "NATS_RESERVED_HEADER_NAMES",
     "SECURITY_LABEL_PROFILE_NAME",
     "SUPPORTED_MESSAGE_AUTHENTICITY_ALGORITHMS",
+    "AckConfirmationConfig",
     "ConsumerDrift",
     "ConsumerManagementResult",
     "FanoutAckGateError",

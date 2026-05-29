@@ -183,8 +183,6 @@ release, and closed only after the containing release is published.
 - Individual observability connector backlog items for Datadog, Oracle Cloud
   Infrastructure Monitoring, and Azure Monitor, all
   following the shared disabled-by-default observability connector contract.
-- Headers-only JetStream delivery support split into validated consumer
-  configuration, payload-presence metadata, and sink or DLQ certification.
 - Additional mission-support documentation examples for future operator
   runbooks, deeper replay drills, and sink-specific certification evidence.
 - Deeper certification evidence and runbooks for complex multi-route Oracle
@@ -246,11 +244,6 @@ release, and closed only after the containing release is published.
   server policies.
 - Deeper replay-start options for sequence or timestamp-based delivery
   policies.
-- Optional confirmed ACK support after durable sink success.
-- Optional confirmed ACK or terminal acknowledgement handling after successful
-  DLQ publication.
-- ACK confirmation metrics and an operator runbook for interpreting durable
-  success followed by ACK confirmation failure.
 - Explicit BackOff-aware `InProgress` heartbeat timing if future work can prove
   safe support for JetStream BackOff sequences.
 
@@ -266,8 +259,6 @@ release, and closed only after the containing release is published.
   durable sink processing.
 - Durable replay-to-sinks guidance and tooling design based on durable pull
   consumers rather than ordered inspection consumers.
-- Payload-presence metadata and sink certification for headers-only
-  metadata-only workflows.
 - Stream mirror, source, subject transform, republish, compression, placement,
   and metadata management helpers beyond the current documentation guidance.
 - Sink certification tests for future HTTP, S3, Kafka, and other active sink

@@ -3,7 +3,7 @@
   "title": "[Feature]: Add optional confirmed ACK after durable sink success",
   "area": "Core runtime and delivery semantics",
   "priority": "P3 - backlog candidate",
-  "target_release": "unscheduled",
+  "target_release": "v0.4.2",
   "labels": ["nats", "testing", "observability"],
   "problem": "The runner currently sends ordinary JetStream ACKs after durable sink success. That preserves commit-then-acknowledge semantics, but operators cannot ask the client to wait for server-side acknowledgement of the ACK itself. In controlled or mission-oriented deployments, confirmed ACK support would provide stronger evidence that the server accepted the acknowledgement while still preserving at-least-once delivery and idempotent duplicate handling.",
   "proposal": "Add a disabled-by-default delivery option for confirmed ACK after durable sink success. The implementation should use the client acknowledgement confirmation method when available, fall back only through explicit configuration decisions, and keep ordinary ACK as the default. The option must have a bounded timeout, clear error classification, safe logs, and metrics. It must run only after sink.write_batch returns durable success or after the configured permanent-failure DLQ path has completed.",

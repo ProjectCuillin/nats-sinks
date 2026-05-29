@@ -110,7 +110,7 @@ Current gap details:
 | MaxAckPending | Server-side flow control for outstanding unacked messages. | `consumer_management.max_ack_pending` can create, reconcile, or validate the server setting. `delivery.batch_size` remains the client-side fetch bound. | Implemented for durable pull consumers |
 | DeliverPolicy | Start at all, new, last, sequence, time, or last-per-subject. | `consumer_management.deliver_policy` supports `all`, `last`, `new`, and `last_per_subject`. Sequence and time starts remain future work. | Partially implemented |
 | Multiple FilterSubjects | Consumers can filter on multiple subjects. | `consumer_management.filter_subjects` supports bounded plural filters that must remain within `nats.subject`; Oracle table routing still happens after delivery. | Implemented for durable pull consumers |
-| HeadersOnly delivery | Consumers can deliver only headers and expose the omitted body size through a NATS header. | `consumer_management.headers_only` can create, reconcile, or validate the server setting. Payload-presence metadata and sink/DLQ certification remain tracked separately. | Partially implemented |
+| HeadersOnly delivery | Consumers can deliver only headers and expose the omitted body size through a NATS header. | `consumer_management.headers_only` can create, reconcile, or validate the server setting. The runtime records payload-presence metadata, rejects unsafe payload-hash fallback when bodies are omitted, and certifies sink/DLQ metadata-only behavior. | Implemented for durable pull consumers |
 | Consumer metadata | Consumers support user metadata. | `consumer_management.metadata` supports bounded low-sensitivity string metadata and rejects secret-looking keys. | Implemented for durable pull consumers |
 | Push consumers | NATS supports push delivery to a subject, optional queue-style deliver groups, `MaxAckPending`, FlowControl, and IdleHeartbeat. | `push_consumer` provides an explicit opt-in bounded manual-ACK runner mode with fail-closed configuration guardrails and focused delivery-contract certification. Pull remains the default. | Implemented as opt-in |
 | Ordered consumers | NATS supports ordered consumers for inspection and analysis workflows. | `nats-sink inspect-ordered` provides bounded, read-only ordered inspection when the NATS Python client exposes ordered-consumer support. It fails closed when unsupported and never replaces durable pull-consumer sink writes. Durable replay-to-sinks remains future work. | Implemented for inspection |
@@ -127,7 +127,7 @@ Current gap details:
 
 | NATS capability | NATS support | Current `nats-sinks` status | Suggested priority |
 | --- | --- | --- | --- |
-| Double ACK / AckSync | Client can wait for the server to confirm receipt of the ACK. | Evaluated in [Acknowledgement Confirmation Evaluation](acknowledgement-confirmation.md). Runner still uses ordinary ACK by default; implementation work is split into optional confirmed ACK, DLQ confirmation, and metrics or runbook backlog items. | Phase 2 |
+| Double ACK / AckSync | Client can wait for the server to confirm receipt of the ACK. | `delivery.ack_confirmation` is disabled by default and can use bounded `ack_sync` only after durable sink success or successful DLQ publication. Metrics distinguish attempts, successes, timeouts, failures, unsupported paths, and elapsed confirmation time. | Implemented as opt-in |
 | In-progress ACK | Extends `AckWait` while long processing continues. | Optional disabled-by-default runtime heartbeat is available with effective AckWait-only guardrails, bind-only consumer-policy inspection, BackOff rejection, and stable metrics. BackOff-aware heartbeat timing remains future work. See [InProgress Evaluation](in-progress-evaluation.md). | Implemented with BackOff support deferred |
 | Term ACK | Stops redelivery without marking successful processing. | Supported as explicit `dead_letter.ack_term_after_publish` policy only after DLQ publication succeeds. Disabled by default. | Implemented |
 | AckAll | ACK one message and implicitly ACK earlier messages. | Intentionally unsupported because commit-then-ack requires explicit per-message safety. | Not planned |
@@ -212,8 +212,7 @@ Other gaps are good candidates for future work:
 
 - certified credentials-file, NKEY, and JWT workflows,
 - explicit consumer configuration and reconciliation,
-- optional confirmed ACK support, ACK confirmation metrics, and explicit
-  BackOff-aware `InProgress` heartbeat timing,
+- explicit BackOff-aware `InProgress` heartbeat timing,
 - optional live push-consumer certification on disposable local NATS servers,
 - durable replay-to-sinks guidance that keeps destination writes on durable
   pull consumers,

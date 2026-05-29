@@ -36,6 +36,11 @@ If DLQ publish fails, the original message remains unacked and eligible for
 redelivery. This keeps the failure visible to JetStream rather than silently
 discarding a message that still needs operator attention.
 
+When `delivery.ack_confirmation.enabled=true`, the normal ACK after successful
+DLQ publication uses the same bounded server-confirmed ACK path as successful
+sink writes. If confirmation times out or fails after DLQ publication, the
+original may redeliver and the DLQ path must remain duplicate-safe.
+
 ## Terminal Acknowledgements
 
 The default runtime uses the conservative DLQ flow: publish the DLQ record, wait
@@ -50,7 +55,11 @@ sink-write path.
 If DLQ publication fails, the runner sends neither ACK nor `AckTerm`; the
 original message remains eligible for redelivery. If `AckTerm` fails after DLQ
 publication, the failure is counted and raised. Redelivery may occur, and DLQ
-handling must remain safe for duplicate publication attempts.
+handling must remain safe for duplicate publication attempts. Current client
+support does not expose a confirmed `AckTerm` path; if ACK confirmation is
+enabled together with terminal DLQ acknowledgements, nats-sinks records the
+unsupported confirmation path and sends the existing unconfirmed `AckTerm`
+only after DLQ publication succeeds.
 
 See [ADR 0005: AckTerm And AckNext Evaluation](adr/0005-ackterm-acknext-evaluation.md)
 for the design decision and safety limits.
@@ -108,6 +117,8 @@ can include:
 - redelivery state,
 - pending count,
 - idempotency key,
+- idempotency key unavailable reason when payload-hash fallback is unsafe,
+- payload-presence metadata,
 - error type and message,
 - optional headers,
 - optional base64 payload.
@@ -123,6 +134,32 @@ need to subscribe to the DLQ subject. When DLQ is enabled, grant publish access
 only to the configured `dead_letter.subject`. The complete NATS permission
 templates are documented in
 [NATS Least-Privilege Permissions](nats-permissions.md).
+
+Headers-only consumers cannot include an omitted body in the DLQ record because
+the runner never received it. In that case the DLQ record keeps the same safe
+JSON shape but emits a payload-presence object and, when `include_payload` is
+true, a `payload_unavailable_reason` instead of `payload_base64`:
+
+```json
+{
+  "subject": "example.subject",
+  "idempotency_key": null,
+  "idempotency_key_unavailable_reason": "payload_omitted",
+  "payload": {
+    "present": false,
+    "omitted": true,
+    "omitted_reason": "headers_only",
+    "original_size_bytes": 4096,
+    "delivered_size_bytes": 0,
+    "nats_msg_size_header": "4096",
+    "nats_msg_size_header_malformed": false
+  },
+  "payload_unavailable_reason": "headers_only"
+}
+```
+
+Do not treat this as payload custody. It is metadata custody for a message body
+that was intentionally withheld by the JetStream headers-only delivery policy.
 
 For a complete operational example of DLQ triage, replay preparation, and
 safe public reporting, see

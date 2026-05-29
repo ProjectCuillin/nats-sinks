@@ -262,9 +262,9 @@ operations without hunting through a long flat list.
 - [Advanced JetStream Topology](jetstream-topology.md): review mirrors, sources,
   transforms, republish behavior, placement, compression, metadata, and
   idempotency implications.
-- [Headers-Only Delivery Evaluation](headers-only-delivery.md): review the
-  design decision for metadata-only JetStream consumers and the follow-up
-  backlog items needed before nats-sinks claims explicit headers-only support.
+- [Headers-Only Delivery](headers-only-delivery.md): review metadata-only
+  JetStream consumer behavior, payload-presence metadata, DLQ handling, and
+  idempotency guidance.
 - [NATS Feature Gap Analysis](nats-feature-gap-analysis.md): track what NATS
   supports that nats-sinks does not yet manage directly.
 

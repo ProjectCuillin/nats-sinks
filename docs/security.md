@@ -375,9 +375,8 @@ Headers-only delivery can reduce payload exposure to a sink process, but it is
 not a complete confidentiality control. Subjects, headers, stream metadata,
 sequence numbers, message size, priority, classification, labels, mission
 metadata, and DLQ records can remain sensitive. The headers-only design is
-tracked separately in
-[Headers-Only Delivery Evaluation](headers-only-delivery.md) so future support
-does not silently store omitted bodies as if producers sent empty payloads.
+documented in [Headers-Only Delivery](headers-only-delivery.md) so omitted
+bodies are never silently stored as if producers sent empty payloads.
 
 Ordered-consumer inspection can expose sensitive stream content even when
 payloads are hidden, because subjects, headers, sequence numbers, priority,

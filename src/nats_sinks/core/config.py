@@ -1312,6 +1312,16 @@ class InProgressConfig(BaseModel):
     )
 
 
+class AckConfirmationConfig(BaseModel):
+    """Optional server-confirmed JetStream acknowledgement behavior."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    timeout_ms: int = Field(default=1000, ge=1, le=60_000)
+    unsupported_action: Literal["fail", "standard_ack"] = "fail"
+
+
 class DeliveryConfig(BaseModel):
     """Delivery behavior. ACK policy is intentionally fixed to commit-then-ack.
 
@@ -1337,6 +1347,7 @@ class DeliveryConfig(BaseModel):
     prefer_safe_duplication: bool = True
     priority_lanes: PriorityLanesConfig = Field(default_factory=PriorityLanesConfig)
     in_progress: InProgressConfig = Field(default_factory=InProgressConfig)
+    ack_confirmation: AckConfirmationConfig = Field(default_factory=AckConfirmationConfig)
 
     @model_validator(mode="after")
     def validate_retry_backoff_cap(self) -> DeliveryConfig:

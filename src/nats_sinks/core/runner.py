@@ -1114,12 +1114,55 @@ class JetStreamSinkRunner:
         acknowledged = 0
         try:
             for raw_message in raw_messages:
-                await _maybe_await(raw_message.ack())
+                await self._ack_one(raw_message)
                 acknowledged += 1
         except Exception as exc:
             failed_or_unknown = max(len(raw_messages) - acknowledged, 1)
             increment_metric(self.metrics, MetricNames.ACK_ERRORS_TOTAL, failed_or_unknown)
             raise AckError(f"failed to ACK JetStream message {context}") from exc
+
+    async def _ack_one(self, raw_message: Any) -> None:
+        """ACK one raw JetStream message using optional confirmation."""
+
+        if not self.delivery.ack_confirmation.enabled:
+            await _maybe_await(raw_message.ack())
+            return
+
+        ack_sync = getattr(raw_message, "ack_sync", None)
+        if ack_sync is None:
+            increment_metric(self.metrics, MetricNames.ACK_CONFIRMATION_UNSUPPORTED_TOTAL)
+            if self.delivery.ack_confirmation.unsupported_action == "standard_ack":
+                await _maybe_await(raw_message.ack())
+                return
+            raise AckError("JetStream message does not expose ack_sync for confirmed ACK")
+
+        timeout_seconds = self.delivery.ack_confirmation.timeout_ms / 1000
+        increment_metric(self.metrics, MetricNames.ACK_CONFIRMATION_ATTEMPTS_TOTAL)
+        started = time.perf_counter()
+        try:
+            await _maybe_await(ack_sync(timeout=timeout_seconds))
+        except TimeoutError:
+            observe_metric(
+                self.metrics,
+                MetricNames.ACK_CONFIRMATION_SECONDS,
+                time.perf_counter() - started,
+            )
+            increment_metric(self.metrics, MetricNames.ACK_CONFIRMATION_TIMEOUTS_TOTAL)
+            raise
+        except Exception:
+            observe_metric(
+                self.metrics,
+                MetricNames.ACK_CONFIRMATION_SECONDS,
+                time.perf_counter() - started,
+            )
+            increment_metric(self.metrics, MetricNames.ACK_CONFIRMATION_FAILURES_TOTAL)
+            raise
+        observe_metric(
+            self.metrics,
+            MetricNames.ACK_CONFIRMATION_SECONDS,
+            time.perf_counter() - started,
+        )
+        increment_metric(self.metrics, MetricNames.ACK_CONFIRMATION_SUCCESSES_TOTAL)
 
     async def _term_all(self, raw_messages: Sequence[Any]) -> None:
         """Send JetStream terminal acknowledgements after DLQ success only.
@@ -1131,6 +1174,17 @@ class JetStreamSinkRunner:
         pretending the terminal acknowledgement completed.
         """
 
+        if self.delivery.ack_confirmation.enabled:
+            increment_metric(
+                self.metrics,
+                MetricNames.ACK_CONFIRMATION_UNSUPPORTED_TOTAL,
+                len(raw_messages),
+            )
+            LOGGER.info(
+                "ACK confirmation is enabled, but JetStream AckTerm confirmation is not "
+                "available through the client; sending unconfirmed terminal acknowledgement "
+                "after successful DLQ publication"
+            )
         terminated = 0
         try:
             for raw_message in raw_messages:

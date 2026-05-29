@@ -80,6 +80,14 @@ value. For encrypted text and opaque payloads, prefer `stream_sequence` or
 `message_id` idempotency because those strategies do not depend on decrypting
 or interpreting the payload body.
 
+Headers-only JetStream consumers are another case where payload-derived
+idempotency is unsafe. When JetStream omits the message body and exposes only
+`Nats-Msg-Size`, many different source messages can arrive at the runner with
+the delivered body `b""`. `NatsEnvelope.idempotency_key()` therefore rejects
+the payload-hash fallback when `payload_omitted=true` and no stream sequence or
+message ID is available. Use `stream_sequence` or producer `Nats-Msg-Id` for
+headers-only workflows.
+
 ## Duplicate Handling Modes
 
 Duplicate handling is destination-specific. A relational database might use an
