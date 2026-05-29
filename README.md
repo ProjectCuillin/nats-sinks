@@ -18,7 +18,7 @@ messages into another durable system, such as Oracle Database, Oracle
 Autonomous Database on Oracle Cloud Infrastructure (OCI), or another approved
 storage backend.
 
-`nats-sinks` is a Python package for building outbound NATS JetStream sink consumers. It provides a reusable runtime that owns JetStream delivery semantics and delegates destination writes to sink implementations. The current production sinks are Oracle Database, including OCI-hosted Oracle Autonomous Database deployments, Oracle MySQL, and local files.
+`nats-sinks` is a Python package for building outbound NATS JetStream sink consumers. It provides a reusable runtime that owns JetStream delivery semantics and delegates destination writes to sink implementations. The current production sinks are Oracle Database, including OCI-hosted Oracle Autonomous Database deployments, Oracle MySQL, local files, encrypted edge spool files, and fixed HTTP endpoints.
 
 The project is intentionally suitable for mission-oriented environments such as
 defence logistics, operational reporting, secure platform telemetry, and
@@ -292,6 +292,9 @@ Included today:
 - File sink with atomic local JSON file writes and deterministic duplicate
   handling.
 - Edge spool sink with encrypted local records and replay into a final sink.
+- HTTP sink for fixed endpoint forwarding with idempotency-key propagation,
+  HTTPS-by-default validation, bounded request and response handling, and
+  explicit retry safety guidance.
 - Optional AES-256-GCM and AES-256-CCM payload encryption in the core runner.
 - Multi-key payload decryption helper for controlled key-rotation, replay, and
   verification workflows.
@@ -991,6 +994,9 @@ Destination-specific details are split into dedicated pages:
   local file output, atomic write behavior, deterministic file names, duplicate
   policies, gzip compression, filesystem safety, and file-specific performance
   guidance.
+- [HTTP Sink](https://nats-sinks.readthedocs.io/en/latest/http-sink/) covers
+  fixed endpoint forwarding, HTTPS validation, safe headers, idempotency-key
+  propagation, bounded responses, and retry guidance.
 - [Named Sinks And Routing](https://nats-sinks.readthedocs.io/en/latest/named-sinks/)
   covers declaring several destination instances in one configuration file,
   validating route target references, redacted review output, and named sink
@@ -1189,6 +1195,7 @@ src/nats_sinks/core      Core runtime, config, envelope, runner, DLQ
 src/nats_sinks/sinks     Sink protocols and registry
 src/nats_sinks/oracle    Oracle sink implementation
 src/nats_sinks/mysql     Oracle MySQL sink implementation
+src/nats_sinks/http      HTTP sink implementation
 src/nats_sinks/file      Local file sink implementation
 src/nats_sinks/cli       CLI entry point
 tests/unit               Deterministic unit tests
@@ -1209,6 +1216,7 @@ Phase 1:
 - Oracle sink.
 - Oracle MySQL sink.
 - File sink.
+- HTTP sink for fixed endpoint forwarding with idempotency-key propagation.
 - NATS reconnect tuning and connection event metrics.
 - WebSocket connection guardrails, optional headers, and local certification
   harness.
@@ -1260,7 +1268,6 @@ Phase 2:
 - Live-certification follow-up for the experimental Palantir Foundry Streams
   sink and experimental Palantir Gotham RevDB object sink.
 - Additional Oracle MySQL HeatWave tuning and certification guidance.
-- HTTP sink.
 - S3 sink design with deterministic object keys.
 - Native OCI Object Storage sink design with deterministic object keys,
   workload identity support, checksums, multipart upload, and least-privilege

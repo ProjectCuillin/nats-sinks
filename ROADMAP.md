@@ -114,6 +114,10 @@ release, and closed only after the containing release is published.
   `SinkRegistry` resolution, first-party Oracle and FileSink descriptors, and
   disabled-by-default allow-listed entry-point discovery for reviewed external
   connectors.
+- First-party HTTP sink for fixed endpoint forwarding with explicit
+  idempotency-key propagation, bounded request and response handling, safe
+  static and environment-backed headers, bounded retry guidance, and warnings
+  for endpoints that cannot provide idempotent semantics.
 - Encrypted edge spool-and-forward sink for disconnected operation, with
   bounded local custody, deterministic duplicate handling, priority-aware
   replay, and explicit forwarding into a final destination sink.
@@ -189,8 +193,6 @@ release, and closed only after the containing release is published.
   idempotency deployments.
 - Deeper Oracle merge insert-versus-match visibility if future Oracle driver
   metadata can support it reliably without guessing.
-- HTTP sink idempotency-key support, retry safety guidance, and clear warnings
-  for endpoints that cannot provide idempotent semantics.
 - S3 sink design with atomic object keys and safe duplicate overwrite/skip
   behavior.
 - Native Oracle Cloud Infrastructure Object Storage sink design with
@@ -227,7 +229,6 @@ release, and closed only after the containing release is published.
   JMS, JDBC, SQL Server, Db2, SAP HANA, specialty warehouses, distributed SQL
   systems, legacy database families, Solace, managed Kafka compatibility
   profiles, Cosmos DB profiles, and MariaDB.
-- HTTP sink.
 - Public Docker image release publication automation, including signed image
   publication, container-specific provenance, and release-attached container
   evidence.

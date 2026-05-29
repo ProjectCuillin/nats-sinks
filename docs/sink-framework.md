@@ -401,6 +401,7 @@ flowchart LR
     BuiltIn --> MySQL[MySqlSink]
     BuiltIn --> Coherence[CoherenceSink]
     BuiltIn --> Spool[SpoolSink]
+    BuiltIn --> HTTP[HttpSink]
     Optional --> ThirdParty[Reviewed external connector]
     ThirdParty --> Contract[Sink protocol and certification tests]
 ```
@@ -415,13 +416,14 @@ Today, the first-party production connectors are built in:
 | Oracle Coherence Community Edition | `coherence` | `nats_sinks.coherence.CoherenceSink` | Experimental first-party connector in this repository. |
 | File | `file` | `nats_sinks.file.FileSink` | Production connector in this repository. |
 | Edge spool | `spool` | `nats_sinks.spool.SpoolSink` | Production connector in this repository. |
+| HTTP | `http` | `nats_sinks.http.HttpSink` | Production connector in this repository. |
 
 Future Oracle-family sinks such as OCI Object Storage, Oracle Berkeley DB,
 and OCI Streaming are intended to be first-party
 connectors in this repository unless project governance decides otherwise
 later. They should use the same connector descriptor and certification tests as
 Oracle Database, Oracle MySQL, Oracle Coherence Community Edition, FileSink,
-and SpoolSink, but they do not need external plugin discovery.
+SpoolSink, and HttpSink, but they do not need external plugin discovery.
 
 The repository includes a local
 [Oracle MySQL test database container](oracle-mysql-test-container.md) used by
@@ -550,6 +552,7 @@ Current production sinks and their durable success boundaries:
 | Oracle MySQL | `nats_sinks.mysql` | Oracle MySQL transaction committed. |
 | File | `nats_sinks.file` | Output file atomically placed after temporary write, flush, and configured fsync behavior. |
 | Edge spool | `nats_sinks.spool` | Encrypted spool record atomically placed after temporary write, flush, and configured fsync behavior. |
+| HTTP | `nats_sinks.http` | Configured endpoint returned a configured success status for every request. |
 
 Current experimental first-party sinks and their success boundaries:
 
@@ -578,7 +581,7 @@ The stable extension points are:
 - the JSON `sink` object, which requires `type` and allows sink-specific fields
   to be validated by the selected destination implementation.
 
-In practice, adding a future `postgres`, `http`, or `s3` sink should
+In practice, adding a future `postgres`, `s3`, or another sink should
 look like this:
 
 1. Add a new module, for example `src/nats_sinks/postgres/`.
