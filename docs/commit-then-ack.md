@@ -64,6 +64,26 @@ sequenceDiagram
 
 If the destination commit succeeds and the process exits before ACK, JetStream may redeliver. This is acceptable. The sink must use idempotency controls to treat the duplicate safely.
 
+## Multi-Sink ACK Gates
+
+Fan-out delivery can select more than one logical sink target for the same
+message. The same safety rule still applies: JetStream may be ACKed only after
+every selected required target has durably completed. Route targets are
+required by default.
+
+Optional targets are different. They are opt-in side effects with a bounded
+`minimum_wait_ms` and `timeout_ms` policy. The ACK gate gives those optional
+targets a controlled chance to finish, but it does not wait forever. If an
+optional target has not committed before the ACK gate releases, the required
+delivery path may still ACK and the optional copy must be treated as not
+guaranteed.
+
+This distinction is important for audit language. A required Oracle Database
+sink can be part of the formal custody path. An optional diagnostic file copy,
+secondary archive, or non-critical side copy is best-effort unless it completed
+before ACK. Operators should use optional targets only when that trade-off is
+acceptable and documented.
+
 ## Permanent Failure With DLQ
 
 ```mermaid
@@ -113,15 +133,15 @@ double ACK. Confirmed ACK waits for the server to confirm that it processed the
 ACK. That can improve operational visibility, but it does not move the safety
 boundary.
 
-For `nats-sinks`, confirmed ACK must still be the final step. It may be useful
-as a future opt-in option after durable sink success, but it must never run
-before `sink.write_batch(...)` returns success and it must never be used to
-claim exactly-once delivery. If the sink commit succeeds and ACK confirmation
-then times out, the message may redeliver and idempotency must handle the
-duplicate.
+For `nats-sinks`, confirmed ACK is still the final step. It is available as a
+disabled-by-default `delivery.ack_confirmation` option after durable sink
+success or successful DLQ publication, but it never runs before
+`sink.write_batch(...)` returns success and it must never be used to claim
+exactly-once delivery. If the sink commit succeeds and ACK confirmation then
+times out, the message may redeliver and idempotency must handle the duplicate.
 
-The evaluation and future implementation split are documented in
-[Acknowledgement Confirmation Evaluation](acknowledgement-confirmation.md).
+The evaluation, configuration, metrics, and `AckTerm` limitation are documented
+in [Acknowledgement Confirmation](acknowledgement-confirmation.md).
 
 ## InProgress Signals
 
@@ -130,11 +150,13 @@ still being worked on and that the acknowledgement wait window should be
 extended. They are not success acknowledgements. They must never replace final
 ACK, NAK, Term, retry, or DLQ behavior.
 
-For `nats-sinks`, any future `InProgress` feature must remain optional,
-disabled by default, bounded, and owned by the core runner. The sink still only
-returns durable success or raises an error. If the sink fails after one or more
-progress signals, the message remains eligible for redelivery or DLQ according
-to policy.
+For `nats-sinks`, `delivery.in_progress` is optional, disabled by default,
+bounded, and owned by the core runner. When enabled with safe AckWait
+configuration, the runner sends progress heartbeats only while
+`sink.write_batch(...)` is active and stops before final ACK, NAK, Term, retry,
+or DLQ handling. The sink still only returns durable success or raises an
+error. If the sink fails after one or more progress signals, the message
+remains eligible for redelivery or DLQ according to policy.
 
 The evaluation and recommended implementation split are documented in
 [InProgress Evaluation](in-progress-evaluation.md).
@@ -143,14 +165,17 @@ The evaluation and recommended implementation split are documented in
 
 JetStream push consumers deliver messages to a delivery subject instead of
 waiting for the client to fetch a bounded batch. That does not change the ACK
-rule. A future push runner mode must use manual acknowledgement only and must
-ACK only after the sink reports durable success or after DLQ publication
-succeeds for permanent failures.
+rule. The opt-in push runner mode uses manual acknowledgement only and ACKs
+only after the sink reports durable success or after DLQ publication succeeds
+for permanent failures.
 
-Push mode is not enabled today. It needs bounded callback intake, pending
-message and byte limits, flow-control and heartbeat handling, and shutdown
-tests before it can be production-ready. The evaluation and implementation
-split are documented in [Push Consumer Evaluation](push-consumer-evaluation.md).
+Push mode is disabled by default and guarded by bounded callback intake plus
+pending message and byte limits. Focused certification tests prove
+ACK-after-commit ordering, no ACK on temporary failure, DLQ-before-ACK on
+permanent failure, callback error containment, flow-control and heartbeat
+configuration propagation, and shutdown behavior. The evaluation and
+implementation split are documented in
+[Push Consumer Evaluation](push-consumer-evaluation.md).
 
 ## Non-Negotiable Invariant
 

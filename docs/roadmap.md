@@ -35,10 +35,23 @@
 - Event freshness and staleness metrics for aggregate event age at receive and
   store time, missing or malformed creation timestamps, stale events, and
   positive source clock skew.
+- Stable InProgress metric names, metrics CLI rendering, Prometheus text
+  rendering, and an operator runbook for distinguishing slow active work from
+  durable sink success.
+- Optional disabled-by-default JetStream `InProgress` heartbeat during
+  long-running sink writes, with effective AckWait-only startup guardrails,
+  bind-only consumer-policy inspection, BackOff rejection, and bounded
+  interval, count, and shutdown controls.
 - Local JSON metrics snapshots and the `nats-sink-metrics` inspection CLI for
   table, JSON, JSONL, shell, names, and Prometheus text output.
 - Observability core with disabled-by-default sharing policies and a
   `nats-sink-observe` CLI for safe connector operation.
+- Subject-aware observability policy model and bounded subject-family metric
+  aggregation through prepared `labeled_metrics` snapshot rows, with raw
+  subject export disabled by default.
+- Subject-aware observability certification tests and operator runbook proving
+  disabled defaults, sanitized connector output, cardinality controls, and
+  delivery non-interference for prepared subject-family metrics.
 - Policy-controlled Prometheus textfile connector for node_exporter, designed
   to run as a separate Linux service from the sink worker.
 - Optional native Prometheus HTTP scrape endpoint, designed as a separate
@@ -52,8 +65,18 @@
 - Splunk HEC observability connector for approved aggregate metrics in
   security operations and incident-response environments, with token values
   sourced from environment variables and HEC export kept outside delivery.
+- OCI Monitoring observability connector for approved Oracle Cloud
+  Infrastructure custom metrics, with optional OCI SDK dependency,
+  least-privilege identity guidance, and export kept outside delivery.
 - StatsD observability connector for approved best-effort UDP or Unix datagram
   metric export, kept outside delivery semantics.
+- Datadog observability connector for approved DogStatsD metric datagrams to a
+  local or explicitly approved Datadog Agent listener.
+- Amazon CloudWatch observability connector for approved custom metrics through
+  bounded `PutMetricData` requests and the optional AWS SDK path.
+- Azure Monitor observability connector for approved custom metrics through a
+  bounded REST path, environment-backed bearer-token reference, and one
+  reviewed Azure resource scope.
 - Syslog observability bridge for approved bounded RFC 5424-style metric
   messages over UDP or Unix datagram sockets, kept outside delivery semantics.
 - NATS server monitoring diagnostic connector for selected endpoints such as
@@ -82,6 +105,13 @@
   `SinkRegistry` resolution, first-party Oracle and FileSink descriptors, and
   disabled-by-default allow-listed entry-point discovery for reviewed external
   connectors.
+- First-party HTTP sink for fixed endpoint forwarding with explicit
+  idempotency-key propagation, bounded request and response handling, safe
+  static and environment-backed headers, bounded retry guidance, and warnings
+  for endpoints that cannot provide idempotent semantics.
+- First-party S3-compatible object sink with deterministic object keys,
+  conditional duplicate handling, optional metadata sidecars, optional gzip
+  compression, bounded retries, and least-privilege object-storage guidance.
 - Documented sink certification contract with reusable test helpers for
   lifecycle, durable write success, duplicate redelivery, ACK-boundary
   protection, and log-redaction checks across current and future production
@@ -92,12 +122,18 @@
   `create_if_missing`, and `reconcile` modes, plus safe drift validation for
   delivery-sensitive settings such as filter subject, ACK policy, AckWait,
   MaxDeliver, MaxAckPending, and headers-only state.
+- Opt-in bounded manual-ACK push-consumer mode with fail-closed configuration,
+  guarded callback intake, flow-control and idle-heartbeat propagation, and
+  delivery-contract certification tests.
 - Encrypted edge spool-and-forward sink for disconnected operation, with
   bounded local custody, deterministic duplicate handling, priority-aware
   replay, and explicit forwarding into a final destination sink.
 - Richer durable pull-consumer policy configuration for plural filter subjects,
   server-side BackOff, MaxWaiting, consumer replicas, memory-storage state, and
   bounded low-sensitivity consumer metadata.
+- Durable replay-to-sinks guidance and tooling design based on durable pull
+  consumers, explicit replay boundaries, dry-run evidence, redacted reporting,
+  idempotency review, and no-early-ACK test expectations.
 - Least-privilege NATS permissions templates for runtime workers, DLQ publish
   rights, optional consumer management, and advisory readers.
 - Advanced JetStream topology guidance for mirrors, sources, subject
@@ -138,48 +174,46 @@
 
 ## Phase 2
 
-- Individual observability connector backlog items for Datadog, Oracle Cloud
-  Infrastructure Monitoring, Amazon CloudWatch, and Azure Monitor, all
-  following the shared disabled-by-default observability connector contract.
-- Headers-only JetStream delivery support split into validated consumer
-  configuration, payload-presence metadata, and sink or DLQ certification.
+- Individual observability connector backlog items for Azure Monitor and any
+  additional future connectors, all following the shared disabled-by-default
+  observability connector contract.
 - Additional mission-support documentation examples for future operator
   runbooks, deeper replay drills, and sink-specific certification evidence.
 - Deeper certification evidence and runbooks for complex multi-route Oracle
   idempotency deployments.
 - Deeper Oracle merge insert-versus-match visibility if future Oracle driver
   metadata can support it reliably without guessing.
-- HTTP sink idempotency-key support, retry safety guidance, and clear warnings
-  for endpoints that cannot provide idempotent semantics.
-- S3 sink design with atomic object keys and safe duplicate overwrite/skip
-  behavior.
 - Native Oracle Cloud Infrastructure Object Storage sink design with
   deterministic object keys, OCI identity support, checksums, multipart upload,
   and least-privilege bucket guidance.
 - Additional Oracle MySQL HeatWave tuning and certification guidance on top of
   the implemented first-party Oracle MySQL sink, including deployment profiles,
   performance notes, and HeatWave-specific operational validation.
-- Oracle Berkeley DB, Oracle NoSQL Database, and OCI Streaming sink evaluations
-  as first-party Oracle-family connector candidates.
-- GoldenGate-inspired sink candidate tracking for additional Oracle-family
-  connector opportunities such as Oracle Autonomous AI Lakehouse, Oracle AI
-  Data Platform, Oracle JSON document stores, OCI Cache Cluster, WebLogic JMS,
-  Oracle TimesTen, Oracle Spatial and Graph profiles, Oracle application
-  connector families, and OCI PostgreSQL profile decisions.
-- Palantir Foundry and Palantir Gotham sink evaluations with local fake-client
-  or contract-harness testing before any live certification claim.
+- Oracle Berkeley DB and OCI Streaming sink evaluations as first-party
+  Oracle-family connector candidates. Oracle NoSQL Database and Oracle
+  Coherence Community Edition now have experimental first-party sinks. Oracle
+  NoSQL Database now has local KVLite container-backed e2e evidence, but deeper
+  deployment-mode certification remains required before production-ready
+  recommendation. Issue #319 tracks the Oracle NoSQL production-readiness
+  matrix, deterministic SDK-construction certification, and live certification
+  runbooks needed before connector metadata can be promoted.
+- Additional Oracle-family connector evaluations such as Oracle Autonomous AI
+  Lakehouse, Oracle AI Data Platform, Oracle JSON document stores, OCI Cache
+  Cluster, WebLogic JMS, Oracle TimesTen, Oracle Spatial and Graph profiles,
+  Oracle application connector families, and OCI PostgreSQL profile decisions.
+- Live-certification work for the experimental Palantir Foundry Streams sink
+  and experimental Palantir Gotham RevDB object sink. Both connectors now have
+  local fake-client contract harnesses, but no production certification claim.
 - Elasticsearch or OpenSearch, Snowflake, BigQuery, Azure object storage,
   Kafka, MongoDB, Redis, and Cassandra-compatible sink evaluations at low
   priority so the project can learn from common Kafka-style connector patterns
   without prematurely broadening the production surface.
-- Additional external connector evaluations informed by GoldenGate target
-  coverage, including AWS streaming and warehouse targets, Azure Event Hubs and
-  Microsoft Fabric, Google Cloud Storage and Pub/Sub, Databricks, Apache
-  Iceberg and Hadoop ecosystem targets, JMS, JDBC, SQL Server, Db2, SAP HANA,
-  specialty warehouses, distributed SQL systems, legacy database families,
-  Solace, managed Kafka compatibility profiles, Cosmos DB profiles, and
-  MariaDB.
-- HTTP sink.
+- Additional external connector evaluations, including AWS streaming and
+  warehouse targets, Azure Event Hubs and Microsoft Fabric, Google Cloud
+  Storage and Pub/Sub, Databricks, Apache Iceberg and Hadoop ecosystem targets,
+  JMS, JDBC, SQL Server, Db2, SAP HANA, specialty warehouses, distributed SQL
+  systems, legacy database families, Solace, managed Kafka compatibility
+  profiles, Cosmos DB profiles, and MariaDB.
 - Docker image.
 - Optional dedicated secret-manager connectors for encryption keys when a
   future release can keep provider dependencies isolated behind extras.
@@ -194,20 +228,9 @@
   server policies.
 - Deeper replay-start options for sequence or timestamp-based delivery
   policies.
-- Optional confirmed ACK support after durable sink success.
-- Optional confirmed ACK or terminal acknowledgement handling after successful
-  DLQ publication.
-- ACK confirmation metrics and an operator runbook for interpreting durable
-  success followed by ACK confirmation failure.
-- AckWait and BackOff guardrails for optional `InProgress` handling.
-- Optional `InProgress` heartbeat during long-running sink writes.
-- InProgress metrics and an operator runbook for distinguishing slow active
-  work from durable success.
-- Subject-aware observability policy model with disabled-by-default,
-  default-deny, bounded subject-family rules.
-- Bounded subject-family metric aggregation without raw subject export by
-  default.
-- Subject-aware observability certification tests and operator runbook.
+- Explicit BackOff-aware `InProgress` heartbeat timing if future work can prove
+  safe support for JetStream BackOff sequences.
+
 ## Phase 3
 
 - External connector marketplace guidance, certification evidence, and
@@ -215,22 +238,11 @@
 - Sink certification tests.
 - Helm chart.
 - Advanced observability.
-- Push-consumer capability and configuration guardrails.
-- Opt-in bounded push-consumer runner mode.
-- Push-consumer delivery-contract and flow-control certification tests.
-- Ordered-consumer client compatibility checks.
-- Read-only ordered-consumer inspection CLI, clearly separated from production
-  durable sink processing.
-- Durable replay-to-sinks guidance and tooling design based on durable pull
-  consumers rather than ordered inspection consumers.
-- Payload-presence metadata and sink certification for headers-only
-  metadata-only workflows.
 - Stream management helpers for retention, discard, storage, replicas, and
   duplicate-window documentation.
 - Stream mirror, source, subject transform, republish, compression, placement,
   and metadata management helpers beyond the current documentation guidance.
-- Sink certification tests for future HTTP, S3, Kafka, and other active sink
-  proposals.
+- Sink certification tests for future Kafka and other active sink proposals.
 
 ## Not Planned Unless Scope Changes
 

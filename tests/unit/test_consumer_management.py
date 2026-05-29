@@ -9,7 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from nats_sinks.core.config import ConsumerManagementConfig, DeliveryConfig
+from nats_sinks.core.config import ConsumerManagementConfig, DeliveryConfig, InProgressConfig
 from nats_sinks.core.consumer_management import (
     build_consumer_config,
     detect_consumer_drift,
@@ -104,6 +104,7 @@ class FakeManagedJetStream:
     async def add_consumer(self, stream: str, *, config: object) -> object:
         self.events.append(f"add_consumer:{stream}")
         self.added_configs.append(config)
+        self.existing = SimpleNamespace(config=config)
         return SimpleNamespace(config=config)
 
 
@@ -186,6 +187,31 @@ async def test_create_if_missing_creates_durable_pull_consumer() -> None:
 
 
 @pytest.mark.asyncio
+async def test_in_progress_create_if_missing_rechecks_created_consumer_policy() -> None:
+    js = FakeManagedJetStream(existing=None)
+
+    result = await ensure_jetstream_consumer(
+        js,
+        stream="ORDERS",
+        durable_name="orders-sink",
+        subject="orders.*",
+        durable=True,
+        config=ConsumerManagementConfig(
+            mode="create_if_missing",
+            ack_wait_seconds=30,
+        ),
+        in_progress=InProgressConfig(enabled=True, interval_ms=5000),
+    )
+
+    assert result.action == "created"
+    assert js.events == [
+        "consumer_info:ORDERS:orders-sink",
+        "add_consumer:ORDERS",
+        "consumer_info:ORDERS:orders-sink",
+    ]
+
+
+@pytest.mark.asyncio
 async def test_create_if_missing_binds_compatible_existing_consumer() -> None:
     js = FakeManagedJetStream(existing=_consumer_info())
 
@@ -201,6 +227,127 @@ async def test_create_if_missing_binds_compatible_existing_consumer() -> None:
     assert result.action == "bound"
     assert js.events == ["consumer_info:ORDERS:orders-sink"]
     assert js.added_configs == []
+
+
+@pytest.mark.asyncio
+async def test_in_progress_bind_only_accepts_safe_effective_ack_wait() -> None:
+    js = FakeManagedJetStream(existing=_consumer_info(ack_wait=30.0))
+
+    result = await ensure_jetstream_consumer(
+        js,
+        stream="ORDERS",
+        durable_name="orders-sink",
+        subject="orders.*",
+        durable=True,
+        config=ConsumerManagementConfig(mode="bind_only"),
+        in_progress=InProgressConfig(enabled=True, interval_ms=5000),
+    )
+
+    assert result.action == "bound"
+    assert js.events == ["consumer_info:ORDERS:orders-sink"]
+
+
+@pytest.mark.asyncio
+async def test_in_progress_bind_only_rejects_missing_effective_ack_wait() -> None:
+    js = FakeManagedJetStream(existing=_consumer_info(ack_wait=None))
+
+    with pytest.raises(ConfigurationError, match="readable effective JetStream consumer ack_wait"):
+        await ensure_jetstream_consumer(
+            js,
+            stream="ORDERS",
+            durable_name="orders-sink",
+            subject="orders.*",
+            durable=True,
+            config=ConsumerManagementConfig(mode="bind_only"),
+            in_progress=InProgressConfig(enabled=True, interval_ms=5000),
+        )
+
+    assert js.events == ["consumer_info:ORDERS:orders-sink"]
+
+
+@pytest.mark.asyncio
+async def test_in_progress_bind_only_rejects_unsafe_effective_ack_wait_interval() -> None:
+    js = FakeManagedJetStream(existing=_consumer_info(ack_wait=5.0))
+
+    with pytest.raises(ConfigurationError, match="below 80%"):
+        await ensure_jetstream_consumer(
+            js,
+            stream="ORDERS",
+            durable_name="orders-sink",
+            subject="orders.*",
+            durable=True,
+            config=ConsumerManagementConfig(mode="bind_only"),
+            in_progress=InProgressConfig(enabled=True, interval_ms=4000),
+        )
+
+
+@pytest.mark.asyncio
+async def test_in_progress_bind_only_rejects_effective_backoff_policy() -> None:
+    js = FakeManagedJetStream(existing=_consumer_info(ack_wait=30.0, backoff=[1.0, 5.0]))
+
+    with pytest.raises(ConfigurationError, match="effective JetStream BackOff policy"):
+        await ensure_jetstream_consumer(
+            js,
+            stream="ORDERS",
+            durable_name="orders-sink",
+            subject="orders.*",
+            durable=True,
+            config=ConsumerManagementConfig(mode="bind_only"),
+            in_progress=InProgressConfig(enabled=True, interval_ms=5000),
+        )
+
+
+@pytest.mark.asyncio
+async def test_in_progress_bind_only_rejects_malformed_effective_backoff_policy() -> None:
+    js = FakeManagedJetStream(existing=_consumer_info(ack_wait=30.0, backoff="1,5"))
+
+    with pytest.raises(ConfigurationError, match="effective JetStream BackOff policy"):
+        await ensure_jetstream_consumer(
+            js,
+            stream="ORDERS",
+            durable_name="orders-sink",
+            subject="orders.*",
+            durable=True,
+            config=ConsumerManagementConfig(mode="bind_only"),
+            in_progress=InProgressConfig(enabled=True, interval_ms=5000),
+        )
+
+
+@pytest.mark.parametrize("ack_wait", [float("nan"), float("inf")])
+@pytest.mark.asyncio
+async def test_in_progress_bind_only_rejects_non_finite_effective_ack_wait(
+    ack_wait: float,
+) -> None:
+    js = FakeManagedJetStream(existing=_consumer_info(ack_wait=ack_wait))
+
+    with pytest.raises(ConfigurationError, match="finite effective JetStream consumer ack_wait"):
+        await ensure_jetstream_consumer(
+            js,
+            stream="ORDERS",
+            durable_name="orders-sink",
+            subject="orders.*",
+            durable=True,
+            config=ConsumerManagementConfig(mode="bind_only"),
+            in_progress=InProgressConfig(enabled=True, interval_ms=5000),
+        )
+
+
+@pytest.mark.asyncio
+async def test_in_progress_rejects_ephemeral_consumer_before_fetch() -> None:
+    js = FakeManagedJetStream(existing=_consumer_info(ack_wait=30.0))
+
+    with pytest.raises(ConfigurationError, match="requires a durable JetStream consumer"):
+        await ensure_jetstream_consumer(
+            js,
+            stream="ORDERS",
+            durable_name="orders-sink",
+            subject="orders.*",
+            durable=False,
+            config=ConsumerManagementConfig(mode="bind_only"),
+            in_progress=InProgressConfig(enabled=True, interval_ms=5000),
+        )
+
+    assert js.events == []
 
 
 @pytest.mark.asyncio

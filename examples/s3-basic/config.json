@@ -1,0 +1,19 @@
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "EVENTS",
+    "consumer": "s3-events-sink",
+    "subject": "events.>"
+  },
+  "sink": {
+    "type": "s3",
+    "bucket": "nats-sinks-events",
+    "prefix": "events/archive",
+    "key_strategy": "stream_sequence",
+    "duplicate_policy": "skip_existing",
+    "metadata_mode": "object_metadata",
+    "object_metadata": {
+      "purpose": "example"
+    }
+  }
+}

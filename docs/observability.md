@@ -19,6 +19,15 @@ Observability is documented as a small set of focused pages:
   sharing policy, and connector-neutral architecture.
 - [Metrics Snapshot And CLI](metrics.md): explains the local metrics recorder,
   `nats-sink-metrics`, metric names, snapshot files, and shell-friendly output.
+- [InProgress Metrics Runbook](inprogress-metrics-runbook.md): explains the
+  stable progress-heartbeat metric family, safe alerting, and why progress
+  signals are not durable success or ACK events.
+- [Subject-Aware Observability Evaluation](subject-aware-observability-evaluation.md):
+  explains the controlled subject-family policy model and why subject labels
+  remain disabled by default.
+- [Subject-Aware Observability Runbook](subject-aware-observability-runbook.md):
+  gives operators and connector authors the certification checklist, synthetic
+  examples, and "do not enable" guidance for subject-family metrics.
 - [Prometheus Integration](prometheus.md): explains the policy-controlled
   Prometheus textfile connector and optional native HTTP scrape endpoint.
 - [OpenTelemetry OTLP Integration](otlp.md): explains policy-controlled export
@@ -31,8 +40,15 @@ Observability is documented as a small set of focused pages:
 - [Splunk HEC Integration](splunk-hec.md): explains the Splunk HTTP Event
   Collector connector for approved aggregate metrics in SIEM and
   incident-response environments.
+- [OCI Monitoring Integration](oci-monitoring.md): explains OCI-native custom
+  metric export with instance principals, resource principals, or protected OCI
+  SDK config files.
 - [StatsD Integration](statsd.md): explains best-effort UDP and Unix datagram
   export to StatsD-compatible aggregators.
+- [Amazon CloudWatch Integration](cloudwatch.md): explains policy-controlled
+  export to CloudWatch custom metrics through the optional AWS SDK path.
+- [Azure Monitor Integration](azure-monitor.md): explains policy-controlled
+  export to Azure Monitor custom metrics through a bounded REST connector.
 - [Syslog Bridge](syslog.md): explains best-effort RFC 5424-style UDP and Unix
   datagram export for restricted or legacy syslog pipelines.
 - [NATS Server Monitoring Integration](nats-server-monitoring.md): explains the
@@ -53,8 +69,19 @@ The Grafana Alloy profile follows the same rule and is implemented as an OTLP
 handoff to a separate Alloy collector.
 The Splunk HEC connector follows the same rule and emits one bounded
 policy-approved metric event to Splunk's HTTP Event Collector.
+The OCI Monitoring connector follows the same rule and sends bounded custom
+metric batches to Oracle Cloud Infrastructure Monitoring through the optional
+OCI SDK path.
 The StatsD connector follows the same rule and emits bounded best-effort
 datagrams to a StatsD-compatible local or network listener.
+The Amazon CloudWatch connector follows the same rule and emits bounded custom
+metric requests through the optional AWS SDK path. The request body contains
+approved metric names, values, units, and reviewed low-cardinality dimensions
+only.
+The Azure Monitor connector follows the same rule and emits bounded custom
+metric requests to one explicitly configured Azure resource through the Azure
+Monitor REST path. The request body contains approved metric names, values, and
+reviewed low-cardinality dimensions only.
 The syslog bridge follows the same rule and emits bounded RFC 5424-style
 messages to an approved syslog listener without exporting payloads, subjects,
 classification values, labels, mission metadata, or destination details.
@@ -69,20 +96,27 @@ runtime:
 - payload bodies, decrypted data, secrets, tokens, private keys, full
   connection strings, NATS credentials, Oracle DSNs, table names, file paths,
   classification values, labels, and subjects must not be exported by default,
-- exported metrics must be low-cardinality unless a future connector clearly
-  documents a bounded label strategy,
+- exported metrics must be low-cardinality, and subject-family labels require
+  the documented `subject_metrics` policy plus prepared `labeled_metrics` rows,
 - event freshness metrics must remain aggregate-only because event age, stale
   counts, and source clock skew can reveal operational tempo,
 - external sharing is disabled until an explicit policy enables it,
 - observability connectors are isolated from core and sink logic so new
   platforms can be added without breaking sink APIs.
+- InProgress metrics remain aggregate timing and count signals. They must not
+  be used as success signals, and they must not export subjects, payloads,
+  destination names, labels, classification values, or private deployment
+  details.
 
-Subject-aware observability has been evaluated as a future opt-in capability.
-It is not enabled today. The current policy may list configured subject
-patterns as disabled review hints, but exporters do not emit subject labels.
-That separation is intentional: subjects can reveal operational structure and
-can create expensive high-cardinality metric series. See
-[Subject-Aware Observability Evaluation](subject-aware-observability-evaluation.md).
+Subject-aware observability now has a policy model and a bounded prepared
+series format. Subject-family export is still disabled by default and is not
+derived directly from raw NATS subjects. The policy can describe reviewed
+subject-family allow rules, stable labels, display modes, cardinality caps, and
+overflow behavior. Exporters render subject-family labels only from prepared
+`labeled_metrics` rows. That separation is intentional: subjects can reveal
+operational structure and can create expensive high-cardinality metric series.
+See [Subject-Aware Observability Evaluation](subject-aware-observability-evaluation.md)
+and [Subject-Aware Observability Runbook](subject-aware-observability-runbook.md).
 
 ## Architecture
 
@@ -228,6 +262,15 @@ Generated policies are disabled by default:
   "include_observations": false,
   "include_legacy": false,
   "subjects": [],
+  "subject_metrics": {
+    "enabled": false,
+    "default_action": "deny",
+    "max_subject_families": 20,
+    "overflow_action": "drop",
+    "overflow_label": "other",
+    "allow_raw_subjects": false,
+    "rules": []
+  },
   "prometheus": {
     "enabled": false,
     "output_file": "/var/lib/node_exporter/textfile_collector/nats_sinks.prom",
@@ -302,6 +345,28 @@ Generated policies are disabled by default:
     "host": "nats-sinks",
     "index": null
   },
+  "oci_monitoring": {
+    "enabled": false,
+    "metric_namespace": "nats_sinks_metrics",
+    "region": null,
+    "compartment_id": null,
+    "resource_group": null,
+    "auth_mode": "instance_principal",
+    "config_file": null,
+    "profile": "DEFAULT",
+    "batch_atomicity": "ATOMIC",
+    "dimensions": {
+      "source": "nats_sinks"
+    },
+    "metadata": {},
+    "include_metric_labels_as_dimensions": false,
+    "timeout_seconds": 5,
+    "max_retries": 0,
+    "retry_backoff_seconds": 0.25,
+    "stale_after_seconds": null,
+    "max_metrics_per_request": 20,
+    "max_request_bytes": 1048576
+  },
   "statsd": {
     "enabled": false,
     "transport": "udp",
@@ -309,6 +374,21 @@ Generated policies are disabled by default:
     "port": 8125,
     "socket_path": null,
     "metric_prefix": null,
+    "timeout_seconds": 1,
+    "max_retries": 0,
+    "retry_backoff_seconds": 0.25,
+    "stale_after_seconds": null,
+    "max_datagram_bytes": 1432
+  },
+  "datadog": {
+    "enabled": false,
+    "transport": "udp",
+    "host": "127.0.0.1",
+    "port": 8125,
+    "socket_path": null,
+    "metric_prefix": null,
+    "tags": {},
+    "include_metric_labels_as_tags": false,
     "timeout_seconds": 1,
     "max_retries": 0,
     "retry_backoff_seconds": 0.25,
@@ -384,11 +464,24 @@ is disabled by default and requires both `enabled=true` and
 containing only approved aggregate metric fields. HEC tokens are referenced by
 environment variable name and resolved only at export time.
 
+The `oci_monitoring` object controls the Oracle Cloud Infrastructure Monitoring
+connector. It is disabled by default and requires both `enabled=true` and
+`oci_monitoring.enabled=true`. The connector sends bounded custom metric
+batches through the optional OCI SDK path. Instance principals and resource
+principals are preferred; SDK config files are supported for controlled local
+labs and protected runtime environments.
+
 The `statsd` object controls the StatsD connector. It is disabled by default
 and requires both `enabled=true` and `statsd.enabled=true`. The connector sends
 one bounded datagram per approved aggregate metric over UDP or a Unix datagram
 socket. StatsD is best-effort observability and must not be treated as durable
 delivery evidence.
+
+The `datadog` object controls the Datadog DogStatsD connector. It is disabled
+by default and requires both `enabled=true` and `datadog.enabled=true`. The
+connector sends one bounded DogStatsD datagram per approved aggregate metric to
+a local or approved Datadog Agent listener. Tags are opt-in and bounded because
+they can expose sensitive metadata or create high-cardinality cost.
 
 The `syslog` object controls the syslog bridge. It is disabled by default and
 requires both `enabled=true` and `syslog.enabled=true`. The connector sends one
@@ -403,6 +496,13 @@ scalar JSON fields. It never exports the configured base URL, credentials, raw
 endpoint body, account names, subject names, stream names, consumer names, or
 topology fields unless an operator has selected those exact fields.
 
+The `subject_metrics` object is the policy model for subject-family
+observability. It is disabled by default and uses default-deny rules. Exporters
+do not add subject labels from raw NATS subjects; they render subject-family
+labels only from prepared `labeled_metrics` rows that have already passed this
+policy. Aggregate metrics continue to export only the metric names allowed by
+the top-level policy.
+
 ## Policy Fields
 
 | Field | Default | Meaning |
@@ -416,19 +516,115 @@ topology fields unless an operator has selected those exact fields.
 | `denied_metric_patterns` | `[]` | Glob patterns to suppress even if an allow rule matches. |
 | `include_observations` | `false` | Whether timing observations such as `sink_batch_write_seconds` may be exported. |
 | `include_legacy` | `false` | Whether legacy metric aliases may be exported. |
-| `subjects` | `[]` | Subject patterns discovered from the core config for operator review and future subject-aware metrics. Current exporters do not share these as labels. |
+| `subjects` | `[]` | Subject patterns discovered from the core config for operator review. These hints are not exported as labels. |
+| `subject_metrics` | object | Disabled-by-default subject-family policy model. Prepared labeled rows are exported only when this policy explicitly allows them. |
 | `prometheus` | object | Prometheus connector settings. |
 | `otlp` | object | OpenTelemetry OTLP connector settings. |
 | `elastic` | object | Elastic Observability profile settings over the OTLP connector. |
 | `grafana_alloy` | object | Grafana Alloy profile settings over the OTLP connector, including generated River snippet settings. |
 | `splunk_hec` | object | Splunk HTTP Event Collector settings for approved aggregate metric events. |
+| `oci_monitoring` | object | OCI Monitoring settings for approved Oracle Cloud Infrastructure custom metrics. |
 | `statsd` | object | StatsD connector settings for approved best-effort metric datagrams. |
+| `datadog` | object | Datadog DogStatsD connector settings for approved best-effort metric datagrams and reviewed low-cardinality tags. |
+| `azure_monitor` | object | Azure Monitor custom metrics settings for one approved Azure resource. |
 | `syslog` | object | Syslog bridge settings for approved RFC 5424-style best-effort metric messages. |
 | `nats_server_monitoring` | object | Optional connector settings for selected NATS server monitoring endpoint values. |
 
 The deny list wins over the allow list. This lets a broad allow rule such as
 `messages_*` be narrowed with a specific deny rule if a metric is not suitable
 for a particular environment.
+
+## Subject-Aware Policy Fields
+
+Subject-aware observability is controlled through the `subject_metrics` object.
+It is intentionally separate from `subjects`, which is only a list of disabled
+review hints discovered from the runtime configuration.
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `subject_metrics.enabled` | `false` | Enables evaluation of subject-family rules for prepared labeled metric rows. It does not derive labels directly from raw subjects. |
+| `subject_metrics.default_action` | `deny` | Default action when no rule matches. This is fixed to `deny` so the model fails closed. |
+| `subject_metrics.max_subject_families` | `20` | Maximum number of subject-family labels kept in one aggregation pass, validated from `1` through `100`. |
+| `subject_metrics.overflow_action` | `drop` | Deterministic overflow behavior. Valid values are `drop`, `aggregate_other`, and `fail_closed`. |
+| `subject_metrics.overflow_label` | `other` | Stable label for `aggregate_other` overflow buckets. |
+| `subject_metrics.allow_raw_subjects` | `false` | Required before any allow rule may use `display_mode: "raw"`. Raw subject sharing should be treated as a reviewed exception. |
+| `subject_metrics.rules` | `[]` | Ordered subject-family rules. Deny rules take precedence over allow rules during evaluation. |
+
+Each rule accepts:
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `subject` | required | NATS subject pattern using the same wildcard grammar as runtime routing. |
+| `action` | `allow` | Either `allow` or `deny`. Allow rules require a stable operator label. |
+| `label` | `null` | Operator-chosen low-cardinality family label. It must be bounded, identifier-like, and must not look like a credential. |
+| `display_mode` | `label` | Future display mode. Valid values are `label`, `redacted`, `hash`, and `raw`. Hashing is deterministic but is not a confidentiality boundary. |
+| `allowed_metrics` | `[]` | Optional exact metric allow list for this subject family. Empty means the rule can apply to any otherwise-approved metric. |
+| `allowed_metric_patterns` | `[]` | Optional metric glob patterns for this subject family. |
+
+Example reviewed policy block:
+
+```json
+{
+  "subject_metrics": {
+    "enabled": true,
+    "default_action": "deny",
+    "max_subject_families": 20,
+    "overflow_action": "aggregate_other",
+    "overflow_label": "other",
+    "allow_raw_subjects": false,
+    "rules": [
+      {
+        "subject": "orders.*",
+        "action": "allow",
+        "label": "orders",
+        "display_mode": "label",
+        "allowed_metrics": [
+          "messages_fetched_total",
+          "messages_written_total",
+          "messages_failed_total"
+        ]
+      },
+      {
+        "subject": "orders.secret",
+        "action": "deny"
+      }
+    ]
+  }
+}
+```
+
+This example describes a subject-family view for approved `orders.*` metrics
+while explicitly denying `orders.secret`. Exporters render only prepared
+`labeled_metrics` rows that have already been mapped to the approved family
+label. They must not inspect raw NATS subjects themselves.
+
+Prepared subject-family rows use the optional metrics snapshot
+`labeled_metrics` section:
+
+```json
+{
+  "labeled_metrics": [
+    {
+      "kind": "counter",
+      "name": "messages_written_total",
+      "value": 128,
+      "labels": {
+        "subject_family": "orders"
+      }
+    }
+  ]
+}
+```
+
+The row says only that the reviewed `orders` family contributed `128` events
+to `messages_written_total`. It does not include the raw subject
+`orders.created`, message IDs, payloads, classifications, file paths, table
+names, endpoint URLs, or credentials. Prometheus renders this as a
+`subject_family` label, OTLP renders it as a data-point attribute, OCI
+Monitoring may render it as a dimension only when explicitly enabled, StatsD
+folds it into a bounded metric name component, Splunk HEC folds it into the
+metric field name, Datadog may render it as a DogStatsD tag only when
+explicitly enabled, and syslog renders it as a structured-data parameter.
 
 ## Prometheus Connector Fields
 
@@ -529,6 +725,33 @@ generation, service guidance, security notes, and test coverage.
 See [Splunk HEC Integration](splunk-hec.md) for full examples, HEC event
 format, service guidance, security notes, and test coverage.
 
+## OCI Monitoring Connector Fields
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `oci_monitoring.enabled` | `false` | Enables OCI Monitoring export when the top-level policy is also enabled. |
+| `oci_monitoring.metric_namespace` | `nats_sinks_metrics` | OCI custom metric namespace. Reserved `oci_` and `oracle_` prefixes are rejected. |
+| `oci_monitoring.region` | `null` | OCI region name. Required when the connector is enabled. |
+| `oci_monitoring.compartment_id` | `null` | Target compartment OCID. Required when enabled and redacted from dry-run output. |
+| `oci_monitoring.resource_group` | `null` | Optional OCI Monitoring resource group. Keep it static and non-sensitive. |
+| `oci_monitoring.auth_mode` | `instance_principal` | Authentication mode. Valid values are `instance_principal`, `resource_principal`, and `config_file`. |
+| `oci_monitoring.config_file` | `null` | OCI SDK config file path. Required only for `auth_mode: "config_file"`. |
+| `oci_monitoring.profile` | `DEFAULT` | OCI SDK config profile used with config-file authentication. |
+| `oci_monitoring.batch_atomicity` | `ATOMIC` | OCI request batch behavior. Valid values are `ATOMIC` and `NON_ATOMIC`. |
+| `oci_monitoring.dimensions` | `{"source": "nats_sinks"}` | Static, low-cardinality dimensions added to each custom metric. At least one safe dimension is required. |
+| `oci_monitoring.metadata` | `{}` | Optional static metric metadata. Sensitive-looking keys are rejected. |
+| `oci_monitoring.include_metric_labels_as_dimensions` | `false` | Adds prepared, policy-reviewed metric labels such as `subject_family` as OCI dimensions. Leave disabled unless the subject-aware runbook has been completed. |
+| `oci_monitoring.timeout_seconds` | `5` | Per-request SDK timeout, validated from greater than `0` through `60` seconds. |
+| `oci_monitoring.max_retries` | `0` | Bounded retries after the initial attempt. |
+| `oci_monitoring.retry_backoff_seconds` | `0.25` | Delay between retry attempts. |
+| `oci_monitoring.stale_after_seconds` | `null` | Optional maximum snapshot age before export fails closed unless `--allow-stale` is used. |
+| `oci_monitoring.max_metrics_per_request` | `20` | Maximum metric data objects per OCI request, capped at `50`. |
+| `oci_monitoring.max_request_bytes` | `1048576` | Maximum rendered request size before SDK model conversion. |
+
+See [OCI Monitoring Integration](oci-monitoring.md) for authentication
+choices, least-privilege OCI policy guidance, dry-run output, service examples,
+and test coverage.
+
 ## StatsD Connector Fields
 
 | Field | Default | Meaning |
@@ -547,6 +770,71 @@ format, service guidance, security notes, and test coverage.
 
 See [StatsD Integration](statsd.md) for full examples, datagram format,
 transport limitations, service guidance, security notes, and test coverage.
+
+## Datadog Connector Fields
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `datadog.enabled` | `false` | Enables Datadog export when the top-level observability policy is also enabled. |
+| `datadog.transport` | `udp` | Transport mode. Supported values are `udp` and `unixgram`. |
+| `datadog.host` | `127.0.0.1` | UDP Datadog Agent host. Keep loopback unless an approved network path exists. |
+| `datadog.port` | `8125` | UDP Datadog Agent port, validated from `1` through `65535`. |
+| `datadog.socket_path` | `null` | Unix datagram socket path. Required when `transport` is `unixgram`. |
+| `datadog.metric_prefix` | `null` | Optional DogStatsD metric prefix. When unset, the policy namespace is used. |
+| `datadog.tags` | `{}` | Optional static low-cardinality tags. Sensitive-looking names or values are rejected. |
+| `datadog.include_metric_labels_as_tags` | `false` | Adds prepared, policy-reviewed metric labels such as `subject_family` as DogStatsD tags. Leave disabled unless the subject-aware runbook has been completed. |
+| `datadog.timeout_seconds` | `1` | Socket timeout, validated from greater than `0` through `60` seconds. |
+| `datadog.max_retries` | `0` | Bounded retries after the initial send attempt. |
+| `datadog.retry_backoff_seconds` | `0.25` | Delay between retry attempts when a local send operation fails. |
+| `datadog.stale_after_seconds` | `null` | Optional maximum snapshot age before export fails closed unless `--allow-stale` is used. |
+| `datadog.max_datagram_bytes` | `1432` | Maximum size for each rendered DogStatsD datagram. |
+
+See [Datadog Integration](datadog.md) for full examples, DogStatsD datagram
+format, tag limitations, Agent guidance, security notes, and test coverage.
+
+## Amazon CloudWatch Connector Fields
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `cloudwatch.enabled` | `false` | Enables Amazon CloudWatch export when the top-level observability policy is also enabled. |
+| `cloudwatch.metric_namespace` | `nats-sinks/metrics` | CloudWatch custom metric namespace. It must not start with `AWS/`, must not contain colons, and is limited to bounded safe ASCII characters. |
+| `cloudwatch.region` | `null` | AWS region used by the SDK client. Required when CloudWatch export is enabled. Dry-run output does not include this value. |
+| `cloudwatch.unit` | `None` | Unit applied to emitted `MetricDatum` values, such as `Count`, `Seconds`, `Milliseconds`, `Bytes`, `Percent`, or `None`. |
+| `cloudwatch.storage_resolution` | `60` | CloudWatch storage resolution. Supported values are `60` for standard custom metrics and `1` for high-resolution custom metrics. |
+| `cloudwatch.dimensions` | `{}` | Static low-cardinality dimensions added to every metric. Names that look sensitive or high-cardinality, such as `subject`, `classification`, `label`, `message`, `table`, `file`, `host`, `user`, `token`, `secret`, or `key`, are rejected. |
+| `cloudwatch.include_metric_labels_as_dimensions` | `false` | When `true`, prepared `labeled_metrics` rows can export their bounded labels as CloudWatch dimensions. Keep disabled unless subject-family sharing has been reviewed. |
+| `cloudwatch.timeout_seconds` | `5` | Connection and read timeout used when the boto3 client is created. |
+| `cloudwatch.max_retries` | `0` | Bounded connector-level retries after the initial failed `PutMetricData` attempt. |
+| `cloudwatch.retry_backoff_seconds` | `0.25` | Delay between connector-level retry attempts. |
+| `cloudwatch.stale_after_seconds` | `null` | Optional maximum snapshot age before export fails closed unless `--allow-stale` is used. |
+| `cloudwatch.max_metrics_per_request` | `20` | Maximum metric datum objects per request. The local cap cannot exceed the AWS limit of `1000`. |
+| `cloudwatch.max_request_bytes` | `1048576` | Maximum rendered request size. Oversized requests fail closed before the AWS SDK is called. |
+
+See [Amazon CloudWatch Integration](cloudwatch.md) for full examples,
+`PutMetricData` request shape, IAM guidance, cost and dimension notes, service
+guidance, security notes, and test coverage.
+
+## Azure Monitor Connector Fields
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `azure_monitor.enabled` | `false` | Enables Azure Monitor export when the top-level observability policy is also enabled. |
+| `azure_monitor.resource_id` | `null` | Azure resource ID that owns the custom metrics. Required when Azure Monitor export is enabled. Dry-run output does not include this value. |
+| `azure_monitor.location` | `null` | Azure resource location used to choose the regional Azure Monitor endpoint. Required when Azure Monitor export is enabled. Dry-run output does not include this value. |
+| `azure_monitor.metric_namespace` | `nats-sinks/metrics` | Azure custom metric namespace. It must not use reserved Azure prefixes, must not contain colons, and is limited to bounded safe ASCII characters. |
+| `azure_monitor.token_env` | `null` | Environment variable containing the Microsoft Entra bearer token. Required when Azure Monitor export is enabled. |
+| `azure_monitor.dimensions` | `{}` | Static low-cardinality dimensions added to every metric. Sensitive-looking or high-cardinality names and values are rejected. |
+| `azure_monitor.include_metric_labels_as_dimensions` | `false` | When `true`, prepared `labeled_metrics` rows can export their bounded labels as Azure dimensions. Keep disabled unless subject-family sharing has been reviewed. |
+| `azure_monitor.timeout_seconds` | `5` | HTTP timeout for each Azure Monitor request. |
+| `azure_monitor.max_retries` | `0` | Bounded connector-level retries after a failed request set. |
+| `azure_monitor.retry_backoff_seconds` | `0.25` | Delay between connector-level retry attempts. |
+| `azure_monitor.stale_after_seconds` | `null` | Optional maximum snapshot age before export fails closed unless `--allow-stale` is used. |
+| `azure_monitor.max_request_bytes` | `1048576` | Maximum rendered request size. Oversized requests fail closed before any HTTP request is made. |
+| `azure_monitor.verify_tls` | `true` | TLS verification is always enabled. |
+
+See [Azure Monitor Integration](azure-monitor.md) for full examples, REST
+request shape, Microsoft Entra token guidance, dimension notes, service
+guidance, security notes, and test coverage.
 
 ## Syslog Bridge Fields
 
@@ -645,10 +933,20 @@ The policy generator copies subject patterns from the core configuration:
 - message-metadata subject rules,
 - Oracle subject-to-table routing rules.
 
-Current core metrics are intentionally not subject-labeled. Subject names can
-be sensitive, and unbounded labels can damage Prometheus performance. The
-`subjects` array is therefore an operator review aid and a future extension
-point, not a promise that subject labels will be exported today.
+Core metrics remain aggregate by default. Subject names can be sensitive, and
+unbounded labels can damage monitoring platforms. The `subjects` array is
+therefore an operator review aid, not a label source. Subject-family labels are
+rendered only from prepared `labeled_metrics` rows that passed the
+`subject_metrics` policy.
+
+Fan-out metrics follow the same rule. Metrics such as
+`fanout_messages_routed_total`, `fanout_child_sinks_selected_total`,
+`fanout_required_child_failure_total`, and
+`fanout_optional_child_timeout_total` are aggregate counters. They do not share
+child sink names, route names, subjects, classification values, labels, file
+paths, database names, or connection details unless a reviewed connector
+explicitly consumes prepared rows from the bounded `subject_metrics` policy
+model.
 
 Example subject entry:
 
@@ -662,9 +960,26 @@ Example subject entry:
 }
 ```
 
-Future subject-aware connectors must document exactly which subject values are
-exported, how cardinality is bounded, and how sensitive subject names are
-approved.
+Example subject-aware policy block:
+
+```json
+{
+  "subject_metrics": {
+    "enabled": false,
+    "default_action": "deny",
+    "max_subject_families": 20,
+    "overflow_action": "drop",
+    "overflow_label": "other",
+    "allow_raw_subjects": false,
+    "rules": []
+  }
+}
+```
+
+Subject-aware connectors must use this policy model and document exactly which
+family labels are exported, how cardinality is bounded, and how sensitive
+subject names are kept out of rendered output. The certification runbook
+describes the release evidence expected for this boundary.
 
 ## Generating A Policy
 
@@ -889,16 +1204,26 @@ Treat observability configuration as production policy:
 - export the smallest useful metric set,
 - allow freshness metrics only when event-age and clock-skew timing are approved
   for the deployment,
-- avoid subject labels unless a future connector explicitly supports bounded,
-  approved subject-aware metrics,
+- avoid subject-family labels unless the reviewed `subject_metrics` policy,
+  prepared `labeled_metrics` rows, and certification runbook checks are in
+  place,
 - keep metrics snapshots and textfiles out of git,
 - make `/etc/nats-sinks/observability.prometheus.json` writable only by root or
   a controlled configuration-management process,
 - grant the Prometheus textfile service read access to the metrics snapshot and
   write access only to the node_exporter textfile directory,
+- grant the OTLP or OCI Monitoring export service read access to the metrics
+  snapshot, read access to the policy, and only the network or platform
+  identity path required to reach the approved monitoring platform,
 - grant the OTLP export service read access to the metrics snapshot, read
   access to the policy, and only the network path required to reach the
   approved OpenTelemetry Collector,
+- grant the Amazon CloudWatch export service read access to the metrics
+  snapshot and policy, and only the AWS identity permissions required to call
+  `cloudwatch:PutMetricData` for the reviewed namespace,
+- grant the Azure Monitor export service read access to the metrics snapshot
+  and policy, plus only the Azure identity permissions required to publish
+  custom metrics for the reviewed Azure resource,
 - keep the main sink service and observability publishing service separate when
   practical.
 
@@ -909,16 +1234,14 @@ labels, or classified mission details.
 ## Future Connectors
 
 The observability core is intentionally connector-neutral. Prometheus textfile,
-Prometheus HTTP, OTLP, Elastic Observability, Grafana Alloy, Splunk HEC, StatsD,
-and NATS monitoring connectors are implemented today.
+Prometheus HTTP, OTLP, Elastic Observability, Grafana Alloy, Splunk HEC, OCI
+Monitoring, StatsD, Datadog, Amazon CloudWatch, Azure Monitor, syslog, and NATS
+monitoring connectors are implemented today.
+
 Future connectors may include:
 
-- Datadog for hosted operational dashboards,
-- Grafana Agent legacy migration notes where needed for existing estates,
-- Oracle Cloud Infrastructure Monitoring for OCI-native deployments,
-- Amazon CloudWatch for AWS deployments,
-- Azure Monitor for Microsoft cloud deployments,
-- syslog or structured log bridges for restricted networks where pull-based
+- Grafana Agent legacy migration notes where needed for existing estates;
+- additional structured log bridges for restricted networks where pull-based
   scraping is not available.
 
 Each connector should remain policy-driven, disabled by default, and isolated

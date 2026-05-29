@@ -20,6 +20,9 @@ import re
 import tempfile
 from collections.abc import Iterable
 from contextlib import suppress
+from dataclasses import dataclass
+from fnmatch import fnmatchcase
+from hashlib import sha256
 from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlsplit
@@ -29,7 +32,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from nats_sinks.core.config import AppConfig, load_json
 from nats_sinks.core.errors import ConfigurationError
 from nats_sinks.core.metrics import METRIC_SPEC_BY_NAME, validate_metric_namespace
-from nats_sinks.core.subjects import validate_subject_pattern
+from nats_sinks.core.subjects import matches_subject, validate_subject_pattern
 
 OBSERVABILITY_POLICY_SCHEMA = "nats_sinks.observability.policy.v1"
 PROMETHEUS_HTTP_PATH_MAX_LENGTH = 128
@@ -41,6 +44,40 @@ NATS_MONITORING_FIELD_MAX_LENGTH = 256
 STATSD_MAX_DATAGRAM_BYTES = 65_507
 STATSD_METRIC_PREFIX_MAX_LENGTH = 128
 STATSD_SOCKET_PATH_MAX_LENGTH = 512
+DATADOG_MAX_DATAGRAM_BYTES = 65_507
+DATADOG_MAX_TAGS = 10
+DATADOG_METRIC_PREFIX_MAX_LENGTH = 128
+DATADOG_SOCKET_PATH_MAX_LENGTH = 512
+DATADOG_TAG_KEY_MAX_LENGTH = 128
+DATADOG_TAG_VALUE_MAX_LENGTH = 128
+OCI_MONITORING_MAX_DIMENSIONS = 10
+OCI_MONITORING_MAX_METADATA = 10
+OCI_MONITORING_MAX_METRICS_PER_REQUEST = 50
+OCI_MONITORING_MAX_REQUEST_BYTES = 1_048_576
+OCI_MONITORING_NAMESPACE_MAX_LENGTH = 255
+OCI_MONITORING_REGION_MAX_LENGTH = 64
+OCI_MONITORING_COMPARTMENT_ID_MAX_LENGTH = 255
+OCI_MONITORING_NAME_MAX_LENGTH = 255
+OCI_MONITORING_DIMENSION_KEY_MAX_LENGTH = 256
+OCI_MONITORING_DIMENSION_VALUE_MAX_LENGTH = 512
+OCI_MONITORING_METADATA_VALUE_MAX_LENGTH = 256
+OCI_MONITORING_RESOURCE_GROUP_MAX_LENGTH = 255
+OCI_MONITORING_CONFIG_FILE_MAX_LENGTH = 512
+OCI_MONITORING_PROFILE_MAX_LENGTH = 128
+CLOUDWATCH_MAX_DIMENSIONS = 10
+CLOUDWATCH_MAX_METRICS_PER_REQUEST = 1_000
+CLOUDWATCH_MAX_REQUEST_BYTES = 1_048_576
+CLOUDWATCH_NAMESPACE_MAX_LENGTH = 255
+CLOUDWATCH_REGION_MAX_LENGTH = 64
+CLOUDWATCH_DIMENSION_MAX_LENGTH = 255
+AZURE_MONITOR_MAX_DIMENSIONS = 10
+AZURE_MONITOR_MAX_REQUEST_BYTES = 1_048_576
+AZURE_MONITOR_NAMESPACE_MAX_LENGTH = 255
+AZURE_MONITOR_LOCATION_MAX_LENGTH = 64
+AZURE_MONITOR_RESOURCE_ID_MAX_LENGTH = 2_048
+AZURE_MONITOR_MIN_RESOURCE_ID_SEGMENTS = 8
+AZURE_MONITOR_NAME_MAX_LENGTH = 255
+AZURE_MONITOR_DIMENSION_MAX_LENGTH = 255
 SYSLOG_MAX_MESSAGE_BYTES = 8_192
 SYSLOG_HOSTNAME_MAX_LENGTH = 255
 SYSLOG_APP_NAME_MAX_LENGTH = 48
@@ -65,8 +102,144 @@ GRAFANA_ALLOY_COMPONENT_LABEL_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
 SPLUNK_HEC_INDEX_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_-]{0,127}$")
 SPLUNK_HEC_METADATA_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.:-]{0,127}$")
 STATSD_METRIC_PREFIX_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.-]{0,127}$")
+DATADOG_METRIC_PREFIX_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.-]{0,127}$")
+DATADOG_TAG_KEY_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_./-]{0,127}$")
+DATADOG_TAG_VALUE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.:/-]{0,127}$")
+OCI_MONITORING_NAMESPACE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,254}$")
+OCI_MONITORING_REGION_RE = re.compile(r"^[a-z]{2,3}(?:-[a-z]+)+-\d$")
+OCI_MONITORING_COMPARTMENT_ID_RE = re.compile(r"^ocid1\.compartment\.[A-Za-z0-9_.-]+$")
+OCI_MONITORING_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.\-$]{0,254}$")
+OCI_MONITORING_DIMENSION_KEY_RE = re.compile(r"^[!-~]{1,256}$")
+OCI_MONITORING_DIMENSION_VALUE_RE = re.compile(r"^[!-~]{1,512}$")
+OCI_MONITORING_CONFIG_PROFILE_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
+CLOUDWATCH_NAMESPACE_RE = re.compile(r"^[A-Za-z0-9_./-]{1,255}$")
+CLOUDWATCH_REGION_RE = re.compile(r"^[a-z]{2}(?:-[a-z]+)+-\d$")
+CLOUDWATCH_DIMENSION_RE = re.compile(r"^[A-Za-z0-9_.:/-]{1,255}$")
+AZURE_MONITOR_NAMESPACE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_./-]{0,254}$")
+AZURE_MONITOR_LOCATION_RE = re.compile(r"^[a-z][a-z0-9]{1,63}$")
+AZURE_MONITOR_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,254}$")
+AZURE_MONITOR_DIMENSION_RE = re.compile(r"^[A-Za-z0-9_.:/-]{1,255}$")
 SYSLOG_PRINTABLE_RE = re.compile(r"^[!-~]+$")
 SYSLOG_STRUCTURED_DATA_ID_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,32}$")
+SUBJECT_FAMILY_LABEL_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.-]{0,63}$")
+SUBJECT_FAMILY_LABEL_SECRET_PARTS = frozenset(
+    {
+        "api_key",
+        "apikey",
+        "bearer",
+        "cookie",
+        "credential",
+        "key",
+        "password",
+        "private",
+        "secret_token",
+        "token",
+    }
+)
+OCI_MONITORING_DIMENSION_SECRET_PARTS = frozenset(
+    {
+        "api_key",
+        "apikey",
+        "bearer",
+        "classification",
+        "compartment",
+        "credential",
+        "file",
+        "host",
+        "key",
+        "label",
+        "message",
+        "mission",
+        "ocid",
+        "password",
+        "path",
+        "private",
+        "resource",
+        "secret",
+        "subject",
+        "table",
+        "tenancy",
+        "token",
+        "user",
+    }
+)
+CLOUDWATCH_DIMENSION_SECRET_PARTS = frozenset(
+    {
+        "api_key",
+        "apikey",
+        "bearer",
+        "classification",
+        "credential",
+        "file",
+        "host",
+        "key",
+        "label",
+        "message",
+        "mission",
+        "password",
+        "path",
+        "private",
+        "secret",
+        "subject",
+        "table",
+        "token",
+        "user",
+    }
+)
+AZURE_MONITOR_DIMENSION_SECRET_PARTS = frozenset(
+    {
+        "api_key",
+        "apikey",
+        "bearer",
+        "classification",
+        "credential",
+        "file",
+        "host",
+        "key",
+        "label",
+        "message",
+        "mission",
+        "password",
+        "path",
+        "private",
+        "resource",
+        "secret",
+        "subject",
+        "subscription",
+        "table",
+        "tenant",
+        "token",
+        "user",
+    }
+)
+DATADOG_TAG_SECRET_PARTS = frozenset(
+    {
+        "api_key",
+        "apikey",
+        "bearer",
+        "classification",
+        "credential",
+        "file",
+        "host",
+        "key",
+        "label",
+        "message",
+        "mission",
+        "password",
+        "path",
+        "private",
+        "secret",
+        "subject",
+        "table",
+        "token",
+        "user",
+    }
+)
+MAX_SUBJECT_AWARE_RULES = 128
+MAX_SUBJECT_AWARE_FAMILIES = 100
+SubjectAwareAction = Literal["allow", "deny"]
+SubjectAwareDisplayMode = Literal["label", "redacted", "hash", "raw"]
+SubjectAwareOverflowAction = Literal["drop", "aggregate_other", "fail_closed"]
 
 
 def _validate_otlp_http_endpoint(value: str | None, *, field_name: str) -> str | None:
@@ -160,13 +333,161 @@ def _validate_syslog_printable_field(value: str, *, field_name: str, max_length:
     return rendered
 
 
+def _validate_subject_family_label(value: str, *, field_name: str) -> str:
+    """Validate a stable low-cardinality subject-family label."""
+
+    rendered = value.strip()
+    if not rendered:
+        raise ValueError(f"{field_name} must not be empty")
+    if not SUBJECT_FAMILY_LABEL_RE.fullmatch(rendered):
+        raise ValueError(
+            f"{field_name} must start with a letter or underscore and contain only "
+            "letters, digits, underscores, dots, or hyphens"
+        )
+    lowered = rendered.lower()
+    if any(part in lowered for part in SUBJECT_FAMILY_LABEL_SECRET_PARTS):
+        raise ValueError(f"{field_name} must not look like a secret or credential")
+    return rendered
+
+
+def _validate_observability_metric_names(values: list[str], *, field_name: str) -> list[str]:
+    """Validate exact metric names used by observability policy sections."""
+
+    rendered: list[str] = []
+    for value in values:
+        item = value.strip()
+        if not item:
+            raise ValueError(f"{field_name} metric names must not be empty")
+        if item not in METRIC_SPEC_BY_NAME:
+            raise ValueError(f"unknown nats-sinks metric name: {item}")
+        rendered.append(item)
+    return rendered
+
+
+def _validate_observability_metric_patterns(values: list[str], *, field_name: str) -> list[str]:
+    """Validate bounded metric glob patterns used by observability policy sections."""
+
+    rendered: list[str] = []
+    for value in values:
+        item = value.strip()
+        if not item:
+            raise ValueError(f"{field_name} metric patterns must not be empty")
+        if "\x00" in item or "\n" in item or "\r" in item:
+            raise ValueError(f"{field_name} metric patterns must not contain control characters")
+        rendered.append(item)
+    return rendered
+
+
+@dataclass(frozen=True, slots=True)
+class SubjectAwareDecision:
+    """Result of evaluating a subject against the subject-aware policy model."""
+
+    allowed: bool
+    reason: str
+    label: str | None = None
+    display_mode: SubjectAwareDisplayMode | None = None
+
+
+class SubjectAwareRule(BaseModel):
+    """One explicit subject-family rule for future subject-aware metrics."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    subject: str
+    action: SubjectAwareAction = "allow"
+    label: str | None = None
+    display_mode: SubjectAwareDisplayMode = "label"
+    allowed_metrics: list[str] = Field(default_factory=list)
+    allowed_metric_patterns: list[str] = Field(default_factory=list)
+
+    @field_validator("subject")
+    @classmethod
+    def validate_subject(cls, value: str) -> str:
+        """Validate subject-family rules with the shared NATS wildcard grammar."""
+
+        return validate_subject_pattern(value)
+
+    @field_validator("label")
+    @classmethod
+    def validate_label(cls, value: str | None) -> str | None:
+        """Validate optional operator-chosen family labels."""
+
+        if value is None:
+            return None
+        return _validate_subject_family_label(value, field_name="subject_metrics.rules.label")
+
+    @field_validator("allowed_metrics")
+    @classmethod
+    def validate_metric_names(cls, values: list[str]) -> list[str]:
+        """Validate rule-scoped exact metric names."""
+
+        return _validate_observability_metric_names(
+            values,
+            field_name="subject_metrics.rules.allowed_metrics",
+        )
+
+    @field_validator("allowed_metric_patterns")
+    @classmethod
+    def validate_metric_patterns(cls, values: list[str]) -> list[str]:
+        """Validate rule-scoped metric glob patterns."""
+
+        return _validate_observability_metric_patterns(
+            values,
+            field_name="subject_metrics.rules.allowed_metric_patterns",
+        )
+
+    @model_validator(mode="after")
+    def validate_allow_rule_label(self) -> SubjectAwareRule:
+        """Require reviewable stable labels for every allow rule."""
+
+        if self.action == "allow" and self.label is None:
+            raise ValueError("subject_metrics allow rules require a stable operator label")
+        return self
+
+
+class SubjectAwareObservabilityPolicy(BaseModel):
+    """Disabled-by-default policy for controlled subject-family observability."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    default_action: Literal["deny"] = "deny"
+    max_subject_families: int = Field(default=20, ge=1, le=MAX_SUBJECT_AWARE_FAMILIES)
+    overflow_action: SubjectAwareOverflowAction = "drop"
+    overflow_label: str = "other"
+    allow_raw_subjects: bool = False
+    rules: list[SubjectAwareRule] = Field(default_factory=list, max_length=MAX_SUBJECT_AWARE_RULES)
+
+    @field_validator("overflow_label")
+    @classmethod
+    def validate_overflow_label(cls, value: str) -> str:
+        """Validate the deterministic overflow bucket label."""
+
+        return _validate_subject_family_label(
+            value,
+            field_name="subject_metrics.overflow_label",
+        )
+
+    @model_validator(mode="after")
+    def validate_subject_policy(self) -> SubjectAwareObservabilityPolicy:
+        """Fail closed for unsafe subject-aware policy shapes."""
+
+        allow_rules = [rule for rule in self.rules if rule.action == "allow"]
+        if len(allow_rules) > self.max_subject_families:
+            raise ValueError("subject_metrics allow rules must not exceed max_subject_families")
+        if any(rule.display_mode == "raw" for rule in allow_rules) and not self.allow_raw_subjects:
+            raise ValueError("subject_metrics raw display mode requires allow_raw_subjects=true")
+        return self
+
+
 class ObservabilitySubjectPolicy(BaseModel):
-    """Optional per-subject sharing hint for future subject-aware metrics.
+    """Optional per-subject review hint for subject-aware policy planning.
 
     Current nats-sinks metrics are intentionally not labeled by subject because
     subject names can be sensitive and high-cardinality.  The policy still
     records known subject patterns as disabled hints so operators can review
-    what the core config handles before enabling future subject-aware metrics.
+    what the core config handles before writing explicit `subject_metrics`
+    allow rules for future subject-aware connectors.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -691,6 +1012,808 @@ class StatsdObservabilityPolicy(BaseModel):
         return self
 
 
+class DatadogObservabilityPolicy(BaseModel):
+    """Datadog DogStatsD observability connector settings.
+
+    The connector emits one DogStatsD datagram per policy-approved aggregate
+    metric. It is intentionally best-effort and observational. The preferred
+    deployment path is a local Datadog Agent DogStatsD listener, so nats-sinks
+    does not need Datadog API keys and does not connect to the Datadog API.
+    Static tags are opt-in, bounded, and validated as low-cardinality metadata.
+    Prepared metric labels stay suppressed unless an operator explicitly enables
+    them after subject-aware observability review.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    transport: Literal["udp", "unixgram"] = "udp"
+    host: str = "127.0.0.1"
+    port: int = Field(default=8125, ge=1, le=65_535)
+    socket_path: str | None = None
+    metric_prefix: str | None = None
+    tags: dict[str, str] = Field(default_factory=dict, max_length=DATADOG_MAX_TAGS)
+    include_metric_labels_as_tags: bool = False
+    timeout_seconds: float = Field(default=1.0, gt=0, le=60)
+    max_retries: int = Field(default=0, ge=0, le=10)
+    retry_backoff_seconds: float = Field(default=0.25, ge=0, le=60)
+    stale_after_seconds: float | None = Field(default=None, gt=0, le=86_400)
+    max_datagram_bytes: int = Field(default=1432, ge=128, le=DATADOG_MAX_DATAGRAM_BYTES)
+
+    @field_validator("host")
+    @classmethod
+    def validate_host(cls, value: str) -> str:
+        """Validate the DogStatsD UDP target host without accepting paths."""
+
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("datadog.host must not be empty")
+        if any(character in rendered for character in "\x00\n\r\t /"):
+            raise ValueError(
+                "datadog.host must not contain whitespace, slashes, or control characters"
+            )
+        return rendered
+
+    @field_validator("socket_path")
+    @classmethod
+    def validate_socket_path(cls, value: str | None) -> str | None:
+        """Validate the optional Unix datagram socket path."""
+
+        if value is None:
+            return None
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("datadog.socket_path must not be empty")
+        if len(rendered) > DATADOG_SOCKET_PATH_MAX_LENGTH:
+            raise ValueError(
+                f"datadog.socket_path must be at most {DATADOG_SOCKET_PATH_MAX_LENGTH} characters"
+            )
+        if any(character in rendered for character in "\x00\n\r"):
+            raise ValueError("datadog.socket_path must not contain control characters")
+        if Path(rendered).name in {"", ".", ".."}:
+            raise ValueError("datadog.socket_path must name a socket path")
+        return rendered
+
+    @field_validator("metric_prefix")
+    @classmethod
+    def validate_metric_prefix(cls, value: str | None) -> str | None:
+        """Validate an optional DogStatsD metric prefix."""
+
+        if value is None:
+            return None
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("datadog.metric_prefix must not be empty")
+        if len(rendered) > DATADOG_METRIC_PREFIX_MAX_LENGTH:
+            raise ValueError(
+                f"datadog.metric_prefix must be at most {DATADOG_METRIC_PREFIX_MAX_LENGTH} "
+                "characters"
+            )
+        if not DATADOG_METRIC_PREFIX_RE.fullmatch(rendered):
+            raise ValueError(
+                "datadog.metric_prefix must start with a letter or underscore and contain "
+                "only letters, digits, underscores, dots, and hyphens"
+            )
+        return rendered.strip(".")
+
+    @field_validator("tags")
+    @classmethod
+    def validate_tags(cls, value: dict[str, str]) -> dict[str, str]:
+        """Validate static Datadog tags as bounded low-cardinality metadata."""
+
+        rendered: dict[str, str] = {}
+        seen_lower: set[str] = set()
+        for raw_key, raw_value in value.items():
+            key = raw_key.strip()
+            tag_value = raw_value.strip()
+            if not key:
+                raise ValueError("datadog.tags keys must not be empty")
+            if not tag_value:
+                raise ValueError("datadog.tags values must not be empty")
+            if len(key) > DATADOG_TAG_KEY_MAX_LENGTH:
+                raise ValueError("datadog.tags keys are too long")
+            if len(tag_value) > DATADOG_TAG_VALUE_MAX_LENGTH:
+                raise ValueError("datadog.tags values are too long")
+            if any(character in key for character in "\x00\n\r\t ,|#"):
+                raise ValueError("datadog.tags keys must not contain separators or controls")
+            if any(character in tag_value for character in "\x00\n\r\t ,|#"):
+                raise ValueError("datadog.tags values must not contain separators or controls")
+            if not DATADOG_TAG_KEY_RE.fullmatch(key):
+                raise ValueError(
+                    "datadog.tags keys must start with a letter and contain only letters, "
+                    "digits, underscores, dots, slashes, or hyphens"
+                )
+            if not DATADOG_TAG_VALUE_RE.fullmatch(tag_value):
+                raise ValueError(
+                    "datadog.tags values must start with a letter and contain only letters, "
+                    "digits, underscores, dots, colons, slashes, or hyphens"
+                )
+            lowered = key.lower()
+            if any(part in lowered for part in DATADOG_TAG_SECRET_PARTS):
+                raise ValueError(
+                    "datadog.tags must not include sensitive or high-cardinality names"
+                )
+            if any(part in tag_value.lower() for part in DATADOG_TAG_SECRET_PARTS):
+                raise ValueError("datadog.tags values must not look sensitive or high-cardinality")
+            if lowered in seen_lower:
+                raise ValueError("datadog.tags keys must be unique ignoring case")
+            seen_lower.add(lowered)
+            rendered[key] = tag_value
+        return rendered
+
+    @model_validator(mode="after")
+    def validate_transport_settings(self) -> DatadogObservabilityPolicy:
+        """Require transport-specific settings only when Datadog is enabled."""
+
+        if not self.enabled:
+            return self
+        if self.transport == "unixgram" and self.socket_path is None:
+            raise ValueError("datadog.socket_path is required when datadog.transport is unixgram")
+        return self
+
+
+class OciMonitoringObservabilityPolicy(BaseModel):
+    """Oracle Cloud Infrastructure Monitoring connector settings.
+
+    The connector is disabled by default and belongs to the observability
+    plane. It reads only local metrics snapshots, applies the shared allow-list
+    policy, and sends bounded custom metric batches through the optional OCI
+    Python SDK when explicitly enabled. OCI authentication is selected by
+    runtime mode; policy files must never contain API keys, private keys,
+    tenancy OCIDs, user OCIDs, fingerprints, passphrases, or session tokens.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    metric_namespace: str = "nats_sinks_metrics"
+    region: str | None = None
+    compartment_id: str | None = None
+    resource_group: str | None = None
+    auth_mode: Literal["instance_principal", "resource_principal", "config_file"] = (
+        "instance_principal"
+    )
+    config_file: str | None = None
+    profile: str = "DEFAULT"
+    batch_atomicity: Literal["ATOMIC", "NON_ATOMIC"] = "ATOMIC"
+    dimensions: dict[str, str] = Field(
+        default_factory=lambda: {"source": "nats_sinks"},
+        max_length=OCI_MONITORING_MAX_DIMENSIONS,
+    )
+    metadata: dict[str, str] = Field(default_factory=dict, max_length=OCI_MONITORING_MAX_METADATA)
+    include_metric_labels_as_dimensions: bool = False
+    timeout_seconds: float = Field(default=5.0, gt=0, le=60)
+    max_retries: int = Field(default=0, ge=0, le=10)
+    retry_backoff_seconds: float = Field(default=0.25, ge=0, le=60)
+    stale_after_seconds: float | None = Field(default=None, gt=0, le=86_400)
+    max_metrics_per_request: int = Field(
+        default=20,
+        ge=1,
+        le=OCI_MONITORING_MAX_METRICS_PER_REQUEST,
+    )
+    max_request_bytes: int = Field(
+        default=OCI_MONITORING_MAX_REQUEST_BYTES,
+        ge=1024,
+        le=OCI_MONITORING_MAX_REQUEST_BYTES,
+    )
+
+    @field_validator("metric_namespace")
+    @classmethod
+    def validate_metric_namespace(cls, value: str) -> str:
+        """Validate the OCI Monitoring custom metric namespace."""
+
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("oci_monitoring.metric_namespace must not be empty")
+        if len(rendered) > OCI_MONITORING_NAMESPACE_MAX_LENGTH:
+            raise ValueError(
+                "oci_monitoring.metric_namespace must be at most "
+                f"{OCI_MONITORING_NAMESPACE_MAX_LENGTH} characters"
+            )
+        lowered = rendered.lower()
+        if lowered.startswith(("oci_", "oracle_")):
+            raise ValueError(
+                "oci_monitoring.metric_namespace must not start with reserved prefixes "
+                "oci_ or oracle_"
+            )
+        if not OCI_MONITORING_NAMESPACE_RE.fullmatch(rendered):
+            raise ValueError(
+                "oci_monitoring.metric_namespace must start with a letter and contain "
+                "only letters, digits, and underscores"
+            )
+        return rendered
+
+    @field_validator("region")
+    @classmethod
+    def validate_region(cls, value: str | None) -> str | None:
+        """Validate an optional OCI region without accepting URLs or secrets."""
+
+        if value is None:
+            return None
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("oci_monitoring.region must not be empty")
+        if len(rendered) > OCI_MONITORING_REGION_MAX_LENGTH:
+            raise ValueError(
+                "oci_monitoring.region must be at most "
+                f"{OCI_MONITORING_REGION_MAX_LENGTH} characters"
+            )
+        if any(character in rendered for character in "\x00\n\r\t /:@"):
+            raise ValueError(
+                "oci_monitoring.region must be a plain OCI region name without whitespace, "
+                "URLs, or credentials"
+            )
+        if not OCI_MONITORING_REGION_RE.fullmatch(rendered):
+            raise ValueError(
+                "oci_monitoring.region must look like an OCI region, for example eu-frankfurt-1"
+            )
+        return rendered
+
+    @field_validator("compartment_id")
+    @classmethod
+    def validate_compartment_id(cls, value: str | None) -> str | None:
+        """Validate the compartment OCID required for custom metrics."""
+
+        if value is None:
+            return None
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("oci_monitoring.compartment_id must not be empty")
+        if len(rendered) > OCI_MONITORING_COMPARTMENT_ID_MAX_LENGTH:
+            raise ValueError("oci_monitoring.compartment_id is too long")
+        if any(character in rendered for character in "\x00\n\r\t /:@"):
+            raise ValueError(
+                "oci_monitoring.compartment_id must be a plain compartment OCID without "
+                "whitespace, URLs, or credentials"
+            )
+        if not OCI_MONITORING_COMPARTMENT_ID_RE.fullmatch(rendered):
+            raise ValueError("oci_monitoring.compartment_id must look like a compartment OCID")
+        return rendered
+
+    @field_validator("resource_group")
+    @classmethod
+    def validate_resource_group(cls, value: str | None) -> str | None:
+        """Validate an optional OCI Monitoring resource group."""
+
+        if value is None:
+            return None
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("oci_monitoring.resource_group must not be empty")
+        if len(rendered) > OCI_MONITORING_RESOURCE_GROUP_MAX_LENGTH:
+            raise ValueError("oci_monitoring.resource_group is too long")
+        if not OCI_MONITORING_NAME_RE.fullmatch(rendered):
+            raise ValueError(
+                "oci_monitoring.resource_group must start with a letter and contain only "
+                "letters, digits, dots, underscores, hyphens, or dollar signs"
+            )
+        lowered = rendered.lower()
+        if any(part in lowered for part in OCI_MONITORING_DIMENSION_SECRET_PARTS):
+            raise ValueError("oci_monitoring.resource_group must not look sensitive")
+        return rendered
+
+    @field_validator("config_file")
+    @classmethod
+    def validate_config_file(cls, value: str | None) -> str | None:
+        """Validate an optional OCI SDK config file path."""
+
+        if value is None:
+            return None
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("oci_monitoring.config_file must not be empty")
+        if len(rendered) > OCI_MONITORING_CONFIG_FILE_MAX_LENGTH:
+            raise ValueError("oci_monitoring.config_file is too long")
+        if any(character in rendered for character in "\x00\n\r"):
+            raise ValueError("oci_monitoring.config_file must not contain control characters")
+        if Path(rendered).name in {"", ".", ".."}:
+            raise ValueError("oci_monitoring.config_file must name a file")
+        return rendered
+
+    @field_validator("profile")
+    @classmethod
+    def validate_profile(cls, value: str) -> str:
+        """Validate the optional OCI SDK config profile name."""
+
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("oci_monitoring.profile must not be empty")
+        if len(rendered) > OCI_MONITORING_PROFILE_MAX_LENGTH:
+            raise ValueError("oci_monitoring.profile is too long")
+        if not OCI_MONITORING_CONFIG_PROFILE_RE.fullmatch(rendered):
+            raise ValueError(
+                "oci_monitoring.profile may contain only letters, digits, underscores, "
+                "dots, colons, and hyphens"
+            )
+        return rendered
+
+    @field_validator("dimensions")
+    @classmethod
+    def validate_dimensions(cls, value: dict[str, str]) -> dict[str, str]:
+        """Validate static OCI dimensions as low-cardinality hints."""
+
+        if not value:
+            raise ValueError("oci_monitoring.dimensions must include at least one safe dimension")
+        rendered: dict[str, str] = {}
+        seen_lower: set[str] = set()
+        for raw_name, raw_value in value.items():
+            name = raw_name.strip()
+            dimension_value = raw_value.strip()
+            if not name:
+                raise ValueError("oci_monitoring.dimensions names must not be empty")
+            if not dimension_value:
+                raise ValueError("oci_monitoring.dimensions values must not be empty")
+            if len(name) > OCI_MONITORING_DIMENSION_KEY_MAX_LENGTH:
+                raise ValueError("oci_monitoring.dimensions names are too long")
+            if len(dimension_value) > OCI_MONITORING_DIMENSION_VALUE_MAX_LENGTH:
+                raise ValueError("oci_monitoring.dimensions values are too long")
+            if " " in name or any(character in name for character in "\x00\n\r\t"):
+                raise ValueError(
+                    "oci_monitoring.dimensions names must not contain spaces or control characters"
+                )
+            if any(character in dimension_value for character in "\x00\n\r\t "):
+                raise ValueError(
+                    "oci_monitoring.dimensions values must not contain whitespace "
+                    "or control characters"
+                )
+            if not OCI_MONITORING_DIMENSION_KEY_RE.fullmatch(name):
+                raise ValueError("oci_monitoring.dimensions names must be printable ASCII")
+            if not OCI_MONITORING_DIMENSION_VALUE_RE.fullmatch(dimension_value):
+                raise ValueError("oci_monitoring.dimensions values must be printable ASCII")
+            lowered = name.lower()
+            if any(part in lowered for part in OCI_MONITORING_DIMENSION_SECRET_PARTS):
+                raise ValueError(
+                    "oci_monitoring.dimensions must not include sensitive or high-cardinality names"
+                )
+            if lowered in seen_lower:
+                raise ValueError("oci_monitoring.dimensions names must be unique ignoring case")
+            seen_lower.add(lowered)
+            rendered[name] = dimension_value
+        return rendered
+
+    @field_validator("metadata")
+    @classmethod
+    def validate_metadata(cls, value: dict[str, str]) -> dict[str, str]:
+        """Validate optional OCI metric metadata as non-sensitive static hints."""
+
+        rendered: dict[str, str] = {}
+        seen_lower: set[str] = set()
+        for raw_name, raw_value in value.items():
+            name = raw_name.strip()
+            metadata_value = raw_value.strip()
+            if not name:
+                raise ValueError("oci_monitoring.metadata names must not be empty")
+            if not metadata_value:
+                raise ValueError("oci_monitoring.metadata values must not be empty")
+            if len(name) > OCI_MONITORING_DIMENSION_KEY_MAX_LENGTH:
+                raise ValueError("oci_monitoring.metadata names are too long")
+            if len(metadata_value) > OCI_MONITORING_METADATA_VALUE_MAX_LENGTH:
+                raise ValueError("oci_monitoring.metadata values are too long")
+            if any(character in name for character in "\x00\n\r\t "):
+                raise ValueError("oci_monitoring.metadata names must not contain whitespace")
+            if any(character in metadata_value for character in "\x00\n\r\t "):
+                raise ValueError("oci_monitoring.metadata values must not contain whitespace")
+            if not OCI_MONITORING_DIMENSION_KEY_RE.fullmatch(name):
+                raise ValueError("oci_monitoring.metadata names must be printable ASCII")
+            if not OCI_MONITORING_DIMENSION_VALUE_RE.fullmatch(metadata_value):
+                raise ValueError("oci_monitoring.metadata values must be printable ASCII")
+            lowered = name.lower()
+            if any(part in lowered for part in OCI_MONITORING_DIMENSION_SECRET_PARTS):
+                raise ValueError("oci_monitoring.metadata must not include sensitive names")
+            if lowered in seen_lower:
+                raise ValueError("oci_monitoring.metadata names must be unique ignoring case")
+            seen_lower.add(lowered)
+            rendered[name] = metadata_value
+        return rendered
+
+    @model_validator(mode="after")
+    def validate_enabled_requirements(self) -> OciMonitoringObservabilityPolicy:
+        """Require explicit OCI location and identity settings only when enabled."""
+
+        if not self.enabled:
+            return self
+        if self.region is None:
+            raise ValueError(
+                "oci_monitoring.region is required when oci_monitoring.enabled is true"
+            )
+        if self.compartment_id is None:
+            raise ValueError(
+                "oci_monitoring.compartment_id is required when oci_monitoring.enabled is true"
+            )
+        if self.auth_mode == "config_file" and self.config_file is None:
+            raise ValueError(
+                "oci_monitoring.config_file is required when "
+                "oci_monitoring.auth_mode is config_file"
+            )
+        if self.auth_mode != "config_file" and self.config_file is not None:
+            raise ValueError(
+                "oci_monitoring.config_file may be set only when auth_mode is config_file"
+            )
+        return self
+
+
+class CloudWatchObservabilityPolicy(BaseModel):
+    """Amazon CloudWatch custom metrics connector settings.
+
+    The connector is disabled by default and belongs to the observability
+    plane. It reads only local metrics snapshots, applies the shared
+    allow-list policy, and sends bounded custom metric batches through the AWS
+    SDK when explicitly enabled. Operators provide AWS authentication through
+    normal SDK credential sources such as instance roles, workload identity,
+    profiles, or environment variables; policy files never contain AWS access
+    keys or account identifiers.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    metric_namespace: str = "nats-sinks/metrics"
+    region: str | None = None
+    unit: Literal[
+        "Seconds",
+        "Microseconds",
+        "Milliseconds",
+        "Bytes",
+        "Kilobytes",
+        "Megabytes",
+        "Gigabytes",
+        "Terabytes",
+        "Bits",
+        "Kilobits",
+        "Megabits",
+        "Gigabits",
+        "Terabits",
+        "Percent",
+        "Count",
+        "Bytes/Second",
+        "Kilobytes/Second",
+        "Megabytes/Second",
+        "Gigabytes/Second",
+        "Terabytes/Second",
+        "Bits/Second",
+        "Kilobits/Second",
+        "Megabits/Second",
+        "Gigabits/Second",
+        "Terabits/Second",
+        "Count/Second",
+        "None",
+    ] = "None"
+    storage_resolution: Literal[1, 60] = 60
+    dimensions: dict[str, str] = Field(
+        default_factory=dict,
+        max_length=CLOUDWATCH_MAX_DIMENSIONS,
+    )
+    include_metric_labels_as_dimensions: bool = False
+    timeout_seconds: float = Field(default=5.0, gt=0, le=60)
+    max_retries: int = Field(default=0, ge=0, le=10)
+    retry_backoff_seconds: float = Field(default=0.25, ge=0, le=60)
+    stale_after_seconds: float | None = Field(default=None, gt=0, le=86_400)
+    max_metrics_per_request: int = Field(
+        default=20,
+        ge=1,
+        le=CLOUDWATCH_MAX_METRICS_PER_REQUEST,
+    )
+    max_request_bytes: int = Field(
+        default=CLOUDWATCH_MAX_REQUEST_BYTES,
+        ge=1024,
+        le=CLOUDWATCH_MAX_REQUEST_BYTES,
+    )
+
+    @field_validator("metric_namespace")
+    @classmethod
+    def validate_metric_namespace(cls, value: str) -> str:
+        """Validate the CloudWatch custom metric namespace."""
+
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("cloudwatch.metric_namespace must not be empty")
+        if len(rendered) > CLOUDWATCH_NAMESPACE_MAX_LENGTH:
+            raise ValueError(
+                "cloudwatch.metric_namespace must be at most "
+                f"{CLOUDWATCH_NAMESPACE_MAX_LENGTH} characters"
+            )
+        if rendered.startswith("AWS/"):
+            raise ValueError("cloudwatch.metric_namespace must not start with AWS/")
+        if ":" in rendered:
+            raise ValueError("cloudwatch.metric_namespace must not contain colons")
+        if any(character in rendered for character in "\x00\n\r\t "):
+            raise ValueError(
+                "cloudwatch.metric_namespace must not contain whitespace or control characters"
+            )
+        if not CLOUDWATCH_NAMESPACE_RE.fullmatch(rendered):
+            raise ValueError(
+                "cloudwatch.metric_namespace may contain only letters, digits, "
+                "underscores, dots, slashes, and hyphens"
+            )
+        return rendered
+
+    @field_validator("region")
+    @classmethod
+    def validate_region(cls, value: str | None) -> str | None:
+        """Validate an optional AWS region without accepting URLs or secrets."""
+
+        if value is None:
+            return None
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("cloudwatch.region must not be empty")
+        if len(rendered) > CLOUDWATCH_REGION_MAX_LENGTH:
+            raise ValueError(
+                f"cloudwatch.region must be at most {CLOUDWATCH_REGION_MAX_LENGTH} characters"
+            )
+        if any(character in rendered for character in "\x00\n\r\t /:@"):
+            raise ValueError(
+                "cloudwatch.region must be a plain AWS region name without whitespace, "
+                "URLs, or credentials"
+            )
+        if not CLOUDWATCH_REGION_RE.fullmatch(rendered):
+            raise ValueError(
+                "cloudwatch.region must look like an AWS region, for example eu-west-1"
+            )
+        return rendered
+
+    @field_validator("dimensions")
+    @classmethod
+    def validate_dimensions(cls, value: dict[str, str]) -> dict[str, str]:
+        """Validate static CloudWatch dimensions as low-cardinality hints."""
+
+        rendered: dict[str, str] = {}
+        seen_lower: set[str] = set()
+        for raw_name, raw_value in value.items():
+            name = raw_name.strip()
+            dimension_value = raw_value.strip()
+            if not name:
+                raise ValueError("cloudwatch.dimensions names must not be empty")
+            if not dimension_value:
+                raise ValueError("cloudwatch.dimensions values must not be empty")
+            if len(name) > CLOUDWATCH_DIMENSION_MAX_LENGTH:
+                raise ValueError("cloudwatch.dimensions names are too long")
+            if len(dimension_value) > CLOUDWATCH_DIMENSION_MAX_LENGTH:
+                raise ValueError("cloudwatch.dimensions values are too long")
+            if any(character in name for character in "\x00\n\r\t "):
+                raise ValueError("cloudwatch.dimensions names must not contain whitespace")
+            if any(character in dimension_value for character in "\x00\n\r\t "):
+                raise ValueError("cloudwatch.dimensions values must not contain whitespace")
+            if not CLOUDWATCH_DIMENSION_RE.fullmatch(name):
+                raise ValueError(
+                    "cloudwatch.dimensions names may contain only letters, digits, "
+                    "underscores, dots, colons, slashes, and hyphens"
+                )
+            if not CLOUDWATCH_DIMENSION_RE.fullmatch(dimension_value):
+                raise ValueError(
+                    "cloudwatch.dimensions values may contain only letters, digits, "
+                    "underscores, dots, colons, slashes, and hyphens"
+                )
+            lowered = name.lower()
+            if any(part in lowered for part in CLOUDWATCH_DIMENSION_SECRET_PARTS):
+                raise ValueError(
+                    "cloudwatch.dimensions must not include sensitive or high-cardinality names"
+                )
+            if lowered in seen_lower:
+                raise ValueError("cloudwatch.dimensions names must be unique ignoring case")
+            seen_lower.add(lowered)
+            rendered[name] = dimension_value
+        return rendered
+
+    @model_validator(mode="after")
+    def validate_enabled_region(self) -> CloudWatchObservabilityPolicy:
+        """Require explicit region selection only when CloudWatch export is enabled."""
+
+        if self.enabled and self.region is None:
+            raise ValueError("cloudwatch.region is required when cloudwatch.enabled is true")
+        return self
+
+
+class AzureMonitorObservabilityPolicy(BaseModel):
+    """Azure Monitor custom metrics connector settings.
+
+    The connector is disabled by default and belongs to the observability
+    plane. It reads only local metrics snapshots, applies the shared
+    allow-list policy, and sends bounded custom metric requests to an explicitly
+    configured Azure resource. Policy files reference a bearer-token
+    environment variable and must not contain Microsoft Entra tokens, tenant
+    identifiers, client secrets, subscription-level routing secrets, payloads,
+    subjects, classification values, or message identifiers.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    resource_id: str | None = None
+    location: str | None = None
+    metric_namespace: str = "nats-sinks/metrics"
+    token_env: str | None = None
+    dimensions: dict[str, str] = Field(
+        default_factory=dict,
+        max_length=AZURE_MONITOR_MAX_DIMENSIONS,
+    )
+    include_metric_labels_as_dimensions: bool = False
+    timeout_seconds: float = Field(default=5.0, gt=0, le=60)
+    max_retries: int = Field(default=0, ge=0, le=10)
+    retry_backoff_seconds: float = Field(default=0.25, ge=0, le=60)
+    stale_after_seconds: float | None = Field(default=None, gt=0, le=86_400)
+    max_request_bytes: int = Field(
+        default=AZURE_MONITOR_MAX_REQUEST_BYTES,
+        ge=1024,
+        le=AZURE_MONITOR_MAX_REQUEST_BYTES,
+    )
+    verify_tls: Literal[True] = True
+
+    @field_validator("resource_id")
+    @classmethod
+    def validate_resource_id(cls, value: str | None) -> str | None:
+        """Validate an Azure resource ID without accepting URLs or subscriptions alone."""
+
+        if value is None:
+            return None
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("azure_monitor.resource_id must not be empty")
+        if len(rendered) > AZURE_MONITOR_RESOURCE_ID_MAX_LENGTH:
+            raise ValueError("azure_monitor.resource_id is too long")
+        if not rendered.startswith("/"):
+            raise ValueError("azure_monitor.resource_id must start with /subscriptions/")
+        if any(character in rendered for character in "\x00\n\r\t ?#\\%"):
+            raise ValueError(
+                "azure_monitor.resource_id must not contain whitespace, encoded slashes, "
+                "query strings, fragments, or control characters"
+            )
+        if "://" in rendered:
+            raise ValueError("azure_monitor.resource_id must be an Azure resource ID, not a URL")
+
+        segments = rendered.strip("/").split("/")
+        lowered = [segment.lower() for segment in segments]
+        if len(segments) < AZURE_MONITOR_MIN_RESOURCE_ID_SEGMENTS:
+            raise ValueError("azure_monitor.resource_id must identify a concrete Azure resource")
+        if any(not segment for segment in segments):
+            raise ValueError("azure_monitor.resource_id must not contain empty path segments")
+        if lowered[0] != "subscriptions":
+            raise ValueError("azure_monitor.resource_id must start with /subscriptions/")
+        if lowered[2] != "resourcegroups":
+            raise ValueError("azure_monitor.resource_id must include a resource group")
+        if lowered[4] != "providers":
+            raise ValueError("azure_monitor.resource_id must include a provider")
+        return rendered
+
+    @field_validator("location")
+    @classmethod
+    def validate_location(cls, value: str | None) -> str | None:
+        """Validate an Azure Monitor regional endpoint location."""
+
+        if value is None:
+            return None
+        rendered = value.strip().lower()
+        if not rendered:
+            raise ValueError("azure_monitor.location must not be empty")
+        if len(rendered) > AZURE_MONITOR_LOCATION_MAX_LENGTH:
+            raise ValueError("azure_monitor.location is too long")
+        if any(character in rendered for character in "\x00\n\r\t /:@.-"):
+            raise ValueError(
+                "azure_monitor.location must be a plain Azure location name without "
+                "URLs, hostnames, punctuation, whitespace, or credentials"
+            )
+        if not AZURE_MONITOR_LOCATION_RE.fullmatch(rendered):
+            raise ValueError(
+                "azure_monitor.location must look like an Azure location, for example westeurope"
+            )
+        return rendered
+
+    @field_validator("metric_namespace")
+    @classmethod
+    def validate_metric_namespace(cls, value: str) -> str:
+        """Validate the Azure Monitor custom metric namespace."""
+
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("azure_monitor.metric_namespace must not be empty")
+        if len(rendered) > AZURE_MONITOR_NAMESPACE_MAX_LENGTH:
+            raise ValueError(
+                "azure_monitor.metric_namespace must be at most "
+                f"{AZURE_MONITOR_NAMESPACE_MAX_LENGTH} characters"
+            )
+        if rendered.lower().startswith(("azure/", "microsoft/")):
+            raise ValueError(
+                "azure_monitor.metric_namespace must not start with reserved Azure prefixes"
+            )
+        if ":" in rendered:
+            raise ValueError("azure_monitor.metric_namespace must not contain colons")
+        if any(character in rendered for character in "\x00\n\r\t "):
+            raise ValueError(
+                "azure_monitor.metric_namespace must not contain whitespace or control characters"
+            )
+        if not AZURE_MONITOR_NAMESPACE_RE.fullmatch(rendered):
+            raise ValueError(
+                "azure_monitor.metric_namespace may contain only letters, digits, "
+                "underscores, dots, slashes, and hyphens, and must start with a letter"
+            )
+        return rendered
+
+    @field_validator("token_env")
+    @classmethod
+    def validate_token_env(cls, value: str | None) -> str | None:
+        """Validate the bearer-token reference as an environment variable name."""
+
+        if value is None:
+            return None
+        rendered = value.strip()
+        if not rendered:
+            raise ValueError("azure_monitor.token_env must not be empty")
+        if len(rendered) > OTLP_HEADER_ENV_MAX_LENGTH:
+            raise ValueError("azure_monitor.token_env is too long")
+        if not ENVIRONMENT_VARIABLE_NAME_RE.fullmatch(rendered):
+            raise ValueError("azure_monitor.token_env must be an environment variable name")
+        return rendered
+
+    @field_validator("dimensions")
+    @classmethod
+    def validate_dimensions(cls, value: dict[str, str]) -> dict[str, str]:
+        """Validate static Azure dimensions as bounded low-cardinality metadata."""
+
+        rendered: dict[str, str] = {}
+        seen_lower: set[str] = set()
+        for raw_name, raw_value in value.items():
+            name = raw_name.strip()
+            dimension_value = raw_value.strip()
+            if not name:
+                raise ValueError("azure_monitor.dimensions names must not be empty")
+            if not dimension_value:
+                raise ValueError("azure_monitor.dimensions values must not be empty")
+            if len(name) > AZURE_MONITOR_DIMENSION_MAX_LENGTH:
+                raise ValueError("azure_monitor.dimensions names are too long")
+            if len(dimension_value) > AZURE_MONITOR_DIMENSION_MAX_LENGTH:
+                raise ValueError("azure_monitor.dimensions values are too long")
+            if any(character in name for character in "\x00\n\r\t "):
+                raise ValueError("azure_monitor.dimensions names must not contain whitespace")
+            if any(character in dimension_value for character in "\x00\n\r\t "):
+                raise ValueError("azure_monitor.dimensions values must not contain whitespace")
+            if not AZURE_MONITOR_DIMENSION_RE.fullmatch(name):
+                raise ValueError(
+                    "azure_monitor.dimensions names may contain only letters, digits, "
+                    "underscores, dots, colons, slashes, and hyphens"
+                )
+            if not AZURE_MONITOR_DIMENSION_RE.fullmatch(dimension_value):
+                raise ValueError(
+                    "azure_monitor.dimensions values may contain only letters, digits, "
+                    "underscores, dots, colons, slashes, and hyphens"
+                )
+            lowered = name.lower()
+            if any(part in lowered for part in AZURE_MONITOR_DIMENSION_SECRET_PARTS):
+                raise ValueError(
+                    "azure_monitor.dimensions must not include sensitive or high-cardinality names"
+                )
+            if any(
+                part in dimension_value.lower() for part in AZURE_MONITOR_DIMENSION_SECRET_PARTS
+            ):
+                raise ValueError(
+                    "azure_monitor.dimensions values must not look sensitive or high-cardinality"
+                )
+            if lowered in seen_lower:
+                raise ValueError("azure_monitor.dimensions names must be unique ignoring case")
+            seen_lower.add(lowered)
+            rendered[name] = dimension_value
+        return rendered
+
+    @model_validator(mode="after")
+    def validate_enabled_requirements(self) -> AzureMonitorObservabilityPolicy:
+        """Require explicit resource, location, and token source only when enabled."""
+
+        if not self.enabled:
+            return self
+        if self.resource_id is None:
+            raise ValueError(
+                "azure_monitor.resource_id is required when azure_monitor.enabled is true"
+            )
+        if self.location is None:
+            raise ValueError(
+                "azure_monitor.location is required when azure_monitor.enabled is true"
+            )
+        if self.token_env is None:
+            raise ValueError(
+                "azure_monitor.token_env is required when azure_monitor.enabled is true"
+            )
+        return self
+
+
 class SyslogObservabilityPolicy(BaseModel):
     """Syslog observability bridge settings.
 
@@ -1017,6 +2140,9 @@ class ObservabilityPolicy(BaseModel):
     include_observations: bool = False
     include_legacy: bool = False
     subjects: list[ObservabilitySubjectPolicy] = Field(default_factory=list)
+    subject_metrics: SubjectAwareObservabilityPolicy = Field(
+        default_factory=SubjectAwareObservabilityPolicy
+    )
     prometheus: PrometheusTextfilePolicy = Field(default_factory=PrometheusTextfilePolicy)
     otlp: OtlpMetricsPolicy = Field(default_factory=OtlpMetricsPolicy)
     elastic: ElasticObservabilityPolicy = Field(default_factory=ElasticObservabilityPolicy)
@@ -1025,6 +2151,14 @@ class ObservabilityPolicy(BaseModel):
     )
     splunk_hec: SplunkHecObservabilityPolicy = Field(default_factory=SplunkHecObservabilityPolicy)
     statsd: StatsdObservabilityPolicy = Field(default_factory=StatsdObservabilityPolicy)
+    datadog: DatadogObservabilityPolicy = Field(default_factory=DatadogObservabilityPolicy)
+    oci_monitoring: OciMonitoringObservabilityPolicy = Field(
+        default_factory=OciMonitoringObservabilityPolicy
+    )
+    cloudwatch: CloudWatchObservabilityPolicy = Field(default_factory=CloudWatchObservabilityPolicy)
+    azure_monitor: AzureMonitorObservabilityPolicy = Field(
+        default_factory=AzureMonitorObservabilityPolicy
+    )
     syslog: SyslogObservabilityPolicy = Field(default_factory=SyslogObservabilityPolicy)
     nats_server_monitoring: NatsServerMonitoringPolicy = Field(
         default_factory=NatsServerMonitoringPolicy
@@ -1042,30 +2176,109 @@ class ObservabilityPolicy(BaseModel):
     def validate_metric_names(cls, values: list[str]) -> list[str]:
         """Allow only known nats-sinks metric names in exact-name lists."""
 
-        rendered: list[str] = []
-        for value in values:
-            item = value.strip()
-            if not item:
-                raise ValueError("metric names must not be empty")
-            if item not in METRIC_SPEC_BY_NAME:
-                raise ValueError(f"unknown nats-sinks metric name: {item}")
-            rendered.append(item)
-        return rendered
+        return _validate_observability_metric_names(values, field_name="observability policy")
 
     @field_validator("allowed_metric_patterns", "denied_metric_patterns")
     @classmethod
     def validate_metric_patterns(cls, values: list[str]) -> list[str]:
         """Reject empty or control-character glob patterns."""
 
-        rendered: list[str] = []
-        for value in values:
-            item = value.strip()
-            if not item:
-                raise ValueError("metric patterns must not be empty")
-            if "\x00" in item or "\n" in item or "\r" in item:
-                raise ValueError("metric patterns must not contain control characters")
-            rendered.append(item)
-        return rendered
+        return _validate_observability_metric_patterns(values, field_name="observability policy")
+
+
+def _base_metric_name(metric_name: str) -> str:
+    """Return a base metric name accepted by exact policy checks."""
+
+    if metric_name in METRIC_SPEC_BY_NAME:
+        return metric_name
+    base_name, separator, _stat = metric_name.rpartition(".")
+    if separator and base_name in METRIC_SPEC_BY_NAME:
+        return base_name
+    return metric_name
+
+
+def _subject_metric_matches(rule: SubjectAwareRule, metric_name: str | None) -> bool:
+    """Return whether a rule applies to a metric name."""
+
+    if metric_name is None:
+        return True
+    base_name = _base_metric_name(metric_name.strip())
+    if base_name not in METRIC_SPEC_BY_NAME:
+        return False
+    if not rule.allowed_metrics and not rule.allowed_metric_patterns:
+        return True
+    return (
+        metric_name in rule.allowed_metrics
+        or base_name in rule.allowed_metrics
+        or any(fnmatchcase(metric_name, pattern) for pattern in rule.allowed_metric_patterns)
+        or any(fnmatchcase(base_name, pattern) for pattern in rule.allowed_metric_patterns)
+    )
+
+
+def _subject_family_label(
+    *,
+    rule: SubjectAwareRule,
+    subject: str,
+) -> str:
+    """Render the future subject-family label according to a reviewed display mode."""
+
+    if rule.display_mode == "label":
+        return rule.label or "unknown"
+    if rule.display_mode == "redacted":
+        return "redacted"
+    if rule.display_mode == "hash":
+        digest = sha256(subject.encode("utf-8")).hexdigest()[:16]
+        return f"sha256_{digest}"
+    return subject
+
+
+def evaluate_subject_observability_policy(
+    policy: SubjectAwareObservabilityPolicy | ObservabilityPolicy,
+    *,
+    subject: str,
+    metric_name: str | None = None,
+) -> SubjectAwareDecision:
+    """Evaluate a concrete subject against the fail-closed subject policy.
+
+    This helper is intentionally independent from delivery code. It lets future
+    observability connectors ask whether subject-family metadata may be shared
+    without affecting ACK behavior, retries, DLQ handling, or sink writes.
+    """
+
+    subject_policy = policy.subject_metrics if isinstance(policy, ObservabilityPolicy) else policy
+    if not subject_policy.enabled:
+        return SubjectAwareDecision(allowed=False, reason="disabled")
+
+    try:
+        validated_subject = validate_subject_pattern(subject)
+    except ConfigurationError:
+        return SubjectAwareDecision(allowed=False, reason="invalid_subject")
+
+    matching_deny = [
+        rule
+        for rule in subject_policy.rules
+        if rule.action == "deny"
+        and matches_subject(rule.subject, validated_subject)
+        and _subject_metric_matches(rule, metric_name)
+    ]
+    if matching_deny:
+        return SubjectAwareDecision(allowed=False, reason="denied")
+
+    for rule in subject_policy.rules:
+        if rule.action != "allow":
+            continue
+        if not matches_subject(rule.subject, validated_subject):
+            continue
+        if not _subject_metric_matches(rule, metric_name):
+            continue
+        return SubjectAwareDecision(
+            allowed=True,
+            reason="allowed",
+            label=_subject_family_label(rule=rule, subject=validated_subject),
+            display_mode=rule.display_mode,
+        )
+
+    return SubjectAwareDecision(allowed=False, reason="no_match")
 
 
 def _unique_preserve_order(values: Iterable[str]) -> list[str]:

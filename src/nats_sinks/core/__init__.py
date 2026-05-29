@@ -14,6 +14,13 @@ as Postgres, HTTP, file, S3, and Kafka easier to certify against the same
 contract.
 """
 
+from nats_sinks.core.ack_gate import (
+    FanoutAckGateError,
+    FanoutAckGateResult,
+    FanoutRequiredSinkError,
+    FanoutTargetResult,
+    wait_for_fanout_ack_gate,
+)
 from nats_sinks.core.advisory import (
     DEFAULT_ADVISORY_SUBJECTS,
     JetStreamAdvisory,
@@ -33,13 +40,29 @@ from nats_sinks.core.authenticity import (
     evaluate_message_authenticity,
     hmac_sha256_signature_b64,
 )
-from nats_sinks.core.config import MetricsConfig
+from nats_sinks.core.config import (
+    FANOUT_OPTIONAL_ACK_DEFAULTS,
+    AckConfirmationConfig,
+    MetricsConfig,
+    PushConsumerConfig,
+    RouteHeaderMatchConfig,
+    RouteMatchConfig,
+    RoutePolicyRouteConfig,
+    RouteTargetConfig,
+    RoutingMatchPolicyConfig,
+)
 from nats_sinks.core.consumer_management import (
     ConsumerDrift,
     ConsumerManagementResult,
+    PushConsumerCapabilityResult,
     build_consumer_config,
+    build_push_consumer_config,
     detect_consumer_drift,
+    detect_push_consumer_capabilities,
+    detect_push_consumer_drift,
     ensure_jetstream_consumer,
+    ensure_jetstream_push_consumer,
+    validate_push_consumer_capabilities,
 )
 from nats_sinks.core.custody import (
     CUSTODY_SCHEMA,
@@ -57,6 +80,7 @@ from nats_sinks.core.encryption import (
     is_encrypted_payload_envelope,
 )
 from nats_sinks.core.envelope import NatsEnvelope
+from nats_sinks.core.fanout_sink import FanoutSink
 from nats_sinks.core.freshness import record_event_freshness_metrics
 from nats_sinks.core.message_metadata import (
     DEFAULT_CLASSIFICATION_HEADER,
@@ -95,6 +119,11 @@ from nats_sinks.core.payload import (
 )
 from nats_sinks.core.policy import PolicyEvaluation, PolicyViolation, evaluate_pre_sink_policy
 from nats_sinks.core.priority import PriorityLaneAssignment, order_by_priority_lanes
+from nats_sinks.core.routing_policy import (
+    RouteSelection,
+    route_matches_envelope,
+    select_route_targets,
+)
 from nats_sinks.core.runner import JetStreamSinkRunner
 from nats_sinks.core.security_labels import (
     DEFAULT_SECURITY_LABELS_HEADER,
@@ -118,6 +147,7 @@ __all__ = [
     "DEFAULT_PRIORITY_HEADER",
     "DEFAULT_SECURITY_LABELS_HEADER",
     "ENCRYPTED_PAYLOAD_KEY",
+    "FANOUT_OPTIONAL_ACK_DEFAULTS",
     "LEGACY_METRIC_ALIASES",
     "MESSAGE_AUTHENTICITY_SCHEMA",
     "METRIC_SPECS",
@@ -125,8 +155,14 @@ __all__ = [
     "NATS_RESERVED_HEADER_NAMES",
     "SECURITY_LABEL_PROFILE_NAME",
     "SUPPORTED_MESSAGE_AUTHENTICITY_ALGORITHMS",
+    "AckConfirmationConfig",
     "ConsumerDrift",
     "ConsumerManagementResult",
+    "FanoutAckGateError",
+    "FanoutAckGateResult",
+    "FanoutRequiredSinkError",
+    "FanoutSink",
+    "FanoutTargetResult",
     "InMemoryMetrics",
     "JetStreamAdvisory",
     "JetStreamAdvisoryMonitor",
@@ -146,6 +182,14 @@ __all__ = [
     "PolicyEvaluation",
     "PolicyViolation",
     "PriorityLaneAssignment",
+    "PushConsumerCapabilityResult",
+    "PushConsumerConfig",
+    "RouteHeaderMatchConfig",
+    "RouteMatchConfig",
+    "RoutePolicyRouteConfig",
+    "RouteSelection",
+    "RouteTargetConfig",
+    "RoutingMatchPolicyConfig",
     "SizePolicyEvaluation",
     "SizePolicyViolation",
     "SubjectPayloadEncryptor",
@@ -153,6 +197,7 @@ __all__ = [
     "attach_custody_metadata",
     "build_consumer_config",
     "build_nats_metadata_snapshot",
+    "build_push_consumer_config",
     "canonical_json_bytes",
     "canonical_message_authenticity_bytes",
     "canonical_message_authenticity_document",
@@ -160,7 +205,10 @@ __all__ = [
     "datetime_to_epoch_ns",
     "decrypt_payload",
     "detect_consumer_drift",
+    "detect_push_consumer_capabilities",
+    "detect_push_consumer_drift",
     "ensure_jetstream_consumer",
+    "ensure_jetstream_push_consumer",
     "evaluate_message_authenticity",
     "evaluate_pre_sink_policy",
     "evaluate_size_policy",
@@ -176,7 +224,11 @@ __all__ = [
     "parse_security_label_header",
     "qualified_metric_name",
     "record_event_freshness_metrics",
+    "route_matches_envelope",
+    "select_route_targets",
     "validate_advisory_subject",
     "validate_metric_namespace",
+    "validate_push_consumer_capabilities",
+    "wait_for_fanout_ack_gate",
     "write_metrics_snapshot",
 ]

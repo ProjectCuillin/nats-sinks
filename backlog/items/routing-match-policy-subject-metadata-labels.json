@@ -3,7 +3,7 @@
   "title": "[Feature]: Add route matching by subject, priority, classification, labels, and approved headers",
   "area": "Configuration",
   "priority": "P2 - next minor release candidate",
-  "target_release": "unscheduled",
+  "target_release": "v0.4.2",
   "labels": ["nats", "sink-new", "security"],
   "problem": "Routing decisions are currently limited. Oracle table routing is subject-based and Oracle-specific, while priority, classification, labels, and headers are normalized metadata that cannot yet drive generic sink selection. Users need route policies that combine the delivered NATS subject with operational metadata so messages can be sent to the right durable destinations without custom code.",
   "proposal": "Define a generic route-match policy schema that can match on NATS subject patterns, normalized priority values, normalized classification values, label membership, and explicitly approved NATS headers. The schema should support exact allow-listed values for priority and classification, labels_all, labels_any, and labels_none semantics, optional subject patterns using the same NATS wildcard rules already used by the project, and a clear route evaluation mode such as first matching route or all matching routes. Header matching should be opt-in, bounded, and limited to configured header names and simple value comparisons. The examples must include at least two match sets for the same subject and label pattern: one route for priority urgent plus classification NATO SECRET plus labels sensor and audit that selects a mixed Oracle and file target set, and one route for priority urgent plus classification NATO UNCLASS plus the same labels that selects only a named Oracle sink called oracle_unclass.",

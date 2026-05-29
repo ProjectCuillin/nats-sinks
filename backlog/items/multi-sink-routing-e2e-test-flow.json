@@ -1,0 +1,41 @@
+{
+  "id": "multi-sink-routing-e2e-test-flow",
+  "title": "[Feature]: Add a multi-sink routing end-to-end test flow",
+  "area": "Testing",
+  "priority": "P3 - backlog candidate",
+  "target_release": "v0.4.2",
+  "labels": ["testing", "sink-oracle", "sink-mysql", "sink-file", "sink-new"],
+  "problem": "The project is adding routing, fan-out, and named sink configuration. Current tests can validate parts of that behavior, but there is no single end-to-end test round that proves one deterministic message set routes correctly across Oracle Database, Oracle MySQL Database, File, and Oracle Coherence Community Edition destinations. Without this test flow, regressions could route messages to the wrong sink, miss a required sink, expose optional sink behavior incorrectly, or ACK before the required durable targets have completed.",
+  "proposal": "Create a local, gated, end-to-end routing test flow that publishes a deterministic fake message set and validates route decisions across multiple named sink instances. The route matrix should combine subject, priority, classification, labels, approved headers, and static configuration gates. The selected sinks must include Oracle Database, Oracle MySQL Database, File, and Oracle Coherence Community Edition when their local backends are available. The flow should prove one-to-one routing, one-to-many fan-out, optional targets with bounded waits, required targets that gate ACK, no-route handling, and backend-specific validation that only expected messages were written.",
+  "users": "Maintainers validating release readiness, developers changing routing or sink behavior, security reviewers checking metadata matching and redaction, and operators who need confidence that mixed Oracle, file, and data-grid sink topologies behave predictably.",
+  "delivery_semantics": "The test flow must prove that ACK remains blocked until every selected required sink succeeds. It must also prove that optional sinks are explicitly configured, bounded by wait policy, and not described as guaranteed delivery when ACK happens before optional commit. The flow must not claim atomic exactly-once behavior across heterogeneous backends. Partial success followed by required failure must leave the message eligible for redelivery, relying on per-sink idempotency.",
+  "security": "All test messages, subjects, classifications, labels, headers, keys, tables, cache names, and file paths must be fake and sanitized. Test evidence must not include credentials, connection strings, private endpoints, host-specific paths, container identifiers, payload secrets, or certificate material. The CLI validation step must reject unsafe route names, sink names, subject patterns, metadata match sets, optional wait values, and unknown sink references before any live backend is touched.",
+  "acceptance": [
+    "A single gated test flow can validate routing across Oracle Database, Oracle MySQL Database, File, and Oracle Coherence Community Edition sinks when all local backends are available.",
+    "The same flow can run a reduced deterministic mode with fake or file-backed sinks when live Oracle Database or container backends are unavailable.",
+    "The route matrix covers subject, priority, classification, labels_all, labels_any, labels_none, approved headers, static config gates, and combined match sets.",
+    "The flow validates one-to-one routing, one-to-many fan-out, no-route handling, optional sink waits, required sink failures, and duplicate redelivery safety.",
+    "Backend assertions prove that each sink contains only the expected messages and that no message leaked to a non-matching sink.",
+    "nats-sink validate checks the full multi-sink routing configuration before the e2e test starts.",
+    "Sanitized evidence is written to the latest test report without credentials, private endpoints, payload secrets, host-specific paths, or container identifiers.",
+    "Documentation explains how individual sinks are configured, how routes reference named sinks, how to run the full flow, and how to interpret reduced-mode results."
+  ],
+  "tests": "Add CLI validation tests, deterministic unit tests, local smoke tests, and optional container-backed e2e tests. Cover valid and invalid multi-sink config, unknown sink references, duplicate route names, invalid match operators, invalid optional wait values, required sink failure after another required sink succeeds, optional timeout before ACK, no-route policies, duplicate redelivery, redaction, and backend-specific row, file, or key/value assertions. The full local e2e mode should use the Oracle MySQL test container, the Oracle Coherence Community Edition test container, a configured Oracle Database integration environment, and temporary file sinks, all behind explicit gates.",
+  "documentation": "Add documentation under the testing and routing documentation tree. Include the full test architecture, route matrix, named sink configuration model, individual sink configuration locations, sanitized example commands, expected sanitized output, reduced-mode behavior, failure troubleshooting, and release evidence expectations. Update docs/testing.md, docs/configuration.md, docs/sink-framework.md, docs/oracle-sink.md, docs/mysql-sink.md, docs/file-sink.md, future Oracle Coherence documentation, docs/roadmap.md, ROADMAP.md, and CHANGELOG.md when implemented.",
+  "closeout": "Close only after the release containing the multi-sink routing end-to-end test flow is published. Include release tag, script names, route matrix summary, backends tested, reduced-mode behavior, checks run, documentation links, sanitized evidence location, and follow-up issues for additional sink types.",
+  "relationships": {
+    "blocked_by": [
+      "backlog:core-routing-fanout-sink",
+      "backlog:multi-sink-instance-configuration",
+      "backlog:optional-sink-ack-gate-wait-policy",
+      "backlog:oracle-coherence-ce-sink",
+      "backlog:oracle-coherence-ce-test-container"
+    ],
+    "related": [
+      "backlog:fanout-sink-certification-tests",
+      "backlog:oracle-mysql-test-container",
+      "backlog:oracle-mysql-sink",
+      "backlog:sink-certification-contract-and-tests"
+    ]
+  }
+}

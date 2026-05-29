@@ -3,7 +3,7 @@
   "title": "[Feature]: Design and implement an S3-compatible object sink",
   "area": "Future sink",
   "priority": "P3 - backlog candidate",
-  "target_release": "unscheduled",
+  "target_release": "v0.4.2",
   "labels": ["sink-new", "sink-s3"],
   "problem": "Object storage is useful for durable handoff, archive, and disconnected processing workflows. The project does not yet provide an S3-compatible sink, and object sinks require careful key design so redelivery does not create uncontrolled duplicates or overwrite the wrong object.",
   "proposal": "Add an S3-compatible sink with deterministic object keys, configurable duplicate handling, metadata sidecar or embedded JSON envelope options, bounded payload handling, optional compression compatibility, and clear guidance for credentials and least-privilege bucket policies. The first design should prioritize safe duplicate skip or overwrite behavior based on idempotency keys.",

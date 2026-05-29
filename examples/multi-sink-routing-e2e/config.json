@@ -1,0 +1,183 @@
+{
+  "nats": {
+    "url": "nats://127.0.0.1:4222",
+    "stream": "MISSION_EVENTS",
+    "consumer": "MISSION_MULTI_SINK_ROUTING",
+    "subject": "mission.>"
+  },
+  "delivery": {
+    "batch_size": 10,
+    "batch_timeout_ms": 1000
+  },
+  "sink": {
+    "type": "fanout"
+  },
+  "sinks": {
+    "oracle_primary": {
+      "type": "oracle",
+      "dsn": "oracle-primary-service",
+      "user": "app_user",
+      "password_env": "NATS_SINKS_ORACLE_PRIMARY_PASSWORD",
+      "table": "MISSION_SECRET_EVENTS"
+    },
+    "mysql_audit": {
+      "type": "mysql",
+      "host": "127.0.0.1",
+      "port": 3306,
+      "database": "mission_audit",
+      "user": "app_user",
+      "password_env": "NATS_SINKS_ORACLE_MYSQL_AUDIT_PASSWORD",
+      "table": "mission_audit_events"
+    },
+    "file_audit": {
+      "type": "file",
+      "directory": "var/lib/nats-sinks/mission-audit",
+      "filename_strategy": "stream_sequence",
+      "duplicate_policy": "skip_existing",
+      "fsync": true
+    },
+    "coherence_read_model": {
+      "type": "coherence",
+      "address": "127.0.0.1:1408",
+      "cache_name": "mission-routing-read-model",
+      "key_strategy": "message_id"
+    },
+    "oracle_unclass": {
+      "type": "oracle",
+      "dsn": "oracle-unclass-service",
+      "user": "app_user",
+      "password_env": "NATS_SINKS_ORACLE_UNCLASS_PASSWORD",
+      "table": "MISSION_UNCLASS_EVENTS"
+    }
+  },
+  "routing": {
+    "enabled": true,
+    "mode": "first",
+    "no_match": "ignore",
+    "target_sink_types": {
+      "oracle_primary": "oracle",
+      "mysql_audit": "mysql",
+      "file_audit": "file",
+      "coherence_read_model": "coherence",
+      "oracle_unclass": "oracle"
+    },
+    "routes": [
+      {
+        "name": "secret_sensor_multi_sink",
+        "match": {
+          "subject": "mission.sensor.>",
+          "priority": "urgent",
+          "classification": "NATO SECRET",
+          "labels_all": [
+            "sensor",
+            "audit"
+          ],
+          "labels_any": [
+            "edge",
+            "gateway"
+          ],
+          "labels_none": [
+            "training"
+          ],
+          "headers": [
+            {
+              "name": "Nats-Sinks-Route",
+              "values": [
+                "mission-audit"
+              ]
+            },
+            {
+              "name": "Nats-Sinks-Flow",
+              "values": [
+                "multi-sink-routing-e2e"
+              ]
+            }
+          ]
+        },
+        "targets": [
+          "oracle_primary",
+          "mysql_audit",
+          {
+            "sink": "file_audit",
+            "required": false,
+            "minimum_wait_ms": 10,
+            "timeout_ms": 50
+          },
+          {
+            "sink": "coherence_read_model",
+            "required": false,
+            "minimum_wait_ms": 10,
+            "timeout_ms": 50
+          }
+        ]
+      },
+      {
+        "name": "unclass_sensor_oracle",
+        "match": {
+          "subject": "mission.sensor.>",
+          "priority": "urgent",
+          "classification": "NATO UNCLASS",
+          "labels_all": [
+            "sensor",
+            "audit"
+          ],
+          "labels_none": [
+            "training"
+          ],
+          "headers": [
+            {
+              "name": "Nats-Sinks-Route",
+              "values": [
+                "unclass-audit"
+              ]
+            },
+            {
+              "name": "Nats-Sinks-Flow",
+              "values": [
+                "multi-sink-routing-e2e"
+              ]
+            }
+          ]
+        },
+        "targets": [
+          "oracle_unclass"
+        ]
+      },
+      {
+        "name": "tasking_coherence_read_model",
+        "match": {
+          "subject": "mission.tasking.*",
+          "priority": "normal",
+          "labels_any": [
+            "tasking"
+          ],
+          "labels_none": [
+            "training"
+          ],
+          "headers": [
+            {
+              "name": "Nats-Sinks-Route",
+              "values": [
+                "tasking-cache"
+              ]
+            },
+            {
+              "name": "Nats-Sinks-Flow",
+              "values": [
+                "multi-sink-routing-e2e"
+              ]
+            }
+          ]
+        },
+        "targets": [
+          {
+            "sink": "coherence_read_model",
+            "required": false,
+            "minimum_wait_ms": 10,
+            "timeout_ms": 50
+          }
+        ]
+      }
+    ]
+  }
+}

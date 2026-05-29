@@ -346,7 +346,7 @@ separate so downstream controls can reason about each class of data.
 | `stored_at_epoch_ns` | `STORED_AT_EPOCH_NS` | Time when Oracle row mapping prepared the row for storage. |
 | `payload` | `PAYLOAD_JSON` | Normalized payload JSON value. |
 | `headers` | `HEADERS_JSON` | Message headers as JSON. |
-| `metadata` | `METADATA_JSON` | Full generic metadata snapshot. |
+| `metadata` | `METADATA_JSON` | Full generic metadata snapshot, including payload-presence state for headers-only delivery. |
 | `mission_metadata` | `MISSION_METADATA_JSON` | Optional validated mission metadata JSON object resolved by the core runtime. Missing mission metadata is stored as JSON `null`. |
 | `security_labels` | `SECURITY_LABELS_JSON` | Optional validated data-centric security label profile resolved by the core runtime. Missing security labels are stored as JSON `null`. |
 
@@ -383,6 +383,15 @@ Each `table_routes` item has this shape:
 | `merge_update_columns` | no | `null`, an empty list, or a list of mapped Oracle column names. | Route-specific matched-row update policy for `merge` mode. Omit this field to inherit the sink default. |
 
 Routes are evaluated in order, and the first matching route wins.
+
+Oracle `table_routes` are sink-local subject-to-table routing. They are
+separate from the generic top-level `routing` policy. The generic policy can
+select logical targets such as `oracle_secret` or `oracle_unclass` from
+subject, priority, classification, labels, and approved header hints. When the
+active sink is `fanout`, those targets bind to named Oracle sink instances in
+the top-level `sinks` registry or compact inline `sink.sinks` form. Each child
+Oracle sink still owns its own connection, table, idempotency, staging, and
+column settings.
 
 Per-route overrides are intentionally conservative:
 

@@ -25,7 +25,7 @@ from types import MappingProxyType
 from typing import Any
 
 from nats_sinks.core.custody import freeze_custody_metadata, thaw_custody_metadata
-from nats_sinks.core.errors import SerializationError
+from nats_sinks.core.errors import SerializationError, ValidationError
 from nats_sinks.core.message_metadata import (
     case_insensitive_header,
     contains_ascii_control_characters,
@@ -83,6 +83,27 @@ def _normalise_headers(headers: Mapping[str, object] | None) -> Mapping[str, str
     return MappingProxyType(normalised)
 
 
+def _case_insensitive_header(headers: Mapping[str, str], name: str) -> str | None:
+    for key, value in headers.items():
+        if key.casefold() == name.casefold():
+            return value
+    return None
+
+
+def _parse_nats_msg_size(value: str | None) -> tuple[int | None, bool]:
+    """Parse the NATS headers-only payload-size hint without guessing."""
+
+    if value is None:
+        return None, False
+    try:
+        size = int(value.strip())
+    except (AttributeError, ValueError):
+        return None, True
+    if size < 0:
+        return None, True
+    return size, False
+
+
 @dataclass(frozen=True, slots=True)
 class NatsEnvelope:
     """Immutable message envelope passed to sinks.
@@ -110,12 +131,18 @@ class NatsEnvelope:
     custody: Mapping[str, Any] | None = None
     reply: str | None = None
     domain: str | None = None
+    payload_present: bool = True
+    payload_omitted: bool = False
+    payload_omitted_reason: str | None = None
+    original_payload_size_bytes: int | None = None
+    payload_size_header_malformed: bool = False
     received_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     raw_metadata: object | None = None
 
     def __post_init__(self) -> None:
         headers = _normalise_headers(self.headers)
         object.__setattr__(self, "headers", headers)
+        self._normalize_payload_presence(headers)
 
         if self.message_id is None:
             message_id = (
@@ -144,6 +171,43 @@ class NatsEnvelope:
         )
         object.__setattr__(self, "custody", freeze_custody_metadata(self.custody))
 
+    def _normalize_payload_presence(self, headers: Mapping[str, str]) -> None:
+        """Derive payload-presence state from NATS headers-only metadata."""
+
+        size_header = _case_insensitive_header(headers, "Nats-Msg-Size")
+        parsed_size, malformed = _parse_nats_msg_size(size_header)
+        data_size = len(self.data)
+
+        payload_present = bool(self.payload_present)
+        payload_omitted = bool(self.payload_omitted)
+        omitted_reason = normalise_metadata_value(self.payload_omitted_reason)
+        original_size = self.original_payload_size_bytes
+        size_header_malformed = bool(self.payload_size_header_malformed or malformed)
+
+        if original_size is not None and original_size < 0:
+            original_size = None
+            size_header_malformed = True
+
+        if size_header is not None and not malformed and data_size == 0:
+            payload_present = False
+            payload_omitted = True
+            omitted_reason = omitted_reason or "headers_only"
+            original_size = parsed_size
+        elif original_size is None:
+            original_size = parsed_size if parsed_size is not None else data_size
+
+        if payload_omitted:
+            payload_present = False
+            omitted_reason = omitted_reason or "headers_only"
+        elif payload_present:
+            omitted_reason = None
+
+        object.__setattr__(self, "payload_present", payload_present)
+        object.__setattr__(self, "payload_omitted", payload_omitted)
+        object.__setattr__(self, "payload_omitted_reason", omitted_reason)
+        object.__setattr__(self, "original_payload_size_bytes", original_size)
+        object.__setattr__(self, "payload_size_header_malformed", size_header_malformed)
+
     def idempotency_key(self) -> str:
         """Return a stable best-effort idempotency key for this message."""
 
@@ -151,6 +215,11 @@ class NatsEnvelope:
             return f"stream-sequence:{self.stream}:{self.stream_sequence}"
         if self.message_id:
             return f"message-id:{self.message_id}"
+        if self.payload_omitted:
+            raise ValidationError(
+                "payload-sha256 idempotency fallback is unavailable because "
+                "the original payload bytes were omitted"
+            )
         digest = hashlib.sha256(self.data).hexdigest()
         return f"payload-sha256:{self.subject}:{digest}"
 

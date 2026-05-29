@@ -1,0 +1,111 @@
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "MISSION",
+    "consumer": "named-multi-sink-example",
+    "subject": "mission.>"
+  },
+  "message_metadata": {
+    "priority": {
+      "header": "Nats-Sinks-Priority",
+      "default": null
+    },
+    "classification": {
+      "header": "Nats-Sinks-Classification",
+      "default": null
+    },
+    "labels": {
+      "header": "Nats-Sinks-Labels",
+      "default": []
+    }
+  },
+  "sinks": {
+    "oracle_secret": {
+      "type": "oracle",
+      "dsn": "tcps://adb.example.invalid/secret",
+      "user": "app_secret",
+      "password_env": "ORACLE_SECRET_PASSWORD",
+      "table": "NATS_SECRET_EVENTS",
+      "mode": "merge"
+    },
+    "oracle_unclass": {
+      "type": "oracle",
+      "dsn": "tcps://adb.example.invalid/unclass",
+      "user": "app_unclass",
+      "password_env": "ORACLE_UNCLASS_PASSWORD",
+      "table": "NATS_UNCLASS_EVENTS",
+      "mode": "merge"
+    },
+    "file_audit": {
+      "type": "file",
+      "directory": ".local/named-multi-sink/audit",
+      "filename_strategy": "stream_sequence",
+      "duplicate_policy": "skip_existing",
+      "fsync": false
+    }
+  },
+  "routing": {
+    "enabled": true,
+    "mode": "first",
+    "no_match": "reject",
+    "routes": [
+      {
+        "name": "nato_secret_sensor_audit",
+        "match": {
+          "subject": "mission.sensor.>",
+          "priority": [
+            "urgent"
+          ],
+          "classification": [
+            "NATO SECRET"
+          ],
+          "labels_all": [
+            "sensor",
+            "audit"
+          ],
+          "headers": [
+            {
+              "name": "Nats-Sinks-Route",
+              "values": [
+                "mission-audit"
+              ]
+            }
+          ]
+        },
+        "targets": [
+          "oracle_secret",
+          {
+            "sink": "file_audit",
+            "required": false,
+            "minimum_wait_ms": 250,
+            "timeout_ms": 1000
+          }
+        ]
+      },
+      {
+        "name": "nato_unclass_sensor_audit",
+        "match": {
+          "subject": "mission.sensor.>",
+          "priority": [
+            "urgent"
+          ],
+          "classification": [
+            "NATO UNCLASS"
+          ],
+          "labels_all": [
+            "sensor",
+            "audit"
+          ]
+        },
+        "targets": [
+          "oracle_unclass"
+        ]
+      }
+    ]
+  },
+  "sink": {
+    "type": "file",
+    "directory": ".local/named-multi-sink/active",
+    "fsync": false
+  }
+}

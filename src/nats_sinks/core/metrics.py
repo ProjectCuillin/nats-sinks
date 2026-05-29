@@ -35,7 +35,11 @@ from typing import Literal, Protocol, cast
 DEFAULT_METRIC_NAMESPACE = "nats_sinks"
 METRICS_SNAPSHOT_SCHEMA = "nats_sinks.metrics.snapshot.v1"
 MAX_METRICS_SNAPSHOT_BYTES = 1_048_576
+MAX_LABELED_METRIC_ROWS = 1_000
+MAX_METRIC_ROW_LABELS = 4
 METRIC_NAMESPACE_RE = re.compile(r"^[A-Za-z_:][A-Za-z0-9_:]*$")
+METRIC_LABEL_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
+METRIC_LABEL_VALUE_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.-]{0,63}$")
 
 
 MetricKind = Literal["counter", "histogram", "gauge"]
@@ -85,12 +89,24 @@ class MetricNames:
     ORACLE_COMMIT_SECONDS = "oracle_commit_seconds"
     MESSAGE_ACK_SECONDS = "message_ack_seconds"
     MESSAGE_TERM_SECONDS = "message_term_seconds"
+    IN_PROGRESS_ATTEMPTS_TOTAL = "in_progress_attempts_total"
+    IN_PROGRESS_SUCCESSES_TOTAL = "in_progress_successes_total"
+    IN_PROGRESS_FAILURES_TOTAL = "in_progress_failures_total"
+    IN_PROGRESS_MAX_HEARTBEATS_REACHED_TOTAL = "in_progress_max_heartbeats_reached_total"
+    IN_PROGRESS_HEARTBEAT_SECONDS = "in_progress_heartbeat_seconds"
+    CURRENT_IN_PROGRESS_BATCHES_ACTIVE = "current_in_progress_batches_active"
     RETRY_BACKOFF_DELAY_SECONDS = "retry_backoff_delay_seconds"
     SINK_WRITE_ERRORS_TOTAL = "sink_write_errors_total"
     MESSAGE_NORMALIZATION_ERRORS_TOTAL = "message_normalization_errors_total"
     PAYLOAD_ENCRYPTION_ERRORS_TOTAL = "payload_encryption_errors_total"
     DLQ_PUBLISH_ERRORS_TOTAL = "dlq_publish_errors_total"
     ACK_ERRORS_TOTAL = "ack_errors_total"
+    ACK_CONFIRMATION_ATTEMPTS_TOTAL = "ack_confirmation_attempts_total"
+    ACK_CONFIRMATION_SUCCESSES_TOTAL = "ack_confirmation_successes_total"
+    ACK_CONFIRMATION_TIMEOUTS_TOTAL = "ack_confirmation_timeouts_total"
+    ACK_CONFIRMATION_FAILURES_TOTAL = "ack_confirmation_failures_total"
+    ACK_CONFIRMATION_UNSUPPORTED_TOTAL = "ack_confirmation_unsupported_total"
+    ACK_CONFIRMATION_SECONDS = "ack_confirmation_seconds"
     TERM_ERRORS_TOTAL = "term_errors_total"
     NATS_CONNECTION_DISCONNECTED_TOTAL = "nats_connection_disconnected_total"
     NATS_CONNECTION_RECONNECTED_TOTAL = "nats_connection_reconnected_total"
@@ -157,6 +173,20 @@ class MetricNames:
     MYSQL_DUPLICATE_NOOP_TOTAL = "mysql_duplicate_noop_total"
     MYSQL_UPSERT_ROWS_TOTAL = "mysql_upsert_rows_total"
     MYSQL_UPSERT_OUTCOME_UNKNOWN_TOTAL = "mysql_upsert_outcome_unknown_total"
+    FANOUT_ROUTE_MATCHES_TOTAL = "fanout_route_matches_total"
+    FANOUT_MESSAGES_ROUTED_TOTAL = "fanout_messages_routed_total"
+    FANOUT_MESSAGES_NO_ROUTE_TOTAL = "fanout_messages_no_route_total"
+    FANOUT_CHILD_SINKS_SELECTED_TOTAL = "fanout_child_sinks_selected_total"
+    CURRENT_FANOUT_CHILD_SINKS_SELECTED = "current_fanout_child_sinks_selected"
+    FANOUT_REQUIRED_CHILD_SUCCESS_TOTAL = "fanout_required_child_success_total"
+    FANOUT_REQUIRED_CHILD_FAILURE_TOTAL = "fanout_required_child_failure_total"
+    FANOUT_OPTIONAL_CHILD_SUCCESS_TOTAL = "fanout_optional_child_success_total"
+    FANOUT_OPTIONAL_CHILD_FAILURE_TOTAL = "fanout_optional_child_failure_total"
+    FANOUT_OPTIONAL_CHILD_TIMEOUT_TOTAL = "fanout_optional_child_timeout_total"
+    FANOUT_MESSAGES_ACKED_TOTAL = "fanout_messages_acked_total"
+    FANOUT_MESSAGES_ACK_BLOCKED_TOTAL = "fanout_messages_ack_blocked_total"
+    FANOUT_ACK_GATE_WAIT_SECONDS = "fanout_ack_gate_wait_seconds"
+    FANOUT_BATCH_SECONDS = "fanout_batch_seconds"
     LAST_SINK_SUCCESS_EPOCH_SECONDS = "last_sink_success_epoch_seconds"
     CURRENT_BATCH_MESSAGES = "current_batch_messages"
 
@@ -257,6 +287,36 @@ METRIC_SPECS: tuple[MetricSpec, ...] = (
         "Elapsed seconds spent sending terminal acknowledgements after DLQ publication.",
     ),
     MetricSpec(
+        MetricNames.IN_PROGRESS_ATTEMPTS_TOTAL,
+        "counter",
+        "JetStream InProgress heartbeat attempts while sink work is still active.",
+    ),
+    MetricSpec(
+        MetricNames.IN_PROGRESS_SUCCESSES_TOTAL,
+        "counter",
+        "JetStream InProgress heartbeats accepted by the client; this is not sink success.",
+    ),
+    MetricSpec(
+        MetricNames.IN_PROGRESS_FAILURES_TOTAL,
+        "counter",
+        "JetStream InProgress heartbeat failures observed before the final ACK decision.",
+    ),
+    MetricSpec(
+        MetricNames.IN_PROGRESS_MAX_HEARTBEATS_REACHED_TOTAL,
+        "counter",
+        "Batches where the configured InProgress heartbeat limit was reached.",
+    ),
+    MetricSpec(
+        MetricNames.IN_PROGRESS_HEARTBEAT_SECONDS,
+        "histogram",
+        "Elapsed seconds spent sending JetStream InProgress heartbeat operations.",
+    ),
+    MetricSpec(
+        MetricNames.CURRENT_IN_PROGRESS_BATCHES_ACTIVE,
+        "gauge",
+        "Batches currently protected by InProgress heartbeat supervision.",
+    ),
+    MetricSpec(
         MetricNames.RETRY_BACKOFF_DELAY_SECONDS,
         "histogram",
         "Retry delay seconds selected for retryable failures before delayed NAK.",
@@ -285,6 +345,36 @@ METRIC_SPECS: tuple[MetricSpec, ...] = (
         MetricNames.ACK_ERRORS_TOTAL,
         "counter",
         "Messages whose JetStream ACK failed after durable success.",
+    ),
+    MetricSpec(
+        MetricNames.ACK_CONFIRMATION_ATTEMPTS_TOTAL,
+        "counter",
+        "JetStream ACK confirmation attempts after durable success or DLQ success.",
+    ),
+    MetricSpec(
+        MetricNames.ACK_CONFIRMATION_SUCCESSES_TOTAL,
+        "counter",
+        "JetStream ACK confirmations accepted by the server after durable success or DLQ success.",
+    ),
+    MetricSpec(
+        MetricNames.ACK_CONFIRMATION_TIMEOUTS_TOTAL,
+        "counter",
+        "JetStream ACK confirmation attempts that timed out after durable success or DLQ success.",
+    ),
+    MetricSpec(
+        MetricNames.ACK_CONFIRMATION_FAILURES_TOTAL,
+        "counter",
+        "JetStream ACK confirmation attempts that failed after durable success or DLQ success.",
+    ),
+    MetricSpec(
+        MetricNames.ACK_CONFIRMATION_UNSUPPORTED_TOTAL,
+        "counter",
+        "Messages where ACK confirmation was requested but unsupported by the client path.",
+    ),
+    MetricSpec(
+        MetricNames.ACK_CONFIRMATION_SECONDS,
+        "histogram",
+        "Elapsed seconds spent waiting for JetStream ACK confirmation responses.",
     ),
     MetricSpec(
         MetricNames.TERM_ERRORS_TOTAL,
@@ -597,6 +687,76 @@ METRIC_SPECS: tuple[MetricSpec, ...] = (
         "Oracle MySQL upsert rows where insert-versus-match outcome is not reliably exposed.",
     ),
     MetricSpec(
+        MetricNames.FANOUT_ROUTE_MATCHES_TOTAL,
+        "counter",
+        "Route policy entries matched by fan-out delivery without exporting route names.",
+    ),
+    MetricSpec(
+        MetricNames.FANOUT_MESSAGES_ROUTED_TOTAL,
+        "counter",
+        "Messages with at least one selected fan-out child sink target.",
+    ),
+    MetricSpec(
+        MetricNames.FANOUT_MESSAGES_NO_ROUTE_TOTAL,
+        "counter",
+        "Messages rejected or ignored because routing selected no fan-out targets.",
+    ),
+    MetricSpec(
+        MetricNames.FANOUT_CHILD_SINKS_SELECTED_TOTAL,
+        "counter",
+        "Selected fan-out child sink operations across routed messages.",
+    ),
+    MetricSpec(
+        MetricNames.CURRENT_FANOUT_CHILD_SINKS_SELECTED,
+        "gauge",
+        "Number of fan-out child sink targets selected for the latest evaluated message.",
+    ),
+    MetricSpec(
+        MetricNames.FANOUT_REQUIRED_CHILD_SUCCESS_TOTAL,
+        "counter",
+        "Required fan-out child sink operations that committed before ACK.",
+    ),
+    MetricSpec(
+        MetricNames.FANOUT_REQUIRED_CHILD_FAILURE_TOTAL,
+        "counter",
+        "Required fan-out child sink operations that failed and blocked ACK.",
+    ),
+    MetricSpec(
+        MetricNames.FANOUT_OPTIONAL_CHILD_SUCCESS_TOTAL,
+        "counter",
+        "Optional fan-out child sink operations that completed before the ACK gate released.",
+    ),
+    MetricSpec(
+        MetricNames.FANOUT_OPTIONAL_CHILD_FAILURE_TOTAL,
+        "counter",
+        "Optional fan-out child sink operations that failed without blocking required ACK.",
+    ),
+    MetricSpec(
+        MetricNames.FANOUT_OPTIONAL_CHILD_TIMEOUT_TOTAL,
+        "counter",
+        "Optional fan-out child sink operations that exceeded their bounded ACK wait window.",
+    ),
+    MetricSpec(
+        MetricNames.FANOUT_MESSAGES_ACKED_TOTAL,
+        "counter",
+        "Fan-out messages whose original JetStream message became eligible for ACK.",
+    ),
+    MetricSpec(
+        MetricNames.FANOUT_MESSAGES_ACK_BLOCKED_TOTAL,
+        "counter",
+        "Fan-out messages whose original JetStream ACK was blocked by required failure.",
+    ),
+    MetricSpec(
+        MetricNames.FANOUT_ACK_GATE_WAIT_SECONDS,
+        "histogram",
+        "Elapsed seconds spent waiting at the fan-out ACK gate.",
+    ),
+    MetricSpec(
+        MetricNames.FANOUT_BATCH_SECONDS,
+        "histogram",
+        "Elapsed seconds spent processing a fan-out batch across selected child sinks.",
+    ),
+    MetricSpec(
         MetricNames.LAST_SINK_SUCCESS_EPOCH_SECONDS,
         "gauge",
         "Unix epoch seconds for the latest durable sink success followed by ACK.",
@@ -710,12 +870,18 @@ class MetricRow:
     value: float
     description: str = ""
     stat: str | None = None
+    labels: dict[str, str] = field(default_factory=dict)
 
     @property
     def shell_name(self) -> str:
         """Return an environment-variable-safe representation of the row name."""
 
         rendered = self.name.replace(".", "_")
+        if self.labels:
+            label_suffix = "_".join(
+                f"{name}_{value}" for name, value in sorted(self.labels.items())
+            )
+            rendered = f"{rendered}_{label_suffix}"
         return re.sub(r"[^A-Za-z0-9_]", "_", rendered).upper()
 
 
@@ -984,7 +1150,66 @@ def load_metrics_snapshot(path: str | os.PathLike[str]) -> dict[str, object]:
     for section in ("counters", "gauges", "observations"):
         if not isinstance(payload.get(section), dict):
             raise ValueError(f"metrics snapshot {section!r} section must be an object")
+    _validate_labeled_metric_rows(payload.get("labeled_metrics", []))
     return cast(dict[str, object], payload)
+
+
+def _validate_metric_row_labels(raw_labels: object) -> dict[str, str]:
+    """Validate bounded labels carried by prepared observability series."""
+
+    if not isinstance(raw_labels, dict):
+        raise ValueError("labeled metric row labels must be an object")
+    if len(raw_labels) > MAX_METRIC_ROW_LABELS:
+        raise ValueError(f"labeled metric rows may contain at most {MAX_METRIC_ROW_LABELS} labels")
+    labels: dict[str, str] = {}
+    for raw_name, raw_value in raw_labels.items():
+        if not isinstance(raw_name, str) or not METRIC_LABEL_NAME_RE.fullmatch(raw_name):
+            raise ValueError("labeled metric label names must be bounded identifiers")
+        if not isinstance(raw_value, str) or not METRIC_LABEL_VALUE_RE.fullmatch(raw_value):
+            raise ValueError("labeled metric label values must be bounded identifiers")
+        labels[raw_name] = raw_value
+    return labels
+
+
+def _validate_labeled_metric_rows(raw_rows: object) -> list[MetricRow]:
+    """Validate optional prepared labeled metric rows from a metrics snapshot."""
+
+    if raw_rows in (None, []):
+        return []
+    if not isinstance(raw_rows, list):
+        raise ValueError("metrics snapshot 'labeled_metrics' section must be a list")
+    if len(raw_rows) > MAX_LABELED_METRIC_ROWS:
+        raise ValueError(
+            f"metrics snapshot may contain at most {MAX_LABELED_METRIC_ROWS} labeled rows"
+        )
+
+    rows: list[MetricRow] = []
+    for raw_row in raw_rows:
+        if not isinstance(raw_row, dict):
+            raise ValueError("labeled metric rows must be objects")
+        name = raw_row.get("name")
+        kind = raw_row.get("kind")
+        if not isinstance(name, str) or name not in METRIC_SPEC_BY_NAME:
+            raise ValueError("labeled metric row names must be known nats-sinks metrics")
+        spec = METRIC_SPEC_BY_NAME[name]
+        if kind not in {"counter", "gauge"}:
+            raise ValueError("labeled metric rows may only be counters or gauges")
+        if kind != spec.kind:
+            raise ValueError("labeled metric row kind must match the metric specification")
+        value = _coerce_metric_number(raw_row.get("value"), name=name)
+        if value < 0 and kind == "counter":
+            raise ValueError("labeled metric counters must not be negative")
+        labels = _validate_metric_row_labels(raw_row.get("labels", {}))
+        rows.append(
+            MetricRow(
+                kind=cast(MetricRowKind, kind),
+                name=name,
+                value=value,
+                description=spec.description,
+                labels=labels,
+            )
+        )
+    return rows
 
 
 def metric_rows_from_snapshot(
@@ -1042,6 +1267,7 @@ def metric_rows_from_snapshot(
                     stat=stat,
                 )
             )
+    rows.extend(_validate_labeled_metric_rows(snapshot.get("labeled_metrics", [])))
     return rows
 
 

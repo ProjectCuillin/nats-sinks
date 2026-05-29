@@ -1,0 +1,16 @@
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "MISSION_EVENTS",
+    "consumer": "foundry-sink",
+    "subject": "mission.events.>"
+  },
+  "sink": {
+    "type": "foundry",
+    "stream_push_url": "https://foundry.example.invalid/api/push/streams/example",
+    "bearer_token_env": "FOUNDRY_TOKEN",
+    "endpoint_allowed_hosts": ["foundry.example.invalid"],
+    "batch_size": 100,
+    "timeout_seconds": 10
+  }
+}

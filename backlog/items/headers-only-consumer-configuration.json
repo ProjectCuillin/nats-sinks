@@ -3,7 +3,7 @@
   "title": "[Feature]: Add validated headers-only JetStream consumer configuration",
   "area": "Core runtime and delivery semantics",
   "priority": "P3 - backlog candidate",
-  "target_release": "unscheduled",
+  "target_release": "v0.4.2",
   "labels": ["nats", "security", "testing"],
   "problem": "NATS JetStream supports headers-only consumers, but nats-sinks does not expose a validated way to request, verify, or reconcile that setting. Operators can create such consumers manually, but nats-sinks cannot currently prove that the durable consumer is intentionally metadata-only or fail closed when an existing consumer has incompatible delivery behavior.",
   "proposal": "Add explicit configuration for headers-only consumer operation under the future JetStream consumer management model. The setting must be disabled by default, validated before message processing, and reconciled with existing durable consumers only through documented bind-only, create-if-missing, or reconcile modes. The runner should require explicit operator intent before accepting a headers-only consumer and should produce a clear configuration error when consumer state conflicts with the configured mode.",

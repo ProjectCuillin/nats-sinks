@@ -82,6 +82,7 @@ mypy src
 python scripts/check-markdown-links.py
 pytest
 scripts/check-sinks.sh
+NATS_SINKS_RUN_CONTAINER_E2E=1 scripts/check-sinks.sh
 bandit -q -r src
 python -m build
 scripts/sbom.sh
@@ -94,6 +95,11 @@ The docs helper builds both canonical documentation targets in isolated
 temporary output directories. That avoids collisions between overlapping
 MkDocs runs that would otherwise clean the same `site/` directory.
 
+The container e2e command is a local release-validation step. Run it when
+Docker is available and the optional Oracle NoSQL Database and Oracle
+Coherence clients are installed. If it cannot be run, record that explicitly in
+`docs/test-report.md` rather than implying container-backed e2e evidence.
+
 Also confirm that local GitHub CLI authentication is valid before pushing tags:
 
 ```bash
@@ -102,8 +108,10 @@ scripts/check-gh-auth.sh
 
 This is not required by PyPI Trusted Publishing itself. It is a maintainer
 quality-of-life check so commands such as `gh run list`, `gh run view`, and
-`gh release view` work immediately after the tag push. If authentication is
-invalid and a terminal is available, the helper asks whether it should start
+`gh release view` work immediately after the tag push. The helper performs a
+small authenticated GitHub API probe without printing token values. If
+authentication is invalid and a terminal is available, the helper asks whether
+it should start
 browser-based `gh auth login`. It never prints token values.
 
 Push the release branch and open or refresh the release pull request:
@@ -374,21 +382,29 @@ GitHub release workflow: GitHub Actions validates the release candidate and
 publishes the artifacts, while the local post-release check validates that the
 published PyPI artifact can be installed and used from a clean environment.
 
-The planned maintained harness will run in a short-lived container, install
-`nats-sinks` from PyPI, verify that the local checkout is not imported, and run
-artifact-level smoke checks for CLI help, version reporting, Python imports,
-configuration validation, file sink behavior, and metrics CLI behavior. It
-will support checking the latest released version or an explicit version, and
-it will write only sanitized local evidence.
-
-Until that harness exists, a maintainer can run a manual clean-container check:
+Run the maintained local validation harness:
 
 ```bash
-docker run --rm -it container-registry.oracle.com/os/oraclelinux:9-slim bash -lc '\
-  microdnf install -y --setopt=install_weak_deps=0 python3.11 python3.11-pip && \
-  python3.11 -m pip install --no-cache-dir nats-sinks && \
-  nats-sink --help >/tmp/nats-sink-help && \
-  python3.11 -c "from nats_sinks import JetStreamSinkRunner; from nats_sinks.file import FileSink; print(\"ok\")"'
+python scripts/run-pypi-release-container-validation.py --version 0.4.1
+```
+
+Use the package version without the leading `v` when checking the PyPI
+artifact. Git tags use `v0.4.1`; PyPI package versions use `0.4.1`.
+
+The script starts from an Oracle Linux 9 slim validation image, installs
+`nats-sinks` from PyPI, verifies that the local checkout is not imported, and
+runs artifact-level smoke checks for CLI help, version reporting, Python
+imports, configuration validation, FileSink behavior, metrics CLI behavior,
+and observability CLI startup. It supports checking the latest released
+version or an explicit version, and it writes only sanitized local evidence.
+
+Optional extras can be included when they can be validated without private
+infrastructure:
+
+```bash
+python scripts/run-pypi-release-container-validation.py \
+  --version 0.4.1 \
+  --extras crypto,mysql,oci
 ```
 
 Do not run this as a default GitHub Action. It depends on public registry state

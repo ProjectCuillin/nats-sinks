@@ -44,23 +44,88 @@ Unit tests cover:
 - AES-256-GCM and AES-256-CCM payload encryption,
 - payload decryption verification,
 - commit-then-ack ordering,
+- fan-out route selection and ACK-gate certification,
 - no ACK when payload encryption fails before sink delivery,
 - DLQ-before-ACK ordering,
 - no ACK on sink failure,
 - no payload logging by default.
 
-Ordered-consumer support is currently documentation and backlog only. Future
-ordered-inspection tests should prove that inspection tooling is read-only,
-bounded, redacted by default, and unable to call sink writes. Future durable
-replay-to-sinks tests should stay on the normal commit-then-acknowledge
-contract and prove that replay never ACKs before durable sink success. See
-[Ordered Consumer Evaluation](ordered-consumer-evaluation.md).
+## Routing And Fan-Out Certification
 
-Push-consumer support is also documentation and backlog only. Future push-mode
-tests must prove manual ACK behavior, bounded callback intake, no ACK on
-temporary failures, DLQ-before-ACK behavior on permanent failures, flow-control
-and heartbeat handling, graceful shutdown, and unchanged pull-mode behavior.
-See [Push Consumer Evaluation](push-consumer-evaluation.md).
+Routing and fan-out tests remain deterministic and local. They do not connect
+to NATS, Oracle Database, Oracle MySQL, or any other backend. The focused suite
+uses synthetic `NatsEnvelope` instances, route policies, in-memory fan-out
+operation plans, and the production `FanoutSink` to prove that route
+selection, child-sink dispatch, and ACK gating behave correctly.
+
+Run the focused suite with:
+
+```bash
+pytest tests/unit/test_fanout_certification.py tests/unit/test_fanout_sink.py
+```
+
+Run the multi-sink routing end-to-end probe with:
+
+```bash
+python scripts/run-multi-sink-routing-e2e.py \
+  --mode reduced \
+  --output .local/multi-sink-routing-e2e/report.json
+```
+
+The suite covers:
+
+- one-to-one routing to a single logical sink target;
+- one-to-many routing to required and optional targets;
+- required target failure after partial success, proving no synthetic ACK is
+  recorded;
+- optional target timeout, proving bounded wait behavior and payload-free logs;
+- no-route actions for `reject`, `ignore`, and `default_route`;
+- matching by subject, priority, classification, `labels_all`, `labels_any`,
+  `labels_none`, approved non-secret headers, and combined match sets;
+- `nats-sink validate` coverage for the documented named multi-sink example
+  and invalid route, sink, match, optional wait, fan-out, and redaction
+  scenarios.
+- a deterministic multi-sink routing flow for Oracle Database, Oracle MySQL
+  Database, File, and Oracle Coherence Community Edition logical targets,
+  using local file-backed probe sinks so no credentials or network calls are
+  needed.
+
+The same suite is part of `scripts/check-sinks.sh` and therefore part of the
+deterministic release readiness path. Live NATS-to-destination fan-out tests
+remain opt-in because they need the same live destination credentials as the
+underlying child sinks.
+
+See [Multi-Sink Routing End-To-End Flow](multi-sink-routing-e2e.md) for the
+route matrix, example configuration, command output, and live-backend layering
+guidance.
+
+Ordered-consumer inspection has focused unit coverage for fail-closed client
+capability detection, redacted default output, explicit payload opt-in, message
+and payload-byte limits, JSONL output-path validation, unsubscribe cleanup, and
+the CLI contract that no sink is built or written. Durable replay-to-sinks
+tests should stay on the normal commit-then-acknowledge contract and prove
+that replay never ACKs before durable sink success. See
+[Ordered Consumer Evaluation](ordered-consumer-evaluation.md) and
+[Durable Replay To Sinks](durable-replay-to-sinks.md).
+
+The durable replay design is covered by a documentation guardrail test. That
+test keeps the page in the MkDocs navigation and checks that public guidance
+continues to mention durable pull consumers, no early ACK, start sequence or
+start time boundaries, maximum message limits, dry-run behavior, redacted
+reports, idempotency review, and future tests for duplicate replay and DLQ
+handling. When replay becomes executable tooling, those documentation checks
+must be complemented by runner-level tests that use fake messages and fake
+sinks to prove the same behavior in code.
+
+Push-consumer support is opt-in and covered by unit tests for default-disabled
+configuration, manual ACK enforcement, bounded callback intake, queue overflow,
+shutdown intake stop, temporary failure without ACK, DLQ-before-ACK permanent
+failure handling, flow-control and idle-heartbeat option propagation, callback
+exception containment, and unchanged pull-mode behavior. Optional live NATS
+push-consumer certification is isolated behind
+`NATS_SINKS_PUSH_CONSUMER_INTEGRATION=1` so ordinary unit and release checks do
+not depend on a local server. See
+[Push Consumer Evaluation](push-consumer-evaluation.md).
 
 ## Bounded Property-Style Tests
 
@@ -170,6 +235,65 @@ export NATS_SINKS_FILE_E2E_DELETE_AFTER=false
 pytest tests/integration/test_file_sink_e2e.py
 ```
 
+## Palantir Foundry Mock Certification
+
+The experimental Palantir Foundry sink is certified locally with a fake
+`FoundryStreamClient`. This test path does not connect to Foundry and does not
+require tenant URLs, credentials, client identifiers, resource identifiers, or
+private response bodies.
+
+```bash
+python -m pytest tests/unit/test_foundry_sink.py -q
+```
+
+The focused suite covers:
+
+- configuration validation for HTTPS endpoints, endpoint allow-listing,
+  bearer-token environment variables, OAuth2 client-credentials fields, record
+  field names, and size limits;
+- record mapping for payloads, payload metadata, priority, classification,
+  labels, NATS metadata, mission metadata, security labels, and custody
+  metadata;
+- deterministic idempotency key strategies and fail-closed behavior when a
+  selected strategy lacks required metadata;
+- fake-client success, permanent rejection, temporary failure, ambiguous
+  partial acceptance, batching, and duplicate redelivery;
+- runner-level ACK evidence proving Foundry acceptance happens before ACK and
+  sink failure prevents ACK.
+
+Mock certification is necessary before live certification, but it is not a
+substitute for testing against an approved Foundry environment.
+
+## Palantir Gotham Mock Certification
+
+The experimental Palantir Gotham sink is certified locally with a fake
+`GothamObjectClient`. This test path does not connect to Gotham and does not
+require tenant URLs, credentials, client identifiers, object type names,
+property type names, primary keys, or private response bodies.
+
+```bash
+python -m pytest tests/unit/test_gotham_sink.py -q
+```
+
+The focused suite covers:
+
+- configuration validation for HTTPS base URLs, endpoint allow-listing,
+  bearer-token environment variables, OAuth2 client-credentials fields, object
+  type names, property type mappings, security portion markings, and size
+  limits;
+- object-create mapping for payloads, payload metadata, selected NATS
+  metadata, classification, labels, security markings, and deterministic
+  external IDs;
+- deterministic idempotency strategies and fail-closed behavior when a
+  selected strategy lacks required metadata;
+- fake-client success, duplicate redelivery, permanent rejection, temporary
+  failure, ambiguous partial acceptance, and batching;
+- runner-level ACK evidence proving Gotham acceptance happens before ACK and
+  sink failure prevents ACK.
+
+Mock certification is necessary before live certification, but it is not a
+substitute for testing against an approved Gotham environment and object model.
+
 The test creates a unique child directory under `NATS_SINKS_FILE_E2E_DIRECTORY`
 for each run. Keep that directory under `.local/` or another ignored location
 when retaining files.
@@ -239,6 +363,168 @@ See [Oracle MySQL Sink](mysql-sink.md) for sink configuration and
 [Oracle MySQL Test Container](oracle-mysql-test-container.md) for the complete
 container security model, runtime sequence, capability exception, and
 troubleshooting guidance.
+
+## Oracle NoSQL Database Sink And Test Backend
+
+The repository includes a local Oracle NoSQL Database KVLite backend and a
+container-backed e2e test for the experimental first-party Oracle NoSQL
+Database sink. The backend wraps Oracle's documented Community Edition KVLite
+image from GitHub Container Registry and is local test infrastructure only.
+
+Run the deterministic asset tests without Docker:
+
+```bash
+python -m pytest tests/unit/test_oracle_nosql_test_container.py -q
+```
+
+Run the optional Docker smoke test when a local Docker daemon and the optional
+Oracle NoSQL Python SDK are available:
+
+```bash
+python -m pip install -e ".[oracle-nosql]"
+python scripts/run-oracle-nosql-container-smoke.py
+```
+
+Expected sanitized output:
+
+```text
+Oracle NoSQL Database container smoke test passed with one verified JSON key/value entry.
+```
+
+Run the Oracle NoSQL sink e2e test against a fresh short-lived KVLite
+container:
+
+```bash
+python scripts/run-oracle-nosql-sink-e2e.py
+```
+
+Expected sanitized output:
+
+```text
+Oracle NoSQL sink container e2e test passed.
+```
+
+That e2e runner starts the same short-lived KVLite backend, binds the HTTP
+proxy to a random loopback port, enables the live-gated
+`tests/integration/test_oracle_nosql_sink_e2e.py` test, creates the narrow
+key/value table through generated safe DDL, writes the same normalized
+envelope twice, and removes the container by default.
+
+See [Oracle NoSQL Database Sink](oracle-nosql-sink.md) for sink configuration
+and [Oracle NoSQL Database Test Backend](oracle-nosql-test-container.md) for
+the image strategy, local-only security posture, JSON verification, cleanup
+behavior, and troubleshooting guidance.
+
+## Oracle Coherence Community Edition Test Backend
+
+The repository includes a local Oracle Coherence Community Edition test backend
+for future Oracle Coherence sink and multi-sink routing work. The backend is a
+test-only Oracle Linux 9 slim image that resolves the Oracle Coherence
+Community Edition runtime, gRPC proxy, and JSON modules during build. It starts
+a short-lived container, exposes the client endpoint only on a random loopback
+port, writes one complete fake event JSON object as a key/value entry, reads it
+back, and removes the container by default.
+
+Run the deterministic asset tests without Docker:
+
+```bash
+python -m pytest tests/unit/test_oracle_coherence_test_container.py -q
+```
+
+Run the optional Docker smoke test when a local Docker daemon and the optional
+Coherence Python client are available. Use an isolated local virtual
+environment for the optional client:
+
+```bash
+python -m venv .local/coherence-smoke-venv
+. .local/coherence-smoke-venv/bin/activate
+python -m pip install coherence-client
+python scripts/run-oracle-coherence-container-smoke.py
+```
+
+Expected sanitized output:
+
+```text
+Oracle Coherence CE container smoke test passed with one verified JSON key/value entry.
+```
+
+This backend does not implement the Oracle Coherence Community Edition sink and
+does not prove production Coherence durability. It is local test infrastructure
+for future sink certification, routing, and fan-out validation.
+
+See [Oracle Coherence Community Edition Test Backend](oracle-coherence-test-container.md)
+for Oracle Linux 9 slim base-image selection, runtime module selection, runtime
+sequence, optional client setup, smoke-test commands, cleanup behavior, and
+security boundaries.
+
+## Subject-Aware Observability Certification
+
+Subject-aware observability has its own focused certification suite because
+subject-family labels can expose operational routing structure or create
+high-cardinality metric sets. The tests use synthetic subjects only and prove
+disabled-by-default behavior, allow and deny handling, malformed policy
+rejection, cardinality caps, overflow behavior, sanitized connector output, and
+delivery non-interference.
+
+Run the focused suite with:
+
+```bash
+python -m pytest tests/unit/test_subject_observability_certification.py -q
+```
+
+The reusable helper is available for connector authors:
+
+```python
+from nats_sinks.testing import run_subject_observability_certification
+
+
+def test_subject_observability_contract() -> None:
+    report = run_subject_observability_certification()
+
+    assert report.raw_subject_leaks == ()
+    assert report.delivery_probe_before == report.delivery_probe_after
+```
+
+See the
+[Subject-Aware Observability Runbook](subject-aware-observability-runbook.md)
+before enabling subject-family metrics in an operator policy.
+
+## Local PyPI Artifact Container Validation
+
+After a release has been published to PyPI, maintainers can run a local
+post-release validation in a clean Oracle Linux 9 slim based container:
+
+```bash
+python scripts/run-pypi-release-container-validation.py --version 0.4.1
+```
+
+This check is intentionally not part of GitHub Actions. It validates public
+registry state after publication by installing `nats-sinks` from PyPI inside a
+short-lived container and confirming that the package does not import from the
+local checkout. It then checks CLI help, version output, Python imports,
+configuration validation, FileSink smoke behavior, metrics snapshot behavior,
+and observability CLI startup.
+
+Use `latest` to check the newest public package:
+
+```bash
+python scripts/run-pypi-release-container-validation.py --version latest
+```
+
+Use optional extras only when they can be validated without private services:
+
+```bash
+python scripts/run-pypi-release-container-validation.py \
+  --version 0.4.1 \
+  --extras crypto,mysql,oci
+```
+
+The script removes the validation container, temporary image, and generated
+validator files by default. It writes sanitized reports under
+`.local/pypi-release-validation/reports/`, which is ignored by Git. If the
+check finds a failure, create a sanitized GitHub bug report before starting the
+fix, attach the relevant local report summary, and follow the normal
+test-driven bug workflow.
 
 ## Local WebSocket End-To-End Test
 
@@ -502,7 +788,10 @@ available level:
 | --- | --- | --- | --- |
 | Oracle | SQL, mapping, routing, payload, idempotency, encrypted payload storage, and contract tests. | `nats-sink validate examples/oracle-jetstream/config.json`; live `test-sink` when Oracle env is available. | Live NATS-to-Oracle e2e when `.local` integration env is available. |
 | Oracle MySQL | SQL, mapping, routing, payload, idempotency, TLS configuration, metrics, and contract tests. | `nats-sink validate examples/oracle-mysql-basic/config.json`; `python scripts/run-oracle-mysql-container-smoke.py`. | Local short-lived Oracle MySQL container e2e with `python scripts/run-mysql-sink-e2e.py`. |
+| Oracle NoSQL Database | Config validation, SDK authorization-provider construction, namespace and compartment handle defaults, cloud table-limit setup, key strategy, JSON value mapping, generated table DDL, duplicate policy, timeout handling, optional dependency failure, fan-out defaults, test-container asset checks, and contract tests with fake SDK clients. | `nats-sink validate examples/oracle-nosql-basic/config.json`; `python scripts/run-oracle-nosql-container-smoke.py`. | Local short-lived Oracle NoSQL Database KVLite container e2e with `python scripts/run-oracle-nosql-sink-e2e.py`; Cloud Simulator and Oracle NoSQL Database Cloud Service certification remains explicitly environment-gated. |
+| Oracle Coherence Community Edition | Config validation, key strategy, JSON value mapping, duplicate policy, timeout handling, optional dependency failure, fan-out defaults, and contract tests. | `nats-sink validate examples/oracle-coherence-basic/config.json`; `python scripts/run-oracle-coherence-container-smoke.py`. | Local short-lived Oracle Coherence Community Edition container e2e with `python scripts/run-coherence-sink-e2e.py`. |
 | File | Path mapping, payload, duplicate policy, compression, encryption, healthcheck, filesystem errors, and fuzz-style path safety tests. | `nats-sink validate examples/file-basic/config.json`; `nats-sink test-sink examples/file-basic/config.json`. | Local deterministic runner-to-file e2e in `tests/integration/test_file_sink_e2e.py`, with uncompressed, gzip, and encrypted output. |
+| S3-compatible object storage | Config validation, bucket and endpoint validation, key strategy, object value mapping, duplicate policy, metadata sidecar behavior, timeout handling, optional dependency failure, fan-out defaults, and contract tests with fake SDK clients. | `nats-sink validate examples/s3-basic/config.json`. | Live S3-compatible object-storage certification remains explicitly environment-gated and should use scoped temporary prefixes, fake payloads, and sanitized reports. |
 
 If a live external-service test is not run, the latest test report must say so
 explicitly. Do not imply that Oracle, NATS, or any other external service was
@@ -525,6 +814,36 @@ replacement for destination-specific tests; they are the shared baseline that
 proves a sink respects the framework boundary, receives only `NatsEnvelope`
 objects, does not own JetStream ACK behavior, and returns success only after
 the sink-specific durable assertion has passed.
+
+To include the local container-backed key/value sink e2e suite, install the
+optional backend clients, make sure Docker is running, and enable the explicit
+container gate:
+
+```bash
+python -m pip install -e ".[coherence,oracle-nosql]"
+NATS_SINKS_RUN_CONTAINER_E2E=1 scripts/check-sinks.sh
+```
+
+That gate runs:
+
+- `python scripts/run-oracle-nosql-sink-e2e.py`, which starts a fresh Oracle
+  NoSQL Database KVLite container and verifies the Oracle NoSQL Database sink;
+- `python scripts/run-coherence-sink-e2e.py`, which builds and starts the
+  Oracle Coherence Community Edition test container and verifies the Oracle
+  Coherence Community Edition sink.
+
+Expected successful tail output:
+
+```text
+Oracle NoSQL sink container e2e test passed.
+Oracle Coherence sink e2e test passed.
+Full container-backed sink e2e suite passed.
+```
+
+The gate is local and opt-in. It is not a GitHub Actions default and it does
+not run unless `NATS_SINKS_RUN_CONTAINER_E2E=1` is set. The backend helpers
+bind to loopback, use fake data, bound readiness waits, and remove containers
+by default.
 
 To include live Oracle checks, source the ignored local integration environment
 files first and set:

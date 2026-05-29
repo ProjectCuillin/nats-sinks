@@ -20,11 +20,13 @@ from nats_sinks.core.errors import ConfigurationError
 from nats_sinks.observability.policy import (
     ObservabilityPolicy,
     build_policy_from_app_config,
+    evaluate_subject_observability_policy,
     load_observability_policy,
     observability_policy_template,
     subjects_from_app_config,
     write_observability_policy,
 )
+from nats_sinks.observability.prometheus import render_prometheus_textfile
 
 
 def _config_file(path: Path) -> Path:
@@ -95,6 +97,15 @@ def test_generated_policy_is_disabled_and_copies_safe_subject_hints(tmp_path: Pa
     assert policy.statsd.transport == "udp"
     assert policy.statsd.host == "127.0.0.1"
     assert policy.statsd.port == 8125
+    assert policy.datadog.enabled is False
+    assert policy.datadog.transport == "udp"
+    assert policy.datadog.host == "127.0.0.1"
+    assert policy.datadog.port == 8125
+    assert policy.datadog.include_metric_labels_as_tags is False
+    assert policy.azure_monitor.enabled is False
+    assert policy.azure_monitor.resource_id is None
+    assert policy.azure_monitor.location is None
+    assert policy.azure_monitor.token_env is None
     assert policy.syslog.enabled is False
     assert policy.syslog.transport == "udp"
     assert policy.syslog.host == "127.0.0.1"
@@ -106,6 +117,9 @@ def test_generated_policy_is_disabled_and_copies_safe_subject_hints(tmp_path: Pa
     assert policy.nats_server_monitoring.prometheus_enabled is False
     assert policy.nats_server_monitoring.allowed_endpoints == []
     assert policy.nats_server_monitoring.allowed_fields == []
+    assert policy.subject_metrics.enabled is False
+    assert policy.subject_metrics.default_action == "deny"
+    assert policy.subject_metrics.rules == []
     assert policy.allowed_metrics == []
     assert policy.allowed_metric_patterns == []
     assert policy.namespace == "mission_ops"
@@ -145,6 +159,222 @@ def test_policy_writer_refuses_to_overwrite_without_flag(tmp_path: Path) -> None
 def test_policy_rejects_unknown_metric_names() -> None:
     with pytest.raises(ValueError, match="unknown nats-sinks metric name"):
         ObservabilityPolicy(allowed_metrics=["not_a_metric"])
+
+
+def test_subject_aware_policy_is_disabled_by_default() -> None:
+    policy = ObservabilityPolicy()
+
+    decision = evaluate_subject_observability_policy(
+        policy,
+        subject="orders.created",
+        metric_name="messages_fetched_total",
+    )
+
+    assert policy.subject_metrics.enabled is False
+    assert decision.allowed is False
+    assert decision.reason == "disabled"
+
+
+def test_subject_aware_policy_allows_reviewed_subject_family() -> None:
+    policy = ObservabilityPolicy(
+        subject_metrics={
+            "enabled": True,
+            "rules": [
+                {
+                    "subject": "orders.*",
+                    "label": "orders",
+                    "allowed_metrics": ["messages_fetched_total"],
+                }
+            ],
+        }
+    )
+
+    decision = evaluate_subject_observability_policy(
+        policy,
+        subject="orders.created",
+        metric_name="messages_fetched_total",
+    )
+
+    assert decision.allowed is True
+    assert decision.label == "orders"
+    assert decision.display_mode == "label"
+
+
+def test_subject_aware_policy_deny_rules_override_allow_rules() -> None:
+    policy = ObservabilityPolicy(
+        subject_metrics={
+            "enabled": True,
+            "rules": [
+                {"subject": "orders.*", "label": "orders"},
+                {"subject": "orders.secret", "action": "deny"},
+            ],
+        }
+    )
+
+    decision = evaluate_subject_observability_policy(
+        policy,
+        subject="orders.secret",
+        metric_name="messages_fetched_total",
+    )
+
+    assert decision.allowed is False
+    assert decision.reason == "denied"
+
+
+def test_subject_aware_policy_default_denies_unknown_subjects() -> None:
+    policy = ObservabilityPolicy(
+        subject_metrics={
+            "enabled": True,
+            "rules": [{"subject": "orders.*", "label": "orders"}],
+        }
+    )
+
+    decision = evaluate_subject_observability_policy(
+        policy,
+        subject="payments.created",
+        metric_name="messages_fetched_total",
+    )
+
+    assert decision.allowed is False
+    assert decision.reason == "no_match"
+
+
+def test_subject_aware_policy_rejects_invalid_subject_patterns() -> None:
+    with pytest.raises(ConfigurationError, match="wildcard"):
+        ObservabilityPolicy(
+            subject_metrics={
+                "rules": [{"subject": "orders.>.bad", "label": "orders"}],
+            }
+        )
+
+
+def test_subject_aware_policy_rejects_unsafe_labels() -> None:
+    with pytest.raises(ValueError, match="label"):
+        ObservabilityPolicy(
+            subject_metrics={
+                "rules": [{"subject": "orders.*", "label": "bad value"}],
+            }
+        )
+
+    with pytest.raises(ValueError, match="secret or credential"):
+        ObservabilityPolicy(
+            subject_metrics={
+                "rules": [{"subject": "orders.*", "label": "api_key"}],
+            }
+        )
+
+
+def test_subject_aware_policy_cardinality_cap_is_enforced() -> None:
+    with pytest.raises(ValueError, match="max_subject_families"):
+        ObservabilityPolicy(
+            subject_metrics={
+                "enabled": True,
+                "max_subject_families": 1,
+                "rules": [
+                    {"subject": "orders.*", "label": "orders"},
+                    {"subject": "payments.*", "label": "payments"},
+                ],
+            }
+        )
+
+
+def test_subject_aware_policy_rejects_invalid_overflow_action() -> None:
+    with pytest.raises(ValueError, match="overflow_action"):
+        ObservabilityPolicy(subject_metrics={"overflow_action": "guess"})
+
+
+def test_subject_aware_policy_supports_redacted_and_hash_modes() -> None:
+    redacted = ObservabilityPolicy(
+        subject_metrics={
+            "enabled": True,
+            "rules": [{"subject": "orders.*", "label": "orders", "display_mode": "redacted"}],
+        }
+    )
+    hashed = ObservabilityPolicy(
+        subject_metrics={
+            "enabled": True,
+            "rules": [{"subject": "orders.*", "label": "orders", "display_mode": "hash"}],
+        }
+    )
+
+    assert (
+        evaluate_subject_observability_policy(redacted, subject="orders.created").label
+        == "redacted"
+    )
+    hash_label = evaluate_subject_observability_policy(hashed, subject="orders.created").label
+    assert hash_label is not None
+    assert hash_label.startswith("sha256_")
+
+
+def test_subject_aware_policy_raw_mode_requires_explicit_review_flag() -> None:
+    with pytest.raises(ValueError, match="allow_raw_subjects"):
+        ObservabilityPolicy(
+            subject_metrics={
+                "enabled": True,
+                "rules": [{"subject": "orders.*", "label": "orders", "display_mode": "raw"}],
+            }
+        )
+
+    policy = ObservabilityPolicy(
+        subject_metrics={
+            "enabled": True,
+            "allow_raw_subjects": True,
+            "rules": [{"subject": "orders.*", "label": "orders", "display_mode": "raw"}],
+        }
+    )
+
+    decision = evaluate_subject_observability_policy(policy, subject="orders.created")
+
+    assert decision.allowed is True
+    assert decision.label == "orders.created"
+
+
+def test_subject_aware_policy_invalid_runtime_subject_fails_closed() -> None:
+    policy = ObservabilityPolicy(
+        subject_metrics={
+            "enabled": True,
+            "rules": [{"subject": "orders.*", "label": "orders"}],
+        }
+    )
+
+    decision = evaluate_subject_observability_policy(policy, subject="bad subject")
+
+    assert decision.allowed is False
+    assert decision.reason == "invalid_subject"
+
+
+def test_subject_aware_policy_does_not_change_aggregate_prometheus_output(
+    tmp_path: Path,
+) -> None:
+    metrics_file = tmp_path / "metrics.json"
+    metrics_file.write_text(
+        json.dumps(
+            {
+                "schema": "nats_sinks.metrics.snapshot.v1",
+                "generated_at_epoch_seconds": 1,
+                "counters": {"messages_fetched_total": 7},
+                "gauges": {},
+                "observations": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    snapshot = json.loads(metrics_file.read_text(encoding="utf-8"))
+    policy = ObservabilityPolicy(
+        enabled=True,
+        allowed_metrics=["messages_fetched_total"],
+        prometheus={"enabled": True},
+        subject_metrics={
+            "enabled": True,
+            "rules": [{"subject": "orders.*", "label": "orders"}],
+        },
+    )
+
+    rendered = render_prometheus_textfile(snapshot, policy)
+
+    assert 'subject="' not in rendered
+    assert "orders" not in rendered
+    assert "nats_sinks_messages_fetched_total 7" in rendered
 
 
 def test_policy_rejects_unsafe_native_http_endpoint_settings() -> None:

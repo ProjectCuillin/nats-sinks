@@ -18,6 +18,14 @@ framework users may construct sinks, but ACK decisions remain in the core
 runner and are never delegated to destination code.
 """
 
+from nats_sinks.coherence import CoherenceSink, CoherenceSinkConfig
+from nats_sinks.core.ack_gate import (
+    FanoutAckGateError,
+    FanoutAckGateResult,
+    FanoutRequiredSinkError,
+    FanoutTargetResult,
+    wait_for_fanout_ack_gate,
+)
 from nats_sinks.core.advisory import (
     DEFAULT_ADVISORY_SUBJECTS,
     JetStreamAdvisory,
@@ -38,6 +46,8 @@ from nats_sinks.core.authenticity import (
     hmac_sha256_signature_b64,
 )
 from nats_sinks.core.config import (
+    FANOUT_OPTIONAL_ACK_DEFAULTS,
+    AckConfirmationConfig,
     ConsumerManagementConfig,
     CustodyConfig,
     EncryptionConfig,
@@ -56,6 +66,12 @@ from nats_sinks.core.config import (
     PreSinkPolicyRuleConfig,
     PriorityLaneConfig,
     PriorityLanesConfig,
+    PushConsumerConfig,
+    RouteHeaderMatchConfig,
+    RouteMatchConfig,
+    RoutePolicyRouteConfig,
+    RouteTargetConfig,
+    RoutingMatchPolicyConfig,
     SecurityLabelProfileConfig,
     SecurityLabelRuleConfig,
     SinkPluginConfig,
@@ -64,9 +80,15 @@ from nats_sinks.core.config import (
 from nats_sinks.core.consumer_management import (
     ConsumerDrift,
     ConsumerManagementResult,
+    PushConsumerCapabilityResult,
     build_consumer_config,
+    build_push_consumer_config,
     detect_consumer_drift,
+    detect_push_consumer_capabilities,
+    detect_push_consumer_drift,
     ensure_jetstream_consumer,
+    ensure_jetstream_push_consumer,
+    validate_push_consumer_capabilities,
 )
 from nats_sinks.core.custody import (
     CUSTODY_SCHEMA,
@@ -99,6 +121,7 @@ from nats_sinks.core.errors import (
     TemporarySinkError,
     ValidationError,
 )
+from nats_sinks.core.fanout_sink import FanoutSink
 from nats_sinks.core.message_metadata import (
     DEFAULT_CLASSIFICATION_HEADER,
     DEFAULT_LABELS_HEADER,
@@ -133,6 +156,11 @@ from nats_sinks.core.payload import (
     normalize_payload_for_json_storage,
 )
 from nats_sinks.core.policy import PolicyEvaluation, PolicyViolation, evaluate_pre_sink_policy
+from nats_sinks.core.routing_policy import (
+    RouteSelection,
+    route_matches_envelope,
+    select_route_targets,
+)
 from nats_sinks.core.runner import JetStreamSinkRunner
 from nats_sinks.core.security_labels import (
     DEFAULT_SECURITY_LABELS_HEADER,
@@ -145,6 +173,9 @@ from nats_sinks.core.size_policy import (
     evaluate_size_policy,
 )
 from nats_sinks.file import FileSink
+from nats_sinks.http import HttpIdempotencyConfig, HttpRetryConfig, HttpSink, HttpSinkConfig
+from nats_sinks.oracle_nosql import OracleNoSqlSink, OracleNoSqlSinkConfig
+from nats_sinks.s3 import S3Sink, S3SinkConfig
 from nats_sinks.sinks.base import FlushableSink, HealthCheckableSink, SchemaAwareSink, Sink
 from nats_sinks.sinks.connectors import (
     SINK_CONNECTOR_API_VERSION,
@@ -167,6 +198,7 @@ __all__ = [
     "DEFAULT_PRIORITY_HEADER",
     "DEFAULT_SECURITY_LABELS_HEADER",
     "ENCRYPTED_PAYLOAD_KEY",
+    "FANOUT_OPTIONAL_ACK_DEFAULTS",
     "MESSAGE_AUTHENTICITY_SCHEMA",
     "METRIC_SPECS",
     "MISSION_METADATA_PROFILE_VERSION",
@@ -175,7 +207,10 @@ __all__ = [
     "SINK_CONNECTOR_API_VERSION",
     "SINK_CONNECTOR_ENTRY_POINT_GROUP",
     "SUPPORTED_MESSAGE_AUTHENTICITY_ALGORITHMS",
+    "AckConfirmationConfig",
     "AckError",
+    "CoherenceSink",
+    "CoherenceSinkConfig",
     "ConfigurationError",
     "ConsumerDrift",
     "ConsumerManagementConfig",
@@ -185,9 +220,18 @@ __all__ = [
     "DestinationUnavailableError",
     "EncryptionConfig",
     "EncryptionRuleConfig",
+    "FanoutAckGateError",
+    "FanoutAckGateResult",
+    "FanoutRequiredSinkError",
+    "FanoutSink",
+    "FanoutTargetResult",
     "FileSink",
     "FlushableSink",
     "HealthCheckableSink",
+    "HttpIdempotencyConfig",
+    "HttpRetryConfig",
+    "HttpSink",
+    "HttpSinkConfig",
     "InMemoryMetrics",
     "JetStreamAdvisory",
     "JetStreamAdvisoryConfig",
@@ -210,6 +254,8 @@ __all__ = [
     "NatsSinksError",
     "NoopMetrics",
     "NormalizedPayload",
+    "OracleNoSqlSink",
+    "OracleNoSqlSinkConfig",
     "PayloadEncryptor",
     "PayloadKeyRegistry",
     "PayloadOriginalFormat",
@@ -222,7 +268,17 @@ __all__ = [
     "PreSinkPolicyRuleConfig",
     "PriorityLaneConfig",
     "PriorityLanesConfig",
+    "PushConsumerCapabilityResult",
+    "PushConsumerConfig",
     "RetryExhaustedError",
+    "RouteHeaderMatchConfig",
+    "RouteMatchConfig",
+    "RoutePolicyRouteConfig",
+    "RouteSelection",
+    "RouteTargetConfig",
+    "RoutingMatchPolicyConfig",
+    "S3Sink",
+    "S3SinkConfig",
     "SchemaAwareSink",
     "SecurityLabelProfileConfig",
     "SecurityLabelRuleConfig",
@@ -246,6 +302,7 @@ __all__ = [
     "attach_custody_metadata",
     "build_consumer_config",
     "build_nats_metadata_snapshot",
+    "build_push_consumer_config",
     "canonical_json_bytes",
     "canonical_message_authenticity_bytes",
     "canonical_message_authenticity_document",
@@ -253,7 +310,10 @@ __all__ = [
     "datetime_to_epoch_ns",
     "decrypt_payload",
     "detect_consumer_drift",
+    "detect_push_consumer_capabilities",
+    "detect_push_consumer_drift",
     "ensure_jetstream_consumer",
+    "ensure_jetstream_push_consumer",
     "evaluate_message_authenticity",
     "evaluate_pre_sink_policy",
     "evaluate_size_policy",
@@ -270,8 +330,12 @@ __all__ = [
     "parse_security_label_header",
     "qualified_metric_name",
     "replay_spool_to_sink",
+    "route_matches_envelope",
+    "select_route_targets",
     "validate_advisory_subject",
+    "validate_push_consumer_capabilities",
+    "wait_for_fanout_ack_gate",
     "write_metrics_snapshot",
 ]
 
-__version__ = "0.4.1"
+__version__ = "0.4.2"

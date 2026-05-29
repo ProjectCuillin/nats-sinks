@@ -22,6 +22,7 @@ nav:
       - Architecture: architecture.md
       - Commit Then ACK: commit-then-ack.md
       - Sink Framework: sink-framework.md
+      - Named Sinks And Routing: named-sinks.md
       - Idempotency: idempotency.md
       - Dead Letter Queues: dead-letter-queues.md
       - Message Sizing: message-sizing.md
@@ -32,18 +33,24 @@ nav:
       - Stream Management Planning: stream-management.md
       - JetStream Topology: jetstream-topology.md
       - WebSocket Connection Evaluation: websocket-connection-evaluation.md
-      - Acknowledgement Confirmation Evaluation: acknowledgement-confirmation.md
+      - Acknowledgement Confirmation: acknowledgement-confirmation.md
       - InProgress Evaluation: in-progress-evaluation.md
       - Push Consumer Evaluation: push-consumer-evaluation.md
       - Ordered Consumer Evaluation: ordered-consumer-evaluation.md
-      - Headers-Only Delivery Evaluation: headers-only-delivery.md
+      - Durable Replay To Sinks: durable-replay-to-sinks.md
+      - Headers-Only Delivery: headers-only-delivery.md
       - Feature Gap Analysis: nats-feature-gap-analysis.md
   - Sinks:
       - Oracle Sink: oracle-sink.md
       - Oracle MySQL Sink: mysql-sink.md
+      - Oracle NoSQL Database Sink: oracle-nosql-sink.md
+      - Oracle Coherence Community Edition Sink: coherence-sink.md
       - File Sink: file-sink.md
       - Edge Spool Sink: spool-sink.md
-      - GoldenGate-Inspired Sink Candidates: goldengate-sink-candidate-research.md
+      - HTTP Sink: http-sink.md
+      - S3-Compatible Object Sink: s3-sink.md
+      - Palantir Foundry Sink: foundry-sink.md
+      - Palantir Gotham Sink: gotham-sink.md
   - Data Handling:
       - Message Authenticity: message-authenticity.md
       - Payload Encryption: payload-encryption.md
@@ -55,15 +62,21 @@ nav:
   - Observability:
       - Overview: observability.md
       - Metrics Snapshot And CLI: metrics.md
+      - InProgress Metrics Runbook: inprogress-metrics-runbook.md
       - Prometheus Integration: prometheus.md
       - OpenTelemetry OTLP Integration: otlp.md
       - Elastic Observability Profile: elastic-observability.md
       - Grafana Alloy Profile: grafana-alloy.md
       - Splunk HEC Integration: splunk-hec.md
+      - OCI Monitoring Integration: oci-monitoring.md
       - StatsD Integration: statsd.md
+      - Datadog Integration: datadog.md
+      - Amazon CloudWatch Integration: cloudwatch.md
+      - Azure Monitor Integration: azure-monitor.md
       - Syslog Bridge: syslog.md
       - NATS Server Monitoring: nats-server-monitoring.md
       - Subject-Aware Observability Evaluation: subject-aware-observability-evaluation.md
+      - Subject-Aware Observability Runbook: subject-aware-observability-runbook.md
       - Future Connectors: observability-connectors.md
   - Deployment:
       - Operations: operations.md
@@ -80,7 +93,10 @@ nav:
   - Testing And Quality:
       - Testing: testing.md
       - Oracle MySQL Test Container: oracle-mysql-test-container.md
+      - Oracle NoSQL Database Test Backend: oracle-nosql-test-container.md
+      - Oracle Coherence CE Test Backend: oracle-coherence-test-container.md
       - Sink Certification: sink-certification.md
+      - Multi-Sink Routing End-To-End Flow: multi-sink-routing-e2e.md
       - Latest Test Report: test-report.md
       - Public API Compatibility: public-api.md
   - Use Cases:
@@ -94,6 +110,8 @@ nav:
       - Defence And Mission Support:
           - Overview: use-cases/defence/index.md
           - F2T2EA Event Phase Tagging: use-cases/defence/f2t2ea-event-phase-tagging.md
+          - Link 16 / TADIL-J J-Series To Oracle Database: use-cases/defence/link16-j-series-oracle.md
+          - LOGFAS-Related Mission Logistics To Oracle Database: use-cases/defence/logfas-logistics-oracle.md
           - Sensor Event Custody: use-cases/defence/sensor-event-custody.md
           - Classification And Labels: use-cases/defence/classification-and-labels.md
           - Chain Of Custody: use-cases/defence/chain-of-custody.md

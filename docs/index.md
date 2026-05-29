@@ -53,9 +53,10 @@ repository documentation after it has been published from `main`.
 
 The current release provides the following production-ready foundation:
 
-- `JetStreamSinkRunner`, a pull-based JetStream runtime with bounded batches,
-  backpressure controls, graceful shutdown, DLQ support, safe ACK behavior, and
-  clear error handling.
+- `JetStreamSinkRunner`, a default pull-based JetStream runtime with bounded
+  batches, an optional bounded manual-ACK push-consumer mode, backpressure
+  controls, graceful shutdown, DLQ support, safe ACK behavior, and clear error
+  handling.
 - `NatsEnvelope`, an immutable message representation that gives sinks payload,
   headers, JetStream metadata, normalized priority/classification/labels fields,
   optional data-centric security labels, timestamps, and idempotency keys
@@ -95,14 +96,17 @@ The current release provides the following production-ready foundation:
   observability policies, reviewing metric and subject sharing, and writing
   policy-filtered Prometheus textfiles for node_exporter or running the
   optional native Prometheus HTTP endpoint. It can also export approved
-  metrics to an OpenTelemetry Collector through OTLP/HTTP JSON.
+  metrics through OTLP/HTTP JSON, OCI Monitoring, Amazon CloudWatch, Azure
+  Monitor, StatsD, Datadog, Splunk HEC, Elastic, Grafana Alloy, syslog, and
+  NATS server monitoring connectors.
 - Basic metrics counters and timing observations for fetched, prepared,
   written, ACKed, NAKed, failed, DLQ, sink write, ACK error, and active batch
   behavior. The built-in runner can write a local JSON snapshot when
   configured, Oracle duplicate/conflict counters are readable through the same
   snapshot and CLI, and external observability sharing is controlled by a
   separate policy that is disabled by default for Prometheus textfile,
-  Prometheus HTTP, OTLP, and NATS monitoring connectors.
+  Prometheus HTTP, OTLP, OCI Monitoring, Amazon CloudWatch, Azure Monitor, and
+  NATS monitoring connectors.
 - Optional JetStream advisory observation for selected advisory subjects, with
   aggregate counters for delivery and cluster signals while keeping advisory
   payloads and subject details out of exported metrics by default.
@@ -142,6 +146,20 @@ The current release provides the following production-ready foundation:
   pooling, TLS CA support, idempotent `upsert` and `insert_ignore` modes,
   subject-to-table routing, metadata persistence, payload normalization, and
   transaction commit before ACK.
+- `nats_sinks.oracle_nosql.OracleNoSqlSink`, an experimental first-party
+  Oracle NoSQL Database sink that stores one complete normalized event JSON
+  object in a configured JSON value field, with deterministic K/V-style keys,
+  conditional duplicate handling, bounded values, and SDK-backed live test
+  gating.
+- `nats_sinks.coherence.CoherenceSink`, an experimental first-party Oracle
+  Coherence Community Edition sink that stores one complete normalized event
+  JSON object as a configured cache or map value, with deterministic
+  idempotency keys, duplicate handling, bounded values, and container-backed
+  local e2e testing.
+- `nats_sinks.s3.S3Sink`, a production first-party S3-compatible object sink
+  with deterministic object keys, conditional duplicate handling, optional
+  metadata sidecars, optional gzip compression, bounded retries, and
+  least-privilege object-storage guidance.
 - `nats_sinks.file.FileSink`, a production local file sink with atomic JSON
   file placement, deterministic filenames, duplicate handling, optional gzip
   compression, metadata persistence, and the same payload normalization contract
@@ -149,10 +167,19 @@ The current release provides the following production-ready foundation:
 - `nats_sinks.spool.SpoolSink`, a production-oriented encrypted edge spool sink
   for disconnected operation, bounded local custody, deterministic idempotency,
   priority-aware replay, and forwarding into a final destination sink.
-- A safe sink connector framework with first-party Oracle, file, and spool
-  connector descriptors, explicit registry resolution, public connector metadata, and
-  disabled-by-default allow-listed entry-point discovery for reviewed external
-  connectors.
+- A safe sink connector framework with first-party Oracle Database,
+  Oracle MySQL, Oracle Coherence Community Edition, file, spool, HTTP, and S3
+  connector descriptors, explicit registry resolution, public connector
+  metadata, and disabled-by-default allow-listed entry-point discovery for
+  reviewed external connectors.
+- A named multi-sink configuration registry that lets one JSON file declare
+  several Oracle Database, Oracle MySQL, Oracle Coherence Community Edition,
+  file, spool, HTTP, or S3 sink instances for route validation, redacted
+  review, named health checks, and active fan-out execution.
+- A disabled-by-default generic route-match policy selector and opt-in
+  `fanout` sink that can match normalized subject, priority, classification,
+  labels, and approved non-secret headers to logical target names and bounded
+  ACK-gating policy for multi-sink delivery.
 - Tests and documentation for the commit-then-acknowledge invariant across the
   core runtime and both production sinks.
 
@@ -170,8 +197,11 @@ metadata for routing and audit.
 | --- | --- | --- | --- |
 | Oracle Database | `from nats_sinks.oracle import OracleSink` | Persist JetStream messages into Oracle tables with idempotent writes. | Oracle transaction committed. |
 | Oracle MySQL | `from nats_sinks.mysql import MySqlSink` | Persist JetStream messages into Oracle MySQL tables with idempotent writes. | Oracle MySQL transaction committed. |
+| Oracle NoSQL Database | `from nats_sinks.oracle_nosql import OracleNoSqlSink` | Maintain an Oracle NoSQL K/V-style event table using complete event JSON values. | SDK put operation completed; production ACK-gated custody depends on operator-confirmed Oracle NoSQL durability. |
+| Oracle Coherence Community Edition | `from nats_sinks.coherence import CoherenceSink` | Maintain a Coherence cache or map read model using complete event JSON values. | Coherence operation completed; production ACK-gated custody depends on operator-confirmed cluster durability. |
 | Local files | `from nats_sinks.file import FileSink` | Write one JSON or gzip-compressed JSON document per message for local handoff, audit, development, or simple archival flows. | Final file atomically placed after flush and optional `fsync`. |
 | Edge spool | `from nats_sinks.spool import SpoolSink` | Commit encrypted local custody during disconnected operation, then replay later to Oracle, file, or another sink. | Encrypted spool record atomically placed after flush and optional `fsync`. |
+| HTTP | `from nats_sinks.http import HttpSink` | Forward normalized messages to one fixed HTTP endpoint with idempotency-key propagation. | Configured endpoint returned a success status for every request. |
 
 All built-in sinks follow the same framework rule: the sink writes durably and
 returns success; the core runner ACKs JetStream messages afterward.
@@ -192,7 +222,7 @@ flowchart LR
 
 ## Package Status
 
-The current release is `0.4.1`. The project is in the `0.x` phase: it is a
+The current release is `0.4.2`. The project is in the `0.x` phase: it is a
 production-ready foundation with Oracle and local file sinks, while the public
 API remains intentionally small so it can stabilize before `1.0.0`.
 
@@ -217,6 +247,8 @@ operations without hunting through a long flat list.
   invariant before implementing or operating any sink.
 - [Sink Framework](sink-framework.md): understand how future sinks fit into the
   package without breaking the public API.
+- [Configuration](configuration.md#routing): review the generic route-match
+  policy selector and active fan-out sink configuration.
 - [Idempotency](idempotency.md), [Dead Letter Queues](dead-letter-queues.md),
   [Message Sizing](message-sizing.md), and [Performance](performance.md):
   understand delivery behavior under duplicate, malformed, large, or high-rate
@@ -235,9 +267,9 @@ operations without hunting through a long flat list.
 - [Advanced JetStream Topology](jetstream-topology.md): review mirrors, sources,
   transforms, republish behavior, placement, compression, metadata, and
   idempotency implications.
-- [Headers-Only Delivery Evaluation](headers-only-delivery.md): review the
-  design decision for metadata-only JetStream consumers and the follow-up
-  backlog items needed before nats-sinks claims explicit headers-only support.
+- [Headers-Only Delivery](headers-only-delivery.md): review metadata-only
+  JetStream consumer behavior, payload-presence metadata, DLQ handling, and
+  idempotency guidance.
 - [NATS Feature Gap Analysis](nats-feature-gap-analysis.md): track what NATS
   supports that nats-sinks does not yet manage directly.
 
@@ -245,8 +277,18 @@ operations without hunting through a long flat list.
 
 - [Oracle Sink](oracle-sink.md): table design, write modes, staging-table
   merge mode, metadata columns, Autonomous Database, and transactions.
+- [Oracle MySQL Sink](mysql-sink.md): Oracle MySQL connection settings, TLS,
+  schema design, subject-to-table routing, and container-backed testing.
+- [Oracle NoSQL Database Sink](oracle-nosql-sink.md): SDK deployment modes,
+  K/V-style rows, deterministic keys, generated safe DDL, duplicate policies,
+  and live test gating.
 - [File Sink](file-sink.md): atomic local files, deterministic filenames,
   duplicate handling, gzip compression, and handoff patterns.
+- [HTTP Sink](http-sink.md): fixed endpoint forwarding, HTTPS validation,
+  safe headers, idempotency-key propagation, bounded responses, and retry
+  guidance.
+- [Named Sinks And Routing](named-sinks.md): declare several destination
+  instances in one configuration file and validate route target references.
 - [Edge Spool Sink](spool-sink.md): encrypted local custody for disconnected
   operation and controlled replay into a final destination sink.
 
@@ -272,6 +314,9 @@ operations without hunting through a long flat list.
 - [Observability](observability.md): start here for the external-sharing model.
 - [Metrics Snapshot And CLI](metrics.md): inspect local snapshots and use
   shell/Python-friendly metric output.
+- [Subject-Aware Observability Evaluation](subject-aware-observability-evaluation.md):
+  review the disabled-by-default subject-family policy model and why current
+  exporters still avoid subject labels.
 - [Prometheus Integration](prometheus.md): configure the policy-controlled
   textfile connector or optional native HTTP endpoint.
 - [OpenTelemetry OTLP Integration](otlp.md): export approved metrics to an
@@ -282,16 +327,26 @@ operations without hunting through a long flat list.
   an Alloy-oriented profile over the OTLP connector.
 - [Splunk HEC Integration](splunk-hec.md): export approved aggregate metrics to
   Splunk HTTP Event Collector for security operations and incident response.
+- [OCI Monitoring Integration](oci-monitoring.md): export approved aggregate
+  metrics to Oracle Cloud Infrastructure Monitoring as custom metrics.
 - [StatsD Integration](statsd.md): export approved aggregate metrics as
   best-effort UDP or Unix datagrams to StatsD-compatible aggregators.
+- [Datadog Integration](datadog.md): export approved aggregate metrics as
+  bounded DogStatsD datagrams to a local or approved Datadog Agent listener.
+- [Amazon CloudWatch Integration](cloudwatch.md): export approved aggregate
+  metrics to CloudWatch custom metrics with bounded `PutMetricData` requests.
+- [Azure Monitor Integration](azure-monitor.md): export approved aggregate
+  metrics to Azure Monitor custom metrics for one reviewed Azure resource.
 - [Syslog Bridge](syslog.md): export approved aggregate metrics as bounded
   RFC 5424-style messages to syslog pipelines.
 - [NATS Server Monitoring](nats-server-monitoring.md): understand why endpoints
   such as `/jsz` and `/healthz` stay outside the delivery worker.
+- [Subject-Aware Observability Runbook](subject-aware-observability-runbook.md):
+  certify disabled defaults, sanitized subject-family labels, connector parity,
+  and delivery non-interference before enabling subject-aware export.
 - [Future Observability Connectors](observability-connectors.md): review the
-  shared connector contract and the staged connector backlog for Datadog, OCI
-  Monitoring, CloudWatch, Azure Monitor, and other future
-  connectors.
+  shared connector contract, implemented connector evaluation, and the
+  remaining staged connector backlog for future observability platforms.
 
 ### Deployment, Security, And Quality
 
@@ -316,9 +371,10 @@ operations without hunting through a long flat list.
   restricted event storage, disconnected file handoff, DLQ triage, and
   destination outage recovery.
 - [Defence And Mission Support](use-cases/defence/index.md): sensor event
-  custody, F2T2EA phase tagging, classification and labels, chain of custody,
-  cross-domain handoff preparation, edge operation, audit-oriented persistence,
-  and synthetic mission testing.
+  custody, Link 16 / TADIL-J J-series persistence, LOGFAS-related logistics
+  event persistence, F2T2EA phase tagging, classification and labels, chain of
+  custody, cross-domain handoff preparation, edge operation, audit-oriented
+  persistence, and synthetic mission testing.
 
 ### Project Workflow
 
@@ -339,7 +395,8 @@ are implemented, tested, documented, and released.
 Planned areas include:
 
 - additional idempotency strategies,
-- HTTP, S3, Kafka, OCI Object Storage, Oracle MySQL, and other sink modules,
+- Kafka, OCI Object Storage, Oracle Berkeley DB, OCI Streaming, and other sink
+  modules,
 - Docker and Kubernetes deployment assets,
 - more live certification runbooks for secure NATS authentication deployments,
 - more JetStream consumer tuning options,

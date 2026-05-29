@@ -63,8 +63,9 @@ treated as a supply-chain trust decision.
 
 Secure defaults:
 
-- Oracle Database, FileSink, and SpoolSink are first-party built-in connectors
-  and do not require plugin discovery.
+- Oracle Database, Oracle MySQL, Oracle NoSQL Database, Oracle Coherence
+  Community Edition, FileSink, SpoolSink, HttpSink, and S3Sink are
+  first-party built-in connectors and do not require plugin discovery.
 - Optional third-party discovery is disabled by default.
 - When discovery is enabled, `plugins.allowed_sinks` must explicitly list each
   external connector name.
@@ -81,10 +82,10 @@ not install connector packages dynamically at runtime, and do not grant the
 service account broader filesystem, network, database, or cloud permissions
 merely because a connector asks for them.
 
-Future Oracle-family sinks such as OCI Object Storage, Oracle MySQL,
-Oracle Berkeley DB, Oracle NoSQL Database, and OCI Streaming are expected to be
-first-party connectors in this repository unless project governance changes
-that posture. Palantir Foundry, Palantir Gotham, and other third-party platform
+Future Oracle-family sinks such as OCI Object Storage, Oracle Berkeley DB, and
+OCI Streaming are expected to be first-party connectors in this repository
+unless project governance changes that posture. Palantir Foundry, Palantir
+Gotham, and other third-party platform
 connectors require the same connector certification evidence before production
 recommendation.
 
@@ -133,20 +134,37 @@ Use this baseline for code review and future releases:
   timestamps, event freshness observations, source clock-skew values, failure
   counters, duplicate counters, and write timings can reveal operational tempo
   even without payloads. Use disabled-by-default observability policies and
-  allow lists before publishing to Prometheus,
-  OpenTelemetry Collectors, Splunk HEC, StatsD, syslog, NATS monitoring
-  snapshots, or any future monitoring platform. OTLP collector endpoints must
-  not contain credentials, non-loopback endpoints must use HTTPS, and optional
-  collector headers must be sourced from environment variables rather than
-  stored in policy JSON. Syslog export must be treated as redistribution to an
-  operational logging fabric, not as a private local debug stream.
-  NATS server monitoring endpoint values must also be selected with explicit
-  endpoint and field allow lists before they are stored locally or rendered for
-  Prometheus. JetStream advisories are also
-  treated as sensitive operational signals: the optional advisory observer is
-  disabled by default, subscribes only to configured advisory subjects, parses
-  bounded JSON payloads, and emits aggregate counters without exporting stream
-  names, consumer names, sequence numbers, or advisory payload bodies.
+  allow lists before publishing to Prometheus, OpenTelemetry Collectors,
+  Elastic, Grafana Alloy, Splunk HEC, OCI Monitoring, StatsD, Datadog,
+  Amazon CloudWatch, Azure Monitor, syslog, NATS monitoring snapshots, or any future
+  monitoring platform. OTLP collector endpoints must not contain credentials,
+  non-loopback endpoints must use HTTPS, and optional collector headers must be
+  sourced from environment variables rather than stored in policy JSON. OCI
+  Monitoring export must use least-privilege OCI identity, protected SDK config
+  files only when needed, and low-cardinality dimensions that do not expose
+  subjects, classification values, labels, mission metadata, hostnames,
+  usernames, table names, file paths, message IDs, tenancy details, or
+  credential material. Datadog tags, CloudWatch dimensions, and Azure Monitor
+  dimensions must stay explicitly reviewed, low-cardinality, and free of
+  sensitive metadata. Azure Monitor resource IDs, locations, and bearer tokens
+  must not appear in dry-run output, logs, issues, or release evidence. Syslog
+  export must be treated as redistribution to an operational logging fabric,
+  not as a private local debug stream. NATS server monitoring endpoint values
+  must also be selected with explicit endpoint and field allow lists before
+  they are stored locally or rendered for Prometheus. JetStream advisories are
+  also treated as sensitive operational signals: the optional advisory observer
+  is disabled by default, subscribes only to configured advisory subjects,
+  parses bounded JSON payloads, and emits aggregate counters without exporting
+  stream names, consumer names, sequence numbers, or advisory payload bodies.
+  Fan-out metrics must remain aggregate by default: do not export route names,
+  child sink names, classification values, labels, file paths, or destination
+  identifiers without a reviewed allow-list policy. Subject-family
+  observability must use the disabled-by-default `subject_metrics` policy and
+  prepared `labeled_metrics` rows. Exporters must not derive labels directly
+  from raw NATS subjects, payloads, message IDs, classifications, file paths,
+  table names, or credentials. Run the subject-aware certification tests and
+  follow the [Subject-Aware Observability Runbook](subject-aware-observability-runbook.md)
+  before enabling a subject-family sharing boundary.
 - Treat local spool directories as protected custody locations. Spool records
   are encrypted by default, but operators must still restrict filesystem
   permissions, exclude spool paths from source control, monitor disk usage,
@@ -191,9 +209,10 @@ Policy-controlled metric and selected NATS monitoring export is documented in
 kept in the [Prometheus Integration](prometheus.md) sub-page and
 OpenTelemetry-specific connector guidance kept in the
 [OpenTelemetry OTLP Integration](otlp.md) sub-page. Elastic, Grafana Alloy,
-Splunk HEC, StatsD, and syslog platform guidance is kept in their respective
-observability sub-pages so each sharing boundary has its own configuration and
-security review.
+Splunk HEC, OCI Monitoring, StatsD, Datadog, Amazon CloudWatch, Azure Monitor,
+and syslog
+platform guidance is kept in their respective observability sub-pages so each
+sharing boundary has its own configuration and security review.
 The NATS server monitoring connector and delivery-boundary decision, including
 `/jsz` and `/healthz` handling, are documented in
 [NATS Server Monitoring Integration](nats-server-monitoring.md).
@@ -330,9 +349,10 @@ Authenticity rules are subject scoped, algorithm allow-listed, and fail closed
 by default. HMAC-SHA256 uses constant-time comparison for shared-secret
 deployments. Ed25519 lets the sink runtime hold only public verification key
 material while producers keep private signing keys. A verification rejection is
-a permanent pre-sink failure: the message never reaches Oracle, file, spool, or
-future sinks, and the original JetStream message is ACKed only after successful
-DLQ publication when DLQ is configured. See
+a permanent pre-sink failure: the message never reaches Oracle Database,
+Oracle MySQL, Oracle Coherence Community Edition, file, spool, or future sinks,
+and the original JetStream message is ACKed only after successful DLQ
+publication when DLQ is configured. See
 [Message Authenticity](message-authenticity.md).
 
 Optional tamper-evident custody metadata can help auditors detect unexpected
@@ -355,31 +375,58 @@ Headers-only delivery can reduce payload exposure to a sink process, but it is
 not a complete confidentiality control. Subjects, headers, stream metadata,
 sequence numbers, message size, priority, classification, labels, mission
 metadata, and DLQ records can remain sensitive. The headers-only design is
-tracked separately in
-[Headers-Only Delivery Evaluation](headers-only-delivery.md) so future support
-does not silently store omitted bodies as if producers sent empty payloads.
+documented in [Headers-Only Delivery](headers-only-delivery.md) so omitted
+bodies are never silently stored as if producers sent empty payloads.
 
-Ordered-consumer inspection and replay planning can also expose sensitive
-stream content. Ordered inspection should be read-only, bounded, redacted by
-default, and separated from durable sink writes. Production replay into sinks
-should use durable pull consumers and commit-then-acknowledge rather than
-ordered inspection consumers. See
+Ordered-consumer inspection can expose sensitive stream content even when
+payloads are hidden, because subjects, headers, sequence numbers, priority,
+classification, labels, and timing can reveal operational context. The
+`nats-sink inspect-ordered` command is read-only, bounded, redacted by default,
+and separated from durable sink writes. Production replay into sinks should use
+durable pull consumers and commit-then-acknowledge rather than ordered
+inspection consumers. See
 [Ordered Consumer Evaluation](ordered-consumer-evaluation.md).
 
-Push-consumer support is not enabled today. If added later, it must be manual
-ACK only, bounded by explicit pending-message and pending-byte limits, and
-protected against unbounded callback intake. Flow-control errors, heartbeat
-events, callback exceptions, and queue saturation must be logged without
-payloads, credentials, private subject families, or sensitive metadata values.
-See [Push Consumer Evaluation](push-consumer-evaluation.md).
+Push-consumer support is disabled by default and must be explicitly enabled.
+It is manual ACK only, bounded by explicit pending-message and pending-byte
+limits, and protected against unbounded callback intake. Flow-control errors,
+heartbeat events, callback exceptions, and queue saturation must be logged
+without payloads, credentials, private subject families, or sensitive metadata
+values. The certification tests prove these controls without exposing real
+subjects or payloads. See [Push Consumer Evaluation](push-consumer-evaluation.md).
 
-Subject-aware observability is also not enabled today. NATS subjects can reveal
-mission, tenant, platform, environment, or routing structure, and per-subject
-metrics can create high-cardinality series. Any future subject-aware export
-must be disabled by default, use explicit subject-family allow lists, use
-stable low-cardinality labels, enforce caps, and fail closed for export without
-changing ACK behavior. See
-[Subject-Aware Observability Evaluation](subject-aware-observability-evaluation.md).
+Subject-aware observability has a disabled-by-default policy model, bounded
+prepared `labeled_metrics` rows, and a focused certification suite. NATS
+subjects can reveal mission, tenant, platform, environment, or routing
+structure, and per-subject metrics can create high-cardinality series. Any
+connector that renders subject-family export must use explicit allow lists,
+stable low-cardinality labels, caps, deterministic overflow behavior, and
+fail-closed export decisions without changing ACK behavior. See
+[Subject-Aware Observability Evaluation](subject-aware-observability-evaluation.md)
+and the
+[Subject-Aware Observability Runbook](subject-aware-observability-runbook.md).
+
+Route target ACK-gating also follows fail-closed defaults. Every selected
+target is required unless configuration explicitly marks it optional. Optional
+targets require a known sink type, bounded wait values, and sanitized logging.
+Those logs contain sink names and outcome categories only. They must not include
+payloads, credentials, connection strings, raw file paths, private subjects, or
+sensitive classification and label values.
+
+Oracle NoSQL Database configuration is also a trust boundary. Endpoints,
+deployment modes, auth modes, table names, row field names, key prefixes,
+table creation controls, and size limits are allow-list validated before SDK
+handle creation. The sink stores the full normalized event in a configured JSON
+value field and must not log payloads, OCI private-key material, passphrases,
+or table row contents by default.
+
+S3-compatible object sink configuration is also a trust boundary. Bucket names,
+prefixes, endpoints, credential-source references, key strategies, object
+suffixes, duplicate policies, metadata modes, and retry budgets are
+allow-list validated before any SDK client is created. Object metadata must
+remain low-cardinality and non-secret. Do not put raw subjects,
+classification values, labels, message IDs, payload fields, private endpoints,
+or credentials into object metadata, issue evidence, or public reports.
 
 Key rotation should use explicit `key_id` values. New runtime configuration
 encrypts with the active key, while authorized verification, replay, or
@@ -562,6 +609,56 @@ transfer decisions in approved systems outside this package. If you use the
 [Cross-Domain Handoff Package](use-cases/defence/cross-domain-handoff-package.md)
 blueprint, enforce path normalization, bounded file counts, bounded payload
 sizes, and secret-free manifests before committing the package.
+
+## Palantir Foundry Sink Security
+
+The Palantir Foundry sink is experimental and should be treated as a controlled
+integration boundary. Configure only reviewed Foundry stream push endpoints,
+use `endpoint_allowed_hosts`, and keep tokens, OAuth2 client identifiers, and
+client secrets in environment variables or a protected service environment
+file.
+
+The connector validates endpoint schemes, host allow-lists, field names,
+batch sizes, record sizes, response sizes, timeout values, and authentication
+mode combinations before attempting a write. It rejects private URL query
+strings and URL userinfo so tokens do not move through the endpoint field.
+
+Runtime errors intentionally avoid printing the Foundry endpoint, token values,
+client identifiers, response bodies, stream resource identifiers, subjects, or
+payloads. Treat live Foundry responses as untrusted input: malformed,
+oversized, rejected, partial, or ambiguous responses fail closed and prevent
+ACK until the normal retry, redelivery, or DLQ policy completes.
+
+Local fake-client certification is not production certification. Before using
+the connector in production, validate it against an approved Foundry test
+environment with least-privilege application permissions and sanitized
+evidence.
+
+## Palantir Gotham Sink Security
+
+The Palantir Gotham sink is experimental and should be treated as a controlled
+RevDB object handoff boundary. Configure only reviewed Gotham base URLs, use
+`endpoint_allowed_hosts`, and keep tokens, OAuth2 client identifiers, and
+client secrets in environment variables or a protected service environment
+file.
+
+The connector validates endpoint schemes, host allow-lists, object type names,
+property type names, security portion markings, batch sizes, object sizes,
+response sizes, timeout values, and authentication mode combinations before
+attempting a write. It builds the object-create endpoint from a base URL and a
+validated object type so configuration cannot supply arbitrary API paths.
+
+Runtime errors intentionally avoid printing the Gotham endpoint, token values,
+client identifiers, response bodies, object types, property types, primary
+keys, subjects, or payloads. Treat live Gotham responses as untrusted input:
+malformed, oversized, missing-primary-key, rejected, partial, timed-out, or
+ambiguous responses fail closed and prevent ACK until the normal retry,
+redelivery, or DLQ policy completes.
+
+Local fake-client certification is not production certification. Before using
+the connector in production, validate it against an approved Gotham test
+environment with least-privilege application permissions, an approved object
+model, and sanitized evidence.
 
 ## Secure Failure Flow
 

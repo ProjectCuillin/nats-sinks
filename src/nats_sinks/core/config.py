@@ -115,7 +115,18 @@ MAX_CONSUMER_BACKOFF_SECONDS = 604_800
 MAX_CONSUMER_METADATA_KEYS = 32
 MAX_CONSUMER_METADATA_KEY_LENGTH = 128
 MAX_CONSUMER_METADATA_VALUE_LENGTH = 512
+MAX_PUSH_PENDING_MESSAGES = 1_000_000
+DEFAULT_PUSH_PENDING_MESSAGES = 1024
+MAX_PUSH_PENDING_BYTES = 268_435_456
+DEFAULT_PUSH_PENDING_BYTES = 67_108_864
+MAX_PUSH_IDLE_HEARTBEAT_SECONDS = 3600
+MAX_PUSH_DRAIN_TIMEOUT_MS = 600_000
+MAX_IN_PROGRESS_INTERVAL_MS = 3_600_000
+MAX_IN_PROGRESS_HEARTBEATS = 10_000
+MAX_IN_PROGRESS_SHUTDOWN_TIMEOUT_MS = 60_000
+IN_PROGRESS_ACK_WAIT_SAFETY_RATIO = 0.8
 CONSUMER_METADATA_KEY_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.:/-]{0,127}$")
+PUSH_DELIVER_GROUP_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,127}$")
 PRIORITY_LANE_NAME_RE = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
 PRE_SINK_POLICY_MISSION_KEY_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.:-]{0,127}$")
 WEBSOCKET_HEADER_NAME_RE = re.compile(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,128}$")
@@ -147,6 +158,47 @@ WEBSOCKET_ENV_ONLY_HEADERS = frozenset(
         "x-auth-token",
     }
 )
+ROUTING_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.:-]{0,127}$")
+FanoutAckGateSinkType = Literal[
+    "coherence",
+    "file",
+    "http",
+    "mysql",
+    "oracle",
+    "oracle_nosql",
+    "s3",
+    "spool",
+]
+MAX_ROUTING_ROUTES = 128
+MAX_ROUTING_TARGETS = 64
+MAX_ROUTING_MATCH_VALUES = 64
+MAX_ROUTING_HEADERS = 16
+MAX_ROUTING_VALUE_LENGTH = 512
+MAX_FANOUT_OPTIONAL_WAIT_MS = 60_000
+MAX_FANOUT_OPTIONAL_TIMEOUT_MS = 300_000
+FANOUT_ACK_GATE_SINK_TYPES = frozenset(
+    {"coherence", "file", "http", "mysql", "oracle", "oracle_nosql", "s3", "spool"}
+)
+FANOUT_OPTIONAL_ACK_DEFAULTS: dict[str, dict[str, int]] = {
+    "coherence": {"minimum_wait_ms": 1_000, "timeout_ms": 5_000},
+    "file": {"minimum_wait_ms": 100, "timeout_ms": 1_000},
+    "http": {"minimum_wait_ms": 1_000, "timeout_ms": 5_000},
+    "mysql": {"minimum_wait_ms": 1_000, "timeout_ms": 5_000},
+    "oracle": {"minimum_wait_ms": 1_000, "timeout_ms": 5_000},
+    "oracle_nosql": {"minimum_wait_ms": 1_000, "timeout_ms": 5_000},
+    "s3": {"minimum_wait_ms": 1_000, "timeout_ms": 5_000},
+    "spool": {"minimum_wait_ms": 100, "timeout_ms": 1_000},
+}
+ROUTING_SENSITIVE_HEADER_NAMES = frozenset(
+    {
+        "authorization",
+        "cookie",
+        "proxy-authorization",
+        "x-api-key",
+        "x-auth-token",
+    }
+)
+MAX_NAMED_SINKS = 64
 MAX_POLICY_LABEL_LENGTH = 128
 MAX_POLICY_PAYLOAD_BYTES = 1_073_741_824
 DEFAULT_SIZE_POLICY_MAX_PAYLOAD_BYTES = 16_777_216
@@ -329,6 +381,263 @@ def _normalize_configured_labels(value: object, *, source: str) -> tuple[str, ..
         if contains_ascii_control_characters(label):
             raise ValueError(f"{source} must not contain control characters")
     return labels
+
+
+def _normalize_route_scalar_values(value: object, *, source: str) -> tuple[str, ...]:
+    """Normalize exact-match routing values and reject ambiguous input.
+
+    Route policies are evaluated for every message in the hot path.  Keeping
+    values as bounded exact strings makes the policy easy to audit and avoids
+    the denial-of-service risks of user-provided regular expressions.
+    """
+
+    if value is None:
+        return ()
+    if isinstance(value, str):
+        raw_values = [value]
+    elif isinstance(value, (list, tuple, set, frozenset)):
+        raw_values = list(value)
+    else:
+        raise ValueError(f"{source} must be a string or a list of strings")
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for item in raw_values:
+        rendered = normalise_metadata_value(item)
+        if rendered is None:
+            raise ValueError(f"{source} entries must not be empty")
+        if contains_ascii_control_characters(rendered):
+            raise ValueError(f"{source} entries must not contain control characters")
+        if len(rendered) > MAX_ROUTING_VALUE_LENGTH:
+            raise ValueError(
+                f"{source} entries must be at most {MAX_ROUTING_VALUE_LENGTH} characters"
+            )
+        if rendered in seen:
+            continue
+        seen.add(rendered)
+        normalized.append(rendered)
+
+    if len(normalized) > MAX_ROUTING_MATCH_VALUES:
+        raise ValueError(f"{source} supports at most {MAX_ROUTING_MATCH_VALUES} values")
+    return tuple(normalized)
+
+
+def _normalize_route_labels(value: object, *, source: str) -> tuple[str, ...]:
+    """Normalize configured routing labels with route-specific value limits."""
+
+    labels = _normalize_configured_labels(value, source=source)
+    for label in labels:
+        if len(label) > MAX_POLICY_LABEL_LENGTH:
+            raise ValueError(
+                f"{source} entries must be at most {MAX_POLICY_LABEL_LENGTH} characters"
+            )
+    if len(labels) > MAX_ROUTING_MATCH_VALUES:
+        raise ValueError(f"{source} supports at most {MAX_ROUTING_MATCH_VALUES} values")
+    return labels
+
+
+def _normalize_routing_name(value: object, *, source: str) -> str:
+    """Validate route and target identifiers without treating them as secrets."""
+
+    if not isinstance(value, str):
+        raise ValueError(f"{source} must be a string")
+    rendered = value.strip()
+    if rendered != value or not ROUTING_NAME_RE.fullmatch(rendered):
+        raise ValueError(
+            f"{source} must start with a letter and contain only letters, digits, "
+            "'.', '_', ':', or '-'"
+        )
+    if contains_ascii_control_characters(rendered):
+        raise ValueError(f"{source} must not contain control characters")
+    return rendered
+
+
+def _normalize_sink_instance_name(value: object, *, source: str) -> str:
+    """Validate one named sink instance used by route targets.
+
+    Named sinks intentionally share the route-target grammar. That keeps
+    operator-facing references stable across config validation, route reports,
+    and fan-out execution without letting path-like or expression-like values
+    into the runtime model.
+    """
+
+    return _normalize_routing_name(value, source=source)
+
+
+def _normalize_route_target_configs(
+    value: object,
+    *,
+    source: str,
+) -> tuple[RouteTargetConfig, ...]:
+    """Normalize one route's logical sink target policy list."""
+
+    raw_targets: list[object]
+    if isinstance(value, str):
+        raw_targets = [value]
+    elif isinstance(value, dict):
+        raw_targets = [value]
+    elif isinstance(value, (list, tuple, set, frozenset)):
+        raw_targets = list(value)
+    else:
+        raise ValueError(f"{source} must be a string, object, or list of targets")
+    if not raw_targets:
+        raise ValueError(f"{source} must contain at least one target")
+    if len(raw_targets) > MAX_ROUTING_TARGETS:
+        raise ValueError(f"{source} supports at most {MAX_ROUTING_TARGETS} names")
+
+    normalized: list[RouteTargetConfig] = []
+    seen: set[str] = set()
+    for item in raw_targets:
+        if isinstance(item, str):
+            target = RouteTargetConfig(sink=item)
+        elif isinstance(item, dict):
+            target = RouteTargetConfig.model_validate(item)
+        else:
+            raise ValueError(f"{source} entries must be strings or target objects")
+        if target.sink in seen:
+            raise ValueError(f"{source} contains duplicate target {target.sink!r}")
+        seen.add(target.sink)
+        normalized.append(target)
+    return tuple(normalized)
+
+
+def _raw_route_target_names(value: object) -> tuple[str, ...]:
+    """Extract target names from raw JSON routing config before Pydantic routing validation."""
+
+    raw_targets: list[object]
+    if value is None:
+        return ()
+    if isinstance(value, str):
+        raw_targets = [value]
+    elif isinstance(value, dict):
+        raw_targets = [value]
+    elif isinstance(value, list | tuple):
+        raw_targets = list(value)
+    else:
+        return ()
+
+    names: list[str] = []
+    for item in raw_targets:
+        if isinstance(item, str):
+            names.append(item)
+        elif isinstance(item, dict):
+            raw_name = item.get("sink")
+            if isinstance(raw_name, str):
+                names.append(raw_name)
+    return tuple(names)
+
+
+def _raw_routing_target_names(raw_routing: object) -> tuple[str, ...]:
+    """Collect raw target names for AppConfig-level named-sink enrichment."""
+
+    if not isinstance(raw_routing, dict):
+        return ()
+    names: list[str] = list(_raw_route_target_names(raw_routing.get("default_targets")))
+    raw_routes = raw_routing.get("routes")
+    if isinstance(raw_routes, list | tuple):
+        for route in raw_routes:
+            if isinstance(route, dict):
+                names.extend(_raw_route_target_names(route.get("targets")))
+    return tuple(names)
+
+
+def _inline_fanout_routing_from_sink(
+    prepared_sink: dict[str, object],
+    raw_sinks: object,
+) -> dict[str, object] | None:
+    """Pop compact fan-out route fields from `sink` into a routing section."""
+
+    inline_fields = {
+        "routes": prepared_sink.pop("routes", None),
+        "route_match_mode": prepared_sink.pop("route_match_mode", None),
+        "no_match": prepared_sink.pop("no_match", None),
+        "default_targets": prepared_sink.pop("default_targets", None),
+        "target_sink_types": prepared_sink.pop("target_sink_types", None),
+    }
+    if not any(value is not None for value in inline_fields.values()):
+        return None
+
+    inline_routing: dict[str, object] = {"enabled": True}
+    field_map = {
+        "route_match_mode": "mode",
+        "no_match": "no_match",
+        "default_targets": "default_targets",
+        "target_sink_types": "target_sink_types",
+        "routes": "routes",
+    }
+    for source, target in field_map.items():
+        value = inline_fields[source]
+        if value is not None:
+            inline_routing[target] = value
+
+    if inline_fields["target_sink_types"] is None:
+        inferred = _infer_inline_fanout_target_sink_types(raw_sinks, inline_routing)
+        if inferred:
+            inline_routing["target_sink_types"] = inferred
+    return inline_routing
+
+
+def _infer_inline_fanout_target_sink_types(
+    raw_sinks: object,
+    raw_routing: object,
+) -> dict[str, str]:
+    """Infer ACK-gate sink types for compact fan-out configs."""
+
+    if not isinstance(raw_sinks, dict):
+        return {}
+    inferred_types: dict[str, str] = {}
+    for raw_name, raw_child_sink in raw_sinks.items():
+        if not isinstance(raw_name, str) or not isinstance(raw_child_sink, dict):
+            continue
+        raw_child_type = raw_child_sink.get("type")
+        if not isinstance(raw_child_type, str):
+            continue
+        child_type = raw_child_type.strip().lower()
+        if child_type in FANOUT_ACK_GATE_SINK_TYPES:
+            inferred_types[raw_name] = child_type
+    return {
+        target_name: inferred_types[target_name]
+        for target_name in _raw_routing_target_names(raw_routing)
+        if target_name in inferred_types
+    }
+
+
+def _validate_fanout_wait_ms(value: object, *, source: str, maximum: int) -> int | None:
+    """Validate bounded wait settings without accepting implicit coercion."""
+
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{source} must be an integer number of milliseconds")
+    if value < 0:
+        raise ValueError(f"{source} must not be negative")
+    if value > maximum:
+        raise ValueError(f"{source} must not exceed {maximum} milliseconds")
+    return value
+
+
+def _validate_routing_header_name(value: object, *, source: str) -> str:
+    """Validate one route-match header name.
+
+    Route matching can look at explicitly configured headers, but it must not
+    encourage policy decisions based on secret-bearing headers.  Operators who
+    need a sensitive signal should publish a separate non-secret routing hint.
+    """
+
+    if not isinstance(value, str):
+        raise ValueError(f"{source} header name must be a string")
+    rendered = value.strip()
+    if rendered != value or not WEBSOCKET_HEADER_NAME_RE.fullmatch(rendered):
+        raise ValueError(f"{source} header name must be an HTTP token name")
+    lowered = rendered.casefold()
+    if lowered in WEBSOCKET_DANGEROUS_HEADERS:
+        raise ValueError(f"{source} must not match protocol-owned header {rendered!r}")
+    if lowered in ROUTING_SENSITIVE_HEADER_NAMES:
+        raise ValueError(
+            f"{source} must not match secret-bearing header {rendered!r}; "
+            "publish a non-secret routing hint instead"
+        )
+    return rendered
 
 
 def _validate_websocket_header_env_name(value: str, *, source: str) -> str:
@@ -786,6 +1095,87 @@ class ConsumerManagementConfig(BaseModel):
         return self
 
 
+class PushConsumerConfig(BaseModel):
+    """Explicit opt-in settings for JetStream push-consumer delivery.
+
+    Push delivery runs callbacks from the NATS client, so it has a different
+    risk profile than the default pull loop.  The framework therefore keeps it
+    disabled by default and validates every delivery-sensitive setting before
+    the runner subscribes.  Manual ACK is mandatory because ACK decisions must
+    remain in the core commit-then-acknowledge pipeline.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    deliver_subject: str | None = None
+    deliver_group: str | None = None
+    manual_ack: bool = True
+    pending_msgs_limit: int = Field(
+        default=DEFAULT_PUSH_PENDING_MESSAGES,
+        ge=1,
+        le=MAX_PUSH_PENDING_MESSAGES,
+    )
+    pending_bytes_limit: int = Field(
+        default=DEFAULT_PUSH_PENDING_BYTES,
+        ge=1024,
+        le=MAX_PUSH_PENDING_BYTES,
+    )
+    queue_overflow_action: Literal["nak", "leave_unacked"] = "nak"
+    flow_control: bool = False
+    idle_heartbeat_seconds: float | None = Field(
+        default=None,
+        gt=0,
+        le=MAX_PUSH_IDLE_HEARTBEAT_SECONDS,
+    )
+    drain_timeout_ms: int = Field(default=30_000, ge=0, le=MAX_PUSH_DRAIN_TIMEOUT_MS)
+
+    @field_validator("deliver_subject", mode="before")
+    @classmethod
+    def validate_deliver_subject(cls, value: object) -> str | None:
+        """Validate the private NATS subject used for push delivery."""
+
+        if value is None:
+            return None
+        try:
+            subject = validate_subject_pattern(value)
+        except ConfigurationError as exc:
+            raise ValueError("push_consumer.deliver_subject must be a valid NATS subject") from exc
+        if "*" in subject or ">" in subject:
+            raise ValueError("push_consumer.deliver_subject must not contain wildcards")
+        return subject
+
+    @field_validator("deliver_group", mode="before")
+    @classmethod
+    def validate_deliver_group(cls, value: object) -> str | None:
+        """Validate the optional queue-style delivery group name."""
+
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            raise ValueError("push_consumer.deliver_group must be a string")
+        group = value.strip()
+        if group != value or not PUSH_DELIVER_GROUP_RE.fullmatch(group):
+            raise ValueError(
+                "push_consumer.deliver_group must start with a letter or digit and contain "
+                "only letters, digits, '.', '_', ':', '/', or '-'"
+            )
+        return group
+
+    @model_validator(mode="after")
+    def validate_push_mode_safety(self) -> PushConsumerConfig:
+        """Fail closed for any push setting that could weaken ACK safety."""
+
+        if self.enabled:
+            if not self.manual_ack:
+                raise ValueError("push_consumer.manual_ack must be true when push mode is enabled")
+            if self.deliver_subject is None:
+                raise ValueError(
+                    "push_consumer.deliver_subject is required when push mode is enabled"
+                )
+        return self
+
+
 class PriorityLaneConfig(BaseModel):
     """One weighted processing lane used for in-batch priority scheduling.
 
@@ -912,6 +1302,38 @@ class PriorityLanesConfig(BaseModel):
         return self
 
 
+class InProgressConfig(BaseModel):
+    """Optional JetStream progress heartbeat for long-running sink writes.
+
+    Progress heartbeats are disabled by default.  When enabled, the top-level
+    configuration and runner require either an explicit AckWait policy or a
+    bind-only durable consumer whose effective AckWait can be inspected before
+    any message is fetched.  BackOff timing is rejected until it has dedicated
+    guardrails because it changes the effective acknowledgement window.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    interval_ms: int = Field(default=5000, ge=1, le=MAX_IN_PROGRESS_INTERVAL_MS)
+    max_heartbeats: int = Field(default=12, ge=1, le=MAX_IN_PROGRESS_HEARTBEATS)
+    shutdown_timeout_ms: int = Field(
+        default=5000,
+        ge=0,
+        le=MAX_IN_PROGRESS_SHUTDOWN_TIMEOUT_MS,
+    )
+
+
+class AckConfirmationConfig(BaseModel):
+    """Optional server-confirmed JetStream acknowledgement behavior."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    timeout_ms: int = Field(default=1000, ge=1, le=60_000)
+    unsupported_action: Literal["fail", "standard_ack"] = "fail"
+
+
 class DeliveryConfig(BaseModel):
     """Delivery behavior. ACK policy is intentionally fixed to commit-then-ack.
 
@@ -936,6 +1358,8 @@ class DeliveryConfig(BaseModel):
     temporary_failure_action: Literal["nak", "leave_unacked"] = "nak"
     prefer_safe_duplication: bool = True
     priority_lanes: PriorityLanesConfig = Field(default_factory=PriorityLanesConfig)
+    in_progress: InProgressConfig = Field(default_factory=InProgressConfig)
+    ack_confirmation: AckConfirmationConfig = Field(default_factory=AckConfirmationConfig)
 
     @model_validator(mode="after")
     def validate_retry_backoff_cap(self) -> DeliveryConfig:
@@ -952,6 +1376,46 @@ class DeliveryConfig(BaseModel):
                 "delivery.retry_backoff_ms"
             )
         return self
+
+
+def validate_in_progress_consumer_policy(
+    *,
+    delivery: DeliveryConfig,
+    consumer_management: ConsumerManagementConfig,
+    durable: bool | None = None,
+) -> None:
+    """Fail closed when InProgress cannot be tied to safe consumer timing."""
+
+    if not delivery.in_progress.enabled:
+        return
+    if durable is False:
+        raise ConfigurationError(
+            "delivery.in_progress.enabled requires nats.durable=true so the "
+            "effective JetStream consumer policy can be verified before startup"
+        )
+    if consumer_management.backoff_seconds is not None:
+        raise ConfigurationError(
+            "delivery.in_progress.enabled does not yet support "
+            "consumer_management.backoff_seconds; configure AckWait-only timing "
+            "or keep InProgress disabled"
+        )
+    if consumer_management.ack_wait_seconds is None:
+        if consumer_management.mode == "bind_only":
+            return
+        raise ConfigurationError(
+            "delivery.in_progress.enabled requires consumer_management.ack_wait_seconds "
+            "unless consumer_management.mode='bind_only' verifies an existing durable "
+            "consumer before startup"
+        )
+
+    ack_wait_ms = consumer_management.ack_wait_seconds * 1000
+    safe_interval_ms = ack_wait_ms * IN_PROGRESS_ACK_WAIT_SAFETY_RATIO
+    if delivery.in_progress.interval_ms >= safe_interval_ms:
+        raise ConfigurationError(
+            "delivery.in_progress.interval_ms must be meaningfully lower than "
+            "consumer_management.ack_wait_seconds; use an interval below 80% of "
+            "the effective AckWait window"
+        )
 
 
 class DeadLetterConfig(BaseModel):
@@ -2290,12 +2754,359 @@ class CustodyConfig(BaseModel):
         return self
 
 
+class RouteHeaderMatchConfig(BaseModel):
+    """One explicit header match used by the generic routing selector."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    values: tuple[str, ...]
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        """Require an approved non-secret header name for route matching."""
+
+        return _validate_routing_header_name(value, source="routing header match")
+
+    @field_validator("values", mode="before")
+    @classmethod
+    def normalize_values(cls, value: object) -> tuple[str, ...]:
+        """Accept exact header values as one string or a bounded list."""
+
+        values = _normalize_route_scalar_values(value, source="routing header values")
+        if not values:
+            raise ValueError("routing header values must contain at least one value")
+        return values
+
+
+class RouteMatchConfig(BaseModel):
+    """Normalized route-match criteria evaluated against a `NatsEnvelope`.
+
+    The model intentionally supports exact-value matching only.  Operators can
+    combine subject wildcards, normalized metadata, labels, and approved header
+    hints without introducing regular-expression or expression-language
+    surfaces into the runtime path.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    subject: str | None = None
+    priority: tuple[str, ...] = Field(default_factory=tuple)
+    classification: tuple[str, ...] = Field(default_factory=tuple)
+    labels_all: tuple[str, ...] = Field(default_factory=tuple)
+    labels_any: tuple[str, ...] = Field(default_factory=tuple)
+    labels_none: tuple[str, ...] = Field(default_factory=tuple)
+    headers: tuple[RouteHeaderMatchConfig, ...] = Field(default_factory=tuple)
+
+    @field_validator("subject")
+    @classmethod
+    def validate_subject(cls, value: str | None) -> str | None:
+        """Validate optional route subjects with the project NATS wildcard rules."""
+
+        if value is None:
+            return None
+        return validate_subject_pattern(value)
+
+    @field_validator("priority", "classification", mode="before")
+    @classmethod
+    def normalize_scalar_matches(cls, value: object) -> tuple[str, ...]:
+        """Normalize exact-match priority and classification values."""
+
+        return _normalize_route_scalar_values(value, source="routing match values")
+
+    @field_validator("labels_all", "labels_any", "labels_none", mode="before")
+    @classmethod
+    def normalize_label_matches(cls, value: object) -> tuple[str, ...]:
+        """Normalize label match lists with the same semicolon shorthand as metadata."""
+
+        return _normalize_route_labels(value, source="routing labels")
+
+    @field_validator("headers", mode="after")
+    @classmethod
+    def validate_headers(
+        cls, value: tuple[RouteHeaderMatchConfig, ...]
+    ) -> tuple[RouteHeaderMatchConfig, ...]:
+        """Bound and de-duplicate header match names case-insensitively."""
+
+        if len(value) > MAX_ROUTING_HEADERS:
+            raise ValueError(f"routing match supports at most {MAX_ROUTING_HEADERS} headers")
+        seen: set[str] = set()
+        for header in value:
+            lowered = header.name.casefold()
+            if lowered in seen:
+                raise ValueError("routing match must not contain duplicate header names")
+            seen.add(lowered)
+        return value
+
+    @model_validator(mode="after")
+    def validate_match_is_meaningful(self) -> RouteMatchConfig:
+        """Reject empty or self-contradicting route matches."""
+
+        if not (
+            self.subject
+            or self.priority
+            or self.classification
+            or self.labels_all
+            or self.labels_any
+            or self.labels_none
+            or self.headers
+        ):
+            raise ValueError("routing route match must contain at least one criterion")
+
+        blocked = set(self.labels_none)
+        required = set(self.labels_all)
+        optional = set(self.labels_any)
+        if blocked.intersection(required):
+            raise ValueError("routing labels_all and labels_none must not overlap")
+        if optional and optional.issubset(blocked):
+            raise ValueError("routing labels_any cannot be entirely blocked by labels_none")
+        return self
+
+
+class RouteTargetConfig(BaseModel):
+    """One logical sink target selected by a routing policy.
+
+    A plain string target in JSON is normalized to this model with
+    `required=true`.  Operators must opt in explicitly before any target is
+    treated as optional for ACK-gating.  Wait values are only valid on optional
+    targets and are completed from per-sink-type defaults by the parent routing
+    policy when omitted.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    sink: str
+    required: bool = True
+    minimum_wait_ms: int | None = None
+    timeout_ms: int | None = None
+
+    @field_validator("sink")
+    @classmethod
+    def validate_sink(cls, value: str) -> str:
+        """Validate logical sink target names used by fan-out policy."""
+
+        return _normalize_routing_name(value, source="routing target sink")
+
+    @field_validator("minimum_wait_ms", mode="before")
+    @classmethod
+    def validate_minimum_wait(cls, value: object) -> int | None:
+        """Validate the optional-target grace period before ACK may proceed."""
+
+        return _validate_fanout_wait_ms(
+            value,
+            source="routing target minimum_wait_ms",
+            maximum=MAX_FANOUT_OPTIONAL_WAIT_MS,
+        )
+
+    @field_validator("timeout_ms", mode="before")
+    @classmethod
+    def validate_timeout(cls, value: object) -> int | None:
+        """Validate the optional-target hard timeout."""
+
+        return _validate_fanout_wait_ms(
+            value,
+            source="routing target timeout_ms",
+            maximum=MAX_FANOUT_OPTIONAL_TIMEOUT_MS,
+        )
+
+    @model_validator(mode="after")
+    def validate_ack_gate_shape(self) -> RouteTargetConfig:
+        """Fail closed when wait policy is attached to a required target."""
+
+        if self.required:
+            if self.minimum_wait_ms is not None or self.timeout_ms is not None:
+                raise ValueError("routing target wait policy is only valid when required is false")
+            return self
+        if (
+            self.minimum_wait_ms is not None
+            and self.timeout_ms is not None
+            and self.timeout_ms < self.minimum_wait_ms
+        ):
+            raise ValueError("routing target timeout_ms must be at least minimum_wait_ms")
+        return self
+
+
+class RoutePolicyRouteConfig(BaseModel):
+    """One named route and the logical sink targets it selects."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    match: RouteMatchConfig
+    targets: tuple[RouteTargetConfig, ...]
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        """Validate route names for logs, operator output, and future metrics."""
+
+        return _normalize_routing_name(value, source="routing route name")
+
+    @field_validator("targets", mode="before")
+    @classmethod
+    def normalize_targets(cls, value: object) -> tuple[RouteTargetConfig, ...]:
+        """Validate selected logical sink names without loading those sinks."""
+
+        return _normalize_route_target_configs(value, source="routing route targets")
+
+
+class RoutingMatchPolicyConfig(BaseModel):
+    """Generic route selector configuration.
+
+    This policy determines which logical sink target names match a normalized
+    envelope.  It does not perform writes, commit sinks, or ACK JetStream
+    messages by itself; fan-out execution and ACK quorum behavior are separate
+    delivery features.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    mode: Literal["first", "all"] = "first"
+    no_match: Literal["reject", "default_route", "ignore"] = "reject"
+    target_sink_types: dict[str, FanoutAckGateSinkType] = Field(default_factory=dict)
+    default_targets: tuple[RouteTargetConfig, ...] = Field(default_factory=tuple)
+    routes: tuple[RoutePolicyRouteConfig, ...] = Field(default_factory=tuple)
+
+    @field_validator("target_sink_types", mode="before")
+    @classmethod
+    def normalize_target_sink_types(cls, value: object) -> dict[str, FanoutAckGateSinkType]:
+        """Validate the target-to-sink-type map used for ACK-gating defaults."""
+
+        if value is None:
+            return {}
+        if not isinstance(value, dict):
+            raise ValueError("routing.target_sink_types must be an object")
+        normalized: dict[str, FanoutAckGateSinkType] = {}
+        seen: set[str] = set()
+        for raw_name, raw_type in value.items():
+            name = _normalize_routing_name(raw_name, source="routing target_sink_types name")
+            if name in seen:
+                raise ValueError(f"routing.target_sink_types contains duplicate target {name!r}")
+            if not isinstance(raw_type, str):
+                raise ValueError("routing.target_sink_types values must be strings")
+            sink_type = raw_type.strip().casefold()
+            if sink_type not in FANOUT_ACK_GATE_SINK_TYPES:
+                allowed = ", ".join(sorted(FANOUT_ACK_GATE_SINK_TYPES))
+                raise ValueError(
+                    f"routing.target_sink_types values must be one of these sink types: {allowed}"
+                )
+            seen.add(name)
+            normalized[name] = cast("FanoutAckGateSinkType", sink_type)
+        return normalized
+
+    @field_validator("default_targets", mode="before")
+    @classmethod
+    def normalize_default_targets(cls, value: object) -> tuple[RouteTargetConfig, ...]:
+        """Validate fallback logical sink names for no-match handling."""
+
+        if value is None:
+            return ()
+        return _normalize_route_target_configs(value, source="routing default_targets")
+
+    @field_validator("routes", mode="after")
+    @classmethod
+    def validate_routes(
+        cls, value: tuple[RoutePolicyRouteConfig, ...]
+    ) -> tuple[RoutePolicyRouteConfig, ...]:
+        """Bound route count and reject duplicate route names."""
+
+        if len(value) > MAX_ROUTING_ROUTES:
+            raise ValueError(f"routing supports at most {MAX_ROUTING_ROUTES} routes")
+        seen: set[str] = set()
+        for route in value:
+            if route.name in seen:
+                raise ValueError(f"routing contains duplicate route name {route.name!r}")
+            seen.add(route.name)
+        return value
+
+    @model_validator(mode="after")
+    def validate_policy(self) -> RoutingMatchPolicyConfig:
+        """Fail closed for enabled policies that cannot select a safe target."""
+
+        if self.enabled and not self.routes:
+            raise ValueError("routing.enabled requires at least one route")
+        if self.no_match == "default_route" and not self.default_targets:
+            raise ValueError("routing.no_match default_route requires default_targets")
+        if self.no_match != "default_route" and self.default_targets:
+            raise ValueError("routing.default_targets is only valid with no_match default_route")
+        self._apply_ack_gate_defaults()
+        return self
+
+    def _all_route_targets(self) -> tuple[RouteTargetConfig, ...]:
+        """Return all configured route and default targets for validation."""
+
+        targets: list[RouteTargetConfig] = list(self.default_targets)
+        for route in self.routes:
+            targets.extend(route.targets)
+        return tuple(targets)
+
+    def target_names(self) -> tuple[str, ...]:
+        """Return every logical sink target referenced by this policy.
+
+        The tuple is de-duplicated in first-seen order so CLI reports stay
+        stable while validation can compare the route policy with the named
+        sink registry.
+        """
+
+        ordered: list[str] = []
+        seen: set[str] = set()
+        for target in self._all_route_targets():
+            if target.sink in seen:
+                continue
+            seen.add(target.sink)
+            ordered.append(target.sink)
+        return tuple(ordered)
+
+    def _apply_ack_gate_defaults(self) -> None:
+        """Apply fail-closed ACK-gating defaults to optional route targets."""
+
+        if not self.enabled and not self.default_targets:
+            return
+
+        all_targets = self._all_route_targets()
+        for target in all_targets:
+            if target.required:
+                continue
+            sink_type = self.target_sink_types.get(target.sink)
+            if sink_type is None:
+                if target.minimum_wait_ms is not None and target.timeout_ms is not None:
+                    continue
+                raise ValueError(
+                    "routing optional target policies require routing.target_sink_types "
+                    f"for target {target.sink!r} when wait values are not explicit"
+                )
+            defaults = FANOUT_OPTIONAL_ACK_DEFAULTS[sink_type]
+            if target.minimum_wait_ms is None:
+                target.minimum_wait_ms = defaults["minimum_wait_ms"]
+            if target.timeout_ms is None:
+                target.timeout_ms = defaults["timeout_ms"]
+            if target.timeout_ms < target.minimum_wait_ms:
+                raise ValueError("routing target timeout_ms must be at least minimum_wait_ms")
+
+
 class SinkConfig(BaseModel):
     """Raw sink configuration selected through the safe registry."""
 
     model_config = ConfigDict(extra="allow")
 
     type: str
+
+    @field_validator("type")
+    @classmethod
+    def validate_type(cls, value: str) -> str:
+        """Normalize sink connector names before registry lookup."""
+
+        if not isinstance(value, str):
+            raise ValueError("sink.type must be a string")
+        rendered = value.strip().lower()
+        if not SINK_PLUGIN_NAME_RE.fullmatch(rendered):
+            raise ValueError(
+                "sink.type must start with a lowercase letter and contain only lowercase "
+                "letters, digits, '_' or '-'"
+            )
+        return rendered
 
 
 class SinkPluginConfig(BaseModel):
@@ -2360,6 +3171,7 @@ class AppConfig(BaseModel):
 
     nats: NatsConfig
     consumer_management: ConsumerManagementConfig = Field(default_factory=ConsumerManagementConfig)
+    push_consumer: PushConsumerConfig = Field(default_factory=PushConsumerConfig)
     delivery: DeliveryConfig = Field(default_factory=DeliveryConfig)
     dead_letter: DeadLetterConfig = Field(default_factory=DeadLetterConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
@@ -2375,8 +3187,173 @@ class AppConfig(BaseModel):
     custody: CustodyConfig = Field(default_factory=CustodyConfig)
     size_policy: SizePolicyConfig = Field(default_factory=SizePolicyConfig)
     pre_sink_policy: PreSinkPolicyConfig = Field(default_factory=PreSinkPolicyConfig)
+    routing: RoutingMatchPolicyConfig = Field(default_factory=RoutingMatchPolicyConfig)
     plugins: SinkPluginConfig = Field(default_factory=SinkPluginConfig)
+    sinks: dict[str, SinkConfig] = Field(default_factory=dict)
     sink: SinkConfig
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_inline_fanout_config(cls, value: object) -> object:
+        """Translate the compact `sink.type=fanout` form into core sections.
+
+        The public fan-out example keeps child sinks and routes close together
+        under the active sink.  Internally, the framework already validates
+        named sinks and route policy as top-level sections.  This normalization
+        accepts the compact form while preserving one validation path for both
+        styles.
+        """
+
+        if not isinstance(value, dict):
+            return value
+        raw_sink = value.get("sink")
+        if not isinstance(raw_sink, dict):
+            return value
+        raw_type = raw_sink.get("type")
+        if not isinstance(raw_type, str) or raw_type.strip().lower() != "fanout":
+            return value
+
+        prepared = dict(value)
+        prepared_sink = dict(raw_sink)
+        inline_sinks = prepared_sink.pop("sinks", None)
+
+        if inline_sinks is not None:
+            if "sinks" in prepared:
+                raise ValueError(
+                    "sink.type fanout must not define both sink.sinks and top-level sinks"
+                )
+            prepared["sinks"] = inline_sinks
+
+        inline_routing = _inline_fanout_routing_from_sink(
+            prepared_sink,
+            prepared.get("sinks"),
+        )
+        if inline_routing is not None:
+            if "routing" in prepared:
+                raise ValueError(
+                    "sink.type fanout must not define both sink routing fields and "
+                    "top-level routing"
+                )
+            prepared["routing"] = inline_routing
+
+        prepared["sink"] = prepared_sink
+        return prepared
+
+    @model_validator(mode="before")
+    @classmethod
+    def enrich_routing_with_named_sink_types(cls, value: object) -> object:
+        """Use named sink definitions as the ACK-gate sink-type source when present.
+
+        The routing policy is validated before the full AppConfig instance exists.
+        This pre-validation pass fills missing `routing.target_sink_types` entries
+        from top-level `sinks` so optional fan-out wait defaults can be applied
+        without asking operators to duplicate sink type names in two sections.
+        """
+
+        if not isinstance(value, dict):
+            return value
+        raw_sinks = value.get("sinks")
+        raw_routing = value.get("routing")
+        if not isinstance(raw_sinks, dict) or not isinstance(raw_routing, dict):
+            return value
+
+        named_sink_types: dict[str, str] = {}
+        for raw_name, raw_sink in raw_sinks.items():
+            if not isinstance(raw_name, str) or not isinstance(raw_sink, dict):
+                continue
+            raw_type = raw_sink.get("type")
+            if not isinstance(raw_type, str):
+                continue
+            sink_type = raw_type.strip().lower()
+            if sink_type in FANOUT_ACK_GATE_SINK_TYPES:
+                named_sink_types[raw_name] = sink_type
+
+        if not named_sink_types:
+            return value
+
+        prepared = dict(value)
+        prepared_routing = dict(raw_routing)
+        raw_target_sink_types = prepared_routing.get("target_sink_types")
+        target_sink_types = (
+            dict(raw_target_sink_types) if isinstance(raw_target_sink_types, dict) else {}
+        )
+        for target_name in _raw_routing_target_names(prepared_routing):
+            target_sink_types.setdefault(target_name, named_sink_types.get(target_name))
+        prepared_routing["target_sink_types"] = {
+            name: sink_type
+            for name, sink_type in target_sink_types.items()
+            if sink_type is not None
+        }
+        prepared["routing"] = prepared_routing
+        return prepared
+
+    @field_validator("sinks", mode="before")
+    @classmethod
+    def normalize_named_sinks(cls, value: object) -> dict[str, object]:
+        """Validate the named sink registry without opening any destination."""
+
+        if value is None:
+            return {}
+        if not isinstance(value, dict):
+            raise ValueError("sinks must be an object of named sink configurations")
+        if len(value) > MAX_NAMED_SINKS:
+            raise ValueError(f"sinks supports at most {MAX_NAMED_SINKS} named instances")
+
+        normalized: dict[str, object] = {}
+        seen: set[str] = set()
+        for raw_name, raw_config in value.items():
+            name = _normalize_sink_instance_name(raw_name, source="sinks name")
+            if name in seen:
+                raise ValueError(f"sinks contains duplicate named sink {name!r}")
+            if not isinstance(raw_config, dict):
+                raise ValueError(f"sinks.{name} must be an object")
+            seen.add(name)
+            normalized[name] = raw_config
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_named_sink_references(self) -> AppConfig:
+        """Ensure route targets reference declared sink instances when a registry exists."""
+
+        if not self.sinks:
+            validate_in_progress_consumer_policy(
+                delivery=self.delivery,
+                consumer_management=self.consumer_management,
+                durable=self.nats.durable,
+            )
+            return self
+
+        referenced_targets = set(self.routing.target_names())
+        unknown = sorted(target for target in referenced_targets if target not in self.sinks)
+        if unknown:
+            joined = ", ".join(unknown)
+            raise ValueError(f"routing targets reference unknown named sink(s): {joined}")
+
+        unknown_type_entries = sorted(
+            target for target in self.routing.target_sink_types if target not in self.sinks
+        )
+        if unknown_type_entries:
+            joined = ", ".join(unknown_type_entries)
+            raise ValueError(
+                f"routing.target_sink_types references unknown named sink(s): {joined}"
+            )
+
+        mismatches: list[str] = []
+        for target, sink_type in self.routing.target_sink_types.items():
+            configured_type = self.sinks[target].type
+            if configured_type != sink_type:
+                mismatches.append(
+                    f"{target} configured as {configured_type}, routed as {sink_type}"
+                )
+        if mismatches:
+            joined = "; ".join(mismatches)
+            raise ValueError(f"routing.target_sink_types must match named sink types: {joined}")
+        validate_in_progress_consumer_policy(
+            delivery=self.delivery,
+            consumer_management=self.consumer_management,
+            durable=self.nats.durable,
+        )
+        return self
 
 
 ENV_OVERRIDES: dict[str, tuple[str, ...]] = {
@@ -2531,7 +3508,19 @@ def redact_mapping(value: Any) -> Any:
     if isinstance(value, BaseModel):
         value = value.model_dump(mode="json")
     if isinstance(value, dict):
-        return {key: redact_mapping(_redact_value(str(key), item)) for key, item in value.items()}
+        rendered: dict[Any, Any] = {}
+        for key, item in value.items():
+            key_text = str(key)
+            if key_text == "sinks" and isinstance(item, dict):
+                rendered[key] = {
+                    sink_name: redact_mapping(sink_config)
+                    for sink_name, sink_config in item.items()
+                }
+            elif key_text == "target_sink_types" and isinstance(item, dict):
+                rendered[key] = dict(item)
+            else:
+                rendered[key] = redact_mapping(_redact_value(key_text, item))
+        return rendered
     if isinstance(value, list):
         return [redact_mapping(item) for item in value]
     return value

@@ -116,7 +116,11 @@ def _metric_prefix(policy: ObservabilityPolicy) -> str:
 def statsd_metric_name(row: MetricRow, policy: ObservabilityPolicy) -> str:
     """Return the StatsD metric name for one approved row."""
 
-    return f"{_metric_prefix(policy)}.{_normalize_metric_component(row.name)}"
+    parts = [_metric_prefix(policy), _normalize_metric_component(row.name)]
+    for key, value in sorted(row.labels.items()):
+        parts.append(_normalize_metric_component(key))
+        parts.append(_normalize_metric_component(value))
+    return ".".join(parts)
 
 
 def _statsd_type(row: MetricRow) -> str:

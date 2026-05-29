@@ -312,10 +312,13 @@ Each uncompressed file contains a single JSON document:
 The actual `metadata` document contains the standard framework metadata
 snapshot: headers, known and future `Nats-*` reserved headers, JetStream stream
 and sequence values, epoch nanosecond timing fields, and the normalized
-`priority`, `classification`, and `labels` values. When priority or
-classification is missing, the file sink writes JSON `null` rather than the
-literal string `"null"`. When labels are missing, the scalar `labels` field is
-JSON `null` and `labels_list` is an empty JSON array.
+`priority`, `classification`, `labels`, and payload-presence values. When
+priority or classification is missing, the file sink writes JSON `null` rather
+than the literal string `"null"`. When labels are missing, the scalar `labels`
+field is JSON `null` and `labels_list` is an empty JSON array. When a
+headers-only consumer omitted the message body, `metadata.payload` records
+`present=false`, `omitted=true`, the omission reason, the delivered byte count,
+and the parsed `Nats-Msg-Size` value when available.
 
 When the core `mission_metadata` feature is enabled, the file sink writes the
 validated object as top-level `mission_metadata` and also includes it in
@@ -332,6 +335,15 @@ both locations use JSON `null`. The profile can carry releasability, handling
 caveats, owner, originator, policy ID, and retention category without turning
 every policy concept into a fixed file-sink field. See
 [Data-Centric Security Label Profile](security-label-profile.md).
+
+The generic `routing` policy can name a file destination as a logical target,
+for example `file_secret_audit`. When the active sink is `fanout`, that
+logical target binds to a named file sink instance. The file child sink keeps
+the normal file durability contract: it returns success only after the output
+file has been placed according to its configured duplicate, compression,
+atomic-write, and fsync settings. Required file targets must complete before
+ACK; optional file targets receive a bounded wait window for side-copy use
+cases.
 
 For broader file-based handoff, edge operation, classification, labels, and
 audit examples, see [Defence And Mission Support](use-cases/defence/index.md).

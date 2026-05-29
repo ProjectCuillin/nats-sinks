@@ -3,7 +3,7 @@
   "title": "[Feature]: Add local container validation for the latest PyPI release artifact",
   "area": "Packaging and release",
   "priority": "P2 - next minor release candidate",
-  "target_release": "unscheduled",
+  "target_release": "v0.4.2",
   "labels": ["release", "testing", "deployment", "security"],
   "problem": "Pre-release validation proves that the source tree, local build, and release workflow are expected to work, but it does not independently prove that the package actually published to PyPI behaves the same way once external users install it. Maintainers need a local post-release QA failsafe that installs the latest released nats-sinks package from PyPI inside a clean container and runs meaningful checks against that published artifact only.",
   "proposal": "Create a local-only post-release validation harness that starts a short-lived container, installs the latest released nats-sinks package from PyPI rather than from the local checkout, and runs the most meaningful artifact-level checks available without private infrastructure. The harness should verify CLI availability, package metadata, Python import surfaces, configuration validation, file sink smoke behavior, metrics CLI behavior, optional extras where practical, and container isolation rules. It should optionally accept an explicit version so maintainers can verify a specific release tag. The harness must clearly report whether it used the PyPI artifact, must not mount the local source tree as an import path, and must not run in GitHub Actions by default. It is a post-release operator check, not a substitute for pre-release tests.",

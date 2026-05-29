@@ -1,0 +1,37 @@
+{
+  "id": "oracle-nosql-database-test-container",
+  "title": "[Feature]: Add an Oracle NoSQL Database test backend container",
+  "area": "Testing",
+  "priority": "P3 - backlog candidate",
+  "target_release": "v0.4.2",
+  "labels": ["deployment", "security", "testing", "sink-oracle"],
+  "problem": "The future Oracle NoSQL Database sink needs a repeatable local backend before sink implementation can be certified. Oracle NoSQL Database supports JSON, table, and key/value data models on premise and as an Oracle Cloud service, and Oracle's public NoSQL material includes KVLite container guidance for developer testing. Without a maintained local Oracle NoSQL Database test container, future sink work could depend on manual KVLite setup, stale local ports, unclear secure versus non-secure modes, ad hoc HTTP proxy configuration, or tests that cannot prove JSON envelope writes before commit-then-ACK behavior is evaluated.",
+  "proposal": "Create a test-only Oracle NoSQL Database backend container and helper scripts for future Oracle NoSQL Database sink development. Research should start from the public Oracle NoSQL repository and Oracle's NoSQL container guidance, including the documented KVLite container image, HTTP proxy support, and secure and non-secure image variants. The implementation should evaluate whether the official `oracle/nosql:ce` image from the GitHub Container Registry is sufficient for local tests. If a custom image is required, it must prefer an Oracle Linux 9 slim base where technically feasible and document any Oracle NoSQL runtime exception. The backend must support a local table suitable for storing a complete normalized nats-sinks event JSON object, must expose only the required local client or proxy endpoint, and must provide readiness checks, random names or ports where practical, cleanup by default, and sanitized output.",
+  "users": "Maintainers preparing the future Oracle NoSQL Database sink, developers running local sink certification, release engineers validating optional container-backed tests, and security reviewers checking test isolation, credential lifecycle, and cleanup behavior.",
+  "delivery_semantics": "This feature does not change JetStream delivery behavior and must not add sink writes or ACK handling. Its purpose is to provide a local Oracle NoSQL Database backend for future sink tests. The future Oracle NoSQL Database sink must still prove that ACK happens only after required sink success. The container itself must not be treated as production durability evidence, a throughput benchmark, or a substitute for live Oracle NoSQL Database service validation.",
+  "security": "The container flow must use fake local-only data, avoid privileged mode, avoid host networking by default, avoid Docker socket mounts, expose only the required loopback-bound Oracle NoSQL client or HTTP proxy endpoint, and remove containers and temporary storage by default. Secure mode should be evaluated first when practical, and any non-secure KVLite mode must be documented as local-test-only. Logs and test evidence must not include secrets, live service details, payloads, private endpoints, host-specific identifiers, generated certificates, generated passwords, or container identifiers. Any generated credentials, certificates, wallets, or test keys must be random, redacted, short lived, and cleaned up unless an explicit local debug flag preserves artifacts.",
+  "acceptance": [
+    "A dedicated Oracle NoSQL Database test backend Dockerfile, documented official image wrapper, or both exist.",
+    "The selected image source, Oracle NoSQL Database version, KVLite mode, secure versus non-secure choice, and HTTP proxy behavior are explicit, documented, and easy to update.",
+    "If a custom image is required, Oracle Linux 9 slim is used as the base where technically feasible, and any exception is documented with a clear reason.",
+    "A local test helper starts a fresh short-lived Oracle NoSQL Database backend with collision-resistant container naming and random loopback port selection where supported.",
+    "The helper waits for Oracle NoSQL Database readiness through the selected client or HTTP proxy path before future sink tests are allowed to run.",
+    "The smoke test creates or verifies a dedicated test table, writes one complete fake normalized event JSON object, reads it back, and verifies the expected key and JSON value.",
+    "The smoke test removes the backend container and temporary storage by default, with an explicit preserve flag for debugging.",
+    "Deterministic unit tests inspect the Dockerfile or wrapper and helper scripts for fixed argument lists, bounded timeouts, redaction, cleanup defaults, no shell injection, base-image expectations, and safe skip behavior when Docker is unavailable.",
+    "Optional Docker tests are gated so normal unit tests do not require a local Docker daemon, Oracle NoSQL credentials, or network access.",
+    "Documentation explains how this backend supports the future Oracle NoSQL Database sink, how to run it locally, how JSON envelope verification works, what security mode is used, and what remains out of scope."
+  ],
+  "tests": "Add deterministic unit tests for the Dockerfile or image wrapper and all helper scripts. Cover image source selection, explicit version declaration, Oracle Linux 9 slim base-image enforcement where a custom image is used, secure and non-secure mode handling, HTTP proxy port selection, random container naming, random local endpoint selection when supported, readiness timeout behavior, test table setup, fake JSON event value validation, cleanup-by-default behavior, preserve flag behavior, fixed Docker command argument lists with shell disabled, sanitized output, and clear skip behavior when Docker is unavailable. Add an optional local Docker smoke test that starts Oracle NoSQL Database or KVLite, writes and reads one fake normalized event JSON object, and removes all temporary resources by default.",
+  "documentation": "Add documentation under the testing or deployment tree for the Oracle NoSQL Database test backend. Include the research source links, selected image or Dockerfile strategy, secure versus non-secure mode choice, build or pull guidance, smoke-test commands, expected sanitized output, JSON value verification, cleanup behavior, troubleshooting, security boundaries, and how future Oracle NoSQL Database sink and fan-out tests should consume the backend. Update docs/testing.md, docs/docker.md, docs/sink-framework.md, docs/roadmap.md, ROADMAP.md, and CHANGELOG.md when implementation starts.",
+  "closeout": "Close only after the release containing the Oracle NoSQL Database test backend is published. Include release tag, selected image source and version, KVLite or service mode, script paths, tests run, Docker smoke evidence, documentation links, known limitations, and confirmation that the Oracle NoSQL Database sink itself remains separate unless implemented under its own issue.",
+  "relationships": {
+    "blocks": [
+      "backlog:oracle-nosql-database-sink"
+    ],
+    "related": [
+      "backlog:sink-certification-contract-and-tests",
+      "backlog:multi-sink-routing-e2e-test-flow"
+    ]
+  }
+}

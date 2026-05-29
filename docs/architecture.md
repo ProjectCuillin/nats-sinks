@@ -205,12 +205,11 @@ flowchart LR
 
 Raw `nats-py` messages expose `ack`, `nak`, and related methods. Passing raw messages into destination code would make it easy for a sink to ACK before durable success. `NatsEnvelope` prevents this by carrying payload and metadata without delivery-control methods.
 
-Headers-only JetStream consumers are intentionally treated as a separate
-design topic. nats-sinks can process empty payload bytes today, but explicit
-headers-only support must distinguish a producer-empty message from a body that
-the NATS server intentionally omitted. See
-[Headers-Only Delivery Evaluation](headers-only-delivery.md) for the staged
-design.
+Headers-only JetStream consumers keep the same sink boundary. `NatsEnvelope`
+still carries `data: bytes` for compatibility, but it also records
+payload-presence metadata so sinks and DLQ records can distinguish a
+producer-empty message from a body that the NATS server intentionally omitted.
+See [Headers-Only Delivery](headers-only-delivery.md).
 
 Ordered consumers are also intentionally separate from the production sink
 runner. They are useful for inspection and analysis, but they are not a
@@ -218,12 +217,14 @@ replacement for durable pull consumers when writing to Oracle, files, or
 future sinks. See [Ordered Consumer Evaluation](ordered-consumer-evaluation.md)
 for the evaluation and follow-up tooling split.
 
-Push consumers have also been evaluated as a possible future runner mode. They
-can be useful for deployments that already standardize on server-initiated
-delivery, but they add callback scheduling, client pending buffers, deliver
-subjects, flow-control messages, and more complex shutdown behavior. Pull
-consumers remain the production default until a push mode can prove the same
-bounded backpressure and ACK-after-durable-success behavior. See
+Push consumers are available as an explicit opt-in runner mode for deployments
+that already standardize on server-initiated delivery. They add callback
+scheduling, client pending buffers, deliver subjects, flow-control messages,
+and more complex shutdown behavior, so pull consumers remain the production
+default. Push mode is manual-ACK only, bounded, and still routes messages
+through the same ACK-after-durable-success pipeline. The certification tests
+exercise callback error containment, temporary failure, permanent DLQ,
+flow-control, heartbeat, overflow, and shutdown paths. See
 [Push Consumer Evaluation](push-consumer-evaluation.md).
 
 ## Extension Model
@@ -250,6 +251,23 @@ Adding a new sink should be an additive release: a new module, optional
 dependency extra, registry entry, tests, and destination-specific documentation.
 The core `NatsEnvelope`, `Sink` protocol, commit-then-acknowledge ordering, and
 existing Oracle configuration should remain compatible.
+
+Generic route matching and fan-out orchestration are also part of the core.
+The `routing` configuration evaluates subject, priority, classification,
+labels, and approved header hints against a normalized `NatsEnvelope` and
+returns logical target names plus ACK-gating policy for those targets. The
+active `fanout` sink binds those target names to named child sinks, writes the
+selected message subsets, waits for every required child sink, and bounds
+optional side copies without moving JetStream acknowledgement ownership into
+destination modules.
+
+The route selector, ACK-gate helper, and production fan-out sink are covered
+by reusable fan-out certification tests. Those tests use synthetic route
+policies and operation plans to prove that a required target failure blocks
+ACK, optional targets are bounded, no-route behavior is explicit, and the
+documented NATO SECRET and NATO UNCLASS examples select the expected logical
+sink names. Destination-specific sink certification still applies to every
+child sink.
 
 Payload encryption is also part of the core, not a sink-specific responsibility.
 When enabled, the runner encrypts `NatsEnvelope.data` and passes a copied

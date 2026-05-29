@@ -1,0 +1,36 @@
+{
+  "id": "http-routing-target-type-missing",
+  "title": "[Bug]: HTTP sink must be accepted by routing target sink-type validation",
+  "area": "Configuration",
+  "severity": "medium",
+  "priority": "P1 - release blocker",
+  "target_release": "v0.4.2",
+  "labels": [
+    "routing",
+    "sink-http",
+    "configuration"
+  ],
+  "summary": "The first-party HTTP sink was added to fan-out optional ACK defaults, but the routing policy configuration still rejected `http` as a valid target sink type.",
+  "observed": "The full repository validation failed in the routing policy test that iterates over every optional ACK default sink type. The `http` entry reached the route policy model and was rejected before validation could apply the HTTP defaults.",
+  "expected": "Routing target sink-type validation should accept every sink type that has optional ACK defaults, including `http`, so route policies can be validated consistently.",
+  "reproduction": "Run the routing policy unit test that checks optional ACK defaults for each sink type. The HTTP parameter fails during configuration validation.",
+  "failing_test": "`python -m pytest tests/unit/test_routing_policy.py::test_route_policy_applies_sink_type_optional_ack_gate_defaults -q` fails for the `http` parameter before the fix.",
+  "impact": "Operators could not use the new HTTP sink as an optional fan-out route target even though the core fan-out defaults declared HTTP support. Required HTTP routing through direct named sink selection was unaffected.",
+  "delivery_semantics": "The defect prevented valid route configuration from loading. It did not cause early ACKs, sink writes, DLQ changes, or message loss.",
+  "security": "The fix expands a strict allow list by one first-party sink type only. It does not add dynamic imports, message-controlled destinations, unbounded fan-out, or secret exposure.",
+  "acceptance": [
+    "Routing target sink-type validation accepts `http` alongside the other first-party sink types.",
+    "The optional ACK default coverage test passes for the HTTP sink type.",
+    "Invalid sink types remain rejected by route policy validation.",
+    "Focused routing policy tests pass after the fix.",
+    "The full repository validation passes after the fix."
+  ],
+  "tests": "Run python -m pytest tests/unit/test_routing_policy.py::test_route_policy_applies_sink_type_optional_ack_gate_defaults tests/unit/test_routing_policy.py::test_route_policy_rejects_unknown_target_sink_type -q, then rerun scripts/check.sh.",
+  "documentation": "No user-facing documentation change is required beyond the HTTP sink documentation already added for the parent feature; this bug is a configuration allow-list consistency fix.",
+  "closeout": "Close after the v0.4.2 release containing the routing validation fix is published. Include sanitized focused and full validation evidence.",
+  "relationships": {
+    "related": [
+      "backlog:http-sink"
+    ]
+  }
+}

@@ -94,6 +94,9 @@ def _metric_field_name(row: MetricRow, policy: ObservabilityPolicy) -> str:
         metric_name = f"{qualified_metric_name(base_name, namespace=policy.namespace)}_{stat}"
     else:
         metric_name = qualified_metric_name(row.name, namespace=policy.namespace)
+    if row.labels:
+        label_suffix = ".".join(f"{key}.{value}" for key, value in sorted(row.labels.items()))
+        metric_name = f"{metric_name}.{label_suffix}"
     return f"metric_name:{metric_name}"
 
 

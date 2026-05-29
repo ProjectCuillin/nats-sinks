@@ -1,0 +1,29 @@
+{
+  "id": "subject-observability-certification-hec-env-bandit",
+  "title": "[Bug]: Subject-aware observability certification helper trips Bandit on synthetic HEC token env name",
+  "area": "Testing",
+  "severity": "low",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.2",
+  "labels": ["observability", "testing", "security"],
+  "summary": "The subject-aware observability certification helper used a synthetic Splunk HEC environment variable name that contained the word token, which made Bandit treat the test marker as a possible hardcoded secret.",
+  "observed": "The full local check stopped during the Bandit security scan for the subject-aware observability certification helper.",
+  "expected": "Certification helpers should avoid synthetic strings that look like secret values while still exercising the same validated connector policy paths.",
+  "reproduction": "Run scripts/check.sh on the issue branch after adding the subject-aware observability certification helper.",
+  "failing_test": "scripts/check.sh Bandit security scan phase",
+  "impact": "The issue blocks release validation for the new certification helper but does not expose a real secret or affect released runtime behavior.",
+  "delivery_semantics": "The fix is limited to a certification-helper test marker and must not change ACK ordering, retries, DLQ publication, sink writes, or idempotency behavior.",
+  "security": "The fix keeps security scanning strict and prevents public evidence from containing strings that resemble token material, credentials, payloads, or operational identifiers.",
+  "acceptance": [
+    "The Bandit security scan passes without suppressing the rule.",
+    "The subject-aware observability certification helper still validates Splunk HEC connector output.",
+    "The focused subject-aware observability certification tests continue to pass.",
+    "The full scripts/check.sh validation passes."
+  ],
+  "tests": "Run the focused subject-aware observability certification suite and scripts/check.sh.",
+  "documentation": "No user-facing documentation change is required beyond the issue #127 certification documentation already being added.",
+  "closeout": "Close only after the release containing the fix is published with sanitized test evidence.",
+  "relationships": {
+    "related": ["#127", "#284"]
+  }
+}

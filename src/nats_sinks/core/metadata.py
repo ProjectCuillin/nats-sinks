@@ -207,6 +207,15 @@ def build_nats_metadata_snapshot(
         "mission_metadata": envelope.mission_metadata_for_json_storage(),
         "security_labels": envelope.security_labels_for_json_storage(),
         "headers": headers,
+        "payload": {
+            "present": envelope.payload_present,
+            "omitted": envelope.payload_omitted,
+            "omitted_reason": envelope.payload_omitted_reason,
+            "original_size_bytes": envelope.original_payload_size_bytes,
+            "delivered_size_bytes": len(envelope.data),
+            "nats_msg_size_header": _case_insensitive_lookup(headers, "Nats-Msg-Size"),
+            "nats_msg_size_header_malformed": envelope.payload_size_header_malformed,
+        },
         "nats": {
             "reserved_headers": reserved_headers,
             "reserved_headers_present": sorted(reserved_headers),

@@ -22,6 +22,16 @@ from datetime import UTC
 from typing import Any
 
 from nats_sinks.core.envelope import NatsEnvelope
+from nats_sinks.core.errors import ValidationError
+
+
+def _safe_idempotency_key(envelope: NatsEnvelope) -> tuple[str | None, str | None]:
+    """Return the best idempotency key without failing DLQ construction."""
+
+    try:
+        return envelope.idempotency_key(), None
+    except ValidationError:
+        return None, "payload_omitted"
 
 
 def build_dead_letter_payload(
@@ -34,6 +44,7 @@ def build_dead_letter_payload(
 ) -> bytes:
     """Build a JSON DLQ payload without assuming the source payload is text."""
 
+    idempotency_key, idempotency_key_unavailable_reason = _safe_idempotency_key(envelope)
     body: dict[str, Any] = {
         "subject": envelope.subject,
         "stream": envelope.stream,
@@ -46,7 +57,24 @@ def build_dead_letter_payload(
         "labels": list(envelope.labels),
         "redelivered": envelope.redelivered,
         "pending": envelope.pending,
-        "idempotency_key": envelope.idempotency_key(),
+        "idempotency_key": idempotency_key,
+        "idempotency_key_unavailable_reason": idempotency_key_unavailable_reason,
+        "payload": {
+            "present": envelope.payload_present,
+            "omitted": envelope.payload_omitted,
+            "omitted_reason": envelope.payload_omitted_reason,
+            "original_size_bytes": envelope.original_payload_size_bytes,
+            "delivered_size_bytes": len(envelope.data),
+            "nats_msg_size_header": next(
+                (
+                    value
+                    for key, value in envelope.headers.items()
+                    if key.casefold() == "nats-msg-size"
+                ),
+                None,
+            ),
+            "nats_msg_size_header_malformed": envelope.payload_size_header_malformed,
+        },
     }
     if include_error:
         body["error_type"] = type(error).__name__
@@ -55,6 +83,8 @@ def build_dead_letter_payload(
         body["timestamp"] = envelope.timestamp.astimezone(UTC).isoformat()
     if include_headers:
         body["headers"] = dict(envelope.headers)
-    if include_payload:
+    if include_payload and envelope.payload_present:
         body["payload_base64"] = base64.b64encode(envelope.data).decode("ascii")
+    elif include_payload and envelope.payload_omitted:
+        body["payload_unavailable_reason"] = envelope.payload_omitted_reason or "payload_omitted"
     return json.dumps(body, sort_keys=True, separators=(",", ":")).encode("utf-8")

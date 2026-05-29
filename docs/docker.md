@@ -83,6 +83,126 @@ The script chooses free localhost ports for the NATS client and monitoring
 ports, which avoids collisions with another NATS server already running on the
 developer machine.
 
+## Post-Release PyPI Artifact Container
+
+The project also includes a local post-release validation script that builds a
+temporary Oracle Linux 9 slim based container and installs the public PyPI
+artifact inside it:
+
+```bash
+python scripts/run-pypi-release-container-validation.py --version 0.4.1
+```
+
+This container is not a deployment image and is not pushed to a registry. It is
+a maintainer QA tool that proves the published package can be installed and
+used without importing from the local source tree. The script removes the
+temporary image and container by default and writes only a sanitized report
+under `.local/pypi-release-validation/reports/`.
+
+The validation container runs with a read-only root filesystem, all Linux
+capabilities dropped, `no-new-privileges`, a writable `/tmp` tmpfs, and a
+bind-mounted validator script. The `/tmp` tmpfs is executable because the
+script creates a short-lived Python virtual environment there and normal
+Python dependencies may include native extension wheels. It keeps source-code
+mounts out of the Python import path so the check exercises the same artifact
+that external users receive from PyPI.
+
+## Oracle Coherence Community Edition Test Backend
+
+The project also includes a test-only Oracle Coherence Community Edition
+backend for future sink certification:
+
+```bash
+python scripts/run-oracle-coherence-container-smoke.py
+```
+
+The smoke runner builds a small Oracle Linux 9 slim based test image, resolves
+the explicit Oracle Coherence Community Edition runtime modules during build,
+starts a short-lived container with a random loopback port, verifies one full
+fake event JSON object as a key/value entry through the Coherence Python
+client, and removes the container by default.
+
+Install the optional client in an isolated local virtual environment before
+running the live smoke test:
+
+```bash
+python -m venv .local/coherence-smoke-venv
+. .local/coherence-smoke-venv/bin/activate
+python -m pip install coherence-client
+```
+
+See [Oracle Coherence Community Edition Test Backend](oracle-coherence-test-container.md)
+for the base-image choice, security posture, runtime sequence, expected output,
+and limitations.
+
+## Oracle NoSQL Database Test Backend
+
+The project includes a local-only Oracle NoSQL Database KVLite backend for the
+experimental Oracle NoSQL Database sink:
+
+```bash
+python scripts/run-oracle-nosql-container-smoke.py
+```
+
+The smoke runner uses Oracle's documented Community Edition KVLite image from
+GitHub Container Registry, starts a short-lived container with `KV_PROXY_PORT`
+set to `8080`, binds the HTTP proxy to a random `127.0.0.1` port, writes one
+complete fake event JSON object to a key/value-style table, reads it back, and
+removes the container by default.
+
+Run the Oracle NoSQL sink e2e test against a fresh KVLite container:
+
+```bash
+python scripts/run-oracle-nosql-sink-e2e.py
+```
+
+Expected successful output:
+
+```text
+Oracle NoSQL sink container e2e test passed.
+```
+
+Install the optional Oracle NoSQL Python SDK first:
+
+```bash
+python -m pip install -e ".[oracle-nosql]"
+```
+
+The helper intentionally wraps the official image instead of building a custom
+Oracle NoSQL image. It therefore does not make a local claim about the base OS
+layer of the Oracle-provided image. See
+[Oracle NoSQL Database Test Backend](oracle-nosql-test-container.md) for the
+image strategy, local-only security posture, JSON verification, expected
+output, and troubleshooting.
+
+## Full Local Container E2E Suite
+
+Before release, maintainers can run the Oracle key/value sink e2e tests
+together with one explicit gate:
+
+```bash
+python -m pip install -e ".[coherence,oracle-nosql]"
+NATS_SINKS_RUN_CONTAINER_E2E=1 scripts/check-sinks.sh
+```
+
+The gate runs `scripts/run-container-e2e-suite.py`, which invokes the
+container-backed Oracle NoSQL Database sink e2e runner and the
+container-backed Oracle Coherence Community Edition sink e2e runner. Both
+backends use short-lived local containers, loopback endpoints, fake event JSON
+data, bounded readiness waits, and cleanup by default.
+
+Expected successful tail output:
+
+```text
+Oracle NoSQL sink container e2e test passed.
+Oracle Coherence sink e2e test passed.
+Full container-backed sink e2e suite passed.
+```
+
+Keep this as a local release-validation step. It is deliberately not enabled by
+default in GitHub Actions, normal unit tests, or quick smoke checks because it
+requires Docker and optional backend SDKs.
+
 ## Manual Compose Workflow
 
 You can also run the stack manually:

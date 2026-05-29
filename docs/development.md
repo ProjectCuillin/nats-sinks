@@ -148,15 +148,19 @@ writing destination-specific code:
    [Sink Certification](sink-certification.md). The helper assertion should
    prove the sink-specific durable success boundary with a fake client, fake
    connection, temporary directory, or other deterministic test double.
-6. Add public API compatibility tests when the sink exposes a documented import
+6. If the sink can be selected through named routing or active fan-out, add
+   fan-out certification cases from `nats_sinks.testing` to prove target
+   selection, required ACK blocking, optional timeout behavior, and sanitized
+   evidence.
+7. Add public API compatibility tests when the sink exposes a documented import
    path.
-7. Add deterministic fake-client unit tests before any live integration tests.
-8. Add integration or end-to-end scripts behind explicit markers and ignored
+8. Add deterministic fake-client unit tests before any live integration tests.
+9. Add integration or end-to-end scripts behind explicit markers and ignored
    local config directories.
 
 First-party Oracle-family sinks, including proposed OCI Object Storage,
-Oracle MySQL, Oracle Berkeley DB, Oracle NoSQL Database, and OCI Streaming,
-should live in this repository unless governance decides otherwise. External
+Oracle Berkeley DB, and OCI Streaming, should live in this repository unless
+governance decides otherwise. External
 connectors should use the `nats_sinks.sinks` entry-point group and should not be
 enabled in production without an explicit `plugins.allowed_sinks` entry and
 connector certification evidence. A sink can be experimental without

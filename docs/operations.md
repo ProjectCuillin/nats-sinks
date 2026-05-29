@@ -201,6 +201,30 @@ That command reconstructs the original `NatsEnvelope` from encrypted local
 custody and calls the target sink. Spool files are deleted only after the
 target sink returns success and `delete_after_replay` is enabled.
 
+## Durable Replay To Sinks
+
+Replay from JetStream into a sink is a write-capable recovery workflow. Treat
+it differently from ordered inspection. Ordered consumers are useful for
+bounded, read-only stream analysis, but replaying to Oracle Database, Oracle
+MySQL, files, fan-out routes, or future sinks must use durable pull consumers
+with the same commit-then-ACK behavior as the normal runner.
+
+Before replaying retained events, operators should review:
+
+- stream and subject scope;
+- start sequence or start time;
+- maximum message count and batch size;
+- sink idempotency mode and duplicate behavior;
+- DLQ behavior for permanent failures;
+- dry-run evidence and redacted reporting requirements;
+- least-privilege NATS permissions for the replay identity.
+
+The durable replay design is documented in
+[Durable Replay To Sinks](durable-replay-to-sinks.md). It defines the
+non-negotiable replay contract: never ACK before durable sink success, never
+use ordered inspection consumers for production sink writes, and never publish
+payloads or credentials in replay evidence.
+
 ## Logging
 
 The package uses standard Python logging. Payload logging is disabled by
@@ -246,23 +270,39 @@ then inspect that snapshot without connecting to NATS or a destination backend.
 ```bash
 nats-sink-metrics show .local/nats-sinks/metrics.json --format table
 nats-sink-metrics show .local/nats-sinks/metrics.json --metric "event_*" --metric "events_*"
+nats-sink-metrics show .local/nats-sinks/metrics.json --metric "fanout_*"
 nats-sink-metrics get .local/nats-sinks/metrics.json messages_failed_total --default 0
 ```
 
 The full CLI reference, Python hooks, shell examples, exit codes, and snapshot
 schema are documented in [Metrics](metrics.md).
 
-Confirmed JetStream acknowledgement support has been evaluated for a future
-release, but it is not enabled today. If that option is implemented later, it
-will provide stronger evidence that the server accepted the post-commit ACK,
-while still allowing redelivery if confirmation fails after durable sink
-success. See
-[Acknowledgement Confirmation Evaluation](acknowledgement-confirmation.md).
+Future multi-sink fan-out delivery uses dedicated aggregate metrics such as
+`fanout_messages_routed_total`, `fanout_required_child_failure_total`,
+`fanout_optional_child_timeout_total`, and `fanout_ack_gate_wait_seconds`.
+Use these to distinguish "required custody failed, do not ACK" from "optional
+side copy timed out, required ACK gate released". They are counts and timing
+signals only; they do not include subjects, payloads, sink names,
+classification values, labels, or destination identifiers.
 
-JetStream `InProgress` support has also been evaluated for future long-running
-sink writes. It is not enabled today. If implemented, it should be treated as a
-bounded heartbeat around active work, not as a success signal. See
-[InProgress Evaluation](in-progress-evaluation.md).
+Confirmed JetStream acknowledgement support is available through the
+disabled-by-default `delivery.ack_confirmation` option. It provides stronger
+evidence that the server accepted the post-commit ACK, while still allowing
+redelivery if confirmation fails after durable sink or DLQ success. See
+[Acknowledgement Confirmation](acknowledgement-confirmation.md).
+
+JetStream `InProgress` support is available as an optional disabled-by-default
+heartbeat for long-running sink writes. It is treated as a bounded signal around
+active work, not as a success signal. The current guardrail requires either an
+explicit `consumer_management.ack_wait_seconds` value or a `bind_only` durable
+consumer whose effective AckWait can be inspected before fetch. Configured and
+effective BackOff timing are rejected for now, and the heartbeat interval must
+be below 80% of the verified AckWait window. See
+[InProgress Evaluation](in-progress-evaluation.md). Stable
+InProgress metric names and operator guidance are available in the
+[InProgress Metrics Runbook](inprogress-metrics-runbook.md), including shell
+and Prometheus examples that keep payloads, subjects, destinations, and
+classification details out of observability output.
 
 Optional JetStream advisory observation is available for deployments that need
 server-side delivery signals such as maximum-delivery, NAK, terminal
@@ -293,26 +333,30 @@ but the sink runner did not necessarily classify those messages as permanent
 sink failures. That distinction matters: advisories are server-side operational
 signals, while DLQ publication remains a deliberate sink-runner action.
 
-Ordered-consumer support has been evaluated for future inspection and analysis
-tooling. It is not enabled today and should not be used as a replacement for
-durable pull-consumer sink workers. Replay into sinks should use durable
+Ordered-consumer support is available only through the read-only
+`nats-sink inspect-ordered` command for bounded inspection and analysis. The
+command does not construct a sink, does not write to destinations, and does not
+ACK production durable work. Replay into sinks should still use durable
 pull-consumer semantics with commit-then-acknowledge. See
 [Ordered Consumer Evaluation](ordered-consumer-evaluation.md).
 
-Push-consumer support has also been evaluated, but it is not enabled today.
-Future push mode must be explicit, manual-ACK only, bounded by queue and
-pending-byte limits, and tested for graceful shutdown before it can be treated
-as production-ready. Pull consumers remain the operational default because the
-worker controls when and how many messages are fetched. See
-[Push Consumer Evaluation](push-consumer-evaluation.md).
+Push-consumer support is available only as an explicit opt-in mode. It is
+manual-ACK only, bounded by queue and pending-byte limits, and still uses the
+same commit-then-ACK sink pipeline as pull mode. The certification tests cover
+temporary failures without ACK, DLQ-before-ACK permanent failures, callback
+exception containment, flow-control and heartbeat option propagation, queue
+overflow, and shutdown intake behavior. Pull consumers remain the operational
+default because the worker controls when and how many messages are fetched.
+See [Push Consumer Evaluation](push-consumer-evaluation.md).
 
 External metrics sharing should use the policy-controlled observability layer
 rather than ad hoc shell redirection or one-off scripts. The separate
 `nats-sink-observe` CLI can generate a disabled policy from runtime config,
 write a filtered Prometheus textfile for node_exporter, run an optional native
 Prometheus HTTP endpoint, or export approved metrics to an OpenTelemetry
-Collector through OTLP/HTTP JSON, StatsD, syslog, Splunk HEC, or another
-implemented observability connector:
+Collector through OTLP/HTTP JSON, Elastic Observability, Grafana Alloy, Splunk
+HEC, OCI Monitoring, StatsD, Datadog DogStatsD, Amazon CloudWatch, Azure
+Monitor, syslog, or another implemented observability connector:
 
 ```bash
 nats-sink-observe init-prometheus-policy \
@@ -334,6 +378,31 @@ nats-sink-observe otlp-export \
   /etc/nats-sinks/observability.prometheus.json \
   --dry-run
 
+nats-sink-observe oci-monitoring-export \
+  /var/lib/nats-sink/metrics.json \
+  /etc/nats-sinks/observability.prometheus.json \
+  --dry-run
+
+nats-sink-observe statsd-export \
+  /var/lib/nats-sink/metrics.json \
+  /etc/nats-sinks/observability.prometheus.json \
+  --dry-run
+
+nats-sink-observe datadog-export \
+  /var/lib/nats-sink/metrics.json \
+  /etc/nats-sinks/observability.prometheus.json \
+  --dry-run
+
+nats-sink-observe cloudwatch-export \
+  /var/lib/nats-sink/metrics.json \
+  /etc/nats-sinks/observability.prometheus.json \
+  --dry-run
+
+nats-sink-observe azure-monitor-export \
+  /var/lib/nats-sink/metrics.json \
+  /etc/nats-sinks/observability.prometheus.json \
+  --dry-run
+
 nats-sink-observe syslog-export \
   /var/lib/nats-sink/metrics.json \
   /etc/nats-sinks/observability.prometheus.json \
@@ -344,8 +413,17 @@ The observability service should run separately from the sink worker where
 possible. See [Observability](observability.md) for the sharing model, the
 [Prometheus Integration](prometheus.md) observability sub-page for connector
 details, [OpenTelemetry OTLP Integration](otlp.md) for collector export,
+[OCI Monitoring Integration](oci-monitoring.md) for Oracle Cloud Infrastructure
+custom metric export, [StatsD Integration](statsd.md) for generic datagram
+export, [Datadog Integration](datadog.md) for DogStatsD Agent export,
+[Amazon CloudWatch Integration](cloudwatch.md) for CloudWatch custom metrics,
+[Azure Monitor Integration](azure-monitor.md) for Azure Monitor custom metrics,
 [Syslog Bridge](syslog.md) for bounded RFC 5424-style message export, and
 [Running nats-sink As A Service](service-deployment.md) for the service model.
+When subject-family metrics are considered, follow the
+[Subject-Aware Observability Runbook](subject-aware-observability-runbook.md)
+before enabling `subject_metrics`; the default operating posture remains
+aggregate-only metrics.
 
 NATS server monitoring endpoints such as `/jsz` and `/healthz` should be
 monitored through your NATS or platform monitoring stack, or through the
@@ -496,6 +574,56 @@ redeliverable for JetStream consumer policy, including externally configured
 the system aligned with the project rule: commit first, ACK last, design for
 redelivery.
 
+## Route-Match And Fan-Out Operations
+
+The `routing` policy is an operator-reviewed selector for active multi-sink
+fan-out delivery when `sink.type` is `fanout`. Treat it as control-plane
+configuration: validate it with `nats-sink validate`, keep route names stable,
+and use non-secret header hints such as `Nats-Sinks-Route` rather than
+matching on credentials, tokens, or raw payload values.
+
+Route matching is fail-closed by default. `no_match: "reject"` returns an
+explicit permanent sink failure when no route matches in active fan-out.
+`default_route` must name fallback targets explicitly, and `ignore` should be
+reserved for reviewed cases where an unmatched message is expected.
+
+Route targets are required by default. Optional route targets are allowed only
+when the target object sets `required` to `false` and the policy can resolve a
+known sink type through `target_sink_types`. The effective redacted
+configuration will show the optional `minimum_wait_ms` and `timeout_ms` values,
+including defaults. Treat optional timeout or failure log entries as evidence
+that the side copy was not guaranteed for that message.
+
+Fan-out is at-least-once across selected destinations, not an atomic
+distributed transaction. If one required child sink commits and another
+required child sink fails before ACK, the fan-out sink raises a temporary
+failure and JetStream redelivery remains possible. Keep each child sink's
+idempotency strategy enabled and test redelivery before production use.
+
+Before operating a new route policy or fan-out sink in a release candidate,
+run the fan-out certification suite:
+
+```bash
+pytest tests/unit/test_fanout_certification.py tests/unit/test_fanout_sink.py
+```
+
+This suite verifies the route-selection matrix, required ACK blocking,
+optional timeout behavior, no-route policies, CLI validation, and redaction
+behavior without contacting live infrastructure. It complements, but does not
+replace, destination-specific Oracle Database, Oracle MySQL, file, spool, or
+future sink certification. Oracle NoSQL Database follows the same optional
+target model with `oracle_nosql` defaults of `minimum_wait_ms=1000` and
+`timeout_ms=5000`; treat it as an optional read model until the configured
+Oracle NoSQL Database store, proxy, consistency, backup, and restore posture
+has been reviewed for ACK-gated custody.
+
+For mission and defence-style deployments, prefer a small number of readable
+routes based on normalized subject, priority, classification, labels, and
+mission-safe header hints. Avoid putting sensitive operation names, raw
+coordinates, personnel data, or secrets into route names or target names
+because these values may appear in local configuration reviews and issue
+evidence.
+
 ## Priority Lanes
 
 Priority-aware processing lanes can be enabled when mixed-urgency events are
@@ -595,6 +723,47 @@ Optional gzip compression can reduce disk usage for JSON and text-heavy
 streams, but it is not a retention or privacy control. Compressed files still
 need the same access controls, backup policy, and rotation policy as
 uncompressed files.
+
+## Palantir Foundry Sink Operations
+
+The experimental Foundry sink should be introduced through mock certification,
+then through a non-production Foundry environment, before any production
+traffic is routed to it. Keep the service identity least-privileged to the
+specific stream push target and configure `endpoint_allowed_hosts` so
+operators can review the intended destination host without inspecting secret
+material.
+
+Monitor sink failures, redeliveries, DLQ counts, and downstream Foundry
+throttling or authorization events during trials. A 2xx response or explicit
+fake-client acceptance is the only local success boundary; rejected, partial,
+malformed, oversized, timed-out, or ambiguous responses prevent ACK and rely on
+the normal retry, redelivery, or DLQ policy.
+
+The local fake-client tests are suitable for release evidence, but they do not
+prove that a customer Foundry tenant, stream schema, branch, authentication
+setup, or permission model is ready for production.
+
+## Palantir Gotham Sink Operations
+
+The experimental Gotham sink should be introduced through mock certification,
+then through a non-production Gotham environment, before any production
+traffic is routed to it. Keep the service identity least-privileged to the
+specific object type and property mutations required for the durable handoff.
+Configure `endpoint_allowed_hosts` so operators can review the intended
+destination host without inspecting secret material.
+
+Monitor sink failures, redeliveries, DLQ counts, and downstream Gotham
+authorization, throttling, ontology validation, and conflict events during
+trials. A valid object-create response with a `primaryKey`, an explicit
+fake-client acceptance, or an explicitly configured duplicate conflict is the
+only local success boundary. Rejected, partial, malformed, oversized,
+timed-out, or ambiguous responses prevent ACK and rely on the normal retry,
+redelivery, or DLQ policy.
+
+The local fake-client tests are suitable for release evidence, but they do not
+prove that a customer Gotham tenant, RevDB object type, property mapping,
+security marking model, authentication setup, or permission model is ready for
+production.
 
 ## Docker Compose Examples
 

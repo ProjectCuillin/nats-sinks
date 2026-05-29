@@ -16,10 +16,11 @@ from their own projects, extension modules, tests, or operational tooling.
 The most important top-level imports are:
 
 ```python
-from nats_sinks import JetStreamSinkRunner, NatsEnvelope, Sink
+from nats_sinks import FanoutSink, JetStreamSinkRunner, NatsEnvelope, Sink
 from nats_sinks.file import FileSink
 from nats_sinks.mysql import MySqlSink
 from nats_sinks.oracle import OracleSink
+from nats_sinks.s3 import S3Sink
 from nats_sinks.sinks import SinkConnector, SinkRegistry
 ```
 
@@ -45,6 +46,9 @@ The tests also cover:
   `ensure_jetstream_consumer`, `detect_consumer_drift`, and
   `build_consumer_config`, including the richer durable pull-consumer policy
   fields for filter subjects, BackOff, replicas, memory storage, and metadata,
+- push-consumer guardrail helpers such as `PushConsumerConfig`,
+  `ensure_jetstream_push_consumer`, `detect_push_consumer_capabilities`, and
+  `build_push_consumer_config` for explicit manual-ACK push mode,
 - JetStream advisory helpers such as `JetStreamAdvisoryConfig`,
   `JetStreamAdvisoryMonitor`, `parse_jetstream_advisory`, and
   `observe_jetstream_advisory_message`,
@@ -52,6 +56,10 @@ The tests also cover:
 - pre-sink policy configuration and evaluation helpers such as
   `PreSinkPolicyConfig`, `PreSinkPolicyRuleConfig`,
   `PolicyViolationError`, and `evaluate_pre_sink_policy`,
+- routing and ACK-gate helpers such as `RoutingMatchPolicyConfig`,
+  `RouteTargetConfig`, `select_route_targets`, and
+  `wait_for_fanout_ack_gate`,
+- the production fan-out orchestration sink `FanoutSink`,
 - payload normalization helpers,
 - metrics classes and helpers such as `MetricNames`, `InMemoryMetrics`,
   `JsonFileMetrics`, `load_metrics_snapshot`, and
@@ -61,7 +69,11 @@ The tests also cover:
   `OtlpMetricsPolicy`, `ElasticObservabilityPolicy`,
   `GrafanaAlloyObservabilityPolicy`, `SplunkHecObservabilityPolicy`,
   `StatsdObservabilityPolicy`, `SyslogObservabilityPolicy`,
-  `NatsServerMonitoringPolicy`,
+  `NatsServerMonitoringPolicy`, `SubjectAwareObservabilityPolicy`,
+  `SubjectAwareRule`, `SubjectAwareDecision`,
+  `evaluate_subject_observability_policy`,
+  `SubjectFamilyAggregationResult`, `aggregate_subject_family_counter`,
+  `attach_labeled_metric_rows`,
   `collect_nats_monitoring_snapshot`,
   `render_otlp_metrics_json`, `export_otlp_metrics`,
   `render_elastic_otlp_metrics_json`,
@@ -69,14 +81,17 @@ The tests also cover:
   `render_grafana_alloy_otlp_metrics_json`, `export_grafana_alloy_metrics`,
   `render_grafana_alloy_config`, `render_splunk_hec_event_json`,
   `export_splunk_hec_metrics`, `render_statsd_lines`,
-  `export_statsd_metrics`, `render_syslog_messages`,
+  `export_statsd_metrics`, `render_datadog_lines`,
+  `export_datadog_metrics`, `render_syslog_messages`,
   `export_syslog_metrics`, and
   `render_nats_monitoring_prometheus`,
 - sink extension points such as `Sink`, `HealthCheckableSink`,
   `SchemaAwareSink`, `FlushableSink`, `SinkRegistry`, `SinkConnector`,
   `load_entry_point_connectors`, and `normalize_connector_name`,
+- testing helpers such as `run_subject_observability_certification` for
+  reusable subject-aware observability release evidence,
 - production sink package exports for `nats_sinks.file`, `nats_sinks.mysql`,
-  and `nats_sinks.oracle`,
+  `nats_sinks.oracle`, and `nats_sinks.s3`,
 - documented configuration helpers such as `load_config` and
   `redacted_config`,
 - command entry points for `nats-sink`, `nats-sink-metrics`, and
@@ -178,6 +193,24 @@ from nats_sinks.testing import (
 These helpers are release-tested so future sink packages can share the same
 baseline evidence without copying internal test code. See
 [Sink Certification](sink-certification.md).
+
+Subject-aware observability certification helpers are also part of the
+documented testing surface:
+
+```python
+from nats_sinks.testing import run_subject_observability_certification
+
+
+def test_subject_observability_contract() -> None:
+    report = run_subject_observability_certification()
+
+    assert report.raw_subject_leaks == ()
+    assert report.delivery_probe_before == report.delivery_probe_after
+```
+
+These helpers use synthetic subjects and prepared `labeled_metrics` rows to
+prove connector behavior without exposing real subject names. See
+[Subject-Aware Observability Runbook](subject-aware-observability-runbook.md).
 
 ## Breaking Changes
 

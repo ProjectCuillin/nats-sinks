@@ -10,9 +10,304 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ## [Unreleased]
 
+No changes yet.
+
+## [0.4.2] - 2026-05-29
+
 ### Added
 
-- No unreleased changes yet.
+- Added the first-party HTTP sink for issue #17. The new `http` sink type
+  forwards normalized envelopes or payload JSON to one fixed
+  operator-configured endpoint, validates HTTPS and loopback-only local HTTP
+  usage, static and environment-backed headers, response classifications,
+  request and response size limits, bounded retries, and explicit
+  idempotency-key propagation, while documenting timeout ambiguity and the
+  requirement that HTTP endpoints be idempotent under at-least-once redelivery.
+- Added the first-party S3-compatible object sink for issue #39. The new `s3`
+  sink type writes normalized envelopes or payload JSON to deterministic
+  object keys, validates buckets, prefixes, endpoints, credential-source
+  references, object suffixes, metadata, object sizes, and retry budgets,
+  supports `skip_existing`, `replace`, and `fail_existing` duplicate
+  policies, optional metadata sidecars, optional gzip compression, and
+  provider-managed `AES256` server-side encryption requests, keeps boto3
+  behind the optional `s3` extra, includes fake-client unit and certification
+  coverage without network calls, and documents least privilege, privacy, and
+  live-test gating.
+- Added defence and mission-support documentation blueprints for persisting
+  authorized Link 16 / TADIL-J J-series tactical message events and
+  LOGFAS-related mission logistics events into Oracle Database. The pages keep
+  radio, cryptographic, tactical, protected-interface, and classified semantics
+  outside the project scope while documenting commit-then-ACK persistence,
+  idempotent Oracle writes, retry and DLQ handling, security labelling, and
+  isolated defence cloud deployment considerations.
+- Added a clearer local MVP getting-started guide to the README and
+  documentation. The flow uses NATS JetStream and the file sink so developers
+  can install the package, create a local stream, run `nats-sink`, publish one
+  message, and inspect the generated JSON record without Oracle Database,
+  cloud infrastructure, wallets, or secrets.
+- Added explicit headers-only payload-presence handling and confirmed
+  acknowledgement controls for issues #111, #112, #113, #114, #115, and #116.
+  `NatsEnvelope` now distinguishes producer-empty payloads from JetStream
+  headers-only body omission, standard metadata and DLQ records persist the
+  payload-presence state, payload-hash idempotency fallback is rejected when a
+  body was omitted, `delivery.ack_confirmation` can opt into bounded
+  server-confirmed ACKs after durable sink or DLQ success, and
+  `nats-sink-metrics` exposes low-cardinality ACK confirmation counters and
+  timing observations.
+- Added the full local container-backed key/value sink e2e gate for issue
+  #316. Setting `NATS_SINKS_RUN_CONTAINER_E2E=1` now makes
+  `scripts/check-sinks.sh` run the maintained Oracle NoSQL Database sink e2e
+  container helper and the Oracle Coherence Community Edition sink e2e
+  container helper in one opt-in local release-validation pass, while normal
+  checks still avoid Docker and optional backend SDK requirements by default.
+- Added the local Oracle NoSQL Database KVLite test backend for issue #310
+  and the container-backed Oracle NoSQL sink e2e harness that revisits issue
+  #149. The new helpers use Oracle's documented Community Edition image from
+  GitHub Container Registry, bind the HTTP proxy to a random loopback port,
+  verify one complete fake event JSON key/value row, run the Oracle NoSQL sink
+  live-gated integration test against the short-lived backend, clean up by
+  default, and document the local-only non-secure KVLite boundary.
+- Added the Oracle NoSQL Database production-readiness certification package
+  for issue #319. The documentation now separates the real SDK-backed
+  production runtime from connector-wide production-ready status, lists the
+  supported deployment and authentication modes in a certification matrix,
+  documents live Cloud Simulator and Oracle NoSQL Database Cloud Service
+  runbook inputs, and keeps the connector metadata experimental until accepted
+  live evidence exists for production-targeted modes.
+- Added the experimental first-party Oracle NoSQL Database sink for issue
+  #149. The new `oracle_nosql` sink type stores one complete normalized event
+  JSON object in a configured Oracle NoSQL table value field, validates SDK
+  endpoints, deployment/auth modes, table and field identifiers, key prefixes,
+  generated table DDL, duplicate policies, timeouts, and row size limits,
+  derives deterministic keys from approved idempotency metadata, supports
+  `skip_existing`, `replace`, and `fail_existing` duplicate behavior, keeps
+  the Oracle NoSQL Python SDK behind the optional `oracle-nosql` extra,
+  includes fake-client unit and certification tests, and documents live KVLite
+  or Cloud Simulator gating for future container-backed validation.
+
+- Added the deterministic multi-sink routing end-to-end flow for issue #301.
+  The new `scripts/run-multi-sink-routing-e2e.py` runner validates the tracked
+  fan-out config, drives the production `FanoutSink` with local file-backed
+  probe sinks, proves subject, priority, classification, label, header, and
+  static gate matching across Oracle Database, Oracle MySQL Database, File,
+  and Oracle Coherence Community Edition logical targets, exercises one-to-one
+  routing, one-to-many fan-out, no-route handling, optional sink timeouts,
+  required sink failure after partial success, duplicate redelivery safety,
+  and writes sanitized pipe-friendly report output without payloads,
+  credentials, destination details, or local paths.
+- Added the experimental first-party Oracle Coherence Community Edition sink
+  for issue #302. The new `coherence` sink type stores one complete normalized
+  event JSON object as a configured Coherence cache or map value, validates
+  cache names, key prefixes, serializer mode, TTLs, duplicate policy,
+  timeouts, and value limits, derives deterministic keys from approved
+  idempotency metadata, supports `skip_existing`, `replace`, and
+  `fail_existing` duplicate behavior, keeps the Coherence Python client behind
+  the optional `coherence` extra, includes fake-client unit and certification
+  tests plus a local container-backed e2e runner, and documents when Coherence
+  can be ACK-gated custody versus an optional fan-out read-model target.
+- Added a local Oracle Coherence Community Edition test backend for issue
+  #303. The new Oracle Linux 9 slim based Dockerfile and smoke runner resolve
+  explicit Coherence CE runtime modules during build, start a short-lived
+  backend with random local naming and loopback port selection, verify one
+  complete fake event JSON object as a key/value entry through the optional
+  Coherence Python client, clean up by default, and document the backend as
+  test infrastructure for future sink and routing work.
+- Added the experimental Palantir Gotham RevDB object sink for issue #151. The
+  new `gotham` sink type targets Gotham object creation through a narrow HTTP
+  client boundary, validates endpoint allow-lists, environment-backed bearer
+  token or OAuth2 client-credentials auth, object type names, property type
+  mappings, security markings, batch and response limits, maps normalized
+  payload and selected metadata into Gotham object-create requests, includes
+  fake-client contract tests and sink certification, and documents that mock
+  certification is not live Gotham certification.
+- Added the experimental Palantir Foundry Streams sink for issue #150. The new
+  `foundry` sink type targets push-based stream ingestion through a narrow HTTP
+  client boundary, validates endpoint allow-lists, environment-backed bearer
+  token or OAuth2 client-credentials auth, record field names, batch and
+  response limits, maps normalized payload and metadata into Foundry records,
+  includes fake-client contract tests and sink certification, and documents
+  that mock certification is not live Foundry certification.
+- Added the disabled-by-default Amazon CloudWatch observability connector for
+  issue #102. The new `cloudwatch` policy section exports only approved local
+  metrics snapshot rows through bounded `PutMetricData` request shapes, keeps
+  boto3 behind the optional `cloudwatch` extra, supports dry-run JSON output
+  without AWS credentials, validates namespace, region, dimensions, request
+  size, retries, and stale-snapshot behavior, suppresses prepared labels as
+  dimensions unless explicitly enabled, and documents IAM, cost, throttling,
+  service separation, and testing guidance.
+- Added the disabled-by-default Azure Monitor observability connector for
+  issue #103. The new `azure_monitor` policy section exports only approved
+  local metrics snapshot rows through bounded Azure Monitor custom metrics
+  REST request shapes, uses an environment-backed Microsoft Entra bearer token
+  without adding an Azure SDK dependency, supports dry-run JSON output without
+  tokens or Azure resource IDs, validates resource IDs, locations, namespaces,
+  dimensions, request size, retries, and stale-snapshot behavior, suppresses
+  prepared labels as dimensions unless explicitly enabled, and documents
+  identity, resource scope, throttling, service separation, and testing
+  guidance.
+- Added the disabled-by-default Datadog observability connector for issue #104.
+  The new `datadog` policy section exports approved local metrics snapshots as
+  bounded DogStatsD datagrams to a local or approved Datadog Agent listener,
+  supports dry-run output without Datadog API credentials, validates transport,
+  metric prefixes, low-cardinality static tags, datagram sizes, retries, and
+  stale-snapshot behavior, suppresses prepared metric labels as tags unless
+  explicitly enabled, and documents Agent operation, tag confidentiality,
+  cardinality, and testing guidance.
+- Added effective consumer-policy guardrails for optional JetStream
+  `InProgress` heartbeats for issue #117. The runner now allows `bind_only`
+  deployments to verify AckWait from the existing durable consumer before
+  fetching, re-checks created or reconciled consumers when progress heartbeats
+  are enabled, rejects effective BackOff policies until BackOff-aware timing is
+  supported, and fails closed when durable consumer timing cannot be verified.
+- Added optional JetStream `InProgress` heartbeats for issue #118. The new
+  `delivery.in_progress` configuration is disabled by default, starts only
+  while `sink.write_batch(...)` is active, stops before final ACK, NAK, Term,
+  retry, DLQ, cancellation, or shutdown completion, and fails closed unless
+  safe effective AckWait timing is verified with a heartbeat interval below 80%
+  of AckWait. BackOff-based consumer timing remains rejected until explicit
+  BackOff-aware heartbeat support is implemented.
+- Added stable InProgress observability metrics and an operator runbook for
+  issue #119. The new metric contract covers progress attempts, successful
+  progress signals, failed progress signals, maximum-heartbeat exits, active
+  heartbeat batches, and heartbeat timing, with `nats-sink-metrics` shell,
+  table, and Prometheus rendering guidance that keeps payloads, subjects,
+  destinations, and classification details out of metric output.
+- Added durable replay-to-sinks guidance and tooling design for issue #120.
+  The new documentation separates ordered inspection from write-capable replay,
+  requires durable pull consumers and commit-then-ACK behavior for replay into
+  sinks, documents start sequence, start time, subject scope, maximum message,
+  dry-run, redacted report, and idempotency review boundaries, and adds a
+  documentation guardrail test for the replay contract.
+- Added the read-only ordered-consumer inspection CLI for issue #122. The new
+  `nats-sink inspect-ordered` command uses the installed `nats-py`
+  ordered-consumer API when available, fails closed when client support is
+  missing, never builds or writes a sink, redacts payloads and sensitive
+  headers by default, validates message, payload-byte, pending, timeout, and
+  JSONL output-path limits, and documents that ordered inspection is not
+  durable sink replay.
+- Added an explicit ordered-consumer client compatibility result for issue
+  #121. The inspection path now names supported, unsupported, non-callable,
+  partial, and ambiguous NATS client capability states through sanitized
+  fail-closed reasons while leaving the production durable pull runner
+  unchanged.
+- Added push-consumer guardrails and opt-in runner support for issues #123 and
+  #125. The new `push_consumer` configuration is disabled by default, requires
+  manual ACK, validates deliver subjects, deliver groups, pending message and
+  byte limits, rejects pull-only `max_waiting` settings in push mode, detects
+  required `nats-py` push-subscribe capabilities, and routes accepted callback
+  messages through the existing commit-then-ACK batch pipeline with bounded
+  queue overflow handling.
+- Added push-consumer delivery-contract certification tests for issue #124.
+  The focused suite proves ACK-after-commit ordering, no ACK on temporary sink
+  failure, DLQ publication before original ACK on permanent failure, callback
+  exception containment, flow-control and idle-heartbeat option propagation,
+  queue overflow handling, cooperative shutdown behavior, and an environment-
+  gated live NATS integration path for disposable local servers.
+- Added the generic route-match policy selector for issue #138. The new
+  disabled-by-default `routing` configuration can match normalized
+  `NatsEnvelope` subject, priority, classification, labels, and approved
+  non-secret headers, validates NATO SECRET and NATO UNCLASS examples through
+  `nats-sink validate`, and exposes public selector helpers for active
+  fan-out delivery.
+- Added optional ACK-gating policy primitives for issue #137. Route targets
+  are required by default, optional target objects can define bounded
+  `minimum_wait_ms` and `timeout_ms` behavior, per-sink-type defaults are
+  applied and visible in redacted effective config, and the new core ACK-gate
+  helper records optional success, failure, or timeout without weakening the
+  commit-then-ACK rule for required targets.
+- Added named multi-sink instance configuration for issue #136. Config files
+  can now declare a top-level `sinks` registry with multiple named Oracle
+  Database, Oracle MySQL, file, or spool instances while preserving the
+  existing single active `sink` runtime path. The CLI validates every named
+  sink, reports route-to-target references, redacts secrets without hiding
+  route target names such as `oracle_secret`, and can health-check one named
+  sink with `--sink-name` or all named sinks with `--all-named-sinks`.
+- Added routing and fan-out certification tests for issue #135. The new
+  `nats_sinks.testing` helpers use synthetic envelopes and in-memory fan-out
+  operation plans to certify one-to-one routing, one-to-many target selection,
+  required ACK blocking, optional timeout behavior, no-route handling, CLI
+  validation, and redaction for fan-out-capable sinks.
+- Added fan-out observability metrics and sanitized logging helpers for issue
+  #134. The new aggregate metrics cover route matches, routed and no-route
+  messages, selected child sink counts, required child success or failure,
+  optional child success, failure, or timeout, ACK eligibility, ACK blocking,
+  ACK-gate wait time, and fan-out batch duration, with `nats-sink-metrics`
+  CLI coverage and documentation that keeps subjects, sink names, labels,
+  classifications, payloads, and destination details out of metrics by
+  default.
+- Added the production fan-out sink orchestration layer for issue #133. The
+  new active `sink.type: "fanout"` mode binds route-selected logical targets
+  to named child sinks, dispatches each normalized envelope to one or more
+  required or optional destinations, blocks runner ACK when any required child
+  sink fails after partial success, supports bounded optional side-copy waits,
+  validates the compact inline NATO SECRET and NATO UNCLASS example through
+  `nats-sink validate`, and documents that fan-out is at-least-once and
+  idempotent rather than an atomic distributed transaction across
+  destinations.
+- Added the subject-aware observability policy model for issue #128. The new
+  disabled-by-default `subject_metrics` policy block uses default-deny
+  subject-family rules, validates stable operator labels, caps subject-family
+  cardinality, defines deterministic overflow behavior, supports label,
+  redacted, hash, and explicitly reviewed raw display modes, and provides a
+  fail-closed evaluator for future connectors without changing current
+  aggregate metric export or delivery behavior.
+- Added bounded subject-family metric aggregation for issue #126. The new
+  prepared `labeled_metrics` snapshot rows map approved subjects to reviewed
+  `subject_family` labels, keep aggregate counters unchanged, enforce
+  deterministic overflow handling, and let Prometheus, OTLP-backed profiles,
+  Splunk HEC, StatsD, and syslog render only low-cardinality approved family
+  labels instead of raw subjects.
+- Added subject-aware observability certification tests and runbook guidance
+  for issue #127. The new reusable `nats_sinks.testing` helpers use synthetic
+  subjects to prove disabled-by-default behavior, allow and deny handling,
+  malformed policy rejection, cardinality caps, sanitized connector and
+  `nats-sink-metrics` output, and delivery non-interference before
+  subject-family metrics are enabled.
+- Added the OCI Monitoring observability connector for issue #107. The new
+  optional `nats-sinks[oci]` extra keeps the OCI SDK out of the base install,
+  adds disabled-by-default `oci_monitoring` policy controls, renders sanitized
+  `PostMetricData` dry-run requests, supports instance principals, resource
+  principals, or protected OCI SDK config files, enforces bounded dimensions,
+  retries, stale-snapshot checks, and request sizes, and documents OCI-native
+  custom metric export as an Observability sub-page.
+- Added a local-only post-release PyPI artifact validation harness for issue
+  #252. The script builds a short-lived Oracle Linux 9 slim validation
+  container, installs `nats-sinks` from PyPI instead of the local checkout,
+  verifies CLI/import/config/FileSink/metrics behavior, supports explicit
+  versions and optional extras, and writes sanitized local reports under
+  `.local/pypi-release-validation/`.
+
+### Fixed
+
+- Fixed release-validation CI lint failure issue #331 by making the local
+  container e2e subprocess suppressions compatible across local and hosted Ruff
+  versions and moving multi-sink routing directory creation out of async code.
+- Fixed release GitHub authentication helper issue #328 so
+  `scripts/check-gh-auth.sh --check-only` validates authenticated GitHub API
+  access without printing token values instead of relying on a quiet
+  `gh auth status` path that could produce a local false negative.
+- Fixed Oracle NoSQL Database cloud SDK handle construction for issue #320 by
+  applying configured `sink.compartment_id` through the SDK handle
+  configuration when supported. A focused regression now proves namespace and
+  compartment defaults are both passed without making network calls.
+- Fixed the issue #317 deterministic test-loader regression found while adding
+  the full container-backed e2e gate. The new test module now registers the
+  dynamically loaded script module before executing it so dataclass processing
+  succeeds without Docker or optional backend SDKs.
+- Fixed Oracle NoSQL Database KVLite test backend readiness for issue #313 by
+  waiting for SDK-level table/write/read readiness after the proxy TCP port
+  opens. This prevents the local smoke and sink e2e helpers from racing a
+  proxy socket that accepts connections before Oracle NoSQL SDK requests are
+  ready.
+- Fixed GitHub CI compatibility with Ruff `PLW0108` by removing an unnecessary
+  connector entry-point sort lambda while preserving deterministic connector
+  loading behavior.
+
+### Removed
+
+- Removed the standalone sink candidate research page from the public
+  documentation navigation so sink planning stays in managed backlog issues and
+  roadmap summaries.
 
 ## [0.4.1] - 2026-05-25
 
@@ -290,11 +585,9 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   custody, record-level AES encryption, deterministic idempotency-key files,
   priority-aware replay, the `nats-sink replay-spool` command, unit coverage,
   example configuration, and operator documentation.
-- Added a GoldenGate-inspired sink candidate research page and new managed
-  backlog items for missing Oracle-family, cloud, streaming, lakehouse,
-  database, messaging, and compatibility-profile connector candidates, using
-  Oracle GoldenGate public connectivity documentation as a planning reference
-  without claiming GoldenGate compatibility.
+- Added managed backlog items for missing Oracle-family, cloud, streaming,
+  lakehouse, database, messaging, and compatibility-profile connector
+  candidates.
 
 ### Changed
 

@@ -3,7 +3,7 @@
   "title": "[Feature]: Add an HTTP sink with idempotency guidance",
   "area": "Future sink",
   "priority": "P3 - backlog candidate",
-  "target_release": "unscheduled",
+  "target_release": "v0.4.2",
   "labels": ["sink-new", "sink-http"],
   "problem": "Some users need to forward JetStream events to internal services through HTTP. HTTP destinations vary widely in reliability and idempotency behavior, so adding an HTTP sink without strong rules could create silent loss, unsafe retries, or duplicate business effects.",
   "proposal": "Design and implement an optional HTTP sink that sends normalized envelopes or payload envelopes to configured destinations with bounded timeouts, bounded retries, explicit idempotency-key support, safe header configuration, and clear warnings for endpoints that cannot provide idempotent semantics. The sink should be disabled unless configured and should never ACK messages itself.",

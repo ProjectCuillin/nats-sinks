@@ -1,0 +1,27 @@
+{
+  "id": "ruff-plw0108-connector-entrypoint-sort",
+  "title": "[Bug]: GitHub CI fails on connector entry-point sort lambda",
+  "area": "Testing",
+  "severity": "low",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.2",
+  "labels": ["testing", "release"],
+  "summary": "The GitHub CI run on the v0.4.1 main merge failed because the hosted runner enabled Ruff rule PLW0108 and flagged an unnecessary lambda in the sink connector entry-point sort key.",
+  "observed": "The release workflow for v0.4.1 passed, but the separate main-branch CI run failed during `ruff check .` with `PLW0108 Lambda may be unnecessary` in `src/nats_sinks/sinks/connectors.py`.",
+  "expected": "The connector registry code should pass Ruff on GitHub-hosted runners and locally, even when Ruff enables PLW0108. The sort key should remain deterministic and behavior-preserving.",
+  "reproduction": "Run `ruff check src/nats_sinks/sinks/connectors.py --select PLW0108` against the released v0.4.1 main commit.",
+  "failing_test": "Use the GitHub CI lint result and a focused Ruff command as the failing regression signal. The standard CI lint step already exercises this path.",
+  "impact": "Low runtime severity. The issue does not affect NATS delivery, ACK order, sink persistence, encryption, idempotency, or payload handling. It does create a failed main CI signal immediately after release, which can confuse release health checks.",
+  "delivery_semantics": "No delivery semantics are affected. The fix must not change connector loading, connector allow-listing, entry-point validation, NATS behavior, Oracle behavior, Oracle MySQL behavior, file sink behavior, or ACK timing.",
+  "security": "The fix must preserve the existing fail-closed external connector allow-list and must not load unapproved entry points. No secrets, endpoints, credentials, payloads, or environment-specific values are required for reproduction or verification.",
+  "acceptance": [
+    "The connector entry-point sort remains deterministic.",
+    "Ruff PLW0108 no longer flags `src/nats_sinks/sinks/connectors.py`.",
+    "Focused connector unit tests pass.",
+    "The standard local release check passes before the fix is marked completed.",
+    "CHANGELOG.md records the CI lint compatibility fix."
+  ],
+  "tests": "Run `ruff check src/nats_sinks/sinks/connectors.py --select PLW0108`, focused connector unit tests, bug-report validation, and `scripts/check.sh`.",
+  "documentation": "Update CHANGELOG.md under Unreleased. No user-facing runtime documentation is needed because behavior does not change.",
+  "closeout": "Close after the release containing the fix is published. Include the release tag, focused Ruff evidence, full check evidence, and confirmation that connector loading behavior did not change."
+}

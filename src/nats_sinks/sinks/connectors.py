@@ -161,7 +161,7 @@ def load_entry_point_connectors(
     seen: set[str] = set()
     for entry_point in sorted(
         _sink_entry_points(entry_point_group, provider=entry_points_provider),
-        key=lambda item: _entry_point_name(item),
+        key=_entry_point_name,
     ):
         entry_name = normalize_connector_name(_entry_point_name(entry_point))
         if entry_name not in allowed:

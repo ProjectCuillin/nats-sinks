@@ -54,12 +54,43 @@ users actually install from PyPI. This is a separate QA failsafe: it catches
 packaging, dependency, metadata, and publication issues that can only be seen
 after the package is available from the public registry.
 
-The planned local release strategy is to run a short-lived container after
-publication that installs `nats-sinks` from PyPI, not from the local checkout,
-and then performs artifact-level smoke checks. The check should cover CLI
+Run the maintained local container check after publication:
+
+```bash
+python scripts/run-pypi-release-container-validation.py --version 0.4.1
+```
+
+To validate the newest public package without naming a version:
+
+```bash
+python scripts/run-pypi-release-container-validation.py --version latest
+```
+
+To include optional extras that can be checked without private infrastructure:
+
+```bash
+python scripts/run-pypi-release-container-validation.py \
+  --version 0.4.1 \
+  --extras crypto,mysql,oci
+```
+
+The script builds a temporary validation image from
+`container-registry.oracle.com/os/oraclelinux:9-slim`, installs `nats-sinks`
+from PyPI inside that container, verifies that `nats_sinks` imports from the
+container virtual environment, and runs artifact-level smoke checks for CLI
 startup, version reporting, public Python imports, configuration validation,
-file sink smoke behavior, metrics CLI behavior, and optional extras where they
-can be verified without private infrastructure.
+FileSink behavior, metrics snapshot inspection, and the observability CLI.
+Generated reports are written under the ignored
+`.local/pypi-release-validation/reports/` directory.
+
+Expected sanitized output:
+
+```text
+PyPI artifact validation status: passed
+Requested version: 0.4.1
+Installed version: 0.4.1
+Report: .local/pypi-release-validation/reports/nats-sinks-pypi-artifact-0_4_1-20260525T120000Z-abc123.json
+```
 
 This post-release check is intentionally local-only. Do not add it to GitHub
 Actions by default, because it validates public registry state after
@@ -67,22 +98,6 @@ publication and should run under maintainer control. If the check finds a
 defect, create a sanitized GitHub bug issue first, attach the minimal
 reproduction and local evidence, and then fix the issue through the normal
 test-driven bug workflow.
-
-Until the dedicated harness exists, maintainers can perform a manual version of
-the check in a clean container:
-
-```bash
-docker run --rm -it container-registry.oracle.com/os/oraclelinux:9-slim bash -lc '\
-  microdnf install -y --setopt=install_weak_deps=0 python3.11 python3.11-pip && \
-  python3.11 -m pip install --no-cache-dir nats-sinks && \
-  nats-sink --help >/tmp/nats-sink-help && \
-  python3.11 -c "from nats_sinks import JetStreamSinkRunner; from nats_sinks.file import FileSink; print(\"ok\")"'
-```
-
-The dedicated backlog item for the production-ready harness requires an Oracle
-Linux based test container, source-tree isolation checks, sanitized local
-reports, explicit-version support, cleanup-by-default behavior, and bug-report
-creation for every finding.
 
 ## Release Flow
 
@@ -171,8 +186,9 @@ Before pushing a release tag, run:
 scripts/check-gh-auth.sh
 ```
 
-The helper checks `gh auth status` for `github.com`. If authentication is not
-valid and an interactive terminal is available, it asks whether it should start
+The helper performs a small authenticated GitHub API probe for `github.com`
+without printing response bodies or token values. If authentication is not valid
+and an interactive terminal is available, it asks whether it should start
 browser-based login with:
 
 ```bash
@@ -213,6 +229,9 @@ relying on the stored GitHub CLI login.
 - Confirm `python scripts/check-markdown-links.py`.
 - Confirm `scripts/check-docs.sh`.
 - Confirm `scripts/check-sinks.sh`.
+- Confirm `NATS_SINKS_RUN_CONTAINER_E2E=1 scripts/check-sinks.sh` when Docker
+  and the optional Oracle NoSQL Database and Oracle Coherence clients are
+  available locally; otherwise document the skip in `docs/test-report.md`.
 - Confirm `pytest`.
 - Confirm `bandit -q -r src`.
 - Confirm `python scripts/update-dependency-manifests.py --check`.
@@ -232,6 +251,9 @@ relying on the stored GitHub CLI login.
 - Create and push an annotated `v*` tag from `main`.
 - Confirm the GitHub Release exists and includes the built wheel, source
   distribution, `SHA256SUMS`, and `dist/sbom/*.cyclonedx.*` assets.
+- Run the local PyPI artifact validation container against the published
+  version:
+  `python scripts/run-pypi-release-container-validation.py --version X.Y.Z`.
 - Confirm release-labeled backlog issues were closed only after the GitHub
   Release exists and only after acceptance criteria plus evidence comments were
   present.

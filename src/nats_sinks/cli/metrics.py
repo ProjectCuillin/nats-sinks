@@ -83,15 +83,41 @@ def _snapshot_age_seconds(snapshot: dict[str, object]) -> float:
 
 
 def _sort_by_name(row: MetricRow) -> str:
-    return row.name
+    return f"{row.name} {row.labels}"
 
 
 def _sort_by_kind(row: MetricRow) -> tuple[str, str]:
-    return (row.kind, row.name)
+    return (row.kind, _sort_by_name(row))
 
 
 def _sort_by_value(row: MetricRow) -> tuple[float, str]:
-    return (row.value, row.name)
+    return (row.value, _sort_by_name(row))
+
+
+def _render_labels(row: MetricRow) -> str:
+    """Return a compact stable label display for CLI output."""
+
+    if not row.labels:
+        return "-"
+    return ",".join(f"{key}={value}" for key, value in sorted(row.labels.items()))
+
+
+def _escape_prometheus_label_value(value: str) -> str:
+    """Escape a Prometheus label value."""
+
+    return value.replace("\\", "\\\\").replace("\n", "\\n").replace('"', '\\"')
+
+
+def _prometheus_label_suffix(row: MetricRow) -> str:
+    """Return the optional Prometheus label suffix for prepared labeled rows."""
+
+    if not row.labels:
+        return ""
+    rendered = ",".join(
+        f'{key}="{_escape_prometheus_label_value(value)}"'
+        for key, value in sorted(row.labels.items())
+    )
+    return f"{{{rendered}}}"
 
 
 def _check_staleness(
@@ -148,6 +174,7 @@ def _rows_as_json(snapshot: dict[str, object], rows: list[MetricRow]) -> str:
                     "name": row.name,
                     "value": row.value,
                     "stat": row.stat,
+                    "labels": row.labels,
                     "description": row.description,
                 }
                 for row in rows
@@ -160,16 +187,19 @@ def _rows_as_json(snapshot: dict[str, object], rows: list[MetricRow]) -> str:
 
 def _render_table(rows: list[MetricRow]) -> str:
     if not rows:
-        return "KIND  METRIC  VALUE  DESCRIPTION"
+        return "KIND  METRIC  LABELS  VALUE  DESCRIPTION"
     kind_width = max(len("KIND"), *(len(row.kind) for row in rows))
     name_width = max(len("METRIC"), *(len(row.name) for row in rows))
+    labels_width = max(len("LABELS"), *(len(_render_labels(row)) for row in rows))
     value_width = max(len("VALUE"), *(len(_format_number(row.value)) for row in rows))
     lines = [
-        f"{'KIND':<{kind_width}}  {'METRIC':<{name_width}}  {'VALUE':>{value_width}}  DESCRIPTION"
+        f"{'KIND':<{kind_width}}  {'METRIC':<{name_width}}  "
+        f"{'LABELS':<{labels_width}}  {'VALUE':>{value_width}}  DESCRIPTION"
     ]
     for row in rows:
         lines.append(
             f"{row.kind:<{kind_width}}  {row.name:<{name_width}}  "
+            f"{_render_labels(row):<{labels_width}}  "
             f"{_format_number(row.value):>{value_width}}  {row.description}"
         )
     return "\n".join(lines)
@@ -192,14 +222,16 @@ def _render_prometheus(
                 lines.append(f"# HELP {metric_name} {description}")
                 lines.append(f"# TYPE {metric_name} summary")
                 emitted.add(metric_name)
-            lines.append(f"{metric_name}_{stat} {_format_number(row.value)}")
+            lines.append(
+                f"{metric_name}_{stat}{_prometheus_label_suffix(row)} {_format_number(row.value)}"
+            )
             continue
         metric_name = qualified_metric_name(row.name, namespace=namespace)
         if metric_name not in emitted:
             lines.append(f"# HELP {metric_name} {row.description}")
             lines.append(f"# TYPE {metric_name} {row.kind}")
             emitted.add(metric_name)
-        lines.append(f"{metric_name} {_format_number(row.value)}")
+        lines.append(f"{metric_name}{_prometheus_label_suffix(row)} {_format_number(row.value)}")
     return "\n".join(lines)
 
 
@@ -220,6 +252,7 @@ def _render_rows(
                     "name": row.name,
                     "value": row.value,
                     "stat": row.stat,
+                    "labels": row.labels,
                     "description": row.description,
                 },
                 sort_keys=True,

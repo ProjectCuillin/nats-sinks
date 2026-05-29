@@ -1,0 +1,29 @@
+{
+  "id": "subject-observability-certification-policy-mypy",
+  "title": "[Bug]: Subject-aware observability certification helper fails mypy policy construction",
+  "area": "Testing",
+  "severity": "low",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.2",
+  "labels": ["observability", "testing"],
+  "summary": "The new subject-aware observability certification helper initially constructed ObservabilityPolicy with plain dictionaries in a way that passed runtime validation but failed strict static type checking.",
+  "observed": "The full local check stopped during mypy validation for the subject-aware observability certification helper.",
+  "expected": "The certification helper should use typed policy construction that passes mypy while preserving runtime validation and the public certification behavior.",
+  "reproduction": "Run scripts/check.sh on the issue branch after adding the subject-aware observability certification helper.",
+  "failing_test": "scripts/check.sh mypy phase",
+  "impact": "The issue blocks release validation for the new certification helper but does not affect released package behavior.",
+  "delivery_semantics": "The fix is limited to test-helper policy construction and must not change ACK ordering, retries, DLQ publication, sink writes, or idempotency behavior.",
+  "security": "The fix keeps the subject-aware observability certification path strict and typed without adding real subjects, endpoints, credentials, payloads, or operational identifiers to test evidence.",
+  "acceptance": [
+    "The subject-aware observability certification helper passes mypy.",
+    "The focused subject-aware observability certification tests continue to pass.",
+    "The full scripts/check.sh validation passes.",
+    "No delivery behavior changes are introduced."
+  ],
+  "tests": "Run the focused subject-aware observability certification suite, the observability regression suite, and scripts/check.sh.",
+  "documentation": "No user-facing documentation change is required beyond the issue #127 certification documentation already being added.",
+  "closeout": "Close only after the release containing the fix is published with sanitized test evidence.",
+  "relationships": {
+    "related": ["#127"]
+  }
+}

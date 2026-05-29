@@ -17,10 +17,11 @@ core config, list metric names and subject hints, validate policy, and render
 policy-filtered Prometheus textfile output or run the optional native
 Prometheus HTTP endpoint. It can also export approved metrics to an
 OpenTelemetry Collector through OTLP/HTTP JSON, including the Elastic
-Observability and Grafana Alloy profiles, and approved aggregate metric events
-through Splunk HEC. It can also send approved best-effort datagrams to
-StatsD-compatible aggregators and RFC 5424-style messages to syslog
-pipelines.
+Observability and Grafana Alloy profiles, approved aggregate metric events
+through Splunk HEC, approved custom metrics to OCI Monitoring, Amazon
+CloudWatch, and Azure Monitor, approved best-effort datagrams to
+StatsD-compatible aggregators or a Datadog Agent, and RFC 5424-style messages
+to syslog pipelines.
 
 For readers new to this project, the CLI does not implement a separate
 delivery engine. It validates configuration, creates the selected sink, builds
@@ -37,6 +38,7 @@ nats-sink run config.json
 nats-sink validate config.json
 nats-sink show-effective-config config.json
 nats-sink test-sink config.json
+nats-sink inspect-ordered config.json --max-messages 5 --format jsonl
 nats-sink stream-plan config.json
 nats-sink query-lineage config.json --field mission_id --value MISSION-ALPHA --dry-run
 nats-sink replay-spool spool-config.json target-config.json --dry-run
@@ -48,7 +50,11 @@ nats-sink-observe elastic-export .local/nats-sinks/metrics.json observability.pr
 nats-sink-observe grafana-alloy-config observability.prometheus.json
 nats-sink-observe grafana-alloy-export .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
 nats-sink-observe splunk-hec-export .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
+nats-sink-observe oci-monitoring-export .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
 nats-sink-observe statsd-export .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
+nats-sink-observe datadog-export .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
+nats-sink-observe cloudwatch-export .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
+nats-sink-observe azure-monitor-export .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
 nats-sink-observe syslog-export .local/nats-sinks/metrics.json observability.prometheus.json --dry-run
 nats-sink-observe nats-monitoring-poll observability.prometheus.json --dry-run
 ```
@@ -63,6 +69,28 @@ to connect to NATS or the configured destination.
 
 ```bash
 nats-sink validate examples/file-basic/config.json
+```
+
+When the configuration contains a top-level `sinks` registry, `validate` also
+checks every named sink and reports which route names reference which target
+names. The report is intentionally safe to paste into tickets or release
+evidence because it includes target names and sink types, not passwords,
+connection credentials, or payloads.
+
+```bash
+nats-sink validate examples/named-multi-sink/config.json
+```
+
+Example output:
+
+```text
+Configuration is valid.
+Active sink: file
+ACK policy: commit-then-acknowledge
+Named sinks: file_audit (file), oracle_secret (oracle), oracle_unclass (oracle)
+Route target references:
+  - nato_secret_sensor_audit: oracle_secret (required), file_audit (optional, minimum_wait_ms=250, timeout_ms=1000)
+  - nato_unclass_sensor_audit: oracle_unclass (required)
 ```
 
 ### `nats-sink show-effective-config`
@@ -87,6 +115,80 @@ Starts the configured sink and runs a health check when the sink supports it. Th
 ```bash
 nats-sink test-sink examples/file-basic/config.json
 ```
+
+Named sink health checks use the same sink-specific validation and startup path
+as the active sink:
+
+```bash
+nats-sink test-sink examples/named-multi-sink/config.json --sink-name file_audit
+nats-sink test-sink examples/named-multi-sink/config.json --all-named-sinks
+```
+
+`--sink-name` is useful when the configuration contains Oracle targets and file
+targets but an operator only wants to check the local file audit path. Use
+`--all-named-sinks` only when opening every configured destination is expected.
+
+### `nats-sink inspect-ordered`
+
+Inspects JetStream messages through a NATS ordered consumer when the installed
+NATS Python client exposes ordered-consumer support. This is an inspection
+tool, not a sink worker: it does not build a sink, does not write to Oracle
+Database, Oracle MySQL, file, spool, fan-out, or plugin destinations, and does
+not ACK production durable work.
+
+Use it for bounded local troubleshooting when an operator needs to inspect a
+small in-order view of a subject without advancing the configured durable sink
+consumer:
+
+```bash
+nats-sink inspect-ordered examples/file-basic/config.json --max-messages 5
+```
+
+Example text output:
+
+```text
+Ordered inspection result
+inspection_only=true
+messages_seen=1
+payload_bytes_seen=24
+stopped_reason=timeout
+record stream_sequence=7 consumer_sequence=1 subject='orders.created' priority=null classification=null labels='' payload_bytes=24 payload_redacted=true
+```
+
+Payloads are redacted by default. For local troubleshooting files, write
+sanitized JSONL under an approved output root:
+
+```bash
+nats-sink inspect-ordered examples/file-basic/config.json \
+  --max-messages 5 \
+  --max-payload-bytes 1048576 \
+  --max-headers 32 \
+  --max-header-value-bytes 256 \
+  --output-root .local/nats-sinks/inspection \
+  --output orders.jsonl
+```
+
+Example JSONL record:
+
+```json
+{"inspection_only":true,"subject":"orders.created","stream":"ORDERS","consumer":"_ordered","stream_sequence":7,"consumer_sequence":1,"timestamp":null,"received_at":"2026-05-26T10:00:00Z","priority":null,"classification":null,"labels":[],"headers":{"Authorization":"<redacted>","X-Trace":"visible"},"payload":{"redacted":true,"bytes":24,"sha256":"..."}}
+```
+
+Use `--format jsonl` when shell tooling should consume the records from
+standard output. Use `--include-payload` only in controlled local environments
+where the payload is approved for display; binary payloads are encoded as
+Base64, and text payloads are emitted as UTF-8. The command enforces hard
+limits for message count, payload bytes, pending messages, pending bytes,
+timeouts, header count, header value length, and JSONL output paths before or
+during inspection. If ordered-consumer support is not available in the active
+client, the command exits with a configuration error rather than falling back
+to durable pull or ordinary push delivery. The compatibility check uses the
+public `JetStreamContext.subscribe` API and reports only a short sanitized
+reason, such as a missing `ordered_consumer` option or an unreadable client
+signature.
+
+See [Ordered Consumer Evaluation](ordered-consumer-evaluation.md) for the
+design decision and replay boundaries.
 
 ### `nats-sink stream-plan`
 
@@ -347,6 +449,7 @@ elastic_enabled=false
 grafana_alloy_enabled=false
 splunk_hec_enabled=false
 statsd_enabled=false
+cloudwatch_enabled=false
 syslog_enabled=false
 nats_server_monitoring_enabled=false
 nats_server_monitoring_prometheus_enabled=false
@@ -633,6 +736,41 @@ ACK messages, write payloads to Splunk, or expose the HEC endpoint or token in
 result summaries. Full connector guidance is documented in
 [Splunk HEC Integration](splunk-hec.md).
 
+### `nats-sink-observe oci-monitoring-export`
+
+Exports policy-approved aggregate metrics to OCI Monitoring as custom metrics.
+The command is disabled unless both the top-level observability policy and
+`oci_monitoring.enabled` are true. It uses the same local snapshot, allow and
+deny lists, stale-snapshot checks, timeout bounds, retry bounds, request-size
+bounds, and redaction posture as the other observability connectors.
+
+Dry-run mode prints a sanitized OCI `PostMetricData` request body without
+importing the OCI SDK or opening a network connection:
+
+```bash
+nats-sink-observe oci-monitoring-export \
+  /var/lib/nats-sink/metrics.json \
+  /etc/nats-sinks/observability.prometheus.json \
+  --dry-run
+```
+
+Example dry-run output:
+
+```json
+[{"batch_atomicity":"ATOMIC","metric_data":[{"compartment_id":"<redacted>","datapoints":[{"count":1,"timestamp":"2026-05-27T12:00:00.000Z","value":256.0}],"dimensions":{"deployment":"edge"},"name":"mission_ops_messages_fetched_total","namespace":"nats_sinks_metrics"}]}]
+```
+
+Example success output:
+
+```text
+OCI Monitoring export: attempted=true delivered=true attempts=1 requests=1 metrics=1 message=OCI Monitoring export delivered
+```
+
+The command is an observability connector, not a delivery feature. It does not
+ACK messages, write payloads to OCI Monitoring, expose compartment OCIDs in
+dry-run output, or manage OCI IAM policies. Full connector guidance is
+documented in [OCI Monitoring Integration](oci-monitoring.md).
+
 ### `nats-sink-observe statsd-export`
 
 Exports policy-approved metrics to a StatsD-compatible UDP listener or Unix
@@ -667,6 +805,150 @@ The command is an observability connector, not a delivery feature. StatsD
 transport is best-effort, so successful local sending must not be treated as
 durable telemetry custody. Full connector guidance is documented in
 [StatsD Integration](statsd.md).
+
+### `nats-sink-observe datadog-export`
+
+Exports policy-approved metrics as DogStatsD datagrams to a local or explicitly
+approved Datadog Agent listener. The command is disabled unless both the
+top-level observability policy and `datadog.enabled` are true. It uses the same
+local snapshot, allow and deny lists, stale-snapshot checks, timeout bounds,
+retry bounds, datagram-size bounds, and redaction posture as the other
+observability connectors.
+
+Dry-run mode prints DogStatsD lines without opening a socket:
+
+```bash
+nats-sink-observe datadog-export \
+  /var/lib/nats-sink/metrics.json \
+  /etc/nats-sinks/observability.prometheus.json \
+  --dry-run
+```
+
+Example dry-run output:
+
+```text
+nats_sinks.messages_fetched_total:256|g|#environment:test,service:nats-sinks
+nats_sinks.messages_acked_total:256|g|#environment:test,service:nats-sinks
+```
+
+Example success output:
+
+```text
+Datadog export: attempted=true delivered=true attempts=1 datagrams=2 message=Datadog export delivered
+```
+
+The command is an observability connector, not a delivery feature. DogStatsD
+transport is best-effort, Datadog tags are opt-in and bounded, and successful
+local sending must not be treated as durable telemetry custody. Full connector
+guidance is documented in [Datadog Integration](datadog.md).
+
+### `nats-sink-observe cloudwatch-export`
+
+Exports policy-approved metrics to Amazon CloudWatch custom metrics through
+`PutMetricData`. The command is disabled unless both the top-level
+observability policy and `cloudwatch.enabled` are true. It uses the same local
+snapshot, allow and deny lists, stale-snapshot checks, timeout bounds, retry
+bounds, and redaction posture as the other observability connectors.
+
+Dry-run mode prints the CloudWatch request list without importing boto3,
+loading AWS credentials, or calling AWS:
+
+```bash
+nats-sink-observe cloudwatch-export \
+  /var/lib/nats-sink/metrics.json \
+  /etc/nats-sinks/observability.prometheus.json \
+  --dry-run
+```
+
+Example dry-run output:
+
+```json
+[
+  {
+    "MetricData": [
+      {
+        "MetricName": "nats_sinks_messages_fetched_total",
+        "StorageResolution": 60,
+        "Unit": "None",
+        "Value": 256.0
+      }
+    ],
+    "Namespace": "nats-sinks/metrics"
+  }
+]
+```
+
+Example success output:
+
+```text
+Amazon CloudWatch export: attempted=true delivered=true attempts=1 requests=1 metrics=1 message=Amazon CloudWatch export delivered
+```
+
+The command is an observability connector, not a delivery feature. Successful
+local export means the AWS SDK accepted the `PutMetricData` call; it does not
+prove alert evaluation, dashboard rendering, or downstream retention. Full
+connector guidance is documented in
+[Amazon CloudWatch Integration](cloudwatch.md).
+
+### `nats-sink-observe azure-monitor-export`
+
+Exports policy-approved metrics to Azure Monitor custom metrics through the
+regional Azure Monitor REST endpoint for one reviewed Azure resource. The
+command is disabled unless both the top-level observability policy and
+`azure_monitor.enabled` are true. It uses the same local snapshot, allow and
+deny lists, stale-snapshot checks, timeout bounds, retry bounds, request-size
+bounds, and redaction posture as the other observability connectors.
+
+Dry-run mode prints the Azure Monitor request bodies without loading a bearer
+token or calling Azure:
+
+```bash
+nats-sink-observe azure-monitor-export \
+  /var/lib/nats-sink/metrics.json \
+  /etc/nats-sinks/observability.prometheus.json \
+  --dry-run
+```
+
+Example dry-run output:
+
+```json
+[
+  {
+    "data": {
+      "baseData": {
+        "dimNames": [
+          "deployment"
+        ],
+        "metric": "nats_sinks_messages_fetched_total",
+        "namespace": "nats-sinks/metrics",
+        "series": [
+          {
+            "count": 1,
+            "dimValues": [
+              "edge"
+            ],
+            "max": 256.0,
+            "min": 256.0,
+            "sum": 256.0
+          }
+        ]
+      }
+    },
+    "time": "2026-05-28T12:00:00.000Z"
+  }
+]
+```
+
+Example success output:
+
+```text
+Azure Monitor export: attempted=true delivered=true attempts=1 requests=1 metrics=1 status=200 message=Azure Monitor export delivered
+```
+
+The command is an observability connector, not a delivery feature. Successful
+local export means Azure Monitor accepted the HTTP request; it does not prove
+alert evaluation, dashboard rendering, or downstream retention. Full connector
+guidance is documented in [Azure Monitor Integration](azure-monitor.md).
 
 ### `nats-sink-observe syslog-export`
 
@@ -793,8 +1075,7 @@ cannot find a metric without a default value.
 
 `nats-sink-observe` returns `0` on success, `2` for invalid configuration,
 policy, snapshot, textfile output errors, disabled native endpoint startup, or
-profile render errors, and `3` when an enabled Prometheus, OTLP, Elastic,
-Grafana Alloy, Splunk HEC, StatsD, or syslog export exhausts its bounded
-delivery attempts, a policy rejects a stale snapshot in connector-specific
-paths that use delivery-failure exit handling, or a native HTTP dry-run returns
-an error response.
+profile render errors, and `3` when an enabled Prometheus HTTP dry-run returns
+an error response, a stale snapshot is rejected, or an enabled OTLP, Elastic,
+Grafana Alloy, Splunk HEC, OCI Monitoring, StatsD, Datadog, Amazon CloudWatch,
+Azure Monitor, or syslog export exhausts bounded delivery attempts.

@@ -18,6 +18,7 @@ configuration.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 from pathlib import Path
 from typing import Annotated, Any
@@ -26,11 +27,30 @@ import typer
 from pydantic import ValidationError as PydanticValidationError
 
 from nats_sinks import __version__
+from nats_sinks.coherence import CoherenceSink
 from nats_sinks.core.config import AppConfig, SinkPluginConfig, load_config, redacted_config
 from nats_sinks.core.errors import ConfigurationError, NatsSinksError
+from nats_sinks.core.fanout_sink import FanoutSink
 from nats_sinks.core.logging import configure_logging
 from nats_sinks.core.metrics import JsonFileMetrics, MetricsRecorder
 from nats_sinks.core.nats_options import build_nats_connect_options
+from nats_sinks.core.ordered_inspection import (
+    DEFAULT_MAX_HEADER_VALUE_BYTES,
+    DEFAULT_MAX_HEADERS,
+    DEFAULT_MAX_MESSAGES,
+    DEFAULT_MAX_PAYLOAD_BYTES,
+    DEFAULT_OUTPUT_ROOT,
+    DEFAULT_PENDING_BYTES,
+    DEFAULT_PENDING_MESSAGES,
+    DEFAULT_TIMEOUT_SECONDS,
+    OrderedInspectionOptions,
+    collect_ordered_inspection_records,
+    render_ordered_inspection_jsonl,
+    render_ordered_inspection_text,
+    resolve_inspection_output_path,
+    validate_ordered_inspection_options,
+    write_ordered_inspection_jsonl,
+)
 from nats_sinks.core.runner import JetStreamSinkRunner
 from nats_sinks.core.stream_management import (
     StreamManagementOptions,
@@ -38,6 +58,9 @@ from nats_sinks.core.stream_management import (
     build_stream_management_plan,
 )
 from nats_sinks.file import FileSink
+from nats_sinks.foundry import FoundrySink
+from nats_sinks.gotham import GothamSink
+from nats_sinks.http import HttpSink
 from nats_sinks.mysql import MySqlSink
 from nats_sinks.oracle import (
     OracleLineageReader,
@@ -47,6 +70,8 @@ from nats_sinks.oracle import (
     render_lineage_result_text,
     resolve_lineage_table,
 )
+from nats_sinks.oracle_nosql import OracleNoSqlSink
+from nats_sinks.s3 import S3Sink
 from nats_sinks.sinks.base import HealthCheckableSink, Sink
 from nats_sinks.sinks.connectors import SinkConnector, load_entry_point_connectors
 from nats_sinks.sinks.registry import SinkRegistry
@@ -66,9 +91,11 @@ def _version_callback(value: bool) -> None:
 def _registry(plugins: SinkPluginConfig | None = None) -> SinkRegistry:
     """Build the explicit sink connector registry.
 
-    Oracle Database, Oracle MySQL, and FileSink are first-party built-ins and are always
-    registered.  External connectors are loaded only when the JSON config
-    explicitly enables plugin discovery and allow-lists the connector name.
+    Oracle Database, Oracle MySQL, Oracle NoSQL Database, Oracle Coherence CE,
+    HTTP, S3-compatible object storage, and FileSink are first-party built-ins
+    and are always registered.
+    External connectors are loaded only when the JSON config explicitly enables
+    plugin discovery and allow-lists the connector name.
     """
 
     registry = SinkRegistry()
@@ -109,6 +136,32 @@ def _registry(plugins: SinkPluginConfig | None = None) -> SinkRegistry:
     )
     registry.register_connector(
         SinkConnector(
+            name="oracle_nosql",
+            factory=OracleNoSqlSink.from_mapping,
+            summary="Built-in Oracle NoSQL Database sink.",
+            status="experimental",
+            built_in=True,
+            production_ready=False,
+            requires_extra="oracle-nosql",
+            documentation="docs/oracle-nosql-sink.md",
+            certification=("commit-then-ack", "unit", "container-e2e"),
+        )
+    )
+    registry.register_connector(
+        SinkConnector(
+            name="coherence",
+            factory=CoherenceSink.from_mapping,
+            summary="Built-in Oracle Coherence Community Edition sink.",
+            status="experimental",
+            built_in=True,
+            production_ready=False,
+            requires_extra="coherence",
+            documentation="docs/coherence-sink.md",
+            certification=("commit-then-ack", "unit", "container-e2e"),
+        )
+    )
+    registry.register_connector(
+        SinkConnector(
             name="spool",
             factory=SpoolSink.from_mapping,
             summary="Built-in encrypted local edge spool sink.",
@@ -117,6 +170,53 @@ def _registry(plugins: SinkPluginConfig | None = None) -> SinkRegistry:
             requires_extra="crypto",
             documentation="docs/spool-sink.md",
             certification=("commit-then-ack", "unit", "replay"),
+        )
+    )
+    registry.register_connector(
+        SinkConnector(
+            name="http",
+            factory=HttpSink.from_mapping,
+            summary="Built-in HTTP endpoint sink.",
+            built_in=True,
+            production_ready=True,
+            documentation="docs/http-sink.md",
+            certification=("commit-then-ack", "unit", "mock-contract"),
+        )
+    )
+    registry.register_connector(
+        SinkConnector(
+            name="s3",
+            factory=S3Sink.from_mapping,
+            summary="Built-in S3-compatible object sink.",
+            built_in=True,
+            production_ready=True,
+            requires_extra="s3",
+            documentation="docs/s3-sink.md",
+            certification=("commit-then-ack", "unit", "mock-contract"),
+        )
+    )
+    registry.register_connector(
+        SinkConnector(
+            name="foundry",
+            factory=FoundrySink.from_mapping,
+            summary="Experimental Palantir Foundry Streams sink.",
+            status="experimental",
+            built_in=True,
+            production_ready=False,
+            documentation="docs/foundry-sink.md",
+            certification=("commit-then-ack", "unit", "mock-contract"),
+        )
+    )
+    registry.register_connector(
+        SinkConnector(
+            name="gotham",
+            factory=GothamSink.from_mapping,
+            summary="Experimental Palantir Gotham RevDB object sink.",
+            status="experimental",
+            built_in=True,
+            production_ready=False,
+            documentation="docs/gotham-sink.md",
+            certification=("commit-then-ack", "unit", "mock-contract"),
         )
     )
     if plugins is not None and plugins.enabled:
@@ -132,6 +232,17 @@ def _raw_sink_config(config: AppConfig) -> dict[str, Any]:
     return config.sink.model_dump(mode="python")
 
 
+def _raw_named_sink_config(config: AppConfig, sink_name: str) -> dict[str, Any]:
+    try:
+        sink_config = config.sinks[sink_name]
+    except KeyError as exc:
+        available = ", ".join(sorted(config.sinks)) or "none configured"
+        raise ConfigurationError(
+            f"unknown named sink {sink_name!r}; available named sinks: {available}"
+        ) from exc
+    return sink_config.model_dump(mode="python")
+
+
 def _load_or_exit(config_path: Path) -> AppConfig:
     try:
         return load_config(config_path)
@@ -142,8 +253,108 @@ def _load_or_exit(config_path: Path) -> AppConfig:
 
 def _build_sink(config: AppConfig) -> Sink:
     raw_sink = _raw_sink_config(config)
+    if raw_sink.get("type") == "fanout":
+        return _build_fanout_sink(config, raw_sink)
+    return _build_sink_from_raw(config, raw_sink)
+
+
+def _build_sink_from_raw(config: AppConfig, raw_sink: dict[str, Any]) -> Sink:
     sink_type = str(raw_sink.get("type", ""))
+    if sink_type == "fanout":
+        raise ConfigurationError("fanout can only be used as the active top-level sink")
     return _registry(config.plugins).create(sink_type, raw_sink)
+
+
+def _validate_fanout_config(config: AppConfig, raw_sink: dict[str, Any]) -> None:
+    """Validate the active fan-out sink without opening child destinations."""
+
+    extra_fields = sorted(set(raw_sink) - {"type"})
+    if extra_fields:
+        joined = ", ".join(extra_fields)
+        raise ConfigurationError(
+            "sink.type 'fanout' accepts only the 'type' field after config normalization; "
+            f"unexpected field(s): {joined}"
+        )
+    if not config.sinks:
+        raise ConfigurationError("sink.type 'fanout' requires named child sinks")
+    if not config.routing.enabled:
+        raise ConfigurationError("sink.type 'fanout' requires routing.enabled true")
+    if not config.routing.target_names():
+        raise ConfigurationError("sink.type 'fanout' routing must select at least one target")
+
+
+def _build_fanout_sink(config: AppConfig, raw_sink: dict[str, Any]) -> FanoutSink:
+    """Create the active fan-out sink and only the child sinks referenced by routes."""
+
+    _validate_fanout_config(config, raw_sink)
+    children: dict[str, Sink] = {}
+    for target_name in config.routing.target_names():
+        child_raw = _raw_named_sink_config(config, target_name)
+        children[target_name] = _build_sink_from_raw(config, child_raw)
+    return FanoutSink(children=children, routing=config.routing)
+
+
+def _validate_sink_config(
+    config: AppConfig,
+    raw_sink: dict[str, Any],
+    *,
+    label: str,
+) -> None:
+    """Validate one sink instance through the registry without opening it."""
+
+    try:
+        if raw_sink.get("type") == "fanout":
+            if label != "sink":
+                raise ConfigurationError(f"{label}: fanout may only be the active sink")
+            _validate_fanout_config(config, raw_sink)
+            return
+        _build_sink_from_raw(config, raw_sink)
+    except (ConfigurationError, PydanticValidationError) as exc:
+        raise ConfigurationError(f"{label}: {exc}") from exc
+
+
+def _validate_all_sink_configs(config: AppConfig) -> None:
+    """Validate the active sink and every named sink instance."""
+
+    _validate_sink_config(config, _raw_sink_config(config), label="sink")
+    for name, sink_config in config.sinks.items():
+        _validate_sink_config(
+            config,
+            sink_config.model_dump(mode="python"),
+            label=f"sinks.{name}",
+        )
+
+
+def _target_description(target: Any) -> str:
+    """Render one route target without exposing destination credentials."""
+
+    parts = [target.sink]
+    parts.append("required" if target.required else "optional")
+    if target.minimum_wait_ms is not None:
+        parts.append(f"minimum_wait_ms={target.minimum_wait_ms}")
+    if target.timeout_ms is not None:
+        parts.append(f"timeout_ms={target.timeout_ms}")
+    return " (".join((parts[0], ", ".join(parts[1:]))) + ")"
+
+
+def _print_named_sink_report(config: AppConfig) -> None:
+    """Print safe route-to-sink information for operator review."""
+
+    if config.sinks:
+        rendered = ", ".join(
+            f"{name} ({sink_config.type})" for name, sink_config in sorted(config.sinks.items())
+        )
+        typer.echo(f"Named sinks: {rendered}")
+    if config.routing.default_targets:
+        targets = ", ".join(
+            _target_description(target) for target in config.routing.default_targets
+        )
+        typer.echo(f"Default route targets: {targets}")
+    if config.routing.routes:
+        typer.echo("Route target references:")
+        for route in config.routing.routes:
+            targets = ", ".join(_target_description(target) for target in route.targets)
+            typer.echo(f"  - {route.name}: {targets}")
 
 
 def _oracle_sink_config(config: AppConfig) -> OracleSinkConfig:
@@ -236,6 +447,29 @@ def _metrics_recorder(config: AppConfig) -> MetricsRecorder | None:
     )
 
 
+async def _connect_nats_for_inspection(options: dict[str, Any]) -> Any:
+    """Open a NATS connection for inspection-only CLI commands.
+
+    The helper exists so tests can inject a fake connection and prove that the
+    inspection command does not construct or call any sink.
+    """
+
+    import nats  # noqa: PLC0415 - keep the runtime client import lazy.
+
+    return await nats.connect(**options)
+
+
+async def _close_nats_connection(connection: Any) -> None:
+    """Close a NATS connection when the client exposes a close method."""
+
+    close = getattr(connection, "close", None)
+    if close is None or not callable(close):
+        return
+    result = close()
+    if inspect.isawaitable(result):
+        await result
+
+
 @app.callback()
 def main(
     version: Annotated[
@@ -258,13 +492,14 @@ def validate(config: Annotated[Path, typer.Argument(exists=True, readable=True)]
 
     loaded = _load_or_exit(config)
     try:
-        _build_sink(loaded)
+        _validate_all_sink_configs(loaded)
     except (ConfigurationError, PydanticValidationError) as exc:
         typer.echo(f"Configuration error: {exc}", err=True)
         raise typer.Exit(2) from exc
     typer.echo("Configuration is valid.")
     typer.echo(f"Active sink: {loaded.sink.type}")
     typer.echo("ACK policy: commit-then-acknowledge")
+    _print_named_sink_report(loaded)
 
 
 @app.command("show-effective-config")
@@ -468,6 +703,155 @@ def query_lineage(
         typer.echo(render_lineage_result_text(result))
 
 
+@app.command("inspect-ordered")
+def inspect_ordered(
+    config: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    max_messages: Annotated[
+        int,
+        typer.Option(
+            "--max-messages",
+            help="Maximum ordered inspection records to emit, from 1 to 1000.",
+        ),
+    ] = DEFAULT_MAX_MESSAGES,
+    max_payload_bytes: Annotated[
+        int,
+        typer.Option(
+            "--max-payload-bytes",
+            help="Maximum total payload bytes to inspect before stopping.",
+        ),
+    ] = DEFAULT_MAX_PAYLOAD_BYTES,
+    include_payload: Annotated[
+        bool,
+        typer.Option(
+            "--include-payload",
+            help="Include payload data in sanitized JSON output. Disabled by default.",
+        ),
+    ] = False,
+    timeout_seconds: Annotated[
+        float,
+        typer.Option(
+            "--timeout-seconds",
+            help="Per-message wait time before ending inspection when no message arrives.",
+        ),
+    ] = DEFAULT_TIMEOUT_SECONDS,
+    output_format: Annotated[
+        str,
+        typer.Option("--format", help="Output format: text or jsonl."),
+    ] = "text",
+    output: Annotated[
+        Path | None,
+        typer.Option(
+            "--output",
+            help=(
+                "Optional JSONL file name or path under --output-root for sanitized "
+                "inspection records."
+            ),
+        ),
+    ] = None,
+    output_root: Annotated[
+        Path,
+        typer.Option(
+            "--output-root",
+            help="Approved local root for --output JSONL files.",
+        ),
+    ] = DEFAULT_OUTPUT_ROOT,
+    pending_messages: Annotated[
+        int,
+        typer.Option("--pending-messages", help="Bounded client pending message limit."),
+    ] = DEFAULT_PENDING_MESSAGES,
+    pending_bytes: Annotated[
+        int,
+        typer.Option("--pending-bytes", help="Bounded client pending byte limit."),
+    ] = DEFAULT_PENDING_BYTES,
+    max_headers: Annotated[
+        int,
+        typer.Option("--max-headers", help="Maximum headers to include in sanitized output."),
+    ] = DEFAULT_MAX_HEADERS,
+    max_header_value_bytes: Annotated[
+        int,
+        typer.Option(
+            "--max-header-value-bytes",
+            help="Maximum UTF-8 bytes per non-sensitive header value in output.",
+        ),
+    ] = DEFAULT_MAX_HEADER_VALUE_BYTES,
+) -> None:
+    """Inspect stream messages through a read-only ordered consumer.
+
+    This command is for bounded troubleshooting and analysis. It does not build
+    a sink, does not write destination records, and does not ACK production
+    durable work. If the installed NATS Python client does not expose ordered
+    consumer support, the command fails closed with a compatibility message.
+    """
+
+    loaded = _load_or_exit(config)
+    normalized_format = output_format.strip().casefold()
+    if normalized_format not in {"text", "jsonl"}:
+        typer.echo("Inspection configuration error: --format must be text or jsonl", err=True)
+        raise typer.Exit(2)
+
+    try:
+        options = OrderedInspectionOptions(
+            max_messages=max_messages,
+            max_payload_bytes=max_payload_bytes,
+            include_payload=include_payload,
+            timeout_seconds=timeout_seconds,
+            pending_messages=pending_messages,
+            pending_bytes=pending_bytes,
+            max_headers=max_headers,
+            max_header_value_bytes=max_header_value_bytes,
+        )
+        validate_ordered_inspection_options(options)
+        resolved_output = (
+            resolve_inspection_output_path(output, output_root=output_root)
+            if output is not None
+            else None
+        )
+    except ConfigurationError as exc:
+        typer.echo(f"Inspection configuration error: {exc}", err=True)
+        raise typer.Exit(2) from exc
+
+    async def _inspect() -> Any:
+        connection = await _connect_nats_for_inspection(_nats_options(loaded))
+        try:
+            jetstream = connection.jetstream()
+            return await collect_ordered_inspection_records(
+                jetstream,
+                subject=loaded.nats.subject,
+                stream=loaded.nats.stream,
+                options=options,
+                message_metadata=loaded.message_metadata,
+                mission_metadata=loaded.mission_metadata,
+                security_labels=loaded.security_labels,
+            )
+        finally:
+            await _close_nats_connection(connection)
+
+    try:
+        result = asyncio.run(_inspect())
+    except ConfigurationError as exc:
+        typer.echo(f"Inspection configuration error: {exc}", err=True)
+        raise typer.Exit(2) from exc
+    except NatsSinksError as exc:
+        typer.echo(f"Inspection failed: {exc}", err=True)
+        raise typer.Exit(1) from exc
+    except Exception as exc:
+        typer.echo(f"Unexpected inspection failure: {type(exc).__name__}", err=True)
+        raise typer.Exit(1) from exc
+
+    if resolved_output is not None:
+        write_ordered_inspection_jsonl(result.records, resolved_output)
+
+    if normalized_format == "jsonl":
+        rendered = render_ordered_inspection_jsonl(result.records)
+        if rendered:
+            typer.echo(rendered)
+        return
+
+    typer.echo(render_ordered_inspection_text(result))
+    if resolved_output is not None:
+        typer.echo(f"JSONL inspection records written to {resolved_output}")
+
+
 @app.command()
 def run(
     config: Annotated[Path, typer.Argument(exists=True, readable=True)],
@@ -503,6 +887,7 @@ def run(
             sink=sink,
             delivery=loaded.delivery,
             consumer_management=loaded.consumer_management,
+            push_consumer=loaded.push_consumer,
             dead_letter=loaded.dead_letter,
             message_metadata=loaded.message_metadata,
             message_authenticity=loaded.message_authenticity,
@@ -531,25 +916,68 @@ def run(
 @app.command("test-sink")
 def test_sink(
     config: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    sink_name: Annotated[
+        str | None,
+        typer.Option(
+            "--sink-name",
+            help="Health-check one named sink from the top-level sinks object.",
+        ),
+    ] = None,
+    all_named_sinks: Annotated[
+        bool,
+        typer.Option(
+            "--all-named-sinks",
+            help="Health-check every named sink instance instead of only the active sink.",
+        ),
+    ] = False,
     dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
 ) -> None:
     """Start and health-check the configured sink."""
 
     loaded = _load_or_exit(config)
-    sink = _build_sink(loaded)
-    typer.echo(f"Active sink: {loaded.sink.type}")
+    if sink_name is not None and all_named_sinks:
+        typer.echo("Configuration error: use --sink-name or --all-named-sinks, not both", err=True)
+        raise typer.Exit(2)
+
+    try:
+        if all_named_sinks:
+            if not loaded.sinks:
+                raise ConfigurationError("no named sinks are configured")
+            selected_sinks = [
+                (name, sink_config.model_dump(mode="python"))
+                for name, sink_config in loaded.sinks.items()
+            ]
+            typer.echo(f"Named sinks selected: {', '.join(name for name, _ in selected_sinks)}")
+        elif sink_name is not None:
+            selected_sinks = [(sink_name, _raw_named_sink_config(loaded, sink_name))]
+            typer.echo(
+                f"Named sink selected: {sink_name} ({selected_sinks[0][1].get('type', 'unknown')})"
+            )
+        else:
+            selected_sinks = [("active", _raw_sink_config(loaded))]
+            typer.echo(f"Active sink: {loaded.sink.type}")
+    except ConfigurationError as exc:
+        typer.echo(f"Configuration error: {exc}", err=True)
+        raise typer.Exit(2) from exc
     typer.echo("ACK policy: commit-then-acknowledge")
     if dry_run:
         typer.echo("Dry run complete; sink was not opened.")
         return
 
-    async def _test() -> None:
+    async def _test_one(label: str, raw_sink: dict[str, Any]) -> None:
+        sink = _build_sink_from_raw(loaded, raw_sink)
         await sink.start()
         try:
             if isinstance(sink, HealthCheckableSink):
                 await sink.healthcheck()
         finally:
             await sink.stop()
+
+    async def _test() -> None:
+        for label, raw_sink in selected_sinks:
+            await _test_one(label, raw_sink)
+            if label != "active":
+                typer.echo(f"Sink test succeeded for {label}.")
 
     try:
         asyncio.run(_test())

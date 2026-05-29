@@ -80,12 +80,20 @@ value. For encrypted text and opaque payloads, prefer `stream_sequence` or
 `message_id` idempotency because those strategies do not depend on decrypting
 or interpreting the payload body.
 
+Headers-only JetStream consumers are another case where payload-derived
+idempotency is unsafe. When JetStream omits the message body and exposes only
+`Nats-Msg-Size`, many different source messages can arrive at the runner with
+the delivered body `b""`. `NatsEnvelope.idempotency_key()` therefore rejects
+the payload-hash fallback when `payload_omitted=true` and no stream sequence or
+message ID is available. Use `stream_sequence` or producer `Nats-Msg-Id` for
+headers-only workflows.
+
 ## Duplicate Handling Modes
 
 Duplicate handling is destination-specific. A relational database might use an
 upsert or an insert-that-ignores-conflicts. An object store might use
-deterministic object keys. An HTTP sink might use an idempotency-key header and
-require the target service to honor it.
+deterministic object keys. The HTTP sink uses an idempotency-key header and
+requires the target service to honor it for safe duplicate redelivery.
 
 The important rule is destination-neutral: a sink must either make duplicate
 redelivery safe or clearly document that a mode is not suitable for normal
@@ -103,15 +111,29 @@ as success rather than creating duplicate business effects.
 
 ## Current Scope
 
-The current production implementations are Oracle, FileSink, and SpoolSink. Oracle
-duplicate handling is documented in [Oracle Sink](oracle-sink.md), including
-`merge`, configurable merge update columns, `insert_ignore`, `insert`, and
-`append` behavior. File duplicate handling is documented in
-[File Sink](file-sink.md), including deterministic file names and
-`skip_existing`, `overwrite`, and `fail` policies. Edge spool duplicate
-handling is documented in [Edge Spool Sink](spool-sink.md), including
-deterministic idempotency-key filenames, encrypted replay records,
+The current production implementations are Oracle Database, Oracle MySQL,
+FileSink, SpoolSink, HTTP, and S3-compatible object storage. Oracle duplicate handling is documented in
+[Oracle Sink](oracle-sink.md), including `merge`, configurable merge update
+columns, `insert_ignore`, `insert`, and `append` behavior. Oracle MySQL
+duplicate handling is documented in [Oracle MySQL Sink](mysql-sink.md),
+including `upsert`, `insert_ignore`, idempotency key columns, and table routes.
+The experimental Oracle NoSQL Database sink documents K/V-style table
+duplicate behavior in [Oracle NoSQL Database Sink](oracle-nosql-sink.md),
+including conditional `skip_existing`, unconditional `replace`, and
+`fail_existing` policies. The experimental Oracle Coherence Community Edition
+sink documents K/V duplicate behavior in
+[Oracle Coherence Community Edition Sink](coherence-sink.md), including
+`skip_existing`, `replace`, and `fail_existing` policies. File
+duplicate handling is documented in [File Sink](file-sink.md), including
+deterministic file names and `skip_existing`, `overwrite`, and `fail` policies.
+Edge spool duplicate handling is documented in [Edge Spool Sink](spool-sink.md),
+including deterministic idempotency-key filenames, encrypted replay records,
 `skip_existing`, and replay cleanup after target sink success.
+HTTP idempotency-key propagation, timeout ambiguity, and retry guidance are
+documented in [HTTP Sink](http-sink.md).
+S3-compatible object key construction, conditional create behavior, duplicate
+policies, and timeout ambiguity are documented in
+[S3-Compatible Object Sink](s3-sink.md).
 Destination-specific key-column, filename, or payload-field details are kept on
 the sink pages so future sinks can document their own backend-native approach
 without changing this generic guide.
@@ -128,6 +150,13 @@ raises before durable success, the core leaves the message eligible for
 redelivery. If a permanent failure is sent to a DLQ, the original message is
 ACKed only after DLQ publication succeeds.
 
+Fan-out delivery adds another boundary to review. Required route targets
+remain part of the formal commit-then-ACK path and therefore need normal
+idempotency guarantees. Optional route targets are explicitly side copies
+unless they complete before the ACK gate releases. Optional targets should
+still be idempotent, but operators must not use an optional target as the only
+durable record for business or mission state.
+
 ## Roadmap
 
 Future idempotency work should focus on certifying every new sink, not only on
@@ -137,8 +166,6 @@ adding more strategy names. Planned areas include:
   idempotency deployments,
 - richer duplicate counters and metrics where backend drivers expose reliable
   committed outcomes,
-- HTTP idempotency-key support and explicit warnings for unsafe endpoints,
-- S3 sinks with deterministic object keys and atomic overwrite-or-skip
-  behavior,
+- expanded HTTP and S3 live certification guidance for reviewed endpoints,
 - a reusable sink certification test suite that proves duplicate redelivery is
   safe before a sink is called production-ready.

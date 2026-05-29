@@ -133,6 +133,15 @@ The generated policy is disabled:
       "share_subject_label": false
     }
   ],
+  "subject_metrics": {
+    "enabled": false,
+    "default_action": "deny",
+    "max_subject_families": 20,
+    "overflow_action": "drop",
+    "overflow_label": "other",
+    "allow_raw_subjects": false,
+    "rules": []
+  },
   "prometheus": {
     "enabled": false,
     "output_file": "/var/lib/node_exporter/textfile_collector/nats_sinks.prom",
@@ -154,12 +163,16 @@ The `subjects` section helps operators review which subject patterns the sink
 configuration knows about. Current Prometheus output does not include subject
 labels by default.
 
-Subject-aware Prometheus export has been evaluated as future work, but it is
-not enabled today. Do not add raw NATS subjects as Prometheus labels through
-local patches or ad hoc exporters. A future implementation needs explicit
-subject-family allow rules, stable low-cardinality labels, cardinality caps,
-and tests proving delivery behavior is unchanged. See
-[Subject-Aware Observability Evaluation](subject-aware-observability-evaluation.md).
+The policy also supports a disabled-by-default `subject_metrics` block. That
+block lets operators model reviewed subject-family rules, stable labels,
+display modes, cardinality caps, and overflow behavior. Prometheus does not
+derive labels from raw subjects. It renders subject-family labels only when a
+separate reviewed aggregation step has attached prepared `labeled_metrics` rows
+to the local metrics snapshot. Do not add raw NATS subjects as Prometheus
+labels through local patches or ad hoc exporters. See
+[Subject-Aware Observability Evaluation](subject-aware-observability-evaluation.md)
+and the
+[Subject-Aware Observability Runbook](subject-aware-observability-runbook.md).
 
 ## Enable A Minimal Export
 
@@ -188,6 +201,15 @@ metrics needed for operations:
   "include_observations": false,
   "include_legacy": false,
   "subjects": [],
+  "subject_metrics": {
+    "enabled": false,
+    "default_action": "deny",
+    "max_subject_families": 20,
+    "overflow_action": "drop",
+    "overflow_label": "other",
+    "allow_raw_subjects": false,
+    "rules": []
+  },
   "prometheus": {
     "enabled": true,
     "output_file": "/var/lib/node_exporter/textfile_collector/nats_sinks.prom",
@@ -211,12 +233,32 @@ connection-event counters. It does not export timings, legacy aliases, subject
 names, message IDs, table names, file paths, classification values, labels, or
 payload contents.
 
+When a reviewed subject-family aggregation step has attached prepared
+`labeled_metrics` rows, Prometheus renders only the approved family label:
+
+```text
+# HELP nats_sinks_messages_written_total Messages reported durable by the destination sink.
+# TYPE nats_sinks_messages_written_total counter
+nats_sinks_messages_written_total 256
+nats_sinks_messages_written_total{subject_family="orders"} 128
+```
+
+The example does not expose concrete subjects such as `orders.created`.
+Run the subject-aware observability certification tests before changing the
+policy or connector behavior:
+
+```bash
+python -m pytest tests/unit/test_subject_observability_certification.py -q
+```
+
 ## Export Freshness Metrics
 
 Freshness metrics can show delayed feeds, stale replay, missing publisher
 timestamps, malformed `Nats-Time-Stamp` headers, and positive source clock skew.
-They are aggregate metrics only; the Prometheus connector does not add subject,
-source, sensor, sink, table, priority, classification, or label dimensions.
+They are aggregate metrics only unless a separate reviewed subject-family
+aggregation step attaches prepared `labeled_metrics` rows. The Prometheus
+connector does not add source, sensor, sink, table, priority, classification,
+payload, or raw subject dimensions.
 
 Enable the freshness counters and observations only when that timing evidence is
 approved for the deployment:
@@ -241,6 +283,38 @@ nats_sinks_events_stale_at_receive_total 3
 # TYPE nats_sinks_event_age_at_receive_seconds summary
 nats_sinks_event_age_at_receive_seconds_count 256
 nats_sinks_event_age_at_receive_seconds_max 12.428
+```
+
+Fan-out metrics can be shared the same way when a deployment needs evidence
+about multi-destination custody without exposing route or sink details:
+
+```json
+{
+  "enabled": true,
+  "allowed_metrics": [
+    "fanout_messages_routed_total",
+    "fanout_required_child_success_total",
+    "fanout_required_child_failure_total",
+    "fanout_optional_child_timeout_total",
+    "fanout_messages_acked_total",
+    "fanout_messages_ack_blocked_total",
+    "fanout_ack_gate_wait_seconds"
+  ],
+  "prometheus": {
+    "enabled": true
+  }
+}
+```
+
+Prometheus receives only the approved aggregate names:
+
+```text
+# HELP nats_sinks_fanout_required_child_failure_total Required fan-out child sink operations that failed and blocked ACK.
+# TYPE nats_sinks_fanout_required_child_failure_total counter
+nats_sinks_fanout_required_child_failure_total 1
+# HELP nats_sinks_fanout_ack_gate_wait_seconds Elapsed seconds spent waiting at the fan-out ACK gate.
+# TYPE nats_sinks_fanout_ack_gate_wait_seconds summary
+nats_sinks_fanout_ack_gate_wait_seconds_count 4
 ```
 
 ## Enable The Native HTTP Endpoint
@@ -679,7 +753,8 @@ Before enabling Prometheus export, confirm:
 - `include_observations` is enabled only if timing values are safe to share,
 - freshness metrics are enabled only when event-age and clock-skew timing is
   approved for the deployment,
-- subject labels are not exported,
+- raw subject labels are not exported, and subject-family labels require
+  prepared `labeled_metrics` rows plus approved `subject_metrics` policy,
 - textfile directory permissions allow the observability service to write and
   node_exporter to read,
 - the metrics snapshot and textfile are not tracked in git,
@@ -696,7 +771,7 @@ The Prometheus connector does not export:
 - message payloads,
 - decrypted payloads,
 - NATS headers,
-- subject labels,
+- raw subject labels,
 - message IDs,
 - stream sequence values,
 - Oracle table names,

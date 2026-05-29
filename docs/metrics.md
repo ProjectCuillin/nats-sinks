@@ -2,9 +2,10 @@
 
 `nats-sinks` includes a small metrics layer for operators and developers who
 need to understand how a sink process is behaving. Metrics are intentionally
-destination-neutral where possible: Oracle Database, Oracle MySQL, file, and
-future sinks share the same core counters, gauges, observations, and Python
-hooks, while destination-specific counters use clear prefixes such as
+destination-neutral where possible: Oracle Database, Oracle MySQL, Oracle
+Coherence Community Edition, file, and future sinks share the same core
+counters, gauges, observations, and Python hooks, while destination-specific
+counters use clear prefixes such as
 `oracle_*` and `mysql_*`.
 
 The current release provides a dependency-free local snapshot recorder and a
@@ -25,14 +26,16 @@ nats-sink-observe init-prometheus-policy \
 This command is separate from `nats-sink`. The `nats-sink` command runs and
 manages sink processing. The `nats-sink-metrics` command reads a local JSON
 metrics snapshot and renders it in human-readable or script-friendly formats.
-It never connects to NATS, Oracle Database, Oracle MySQL, the file sink
-directory, or any future destination backend.
+It never connects to NATS, Oracle Database, Oracle MySQL, Oracle Coherence
+Community Edition, the file sink directory, or any future destination backend.
 
 The `nats-sink-observe` command owns external sharing. It can render a
 Prometheus textfile for node_exporter, run an optional native Prometheus HTTP
 endpoint, or export approved metrics to an OpenTelemetry Collector through
-OTLP/HTTP JSON. These connectors are disabled by default and require an
-explicit allow-list policy before real metrics are shared.
+OTLP/HTTP JSON, OCI Monitoring custom metrics, Amazon CloudWatch custom
+metrics, Azure Monitor custom metrics, StatsD, Datadog, syslog, or another
+implemented observability connector. These connectors are disabled by default
+and require an explicit allow-list policy before real metrics are shared.
 
 ## Why Metrics Matter
 
@@ -78,7 +81,7 @@ The runner emits metric suffixes such as `messages_fetched_total`. A recorder
 stores or exports those values. `JsonFileMetrics` writes a compact local JSON
 document that the metrics CLI can read. Larger deployments can implement the
 same `MetricsRecorder` protocol and send values to Prometheus, OpenTelemetry,
-StatsD, syslog, or a platform-native telemetry service.
+OCI Monitoring, StatsD, syslog, or a platform-native telemetry service.
 
 Metrics are observational only. They must never change ACK ordering, inspect
 plaintext payloads, mutate envelopes, or decide whether a message is successful.
@@ -88,11 +91,15 @@ External sharing should go through the observability policy layer described in
 from the runner and sinks so the main delivery process and any monitoring
 connector can run as different services with different permissions.
 
-The metrics snapshot is intentionally aggregate-only today. It does not include
-per-subject labels or per-subject series. Subject-aware observability has been
-evaluated for future work, but it needs explicit subject-family policy,
-cardinality caps, and certification tests before it can be enabled. See
-[Subject-Aware Observability Evaluation](subject-aware-observability-evaluation.md).
+The default metrics snapshot is aggregate-only. It does not include per-subject
+labels or per-subject series unless a separate, reviewed subject-family
+aggregation step attaches prepared `labeled_metrics` rows. That extension is
+disabled unless the `subject_metrics` policy model explicitly allows a subject
+family, gives it a stable label, and keeps it within cardinality bounds. Raw
+subjects are not exported by default. See
+[Subject-Aware Observability Evaluation](subject-aware-observability-evaluation.md)
+and the
+[Subject-Aware Observability Runbook](subject-aware-observability-runbook.md).
 
 ## Enabling The Snapshot Recorder
 
@@ -150,16 +157,42 @@ A metrics snapshot is UTF-8 JSON with a small, versioned schema:
       "max": 1.034210,
       "last": 0.901234
     }
-  }
+  },
+  "labeled_metrics": [
+    {
+      "kind": "counter",
+      "name": "messages_written_total",
+      "value": 128,
+      "labels": {
+        "subject_family": "orders"
+      }
+    }
+  ]
 }
 ```
 
 Observations are summarized instead of storing raw arrays. This keeps the
 snapshot bounded and avoids writing unbounded timing history to disk.
 
+`labeled_metrics` is optional and absent from ordinary aggregate snapshots. It
+is reserved for prepared low-cardinality series, such as reviewed
+`subject_family` counters. Exporters read those prepared rows rather than
+deriving labels from raw NATS subjects. The snapshot loader validates the row
+count, known metric names, row kinds, finite values, and bounded label names and
+values before any connector can render them.
+
 The snapshot should not contain secrets or payload bodies. It can still reveal
 operational tempo, failure rates, and batch sizes, so store it in a local path
 with appropriate filesystem permissions.
+
+The subject-aware certification helper under `nats_sinks.testing` verifies that
+prepared rows remain disabled by default, low-cardinality, sanitized, and
+delivery-neutral. Run the focused certification suite before enabling or
+changing subject-family metrics:
+
+```bash
+python -m pytest tests/unit/test_subject_observability_certification.py -q
+```
 
 ## Event Freshness And Staleness Metrics
 
@@ -241,6 +274,52 @@ sensitive and can create unbounded cardinality. Use aggregate counters first,
 then investigate individual records through approved operational tooling when a
 metric indicates delayed, missing, malformed, or skewed event timestamps.
 
+## InProgress Metrics
+
+InProgress metrics describe optional JetStream progress heartbeats for
+long-running sink writes. The metric contract, snapshot rendering, CLI output,
+and Prometheus text rendering let operators and connector authors build
+dashboards without inventing names. Runtime InProgress heartbeats are disabled
+by default and emit these metrics only when `delivery.in_progress.enabled=true`
+and the consumer AckWait guardrails pass startup validation.
+
+These metrics are observational only. A progress heartbeat means "work is
+still active." It is not durable sink success, not a message ACK, not a DLQ
+publication, and not an idempotency decision.
+
+| Metric suffix | Type | Meaning |
+| --- | --- | --- |
+| `in_progress_attempts_total` | counter | JetStream InProgress heartbeat attempts while sink work is active. |
+| `in_progress_successes_total` | counter | Heartbeats accepted by the client path; not sink success. |
+| `in_progress_failures_total` | counter | Heartbeat calls that failed before the final ACK decision. |
+| `in_progress_max_heartbeats_reached_total` | counter | Batches where the configured heartbeat limit was reached. |
+| `current_in_progress_batches_active` | gauge | Batches currently under heartbeat supervision. |
+| `in_progress_heartbeat_seconds` | observation | Elapsed time spent sending heartbeat operations. |
+
+Example shell inspection:
+
+```bash
+nats-sink-metrics show .local/nats-sinks/metrics.json \
+  --format shell \
+  --metric "in_progress_*" \
+  --metric "current_in_progress_*"
+```
+
+Example output:
+
+```text
+CURRENT_IN_PROGRESS_BATCHES_ACTIVE=0.0
+IN_PROGRESS_ATTEMPTS_TOTAL=18
+IN_PROGRESS_FAILURES_TOTAL=0
+IN_PROGRESS_HEARTBEAT_SECONDS_COUNT=18
+IN_PROGRESS_MAX_HEARTBEATS_REACHED_TOTAL=0
+IN_PROGRESS_SUCCESSES_TOTAL=18
+```
+
+For operational interpretation, alerting guidance, and safe Prometheus
+examples, read the
+[InProgress Metrics Runbook](inprogress-metrics-runbook.md).
+
 ## Message Authenticity Metrics
 
 When `message_authenticity.enabled` is true, the core runtime records aggregate
@@ -306,7 +385,11 @@ The observability CLI provides policy and connector commands:
 | `nats-sink-observe elastic-export SNAPSHOT POLICY` | Dry-run or send approved metrics through the Elastic OTLP profile. |
 | `nats-sink-observe grafana-alloy-export SNAPSHOT POLICY` | Dry-run or send approved metrics through the Grafana Alloy profile. |
 | `nats-sink-observe splunk-hec-export SNAPSHOT POLICY` | Dry-run or send approved aggregate metrics to Splunk HEC. |
+| `nats-sink-observe oci-monitoring-export SNAPSHOT POLICY` | Dry-run or send approved custom metrics to OCI Monitoring. |
 | `nats-sink-observe statsd-export SNAPSHOT POLICY` | Dry-run or send approved best-effort metric datagrams to StatsD. |
+| `nats-sink-observe datadog-export SNAPSHOT POLICY` | Dry-run or send approved best-effort DogStatsD datagrams to a Datadog Agent. |
+| `nats-sink-observe cloudwatch-export SNAPSHOT POLICY` | Dry-run or send approved custom metrics to Amazon CloudWatch. |
+| `nats-sink-observe azure-monitor-export SNAPSHOT POLICY` | Dry-run or send approved custom metrics to Azure Monitor. |
 | `nats-sink-observe syslog-export SNAPSHOT POLICY` | Dry-run or send approved RFC 5424-style metric messages to syslog. |
 
 The global version flag is available too:
@@ -392,17 +475,33 @@ published to DLQ and `dead_letter.ack_term_after_publish` is enabled. They are
 separate from normal ACK metrics because `AckTerm` means "stop redelivery after
 terminal failure handling", not "the sink successfully wrote the message".
 
-Confirmed ACK metrics are not emitted yet because the runtime does not yet
-expose a confirmed ACK option. The evaluated future metrics are documented in
-[Acknowledgement Confirmation Evaluation](acknowledgement-confirmation.md).
-Those future metrics should remain separate from ordinary ACK counters so an
+Confirmed ACK metrics are emitted when `delivery.ack_confirmation.enabled=true`
+and the runner attempts a server-confirmed ACK after durable sink success or
+successful DLQ publication. They are separate from ordinary ACK counters so an
 operator can distinguish "ACK sent" from "ACK confirmation received".
+Confirmation failure after durable success can still lead to redelivery, so
+these counters should be interpreted alongside idempotency and duplicate
+metrics.
 
-InProgress metrics are also not emitted yet because the runtime does not yet
-send progress signals. The evaluated future metrics are documented in
-[InProgress Evaluation](in-progress-evaluation.md). Those future metrics should
-distinguish "work is still active" from "work is successful" so dashboards do
-not accidentally treat progress as durable completion.
+```bash
+nats-sink-metrics show .local/nats-sinks/metrics.json --metric "ack_confirmation_*"
+```
+
+Example shell output:
+
+```text
+ACK_CONFIRMATION_ATTEMPTS_TOTAL=3
+ACK_CONFIRMATION_SUCCESSES_TOTAL=2
+ACK_CONFIRMATION_TIMEOUTS_TOTAL=1
+ACK_CONFIRMATION_SECONDS_COUNT=1
+```
+
+The InProgress metric contract is available for the optional runtime heartbeat.
+The metrics and operator interpretation guidance are documented in the
+[InProgress Metrics Runbook](inprogress-metrics-runbook.md), and the timing
+evaluation remains in [InProgress Evaluation](in-progress-evaluation.md).
+These metrics distinguish "work is still active" from "work is successful" so
+dashboards do not accidentally treat progress as durable completion.
 
 ```bash
 nats-sink-metrics show .local/nats-sinks/metrics.json --metric "*term*"
@@ -555,6 +654,104 @@ Priority lane metrics are useful for answering operational questions such as:
 
 For the scheduling model and configuration details, read
 [Priority-Aware Processing Lanes](priority-lanes.md).
+
+## Fan-Out Metrics
+
+Fan-out metrics are emitted by the production `FanoutSink` through the reusable
+route-selection and ACK-gate observability helpers. They are aggregate-only and
+deliberately payload-free. The helpers count how many route policy entries
+matched, how many messages selected child sinks, how many child sinks were
+selected, whether required sinks succeeded or failed, whether optional sinks
+succeeded, failed, or timed out, and whether the original JetStream message
+became eligible for ACK.
+
+The fan-out metrics do not expose route names, sink instance names, NATS
+subjects, classification values, labels, message IDs, file paths, database
+names, or payload fields. If a deployment later wants subject-aware or
+sink-aware external export, that must be approved through an explicit
+observability policy with bounded cardinality.
+
+The fan-out metric suffixes are:
+
+| Metric suffix | Type | Meaning |
+| --- | --- | --- |
+| `fanout_route_matches_total` | counter | Matched route policy entries without exporting route names. |
+| `fanout_messages_routed_total` | counter | Messages with at least one selected child sink target. |
+| `fanout_messages_no_route_total` | counter | Messages rejected or ignored because no child sink target was selected. |
+| `fanout_child_sinks_selected_total` | counter | Selected child sink operations across routed messages. |
+| `current_fanout_child_sinks_selected` | gauge | Child sink targets selected for the latest evaluated message. |
+| `fanout_required_child_success_total` | counter | Required child sink operations that committed before ACK. |
+| `fanout_required_child_failure_total` | counter | Required child sink operations that failed and blocked ACK. |
+| `fanout_optional_child_success_total` | counter | Optional child sink operations that completed before the ACK gate released. |
+| `fanout_optional_child_failure_total` | counter | Optional child sink operations that failed without blocking required ACK. |
+| `fanout_optional_child_timeout_total` | counter | Optional child sink operations that exceeded their bounded ACK wait window. |
+| `fanout_messages_acked_total` | counter | Fan-out messages whose original JetStream message became eligible for ACK. |
+| `fanout_messages_ack_blocked_total` | counter | Fan-out messages whose original ACK was blocked by required failure. |
+| `fanout_ack_gate_wait_seconds` | observation | Seconds spent waiting at the fan-out ACK gate. |
+| `fanout_batch_seconds` | observation | Seconds spent processing a fan-out batch across selected child sinks. |
+
+Show only fan-out rows:
+
+```bash
+nats-sink-metrics show .local/nats-sinks/metrics.json \
+  --format shell \
+  --metric "fanout_*" \
+  --metric "current_fanout_*"
+```
+
+Example output:
+
+```text
+CURRENT_FANOUT_CHILD_SINKS_SELECTED=2
+FANOUT_ACK_GATE_WAIT_SECONDS_COUNT=1
+FANOUT_ACK_GATE_WAIT_SECONDS_MAX=0.125
+FANOUT_CHILD_SINKS_SELECTED_TOTAL=2
+FANOUT_MESSAGES_ACKED_TOTAL=1
+FANOUT_MESSAGES_ROUTED_TOTAL=1
+FANOUT_OPTIONAL_CHILD_TIMEOUT_TOTAL=1
+FANOUT_REQUIRED_CHILD_SUCCESS_TOTAL=1
+```
+
+Prometheus text output from the local CLI keeps the same aggregate posture:
+
+```bash
+nats-sink-metrics show .local/nats-sinks/metrics.json \
+  --format prometheus \
+  --metric "fanout_*" \
+  --namespace mission_ops
+```
+
+Example output:
+
+```text
+# HELP mission_ops_fanout_messages_routed_total Messages with at least one selected fan-out child sink target.
+# TYPE mission_ops_fanout_messages_routed_total counter
+mission_ops_fanout_messages_routed_total 1
+# HELP mission_ops_fanout_ack_gate_wait_seconds Elapsed seconds spent waiting at the fan-out ACK gate.
+# TYPE mission_ops_fanout_ack_gate_wait_seconds summary
+mission_ops_fanout_ack_gate_wait_seconds_count 1
+mission_ops_fanout_ack_gate_wait_seconds_sum 0.125
+```
+
+Python test harnesses and embedded fan-out delivery code can use the helper
+module directly:
+
+```python
+from nats_sinks.core.fanout_observability import record_fanout_ack_gate_result
+
+summary = record_fanout_ack_gate_result(
+    metrics,
+    ack_gate_result,
+    ack_wait_seconds=0.125,
+    batch_seconds=0.250,
+)
+assert summary.messages_acked == 1
+```
+
+Structured fan-out logs are human-readable and intentionally sanitized. A
+required failure log says that the original message remains unacknowledged; an
+optional timeout log says that the ACK gate released with optional issues. The
+logs include counts and outcome categories, not payloads or child sink names.
 
 ## Oracle Duplicate And Conflict Metrics
 
@@ -861,6 +1058,11 @@ nats_connection_reconnected_total
 nats_connection_closed_total
 nats_discovered_servers_total
 nats_async_errors_total
+fanout_route_matches_total
+fanout_messages_routed_total
+fanout_required_child_success_total
+fanout_optional_child_timeout_total
+fanout_ack_gate_wait_seconds
 last_sink_success_epoch_seconds
 current_batch_messages
 ```
@@ -1052,6 +1254,12 @@ The preferred metric suffixes are:
 | `payload_encryption_errors_total` | counter | Messages that failed core payload encryption before sink delivery. |
 | `dlq_publish_errors_total` | counter | Messages whose DLQ publication failed before original ACK. |
 | `ack_errors_total` | counter | Messages whose JetStream ACK failed after durable success. |
+| `ack_confirmation_attempts_total` | counter | JetStream ACK confirmation attempts after durable success or DLQ success. |
+| `ack_confirmation_successes_total` | counter | JetStream ACK confirmations accepted by the server after durable success or DLQ success. |
+| `ack_confirmation_timeouts_total` | counter | JetStream ACK confirmation attempts that timed out after durable success or DLQ success. |
+| `ack_confirmation_failures_total` | counter | JetStream ACK confirmation attempts that failed after durable success or DLQ success. |
+| `ack_confirmation_unsupported_total` | counter | Messages where ACK confirmation was requested but unsupported by the client path. |
+| `ack_confirmation_seconds` | observation | Elapsed seconds spent waiting for JetStream ACK confirmation responses. |
 | `term_errors_total` | counter | Messages whose terminal acknowledgement failed after successful DLQ publication. |
 | `policy_messages_passed_total` | counter | Messages accepted by pre-sink policy evaluation. |
 | `policy_messages_rejected_total` | counter | Messages rejected by pre-sink policy evaluation before any sink write. |
@@ -1095,6 +1303,20 @@ The preferred metric suffixes are:
 | `priority_lane_defaulted_total` | counter | Messages routed to the default priority lane because priority was missing or unknown. |
 | `priority_lane_rejected_total` | counter | Messages rejected because priority metadata violated the priority-lane policy. |
 | `current_priority_lanes_active` | gauge | Number of configured priority lanes represented in the active scheduled batch. |
+| `fanout_route_matches_total` | counter | Route policy entries matched by fan-out delivery without exposing route names. |
+| `fanout_messages_routed_total` | counter | Messages with at least one selected fan-out child sink target. |
+| `fanout_messages_no_route_total` | counter | Messages rejected or ignored because routing selected no fan-out targets. |
+| `fanout_child_sinks_selected_total` | counter | Selected fan-out child sink operations across routed messages. |
+| `current_fanout_child_sinks_selected` | gauge | Child sink targets selected for the latest evaluated message. |
+| `fanout_required_child_success_total` | counter | Required fan-out child sink operations that committed before ACK. |
+| `fanout_required_child_failure_total` | counter | Required fan-out child sink operations that failed and blocked ACK. |
+| `fanout_optional_child_success_total` | counter | Optional fan-out child sink operations that completed before the ACK gate released. |
+| `fanout_optional_child_failure_total` | counter | Optional fan-out child sink operations that failed without blocking required ACK. |
+| `fanout_optional_child_timeout_total` | counter | Optional fan-out child sink operations that exceeded their bounded ACK wait window. |
+| `fanout_messages_acked_total` | counter | Fan-out messages whose original JetStream message became eligible for ACK. |
+| `fanout_messages_ack_blocked_total` | counter | Fan-out messages whose original ACK was blocked by required failure. |
+| `fanout_ack_gate_wait_seconds` | observation | Seconds spent waiting at the fan-out ACK gate. |
+| `fanout_batch_seconds` | observation | Seconds spent processing a fan-out batch across selected child sinks. |
 | `oracle_conflicts_total` | counter | Oracle write conflicts observed by OracleSink, such as duplicate-key conflicts. |
 | `oracle_duplicates_total` | counter | Oracle rows identified as duplicate prior processing through idempotent handling. |
 | `oracle_duplicate_ignored_total` | counter | Oracle duplicate rows safely ignored by `insert_ignore` mode. |

@@ -14,129 +14,136 @@ generated database passwords, or full raw logs from live systems.
 | Field | Value |
 | --- | --- |
 | Overall result | Pass |
-| Report generated | 2026-05-25 release `v0.4.1` readiness validation |
-| Project version | `0.4.1` release candidate |
+| Report generated | 2026-05-29 release validation and blocker fix for `v0.4.2` |
+| Project version | `0.4.2` |
 | Python version | 3.12.4 |
-| Git revision checked | Branch `release-v0.4.1` with local release-candidate changes |
-| Live NATS details | Local disposable NATS server only; ports and process details redacted |
-| Live Oracle Database details | Environment-gated test table only; connection details redacted |
-| Live Oracle MySQL details | Local short-lived Docker container only; generated credentials, ports, container names, and container identifiers redacted |
+| Git revision checked | Branch `bugfix-release-ci-latest-ruff-lint`, to be merged back into `release-v0.4.2` |
+| Live NATS details | Environment-gated live tests skipped unless explicitly enabled |
+| Live Oracle Database details | Environment-gated live tests skipped unless explicitly enabled |
+| Live Oracle MySQL details | Environment-gated live tests skipped unless explicitly enabled |
+| Live Oracle NoSQL details | Environment-gated live tests skipped unless explicitly enabled |
+| Live Oracle Coherence details | Environment-gated live tests skipped unless explicitly enabled |
+| Live S3-compatible object storage details | Environment-gated live tests skipped unless explicitly enabled |
+| Container e2e details | Oracle NoSQL Database and Oracle Coherence Community Edition container-backed sink e2e passed locally |
 
-This refresh covered the full `v0.4.1` release candidate. It validated the core
-runtime, Oracle Database sink, Oracle MySQL sink, file sink, spool support,
-observability connectors, Docker assets, documentation builds, package build,
-SBOM generation, checksum generation, and release issue hygiene.
-
-```mermaid
-flowchart LR
-    NATS[NATS JetStream message] --> Core[nats-sinks core envelope and metadata]
-    Core --> MySQL[Oracle MySQL sink]
-    MySQL --> Commit[Database commit]
-    Commit --> Ack[Message may be acknowledged]
-    MySQL --> Metrics[Sink metrics]
-    Tests[Unit and container e2e tests] --> Report[Sanitized latest report]
-    Docs[Documentation builds] --> Report
-```
+This refresh prepares the `v0.4.2` release branch after the HTTP, S3, Oracle
+NoSQL Database, Oracle Coherence Community Edition, Palantir Foundry, Palantir
+Gotham, OCI Monitoring, routing, documentation, and release-preparation changes
+planned for the release. Two release-preparation bugs were found during the
+release cycle. Managed bug `#328` covered a GitHub CLI authentication helper
+false negative. Managed bug `#331` covered a hosted release-validation CI lint
+failure caused by newer Ruff rules than the first local release-preparation
+environment used. Both were reproduced with deterministic tests, fixed,
+commented on their issues, marked `completed`, and included in this report.
 
 ## Core And Repository Validation
 
 | Check | Result |
 | --- | --- |
-| Ruff format | Pass, `212 files already formatted` |
-| Ruff lint | Pass |
-| Mypy | Pass, no issues in `85` source files |
-| Version metadata consistency | Pass for `0.4.1` |
+| Ruff format | Pass, `294` files already formatted |
+| Ruff lint | Pass, including a local check with Ruff `0.15.15` to match the hosted release-validation runner |
+| Mypy | Pass, no issues in `126` source files |
+| Version metadata consistency | Pass for `0.4.2` |
 | Dependency manifests | Pass, manifest files up to date |
-| Backlog item validation | Pass, `142` backlog items validated |
-| Bug report validation | Pass, `84` bug report items validated |
+| Backlog metadata | Pass, `148` backlog items validated |
+| Bug report metadata | Pass, `96` bug reports validated |
 | PyPI-facing Markdown links | Pass |
-| Secret scan | Pass, no high-confidence secret material found |
-| Bandit | Pass with reviewed `nosec` annotations for validated SQL identifier builders |
-| Package build | Pass, sdist and wheel built |
-| SBOM generation | Pass, CycloneDX JSON and XML generated |
-| Checksum generation | Pass, `dist/SHA256SUMS` generated |
-| Twine metadata check | Pass for retained distributions |
+| Documentation builds | Pass for Read the Docs and GitHub Pages MkDocs builds |
+| Security checks | Pass; existing reviewed `nosec` warnings remained non-blocking |
+| Package build | Pass, source distribution and wheel built for `0.4.2` |
+| SBOM and checksums | Pass, CycloneDX JSON/XML and checksum manifest generated for `0.4.2` |
+| GitHub CLI release helper | Pass after bug `#328`; authenticated API probing is used without printing token values |
+| Release CI lint compatibility | Pass after bug `#331`; stale Ruff suppressions and async pathlib use were covered by a focused regression |
+
+The documentation build emitted the existing upstream Material for MkDocs
+warning about MkDocs 2.0. The repository checks remained passing.
 
 ## Test Results
 
 | Test Area | Command | Result |
 | --- | --- | --- |
-| Oracle MySQL sink hardening and regression tests | `scripts/check.sh` | Pass as part of the full unit suite, including the Oracle MySQL bug-hunt hardening tests |
-| Oracle MySQL container end-to-end test | `python scripts/run-mysql-sink-e2e.py` | Pass |
-| Local Docker/NATS/file-sink smoke test | `python scripts/run-docker-local-smoke.py` | Pass |
-| Oracle MySQL test container smoke test | `python scripts/run-oracle-mysql-container-smoke.py` | Pass |
-| WebSocket NATS end-to-end test | `scripts/run-websocket-e2e.sh` | Pass, `16` messages persisted |
-| Oracle Database live end-to-end test | `scripts/run-oracle-e2e.sh --table NATS_SINKS_E2E_EVENTS_V2 --message-count 64 --batch-size 64` | Pass, `1 passed` |
-| Main repository test suite | `scripts/check.sh` | Pass, `896 passed, 10 skipped` |
-| Encryption and sink contract subset | `scripts/check.sh` | Pass, `123 passed` |
-| Sink capability subset | `scripts/check.sh` | Pass, `105 passed` |
-| Documentation builds | `scripts/check.sh` | Pass for Read the Docs and GitHub Pages MkDocs builds |
+| Main repository test suite | `scripts/check.sh` | Pass, `1314 passed, 13 skipped` |
+| Commit, encryption, file, and Oracle sink subset | run by `scripts/check.sh` | Pass, `142 passed` |
+| Sink certification and example validation | `scripts/check-sinks.sh` through `scripts/check.sh` | Pass, `217 passed` plus configuration validation for file, Oracle Database, Oracle MySQL Database, Oracle NoSQL Database, Oracle Coherence Community Edition, fan-out, Foundry, Gotham, HTTP, and S3 examples |
+| Container-backed sink e2e | `NATS_SINKS_RUN_CONTAINER_E2E=1 scripts/check-sinks.sh` | Pass; Oracle NoSQL Database and Oracle Coherence Community Edition container-backed sink e2e passed |
+| GitHub auth helper regression | `python -m pytest tests/unit/test_check_gh_auth_script.py -q` | Pass, `2 passed` |
+| GitHub auth helper live check | `scripts/check-gh-auth.sh --check-only` | Pass with authenticated API access |
+| Release CI lint compatibility regression | `python -m pytest tests/unit/test_release_ci_lint_compatibility.py -q` | Pass, `2 passed` |
+| Latest Ruff compatibility check | `python -m ruff check .` with Ruff `0.15.15` | Pass |
+| Full local validation | `scripts/check.sh` | Pass |
 
-The skipped tests are the existing environment-gated live NATS and Oracle
-Database integration tests. Where release validation required live coverage,
-the dedicated local e2e scripts were run explicitly and their sensitive
-connection details were excluded from this report.
+The skipped tests are the existing environment-gated live NATS, Oracle
+Database, Oracle MySQL, Oracle NoSQL Database, Oracle Coherence Community
+Edition, S3-compatible object storage, and push-consumer integration tests.
+They require explicit operator-provided services or environment flags and were
+not implicitly run by the default release-preparation check.
 
-## Oracle MySQL Sink Evidence
+The Oracle Coherence container-backed e2e run emitted two Python 3.14 protobuf
+deprecation warnings from the optional Coherence client dependency. The test
+passed and no project code defect was found.
 
-The optional local Oracle MySQL sink end-to-end test was executed with the local
-Docker daemon:
+## Release Readiness Evidence
 
-```bash
-python scripts/run-mysql-sink-e2e.py
-```
+| Check | Result |
+| --- | --- |
+| Open release-labeled issues | `52` open issues with `release-v0.4.2` were checked after bug `#331`; all completed development work is waiting for release-gated closure |
+| Release-prep bugs found during validation | Bugs `#328` and `#331` created, reproduced, fixed, documented, and marked `completed` for `v0.4.2` |
+| Open PRs into `release-v0.4.2` | None before this release-preparation branch is opened |
+| Open PRs into `main` | None before this release-preparation branch is opened |
+| Dist artifacts | `nats_sinks-0.4.2.tar.gz` and `nats_sinks-0.4.2-py3-none-any.whl` built successfully |
+| SBOM artifacts | `nats-sinks-0.4.2.cyclonedx.json` and `nats-sinks-0.4.2.cyclonedx.xml` generated |
+| Checksum manifest | `dist/SHA256SUMS` generated and verified for tracked release artifacts |
 
-Sanitized result:
-
-```text
-Oracle MySQL sink container e2e test passed.
-```
-
-The test verified:
-
-- a fresh Oracle MySQL test container with generated credentials;
-- loopback-only random host-port exposure;
-- automatic test table creation through the Oracle MySQL sink;
-- commit-before-success processing;
-- JSON payload persistence;
-- non-JSON payload envelope persistence;
-- empty-message handling;
-- priority, classification, labels, mission metadata, and security labels;
-- subject-to-table routing;
-- duplicate handling through idempotency configuration;
-- cleanup of the container, Docker volume, and generated secret files by
-  default.
-
-Docker cleanup was checked after the run. No `nats-sinks` Oracle MySQL test
-container or volume remained active.
+Feature requests and managed bug reports remain open until the GitHub Release
+for the associated release is published. The `completed` label means the work
+is done in development and waiting for release-gated closure.
 
 ## Issues Found During Validation
 
-The Oracle MySQL release hardening pass raised and repaired the managed GitHub
-bug reports `#253` through `#269`. The fixes cover configuration fail-closed
-behavior, identifier validation, TLS path validation, idempotency column
-validation, deterministic DDL naming, and cleanup-error handling. Each bug has
-public issue evidence, release labels, completed status, and regression coverage.
+Managed bug `#328` was found during release preparation:
 
-Issue `#224` was also updated with close-out evidence for the local Docker image
-and NATS Compose stack after the local Docker smoke test passed.
+- the failing regression showed `scripts/check-gh-auth.sh --check-only` could
+  reject a usable GitHub CLI environment when the quiet status path was
+  unreliable;
+- the helper now performs a silent authenticated API probe instead of relying
+  on the quiet status path;
+- the regression test and live helper check both passed after the fix;
+- the issue has failing-test evidence, completion evidence, checked acceptance
+  criteria, and the `completed` label.
+
+Managed bug `#331` was found when the release-validation CI workflow installed
+a newer Ruff version than the first local release-preparation environment:
+
+- the failing CI run reported stale subprocess lint suppressions in local
+  container e2e helper scripts and a direct pathlib call inside an async
+  multi-sink routing helper;
+- a focused static regression now covers both compatibility expectations;
+- the subprocess helpers continue to use fixed argument lists, no shell, bounded
+  timeouts, and explicit environments;
+- the multi-sink routing helper delegates local directory creation outside the
+  async event loop;
+- the focused regression, full local validation, latest Ruff compatibility
+  check, and container-backed sink e2e suite all passed after the fix.
+
+No unresolved code, packaging, documentation, sink, or container-backed e2e
+defects remain from this validation pass.
 
 ## Documentation Evidence
 
-The following documentation was updated and built successfully:
+The following release-facing documentation was updated or validated:
 
-- [Oracle MySQL Sink](mysql-sink.md)
-- [Oracle MySQL Test Container](oracle-mysql-test-container.md)
+- [README](https://github.com/ProjectCuillin/nats-sinks/blob/main/README.md)
+- [Documentation Home](index.md)
+- [Release](release.md)
+- [Publishing](publishing.md)
+- [Getting Started](getting-started.md)
 - [Configuration](configuration.md)
-- [Docker](docker.md)
-- [Metrics](metrics.md)
-- [Public API](public-api.md)
-- [Python Usage](python-usage.md)
-- [Sink Certification](sink-certification.md)
-- [Sink Framework](sink-framework.md)
 - [Testing](testing.md)
+- [Security](security.md)
 - [Roadmap](roadmap.md)
+- [Public API](public-api.md)
+- [Defence And Mission Support](use-cases/defence/index.md)
 
-The README, changelog, MkDocs navigation, example configuration, dependency
-manifest, public API checks, sink certification checks, and CLI registry tests
-were also updated for issue `#101`.
+The changelog, version metadata, release helper documentation, bug metadata,
+latest test report, generated dependency manifests, package artifacts, SBOM,
+and checksum evidence were refreshed for `v0.4.2` release preparation.

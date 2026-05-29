@@ -5,9 +5,12 @@
 
 import json
 from pathlib import Path
+from typing import Any
 
+import pytest
 from typer.testing import CliRunner
 
+import nats_sinks.cli.main as cli_main
 from nats_sinks import InMemoryMetrics, MetricNames, SinkPluginConfig, __version__
 from nats_sinks.cli.main import _attach_metrics_to_sink, _registry, app
 from nats_sinks.core.errors import ConfigurationError
@@ -44,6 +47,73 @@ def test_cli_validates_file_sink_config(tmp_path: Path) -> None:
         ),
         encoding="utf-8",
     )
+
+    result = CliRunner().invoke(app, ["validate", str(config)])
+
+    assert result.exit_code == 0
+    assert "Configuration is valid." in result.output
+    assert "Active sink: file" in result.output
+
+
+def test_cli_validates_http_sink_config(tmp_path: Path) -> None:
+    config = tmp_path / "http-config.json"
+    config.write_text(
+        json.dumps(
+            {
+                "nats": {
+                    "url": "nats://localhost:4222",
+                    "stream": "ORDERS",
+                    "consumer": "http-orders-sink",
+                    "subject": "orders.*",
+                },
+                "sink": {
+                    "type": "http",
+                    "url": "https://events.example.invalid/nats-sink",
+                    "endpoint_allowed_hosts": ["events.example.invalid"],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(app, ["validate", str(config)])
+
+    assert result.exit_code == 0
+    assert "Configuration is valid." in result.output
+    assert "Active sink: http" in result.output
+
+
+def test_cli_validates_s3_sink_config(tmp_path: Path) -> None:
+    config = tmp_path / "s3-config.json"
+    config.write_text(
+        json.dumps(
+            {
+                "nats": {
+                    "url": "nats://localhost:4222",
+                    "stream": "ORDERS",
+                    "consumer": "s3-orders-sink",
+                    "subject": "orders.*",
+                },
+                "sink": {
+                    "type": "s3",
+                    "bucket": "nats-sinks-events",
+                    "prefix": "orders/archive",
+                    "key_strategy": "stream_sequence",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(app, ["validate", str(config)])
+
+    assert result.exit_code == 0
+    assert "Configuration is valid." in result.output
+    assert "Active sink: s3" in result.output
+
+
+def test_cli_validates_routing_match_policy_example() -> None:
+    config = Path(__file__).resolve().parents[2] / "examples/routing-match-policy/config.json"
 
     result = CliRunner().invoke(app, ["validate", str(config)])
 
@@ -178,10 +248,31 @@ def test_cli_metrics_hook_attaches_mysql_sink_counters() -> None:
 def test_cli_registry_always_exposes_first_party_connectors() -> None:
     registry = _registry()
 
-    assert registry.names() == ("file", "mysql", "oracle", "spool")
+    assert registry.names() == (
+        "coherence",
+        "file",
+        "foundry",
+        "gotham",
+        "http",
+        "mysql",
+        "oracle",
+        "oracle_nosql",
+        "s3",
+        "spool",
+    )
+    assert registry.connector("coherence").requires_extra == "coherence"
+    assert registry.connector("coherence").production_ready is False
     assert registry.connector("file").built_in is True
+    assert registry.connector("foundry").production_ready is False
+    assert registry.connector("gotham").production_ready is False
+    assert registry.connector("http").documentation == "docs/http-sink.md"
+    assert registry.connector("http").production_ready is True
     assert registry.connector("mysql").requires_extra == "mysql"
+    assert registry.connector("oracle_nosql").requires_extra == "oracle-nosql"
+    assert registry.connector("oracle_nosql").production_ready is False
     assert registry.connector("oracle").production_ready is True
+    assert registry.connector("s3").requires_extra == "s3"
+    assert registry.connector("s3").documentation == "docs/s3-sink.md"
     assert registry.connector("spool").requires_extra == "crypto"
 
 
@@ -272,3 +363,190 @@ def test_cli_stream_plan_rejects_invalid_options_without_traceback(tmp_path: Pat
     assert result.exit_code == 2
     assert "retention must be one of" in result.output
     assert "Traceback" not in result.output
+
+
+class FakeInspectionSequence:
+    stream = 7
+    consumer = 1
+
+
+class FakeInspectionMetadata:
+    stream = "ORDERS"
+    consumer = "_ordered"
+    num_delivered = 1
+    num_pending = 0
+    timestamp = None
+    sequence = FakeInspectionSequence()
+
+
+class FakeInspectionMessage:
+    subject = "orders.created"
+    data = b'{"order_id":"A-100"}'
+    reply = None
+    metadata = FakeInspectionMetadata()
+    headers: dict[str, str]
+
+    def __init__(self) -> None:
+        self.headers = {"Authorization": "Bearer example", "X-Unit": "visible"}
+
+    async def ack(self) -> None:
+        raise AssertionError("inspection CLI must not ACK messages")
+
+
+class FakeInspectionSubscription:
+    def __init__(self) -> None:
+        self.messages: list[FakeInspectionMessage] = [FakeInspectionMessage()]
+        self.unsubscribed = False
+
+    async def next_msg(self, **kwargs: float) -> FakeInspectionMessage:
+        _ = kwargs["timeout"]
+        if not self.messages:
+            raise TimeoutError
+        return self.messages.pop(0)
+
+    async def unsubscribe(self) -> None:
+        self.unsubscribed = True
+
+
+class FakeInspectionJetStream:
+    def __init__(self) -> None:
+        self.subscription = FakeInspectionSubscription()
+
+    async def subscribe(
+        self,
+        subject: str,
+        *,
+        stream: str,
+        ordered_consumer: bool,
+        manual_ack: bool,
+        idle_heartbeat: float | None,
+        pending_msgs_limit: int,
+        pending_bytes_limit: int,
+    ) -> FakeInspectionSubscription:
+        assert subject == "orders.created"
+        assert stream == "ORDERS"
+        assert ordered_consumer is True
+        assert manual_ack is False
+        assert idle_heartbeat is None
+        assert pending_msgs_limit > 0
+        assert pending_bytes_limit > 0
+        return self.subscription
+
+
+class FakeInspectionConnection:
+    def __init__(self) -> None:
+        self.js = FakeInspectionJetStream()
+        self.closed = False
+
+    def jetstream(self) -> FakeInspectionJetStream:
+        return self.js
+
+    async def close(self) -> None:
+        self.closed = True
+
+
+def _ordered_inspection_config(path: Path, event_dir: Path) -> None:
+    path.write_text(
+        json.dumps(
+            {
+                "nats": {
+                    "url": "nats://localhost:4222",
+                    "stream": "ORDERS",
+                    "consumer": "file-orders-sink",
+                    "subject": "orders.created",
+                },
+                "sink": {
+                    "type": "file",
+                    "directory": str(event_dir),
+                    "fsync": False,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_cli_inspect_ordered_outputs_redacted_jsonl_without_building_sink(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    config = tmp_path / "file-config.json"
+    _ordered_inspection_config(config, tmp_path / "events")
+    connection = FakeInspectionConnection()
+
+    async def fake_connect(options: dict[str, Any]) -> FakeInspectionConnection:
+        assert options["servers"] == ["nats://localhost:4222"]
+        return connection
+
+    def fail_if_sink_is_built(*args: Any, **kwargs: Any) -> None:
+        _ = args, kwargs
+        raise AssertionError("inspection command must not build a sink")
+
+    monkeypatch.setattr(cli_main, "_connect_nats_for_inspection", fake_connect)
+    monkeypatch.setattr(cli_main, "_build_sink", fail_if_sink_is_built)
+    monkeypatch.setattr(cli_main, "_build_sink_from_raw", fail_if_sink_is_built)
+
+    result = CliRunner().invoke(app, ["inspect-ordered", str(config), "--format", "jsonl"])
+
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["inspection_only"] is True
+    assert parsed["stream_sequence"] == 7
+    assert parsed["headers"]["Authorization"] == "<redacted>"
+    assert parsed["payload"]["redacted"] is True
+    assert "data" not in parsed["payload"]
+    assert connection.closed is True
+    assert connection.js.subscription.unsubscribed is True
+
+
+def test_cli_inspect_ordered_validates_limits_before_connecting(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    config = tmp_path / "file-config.json"
+    _ordered_inspection_config(config, tmp_path / "events")
+
+    async def fail_if_connects(options: dict[str, Any]) -> None:
+        _ = options
+        raise AssertionError("invalid inspection limits should fail before connecting")
+
+    monkeypatch.setattr(cli_main, "_connect_nats_for_inspection", fail_if_connects)
+
+    result = CliRunner().invoke(app, ["inspect-ordered", str(config), "--max-messages", "0"])
+
+    assert result.exit_code == 2
+    assert "max_messages must be between 1 and 1000" in result.output
+    assert "Traceback" not in result.output
+
+
+def test_cli_inspect_ordered_writes_jsonl_under_output_root(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    config = tmp_path / "file-config.json"
+    output_root = tmp_path / "inspection"
+    _ordered_inspection_config(config, tmp_path / "events")
+
+    async def fake_connect(options: dict[str, Any]) -> FakeInspectionConnection:
+        _ = options
+        return FakeInspectionConnection()
+
+    monkeypatch.setattr(cli_main, "_connect_nats_for_inspection", fake_connect)
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "inspect-ordered",
+            str(config),
+            "--output-root",
+            str(output_root),
+            "--output",
+            "orders.jsonl",
+        ],
+    )
+
+    assert result.exit_code == 0
+    output_path = output_root / "orders.jsonl"
+    parsed = json.loads(output_path.read_text(encoding="utf-8"))
+    assert parsed["subject"] == "orders.created"
+    assert "JSONL inspection records written to" in result.output

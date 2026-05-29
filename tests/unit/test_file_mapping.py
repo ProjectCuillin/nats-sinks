@@ -26,6 +26,7 @@ def _envelope(
     stream: str | None = "ORDERS",
     stream_sequence: int | None = 7,
     message_id: str | None = "msg-1",
+    headers: dict[str, str] | None = None,
     priority: str | None = None,
     classification: str | None = None,
     labels: object | None = None,
@@ -34,7 +35,9 @@ def _envelope(
     return NatsEnvelope(
         subject=subject,
         data=data,
-        headers={"Nats-Msg-Id": message_id} if message_id else {},
+        headers=(
+            headers if headers is not None else ({"Nats-Msg-Id": message_id} if message_id else {})
+        ),
         stream=stream,
         consumer="file-sink",
         stream_sequence=stream_sequence,
@@ -211,3 +214,24 @@ def test_file_record_wraps_empty_payload() -> None:
 
     assert record["payload"]["_nats_sinks"]["size_bytes"] == 0
     assert record["payload_info"]["wrapped"]
+    assert record["metadata"]["payload"]["present"] is True
+    assert record["metadata"]["payload"]["omitted"] is False
+
+
+def test_file_record_marks_headers_only_payload_omission() -> None:
+    config = FileSinkConfig(directory=Path("test-output"))
+    record = file_record_for_envelope(
+        _envelope(data=b"", headers={"Nats-Msg-Size": "2048"}),
+        config=config,
+    )
+
+    assert record["payload"]["_nats_sinks"]["size_bytes"] == 0
+    assert record["metadata"]["payload"] == {
+        "present": False,
+        "omitted": True,
+        "omitted_reason": "headers_only",
+        "original_size_bytes": 2048,
+        "delivered_size_bytes": 0,
+        "nats_msg_size_header": "2048",
+        "nats_msg_size_header_malformed": False,
+    }

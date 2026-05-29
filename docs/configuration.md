@@ -12,8 +12,14 @@ where it will write.
 ## Minimal Configuration
 
 The minimal example uses the local file sink because it does not require a
-database or credentials. Oracle Database and Oracle MySQL use the same generic
-runtime sections and add destination-specific fields inside the `sink` object.
+database or credentials. Oracle Database, Oracle MySQL, Oracle NoSQL Database,
+Oracle Coherence Community Edition, the edge spool sink, HTTP, S3-compatible
+object storage, and the experimental Palantir Foundry and Gotham sinks use the
+same generic runtime sections and add destination-specific fields inside the
+`sink` object. When a
+deployment needs to prepare several destinations for routing and future
+fan-out, it can also declare additional named instances in the top-level
+`sinks` object.
 
 ```json
 {
@@ -83,7 +89,18 @@ runtime sections and add destination-specific fields inside the `sink` object.
     "retry_backoff_multiplier": 2.0,
     "retry_jitter": "full",
     "temporary_failure_action": "nak",
-    "prefer_safe_duplication": true
+    "prefer_safe_duplication": true,
+    "in_progress": {
+      "enabled": false,
+      "interval_ms": 5000,
+      "max_heartbeats": 12,
+      "shutdown_timeout_ms": 5000
+    },
+    "ack_confirmation": {
+      "enabled": false,
+      "timeout_ms": 1000,
+      "unsupported_action": "fail"
+    }
   },
   "dead_letter": {
     "enabled": true,
@@ -134,6 +151,58 @@ runtime sections and add destination-specific fields inside the `sink` object.
         "priority": "urgent",
         "classification": "restricted",
         "labels": "urgent;customer-facing"
+      }
+    ]
+  },
+  "routing": {
+    "enabled": false,
+    "mode": "first",
+    "no_match": "reject",
+    "target_sink_types": {
+      "oracle_secret": "oracle",
+      "file_secret_audit": "file",
+      "s3_secret_archive": "s3",
+      "oracle_unclass": "oracle"
+    },
+    "default_targets": [],
+    "routes": [
+      {
+        "name": "nato_secret_sensor_audit",
+        "match": {
+          "subject": "mission.sensor.>",
+          "priority": ["urgent"],
+          "classification": ["NATO SECRET"],
+          "labels_all": ["sensor", "audit"],
+          "headers": [
+            {
+              "name": "Nats-Sinks-Route",
+              "values": ["mission-audit"]
+            }
+          ]
+        },
+        "targets": [
+          "oracle_secret",
+          {
+            "sink": "file_secret_audit",
+            "required": false,
+            "minimum_wait_ms": 250,
+            "timeout_ms": 1000
+          },
+          {
+            "sink": "s3_secret_archive",
+            "required": false
+          }
+        ]
+      },
+      {
+        "name": "nato_unclass_sensor_audit",
+        "match": {
+          "subject": "mission.sensor.>",
+          "priority": ["urgent"],
+          "classification": ["NATO UNCLASS"],
+          "labels_all": ["sensor", "audit"]
+        },
+        "targets": ["oracle_unclass"]
       }
     ]
   },
@@ -216,6 +285,20 @@ runtime sections and add destination-specific fields inside the `sink` object.
     "allowed_sinks": [],
     "require_production_ready": true
   },
+  "sinks": {
+    "oracle_secret": {
+      "type": "oracle",
+      "dsn": "tcps://adb.example.invalid/secret",
+      "user": "app_secret",
+      "password_env": "ORACLE_SECRET_PASSWORD",
+      "table": "NATS_SECRET_EVENTS"
+    },
+    "file_audit": {
+      "type": "file",
+      "directory": ".local/file-audit/events",
+      "fsync": false
+    }
+  },
   "sink": {
     "type": "file",
     "directory": ".local/file-sink/events",
@@ -256,12 +339,14 @@ The top-level sections are:
 | `metrics` | no | Metrics namespace, enablement flag, and optional local JSON snapshot path. |
 | `advisories` | no | Optional observation-only JetStream advisory subscription settings. Disabled by default and isolated from source-message ACK behavior. |
 | `message_metadata` | no | Optional priority, classification, and labels extraction defaults applied to every message before sink delivery. |
+| `routing` | no | Optional generic route-match policy that selects logical sink target names from subject, priority, classification, labels, and approved headers. Used directly by `sink.type: "fanout"` and disabled by default for single-sink deployments. |
 | `message_authenticity` | no | Optional fail-closed message-level authenticity verification before payload encryption and sink delivery. Disabled by default. |
 | `custody` | no | Optional tamper-evident payload and metadata hashes computed by the core before sink delivery. Disabled by default. |
 | `encryption` | no | Optional core payload encryption before messages are passed to any sink. |
 | `size_policy` | no | Optional destination-neutral payload, header, metadata, label, record, and batch-size bounds evaluated before any sink write. Disabled by default. |
 | `pre_sink_policy` | no | Optional fail-closed validation gate evaluated after normalization and core payload transformation, but before any sink write. |
-| `plugins` | no | Optional allow-listed discovery for externally installed sink connectors. Disabled by default. Built-in Oracle, file, and spool sinks do not need this section. |
+| `plugins` | no | Optional allow-listed discovery for externally installed sink connectors. Disabled by default. Built-in Oracle Database, Oracle MySQL, Oracle NoSQL Database, Oracle Coherence Community Edition, file, spool, and HTTP sinks do not need this section. |
+| `sinks` | no | Optional registry of named sink instances used by route validation, redacted output, named health checks, and active multi-sink fan-out. See [Named Sinks And Routing](named-sinks.md). |
 | `sink` | yes | Destination-specific sink configuration. `sink.type` chooses the sink implementation. |
 
 The only supported `delivery.ack_policy` value is `after_sink_commit`, which
@@ -272,16 +357,26 @@ production sink processing because it combines acknowledgement and fetching.
 `dead_letter.ack_term_after_publish` option and only after DLQ publication
 succeeds.
 
-Confirmed ACK, sometimes called `AckSync` or double ACK in client APIs, has
-been evaluated but is not yet a runtime configuration option. Any future option
-will be disabled by default and will run only after durable sink success. See
-[Acknowledgement Confirmation Evaluation](acknowledgement-confirmation.md) for
-the current design direction and limitations.
+Confirmed ACK, sometimes called `AckSync` or double ACK in client APIs, is
+available through the disabled-by-default `delivery.ack_confirmation` section.
+When enabled, the runner asks the NATS client to wait for server confirmation
+only after durable sink success or successful DLQ publication. Confirmation
+failure after durable success is still a redelivery-risk event, so idempotent
+sink behavior remains mandatory. See
+[Acknowledgement Confirmation](acknowledgement-confirmation.md) for
+operator guidance and limitations.
 
-JetStream `InProgress` handling has also been evaluated but is not yet a
-runtime configuration option. Any future option will be disabled by default,
-bounded, advisory only, and tied to verifiable consumer `AckWait` or `BackOff`
-timing. See [InProgress Evaluation](in-progress-evaluation.md).
+JetStream `InProgress` handling is available as an optional, disabled-by-default
+heartbeat around active sink writes. It is advisory only: it can extend the
+JetStream acknowledgement wait window while work is still running, but it never
+turns work into a success. The runner starts it only during
+`sink.write_batch(...)` and stops it before final ACK, NAK, Term, DLQ, retry,
+or shutdown completion. It currently requires an explicit
+`consumer_management.ack_wait_seconds` value or a `bind_only` durable consumer
+whose effective AckWait can be verified at startup. It rejects configured or
+effective BackOff policies and requires the heartbeat interval to be below 80%
+of the verified AckWait window. See
+[InProgress Evaluation](in-progress-evaluation.md).
 
 ```mermaid
 flowchart TD
@@ -297,6 +392,59 @@ flowchart TD
     Core --> Sink[Validate selected sink configuration]
     Sink --> Run[Run service or print redacted effective config]
 ```
+
+## Named Sink Registry
+
+The optional top-level `sinks` object declares additional named destination
+instances. Each child object uses the same sink-specific fields as a normal
+top-level `sink`. For example, an Oracle child still configures `dsn`, `user`,
+`password_env`, `table`, and Oracle write policy, while a file child configures
+`directory`, `filename_strategy`, `duplicate_policy`, compression, and fsync
+behavior.
+
+Named sinks are separate from route matching. The route policy contains match
+rules and target names only; destination-specific configuration stays in
+`sinks`. This makes review easier in environments where operational routes,
+classification boundaries, Oracle Database schemas, local file handoff paths,
+and secret sources are owned by different teams.
+
+```json
+{
+  "sinks": {
+    "oracle_secret": {
+      "type": "oracle",
+      "dsn": "tcps://adb.example.invalid/secret",
+      "user": "app_secret",
+      "password_env": "ORACLE_SECRET_PASSWORD",
+      "table": "NATS_SECRET_EVENTS"
+    },
+    "oracle_unclass": {
+      "type": "oracle",
+      "dsn": "tcps://adb.example.invalid/unclass",
+      "user": "app_unclass",
+      "password_env": "ORACLE_UNCLASS_PASSWORD",
+      "table": "NATS_UNCLASS_EVENTS"
+    },
+    "file_audit": {
+      "type": "file",
+      "directory": ".local/file-audit/events",
+      "fsync": false
+    }
+  }
+}
+```
+
+`nats-sink validate` checks the active `sink`, every named sink under `sinks`,
+and every route target reference when named sinks are configured. It also prints
+a safe route-to-target report. `nats-sink show-effective-config` includes the
+named registry with password, token, credential, and key material redacted. Use
+`nats-sink test-sink CONFIG --sink-name NAME` to health-check one named sink or
+`--all-named-sinks` to check every named sink where opening those destinations
+is appropriate.
+
+See [Named Sinks And Routing](named-sinks.md) for complete examples covering
+two Oracle backends, two Oracle tables in one backend, Oracle plus file, two
+file destinations, route target validation, and CLI output.
 
 ## Core Configuration Reference
 
@@ -388,12 +536,12 @@ If an embedding application passes its own `nats-py` callbacks through
 `nats_options`, the runner wraps them so the application callback still runs
 after metrics have been recorded.
 
-Headers-only JetStream delivery is not yet a supported configuration switch in
-nats-sinks. The current runtime can process empty payload bytes, but it does
-not yet distinguish a producer-empty payload from a body omitted by a
-headers-only consumer. See
-[Headers-Only Delivery Evaluation](headers-only-delivery.md) for the design
-decision and follow-up backlog items.
+Headers-only JetStream delivery is supported for durable pull-consumer
+management through `consumer_management.headers_only`. When JetStream omits a
+body, the runtime records payload-presence metadata from `Nats-Msg-Size` and
+does not invent a fake payload. See
+[Headers-Only Delivery](headers-only-delivery.md) for sink, DLQ, and
+idempotency guidance.
 
 The `nats` section is also the source of truth for least-privilege NATS
 authorization planning. `nats.stream`, `nats.consumer`, `nats.subject`, and
@@ -451,7 +599,7 @@ sequenceDiagram
 | `backoff_seconds` | no | `null` | List of positive numbers, each at most `604800`, or `null`. | Optional server-side JetStream `BackOff` sequence. When set, `max_deliver` is required, the list length must be less than or equal to `max_deliver`, and `ack_wait_seconds` must remain `null` because JetStream BackOff overrides AckWait. |
 | `max_ack_pending` | no | `null` | Integer `1` to `1000000`, or `null`. | Optional server-side outstanding ACK limit. This complements, but does not replace, `delivery.batch_size`. |
 | `max_waiting` | no | `null` | Integer `1` to `1000000`, or `null`. | Optional pull-request wait limit on the server-side consumer. |
-| `headers_only` | no | `null` | `true`, `false`, or `null`. | Optional JetStream headers-only delivery setting. The server-side consumer policy is supported here; payload-presence metadata and sink/DLQ certification for metadata-only workflows remain tracked separately. |
+| `headers_only` | no | `null` | `true`, `false`, or `null`. | Optional JetStream headers-only delivery setting. When enabled and JetStream supplies `Nats-Msg-Size`, nats-sinks records that the payload body was intentionally omitted while preserving commit-then-ACK behavior. |
 | `num_replicas` | no | `null` | Integer `0` to `5`, or `null`. | Optional consumer-state replica count. `0` means inherit from the stream when sent to JetStream. `null` leaves the field unmanaged by nats-sinks. |
 | `memory_storage` | no | `null` | `true`, `false`, or `null`. | Optional JetStream `MemoryStorage` flag for consumer state. Use cautiously for durable sink workers because consumer state participates in redelivery behavior. |
 | `metadata` | no | `{}` | Object with up to `32` safe string keys and values. | Optional JetStream consumer metadata. Keys and values are bounded, values reject control characters, and secret-looking keys are rejected. Do not place credentials, payloads, private hostnames, or sensitive operational details in consumer metadata. |
@@ -549,15 +697,62 @@ Permission guidance:
 
 ### `delivery`
 
-The `delivery` section controls how the core runner fetches, writes, retries,
-and ACKs messages. It is destination-neutral: Oracle, file, and future sinks all
-receive batches according to these settings.
+### `push_consumer`
 
-Current releases use pull consumers only. Push-consumer support has been
-evaluated for a future explicit runner mode, but it is not a configuration
-option yet because it needs separate manual-ACK, pending-limit, flow-control,
-heartbeat, shutdown, and certification guardrails. See
-[Push Consumer Evaluation](push-consumer-evaluation.md).
+The `push_consumer` section enables the opt-in JetStream push delivery mode.
+It is disabled by default. Pull consumers remain the recommended production
+default because the runner controls when work is fetched. Push mode exists for
+deployments that already standardize on server-initiated delivery and can
+provision a dedicated delivery subject.
+
+Push mode is still commit-then-acknowledge: callback delivery never means
+success. The runner enqueues callback messages into a bounded queue, writes
+them through the same sink batch pipeline as pull mode, and ACKs only after the
+sink commits or after permanent failures have been preserved in DLQ.
+
+```json
+{
+  "push_consumer": {
+    "enabled": true,
+    "deliver_subject": "_INBOX.nats_sinks.orders",
+    "deliver_group": "orders-workers",
+    "manual_ack": true,
+    "pending_msgs_limit": 1024,
+    "pending_bytes_limit": 67108864,
+    "queue_overflow_action": "nak",
+    "flow_control": false,
+    "idle_heartbeat_seconds": null,
+    "drain_timeout_ms": 30000
+  }
+}
+```
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `enabled` | no | `false` | Boolean. | Enables push delivery. Keep disabled unless the deployment has reviewed push-consumer behavior and permissions. |
+| `deliver_subject` | yes when enabled | `null` | Concrete NATS subject without wildcards. | Delivery subject used by the push consumer. Required so the route is explicit and reviewable. |
+| `deliver_group` | no | `null` | Letters, digits, `.`, `_`, `:`, `/`, `-`, up to 128 characters. | Optional queue-style delivery group. When set, the runner subscribes as a queue push subscriber. |
+| `manual_ack` | no | `true` | Must be `true` when enabled. | Fail-closed guardrail. Auto-ACK would break commit-then-acknowledge and is rejected. |
+| `pending_msgs_limit` | no | `1024` | Integer `1` to `1000000`. | Client-side maximum queued messages accepted from the NATS push subscription. Also used as default server-side `MaxAckPending` when `consumer_management.max_ack_pending` is not set. |
+| `pending_bytes_limit` | no | `67108864` | Integer `1024` to `268435456`. | Client-side pending byte limit for the NATS subscription. |
+| `queue_overflow_action` | no | `nak` | `nak` or `leave_unacked`. | What the runner does when the bounded callback queue is full or already draining. `nak` asks JetStream to redeliver after the configured retry backoff. |
+| `flow_control` | no | `false` | Boolean. | Passes JetStream push flow-control intent to `nats-py`. Startup fails closed if the installed client does not expose the required option. |
+| `idle_heartbeat_seconds` | no | `null` | Float greater than `0` and at most `3600`. | Optional push idle heartbeat interval. Startup fails closed if the client cannot configure it. |
+| `drain_timeout_ms` | no | `30000` | Integer `0` to `600000`. | Reserved shutdown budget for push-drain certification and future operational tooling. Current shutdown stops new intake and drains accepted messages cooperatively. |
+
+When push mode is enabled, `consumer_management.max_waiting` is rejected
+because it is a pull-only setting. If `consumer_management.max_ack_pending` is
+set, it must be less than or equal to `push_consumer.pending_msgs_limit` so the
+server cannot keep more unacknowledged work outstanding than the runner has
+accepted into its bounded queue. The current push runner also requires
+`nats.durable=true` so redelivery, drift checks, and operational ownership stay
+explicit.
+
+### `delivery`
+
+The `delivery` section controls how the core runner fetches or drains, writes,
+retries, and ACKs messages. It is destination-neutral: Oracle, file, and future
+sinks all receive batches according to these settings.
 
 | Field | Required | Default | Valid values | Description |
 | --- | --- | --- | --- | --- |
@@ -574,6 +769,8 @@ heartbeat, shutdown, and certification guardrails. See
 | `temporary_failure_action` | no | `nak` | `nak` or `leave_unacked`. | `nak` asks JetStream to redeliver after the configured backoff. `leave_unacked` relies on the consumer ACK timeout. |
 | `prefer_safe_duplication` | no | `true` | `true` or `false`. | Documents the intended reliability posture: duplicates are acceptable when idempotency handles them; silent loss is not. Keep true unless a future sink documents a reviewed alternative. |
 | `priority_lanes` | no | disabled default lane | Object. | Optional in-batch priority scheduling policy. See [Priority-Aware Processing Lanes](priority-lanes.md). |
+| `in_progress` | no | disabled | Object. | Optional JetStream progress heartbeat during active sink writes. Disabled by default and fail-closed unless safe consumer timing is configured. |
+| `ack_confirmation` | no | disabled | Object. | Optional server-confirmed ACK handling after durable sink success or successful DLQ publication. Disabled by default and bounded by timeout. |
 
 Retry delays are based on JetStream delivery-attempt metadata when available.
 For example, with the defaults, the first retryable failure uses a base delay
@@ -627,6 +824,83 @@ ACKs only after the sink reports durable success for the batch.
 }
 ```
 
+#### `delivery.in_progress`
+
+`delivery.in_progress` controls optional JetStream progress heartbeats for
+long-running sink writes. Use it only when sink writes can legitimately exceed
+the configured consumer AckWait window and idempotency is already in place.
+
+The feature is disabled by default. When enabled, startup fails closed unless
+the runner can verify safe timing from either local configuration or an
+existing durable consumer:
+
+- `nats.durable` must be `true`;
+- `consumer_management.ack_wait_seconds` must be set, or
+  `consumer_management.mode` must be `bind_only` so the existing durable
+  consumer can be inspected before fetch;
+- configured and effective `consumer_management.backoff_seconds`/JetStream
+  `BackOff` must remain unset;
+- `delivery.in_progress.interval_ms` must be below 80% of
+  the verified effective AckWait window.
+
+This first implementation intentionally avoids BackOff-based runtime
+heartbeats. BackOff can override AckWait in JetStream, so deployments using
+BackOff should keep `delivery.in_progress.enabled=false` until BackOff-aware
+heartbeat support is explicitly implemented.
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `enabled` | no | `false` | Boolean. | Enables the heartbeat while `sink.write_batch(...)` is active. Keep disabled unless the AckWait policy and sink latency have been reviewed. |
+| `interval_ms` | no | `5000` | Integer `1` to `3600000`, and less than 80% of AckWait when enabled. | Delay between heartbeat rounds. Each round calls the client `in_progress()` method for every raw message in the active batch. |
+| `max_heartbeats` | no | `12` | Integer `1` to `10000`. | Maximum number of heartbeat rounds per active batch. When the limit is reached, the runner stops sending progress signals and preserves normal final ACK or failure behavior. |
+| `shutdown_timeout_ms` | no | `5000` | Integer `0` to `60000`. | Time allowed for the heartbeat task to stop before final acknowledgement handling continues. `0` cancels immediately. |
+
+Example:
+
+```json
+{
+  "consumer_management": {
+    "ack_wait_seconds": 30
+  },
+  "delivery": {
+    "in_progress": {
+      "enabled": true,
+      "interval_ms": 5000,
+      "max_heartbeats": 12,
+      "shutdown_timeout_ms": 5000
+    }
+  }
+}
+```
+
+The example sends progress signals at most every five seconds while the sink is
+actively writing. A durable success still produces the final ACK only after the
+write returns successfully. A temporary or permanent failure after one or more
+progress signals still follows the normal NAK, redelivery, or DLQ path.
+
+For least-privilege production deployments that pre-create consumers, use
+`bind_only` and omit `ack_wait_seconds` only when the runtime identity can read
+the existing durable consumer policy through `consumer_info`:
+
+```json
+{
+  "consumer_management": {
+    "mode": "bind_only"
+  },
+  "delivery": {
+    "in_progress": {
+      "enabled": true,
+      "interval_ms": 5000,
+      "max_heartbeats": 12
+    }
+  }
+}
+```
+
+In this shape, startup reads the effective consumer `ack_wait` and `backoff`
+fields. If AckWait is missing, unreadable, non-positive, too close to the
+heartbeat interval, or BackOff is present, the worker refuses to fetch messages.
+
 | Field | Required | Default | Valid values | Description |
 | --- | --- | --- | --- | --- |
 | `enabled` | no | `false` | `true` or `false`. | Enables in-batch priority scheduling. Disabled keeps fetched order unchanged. |
@@ -644,6 +918,46 @@ without trusting every publisher to set a priority header.
 For the full design, limitations, starvation controls, and metrics, read
 [Priority-Aware Processing Lanes](priority-lanes.md).
 
+#### `delivery.ack_confirmation`
+
+`delivery.ack_confirmation` controls optional server-confirmed JetStream ACKs.
+It is disabled by default. When enabled, the runner calls the client
+`ack_sync(timeout=...)` method only after the durable boundary has already been
+crossed:
+
+- after `sink.write_batch(...)` returns success for normal delivery;
+- after DLQ publication succeeds for permanent failures that use normal ACK.
+
+Confirmed ACK does not make delivery exactly once. If a sink commit succeeds
+and ACK confirmation times out, JetStream may redeliver the message. Sinks must
+therefore remain idempotent. `AckTerm` has no confirmed client path in the
+current runtime; when `dead_letter.ack_term_after_publish=true`, the runner
+records that confirmation was unsupported and sends the existing unconfirmed
+terminal acknowledgement only after DLQ publication succeeds.
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `enabled` | no | `false` | Boolean. | Enables `ack_sync` for normal ACKs after durable success and DLQ success. Keep disabled unless the extra round trip and redelivery-risk interpretation have been reviewed. |
+| `timeout_ms` | no | `1000` | Integer `1` to `60000`. | Maximum time to wait for the server to confirm each ACK. Timeout is counted separately from sink commit time. |
+| `unsupported_action` | no | `fail` | `fail` or `standard_ack`. | Behavior when the raw client message has no `ack_sync` method. `fail` preserves fail-closed behavior; `standard_ack` is an explicit compatibility fallback. |
+
+Example:
+
+```json
+{
+  "delivery": {
+    "ack_confirmation": {
+      "enabled": true,
+      "timeout_ms": 1500,
+      "unsupported_action": "fail"
+    }
+  }
+}
+```
+
+Metrics for attempts, successes, timeouts, failures, unsupported client paths,
+and elapsed confirmation time are documented in [Metrics](metrics.md).
+
 ### `dead_letter`
 
 The `dead_letter` section controls what happens to permanently invalid messages,
@@ -659,7 +973,7 @@ ACKed only after DLQ publication succeeds.
 | `include_payload` | no | `true` | `true` or `false`. | Includes the original message body in the DLQ payload. Disable when payload privacy is more important than DLQ replay convenience. |
 | `include_headers` | no | `true` | `true` or `false`. | Includes original message headers in the DLQ payload. Disable if headers may contain sensitive values. |
 | `include_error` | no | `true` | `true` or `false`. | Includes framework error type and message in the DLQ payload. |
-| `ack_term_after_publish` | no | `false` | `true` or `false`. | When true, sends JetStream `AckTerm` after DLQ publication succeeds instead of normal ACK. This is disabled by default, applies only to permanent failures with successful DLQ publication, and must not be used to signal successful sink writes. |
+| `ack_term_after_publish` | no | `false` | `true` or `false`. | When true, sends JetStream `AckTerm` after DLQ publication succeeds instead of normal ACK. This is disabled by default, applies only to permanent failures with successful DLQ publication, and must not be used to signal successful sink writes. `delivery.ack_confirmation` confirms normal ACKs only; current client support does not provide confirmed `AckTerm`. |
 
 ### `logging`
 
@@ -709,13 +1023,17 @@ publish only approved metric names:
 [Elastic Observability Profile](elastic-observability.md),
 [Grafana Alloy Profile](grafana-alloy.md),
 [Splunk HEC Integration](splunk-hec.md),
-[StatsD Integration](statsd.md), and
+[StatsD Integration](statsd.md),
+[Datadog Integration](datadog.md),
+[Amazon CloudWatch Integration](cloudwatch.md),
+[Azure Monitor Integration](azure-monitor.md), and
 [Syslog Bridge](syslog.md). The default generated policy keeps all Prometheus,
-OTLP, Elastic, Grafana Alloy, Splunk HEC, StatsD, syslog, and NATS server
-monitoring sharing disabled. The same observability policy also controls the
-optional NATS server monitoring connector for selected `/healthz`, `/jsz`, and
-related endpoint fields. That connector is separate from `nats-sink run` and
-must be enabled explicitly through `nats_server_monitoring`.
+OTLP, Elastic, Grafana Alloy, Splunk HEC, StatsD, Datadog, Amazon CloudWatch,
+Azure Monitor, syslog, and NATS server monitoring sharing disabled. The same
+observability policy also controls the optional NATS server monitoring
+connector for selected `/healthz`, `/jsz`, and related endpoint fields. That
+connector is separate from
+`nats-sink run` and must be enabled explicitly through `nats_server_monitoring`.
 
 Example:
 
@@ -960,6 +1278,266 @@ object through the core runtime so Oracle can store it in
 `MISSION_METADATA_JSON`, file sink records can expose it as top-level
 `mission_metadata`, and future sinks can preserve the same destination-neutral
 context without adding many fixed framework fields.
+
+### `routing`
+
+The `routing` section defines a generic route-match policy. It is disabled by
+default for ordinary single-sink deployments. When the active sink is
+`fanout`, the policy evaluates each normalized `NatsEnvelope`, returns logical
+sink target names, and drives writes to the matching named child sinks.
+
+Route matching always uses normalized framework fields:
+
+- `subject` is matched with the same NATS wildcard grammar used elsewhere in
+  the project.
+- `priority` and `classification` match the resolved
+  `NatsEnvelope.priority` and `NatsEnvelope.classification` values.
+- `labels_all`, `labels_any`, and `labels_none` match the normalized
+  `NatsEnvelope.labels` tuple.
+- `headers` match only explicitly configured, non-secret, non-protocol-owned
+  header names with exact bounded values.
+
+This design keeps routing policy reviewable in high-assurance environments. It
+does not accept regular expressions, expression languages, or code-like match
+rules from configuration.
+
+Example with two match sets for the same subject and label family:
+
+```json
+{
+  "routing": {
+    "enabled": true,
+    "mode": "first",
+    "no_match": "reject",
+    "target_sink_types": {
+      "oracle_secret": "oracle",
+      "file_secret_audit": "file",
+      "oracle_unclass": "oracle"
+    },
+    "routes": [
+      {
+        "name": "nato_secret_sensor_audit",
+        "match": {
+          "subject": "mission.sensor.>",
+          "priority": ["urgent"],
+          "classification": ["NATO SECRET"],
+          "labels_all": ["sensor", "audit"],
+          "headers": [
+            {
+              "name": "Nats-Sinks-Route",
+              "values": ["mission-audit"]
+            }
+          ]
+        },
+        "targets": [
+          "oracle_secret",
+          {
+            "sink": "file_secret_audit",
+            "required": false,
+            "minimum_wait_ms": 250,
+            "timeout_ms": 1000
+          }
+        ]
+      },
+      {
+        "name": "nato_unclass_sensor_audit",
+        "match": {
+          "subject": "mission.sensor.>",
+          "priority": ["urgent"],
+          "classification": ["NATO UNCLASS"],
+          "labels_all": ["sensor", "audit"]
+        },
+        "targets": ["oracle_unclass"]
+      }
+    ]
+  }
+}
+```
+
+The target names are logical sink names. When the active sink uses
+`"type": "fanout"`, those names bind to concrete child sink instances in the
+top-level `sinks` registry or in the compact inline `sink.sinks` form. For
+example, `oracle_secret` can point at one Oracle Database schema,
+`oracle_unclass` at another Oracle Database table or database,
+`coherence_read_model` at an Oracle Coherence Community Edition cache,
+`file_secret_audit` at a controlled local file destination, and
+`s3_secret_archive` at a configured object-storage bucket and prefix. The
+individual sink connection, table, cache, filesystem, object-storage, and
+durability settings remain in
+sink-specific configuration blocks such as [Oracle Sink](oracle-sink.md),
+[Oracle Coherence Community Edition Sink](coherence-sink.md), and
+[File Sink](file-sink.md), or [S3-Compatible Object Sink](s3-sink.md).
+
+The route target list accepts either a string or an object. A string is the
+short form for a required target. Required targets are the safe default:
+active fan-out delivery waits for every required target to durably complete
+before the fan-out sink returns success to the runner. A target object can set
+`required` to `false` for an optional side copy. Optional targets are
+explicitly outside the required ACK contract. If an optional target has not
+committed before the ACK gate releases, the project does not claim that the
+optional copy is guaranteed.
+
+Optional targets require `target_sink_types` so the loader can apply and show
+bounded per-sink-type defaults in the effective redacted configuration. The
+currently recognized sink types are `coherence`, `file`, `mysql`, `oracle`,
+`oracle_nosql`, `s3`, and `spool`.
+Unknown target references, unknown sink types, negative waits, excessive waits,
+and `timeout_ms` values lower than `minimum_wait_ms` are rejected by
+`nats-sink validate`.
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `enabled` | no | `false` | `true` or `false`. | Enables route selection. Disabled policies select no targets. |
+| `mode` | no | `first` | `first` or `all`. | `first` selects the first matching route. `all` selects every matching route and de-duplicates target names while preserving route order. |
+| `no_match` | no | `reject` | `reject`, `ignore`, or `default_route`. | Explicit action when no route matches. In active fan-out, `reject` raises a permanent sink failure, `ignore` drops the message from fan-out delivery, and `default_route` selects the configured fallback targets. |
+| `target_sink_types` | no | `{}` | Object mapping logical target names to `coherence`, `file`, `http`, `mysql`, `oracle`, `oracle_nosql`, `s3`, or `spool`. | Required when optional route targets are configured. Used to validate target references and apply optional ACK-gate defaults. |
+| `default_targets` | no | `[]` | String, target object, or list of those values. | Fallback targets used only when `no_match` is `default_route`. |
+| `routes` | no | `[]` | List of route objects. | Ordered route definitions. Required when `enabled` is true. At most 128 routes. |
+
+Route fields:
+
+| Route field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `name` | yes | none | Starts with a letter; then letters, digits, `.`, `_`, `:`, or `-`; at most 128 characters. | Stable route identifier for operator output, tests, and future metrics. |
+| `match` | yes | none | Match object. | At least one criterion is required. |
+| `targets` | yes | none | String, target object, or list of those values. | Logical sink targets selected by the route. At most 64 targets. Duplicate names are rejected. |
+
+Target object fields:
+
+| Target field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `sink` | yes | none | Logical target name. | Name of the future child sink selected by the route. |
+| `required` | no | `true` | `true` or `false`. | Required targets must complete before ACK. Optional targets get only a bounded grace window. |
+| `minimum_wait_ms` | no | Per sink type. | Integer `0` to `60000`. | Grace period for an optional target before ACK may proceed. Only valid when `required` is `false`. |
+| `timeout_ms` | no | Per sink type. | Integer `0` to `300000`; must be at least `minimum_wait_ms`. | Hard cap for an optional target attempt. Only valid when `required` is `false`. |
+
+Optional target defaults:
+
+| Sink type | Default `minimum_wait_ms` | Default `timeout_ms` | Rationale |
+| --- | ---: | ---: | --- |
+| `file` | `100` | `1000` | Local file side copies should not block the main custody path for long. |
+| `spool` | `100` | `1000` | Local spool side effects are normally fast and bounded. |
+| `oracle` | `1000` | `5000` | Network-backed transactional writes need a longer grace window. |
+| `http` | `1000` | `5000` | HTTP endpoint calls have network timing and ambiguous timeout concerns. |
+| `s3` | `1000` | `5000` | S3-compatible object writes have network timing and ambiguous timeout concerns. |
+| `mysql` | `1000` | `5000` | Oracle MySQL writes have similar network and transaction timing concerns. |
+| `oracle_nosql` | `1000` | `5000` | Oracle NoSQL Database writes are network-backed and commonly used as optional K/V side copies until live durability is reviewed. |
+| `coherence` | `1000` | `5000` | Oracle Coherence Community Edition writes are network-backed and often used as read-model side copies. |
+
+### Active Fan-Out Sink
+
+Use `sink.type: "fanout"` when one NATS consumer should route each normalized
+message to one or more named child sinks. Existing single-sink configurations
+remain unchanged; fan-out is opt-in.
+
+The compact inline form keeps the child sinks and routes together:
+
+```json
+{
+  "sink": {
+    "type": "fanout",
+    "route_match_mode": "all",
+    "sinks": {
+      "oracle_secret": {
+        "type": "oracle",
+        "dsn": "oracle-primary-service",
+        "user": "app_user",
+        "password_env": "ORACLE_PRIMARY_PASSWORD",
+        "table": "SECRET_EVENTS"
+      },
+      "file_audit": {
+        "type": "file",
+        "directory": "var/lib/nats-sinks/audit"
+      },
+      "oracle_unclass": {
+        "type": "oracle",
+        "dsn": "oracle-unclass-service",
+        "user": "app_user",
+        "password_env": "ORACLE_UNCLASS_PASSWORD",
+        "table": "UNCLASS_EVENTS"
+      }
+    },
+    "routes": [
+      {
+        "name": "secret-sensor-audit",
+        "match": {
+          "subject": "nl.mod.clas.>",
+          "priority": ["urgent"],
+          "classification": ["NATO SECRET"],
+          "labels_all": ["sensor", "audit"]
+        },
+        "targets": [
+          {"sink": "oracle_secret", "required": true},
+          {"sink": "file_audit", "required": false, "minimum_wait_ms": 500}
+        ]
+      },
+      {
+        "name": "unclass-sensor-oracle",
+        "match": {
+          "subject": "nl.mod.clas.>",
+          "priority": ["urgent"],
+          "classification": ["NATO UNCLASS"],
+          "labels_all": ["sensor", "audit"]
+        },
+        "targets": [{"sink": "oracle_unclass", "required": true}]
+      }
+    ]
+  }
+}
+```
+
+`nats-sink validate` normalizes that compact form into the same internal
+top-level `sinks` and `routing` sections used by larger configuration files.
+Operators who prefer separation can declare `sink: {"type": "fanout"}`,
+top-level `sinks`, and top-level `routing` explicitly.
+
+The fan-out sink preserves the project ACK invariant. The runner still ACKs
+only after `FanoutSink.write_batch(...)` returns success. In the default
+required-target mode, that means every selected required child sink has
+returned durable success. Optional targets are started at the same time as
+required targets, observed for their bounded wait window, and then allowed to
+fail or time out without blocking the required ACK path.
+
+Fan-out is not an atomic distributed transaction across destinations. If one
+required child sink commits and another required child sink fails before ACK,
+the fan-out sink raises a temporary failure and JetStream redelivery remains
+possible. Keep idempotency enabled on every child sink.
+
+Match fields:
+
+| Match field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `subject` | no | unset | NATS subject pattern. | Matches `NatsEnvelope.subject`. |
+| `priority` | no | `[]` | String or list of strings. | Exact allowed priority values. At most 64 values. |
+| `classification` | no | `[]` | String or list of strings. | Exact allowed classification values. At most 64 values. |
+| `labels_all` | no | `[]` | Semicolon-separated string or list. | All listed labels must be present. |
+| `labels_any` | no | `[]` | Semicolon-separated string or list. | At least one listed label must be present. |
+| `labels_none` | no | `[]` | Semicolon-separated string or list. | None of the listed labels may be present. |
+| `headers` | no | `[]` | List of `{ "name": "...", "values": "..." }` objects. | Exact matches against approved non-secret header names. At most 16 headers per route. |
+
+Header matches reject secret-bearing headers such as `Authorization`, `Cookie`,
+`Proxy-Authorization`, `X-Api-Key`, and `X-Auth-Token`. Publish a non-secret
+routing hint such as `Nats-Sinks-Route` when a header needs to influence
+selection.
+
+Validate the tracked example:
+
+```bash
+nats-sink validate examples/routing-match-policy/config.json
+```
+
+Validate the richer multi-sink routing end-to-end example, which includes
+Oracle Database, Oracle MySQL Database, File, and Oracle Coherence Community
+Edition logical targets:
+
+```bash
+nats-sink validate examples/multi-sink-routing-e2e/config.json
+python scripts/run-multi-sink-routing-e2e.py --mode reduced
+```
+
+See [Multi-Sink Routing End-To-End Flow](multi-sink-routing-e2e.md) for the
+complete route matrix, optional target wait behavior, duplicate-redelivery
+evidence, and pipe-friendly report examples.
 
 ### `mission_metadata`
 
@@ -1494,14 +2072,22 @@ remaining fields to the selected sink validator.
 
 | Field | Required | Default | Valid values | Description |
 | --- | --- | --- | --- | --- |
-| `type` | yes | none | `file`, `oracle`, `mysql`, or `spool` in the current release. | Selects the production sink implementation. Future sinks should add new values without changing the generic core sections. |
+| `type` | yes | none | `file`, `oracle`, `mysql`, `oracle_nosql`, `coherence`, `spool`, `http`, `s3`, or experimental `foundry` and `gotham` in the current release. | Selects the sink implementation. Future sinks should add new values without changing the generic core sections. |
 
 All other fields under `sink` are sink-specific:
 
 - `file` fields are documented in [File Sink](file-sink.md),
 - `oracle` fields are documented in [Oracle Sink](oracle-sink.md),
 - `mysql` fields are documented in [Oracle MySQL Sink](mysql-sink.md),
-- `spool` fields are documented in [Edge Spool Sink](spool-sink.md).
+- `oracle_nosql` fields are documented in
+  [Oracle NoSQL Database Sink](oracle-nosql-sink.md),
+- `coherence` fields are documented in
+  [Oracle Coherence Community Edition Sink](coherence-sink.md),
+- `spool` fields are documented in [Edge Spool Sink](spool-sink.md),
+- `http` fields are documented in [HTTP Sink](http-sink.md),
+- `s3` fields are documented in [S3-Compatible Object Sink](s3-sink.md),
+- `foundry` fields are documented in [Palantir Foundry Sink](foundry-sink.md),
+- `gotham` fields are documented in [Palantir Gotham Sink](gotham-sink.md).
 
 ### `plugins`
 
@@ -1509,7 +2095,10 @@ The `plugins` section controls optional discovery for externally installed sink
 connectors. It is disabled by default because Python plugin loading is a
 code-execution and supply-chain trust boundary. You do not need this section
 for the built-in Oracle Database sink, built-in Oracle MySQL sink, built-in
-FileSink, or built-in SpoolSink.
+Oracle NoSQL Database sink, built-in Oracle Coherence Community Edition sink,
+built-in FileSink, built-in SpoolSink, built-in HTTP sink, built-in
+S3-compatible object sink, built-in experimental Foundry sink, or built-in
+experimental Gotham sink.
 
 | Field | Required | Default | Valid values | Description |
 | --- | --- | --- | --- | --- |
@@ -1540,9 +2129,9 @@ contain a module path or class path. This is intentional: runtime configuration
 must not be able to choose arbitrary imports.
 
 First-party future Oracle-family sinks, such as OCI Object Storage,
-Oracle Berkeley DB, Oracle NoSQL Database, and OCI Streaming, are
-expected to be added as built-in connectors in this repository unless project
-governance changes that decision. They should not require `plugins.enabled`.
+Oracle Berkeley DB, and OCI Streaming, are expected to be added as built-in
+connectors in this repository unless project governance changes that decision.
+They should not require `plugins.enabled`.
 
 ## Delivery Settings
 
@@ -1598,17 +2187,34 @@ secret-handling guidance, and examples. The current production sinks are:
   options, TLS certificate handling, table routing, payload modes, column
   mappings, idempotent `upsert` and `insert_ignore` modes, and the local
   container-backed e2e test live in [Oracle MySQL Sink](mysql-sink.md).
+- `"type": "oracle_nosql"` for the experimental Oracle NoSQL Database sink.
+  Endpoint validation, SDK deployment modes, deterministic K/V-style row keys,
+  JSON value storage, generated safe table DDL, duplicate policies, and live
+  test gating live in [Oracle NoSQL Database Sink](oracle-nosql-sink.md).
+- `"type": "coherence"` for the experimental Oracle Coherence Community
+  Edition sink. Cache or map selection, deterministic key strategies, duplicate
+  policies, JSON value limits, and the local container-backed e2e test live in
+  [Oracle Coherence Community Edition Sink](coherence-sink.md).
 - `"type": "file"` for local JSON file output. File durability, duplicate
   policies, deterministic file names, optional gzip compression, and filesystem
   safety live in [File Sink](file-sink.md).
 - `"type": "spool"` for encrypted local edge custody. Spool durability,
   record-level encryption, bounded capacity, deterministic duplicate handling,
   priority-aware replay, and cleanup policy live in [Edge Spool Sink](spool-sink.md).
+- `"type": "http"` for a fixed HTTP endpoint. HTTPS validation, static and
+  environment-backed headers, idempotency-key propagation, bounded request and
+  response handling, and retry guidance live in [HTTP Sink](http-sink.md).
+- `"type": "s3"` for S3-compatible object storage. Bucket and prefix
+  validation, deterministic object-key strategies, duplicate policies,
+  metadata sidecars, optional gzip compression, credential modes, and
+  least-privilege object-storage guidance live in
+  [S3-Compatible Object Sink](s3-sink.md).
 
 This separation is part of the compatibility contract. Adding a future
-`http`, `s3`, or another database sink should add new sink-specific fields
-under `"sink"` without requiring existing Oracle Database, Oracle MySQL, file,
-or spool users to change the rest of their configuration.
+database or object-storage sink should add new sink-specific fields under
+`"sink"` without requiring existing Oracle Database, Oracle MySQL, Oracle
+NoSQL Database, Oracle Coherence Community Edition, file, spool, HTTP, or S3 users
+to change the rest of their configuration.
 
 ## Payload Storage Modes
 

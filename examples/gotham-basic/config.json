@@ -1,0 +1,23 @@
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "MISSION_EVENTS",
+    "consumer": "gotham-sink",
+    "subject": "mission.events.*"
+  },
+  "sink": {
+    "type": "gotham",
+    "gotham_base_url": "https://gotham.example.invalid",
+    "object_type": "com.example.object.event",
+    "external_id_property_type": "com.example.property.externalId",
+    "subject_property_type": "com.example.property.subject",
+    "payload_property_type": "com.example.property.payload",
+    "payload_info_property_type": "com.example.property.payloadInfo",
+    "metadata_property_type": "com.example.property.metadata",
+    "classification_property_type": "com.example.property.classification",
+    "labels_list_property_type": "com.example.property.labels",
+    "security_portion_markings": ["SENSITIVE"],
+    "bearer_token_env": "GOTHAM_TOKEN",
+    "endpoint_allowed_hosts": ["gotham.example.invalid"]
+  }
+}

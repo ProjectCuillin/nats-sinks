@@ -130,9 +130,10 @@ Prometheus textfile service/timer assets, installs the disabled native
 Prometheus HTTP service asset, installs the disabled OTLP service/timer assets,
 installs the disabled NATS monitoring service/timer assets, and enables only
 the main sink service. Prometheus, OTLP, Elastic Observability, Grafana Alloy,
-Splunk HEC, StatsD, syslog, and NATS monitoring sharing remain disabled until the
-observability policy and the selected observability service are explicitly
-enabled.
+Splunk HEC, OCI Monitoring, StatsD, Datadog, Amazon CloudWatch, Azure Monitor,
+syslog, and NATS monitoring sharing
+remain disabled until the observability policy and the selected observability
+service are explicitly enabled.
 
 The installer works in two modes. When it is run from a local git checkout, it
 copies tracked example configuration files and systemd unit files from that
@@ -340,11 +341,32 @@ to the observability policy, and a protected environment variable containing
 the HEC token. See [Splunk HEC Integration](splunk-hec.md) for HEC event
 format, token handling, TLS expectations, and service guidance.
 
+For OCI Monitoring, run `nats-sink-observe oci-monitoring-export` as a
+separate oneshot service or timer with read access to the metrics snapshot,
+read access to the observability policy, and the least-privilege OCI identity
+needed to post custom metrics in the approved compartment. See
+[OCI Monitoring Integration](oci-monitoring.md) for OCI SDK extra installation,
+authentication modes, custom metric format, and service guidance.
+
 For StatsD, run `nats-sink-observe statsd-export` as a separate oneshot
 service or timer with read access to the metrics snapshot and observability
 policy, and send datagrams only to the approved StatsD-compatible listener.
 See [StatsD Integration](statsd.md) for datagram format, best-effort transport
 limitations, and service guidance.
+
+For Amazon CloudWatch, run `nats-sink-observe cloudwatch-export` as a separate
+oneshot service or timer with read access to the metrics snapshot and
+observability policy, plus only the AWS identity permissions needed to call
+`cloudwatch:PutMetricData` for the reviewed namespace. See
+[Amazon CloudWatch Integration](cloudwatch.md) for request shape, IAM guidance,
+dimension controls, and service guidance.
+
+For Azure Monitor, run `nats-sink-observe azure-monitor-export` as a separate
+oneshot service or timer with read access to the metrics snapshot and
+observability policy, plus only the Azure identity permissions needed to post
+custom metrics for the reviewed resource. See
+[Azure Monitor Integration](azure-monitor.md) for REST request shape, bearer
+token handling, dimension controls, and service guidance.
 
 For syslog, run `nats-sink-observe syslog-export` as a separate oneshot
 service or timer with read access to the metrics snapshot and observability

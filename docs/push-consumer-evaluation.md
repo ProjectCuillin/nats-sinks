@@ -1,21 +1,19 @@
 # Push Consumer Evaluation
 
-This page records the evaluation for possible push-consumer support in
-`nats-sinks`. It is written for operators and maintainers who already use NATS
-push-consumer patterns and want to understand whether those patterns can fit
-the `nats-sinks` delivery contract.
+This page records the evaluation and current implementation posture for
+push-consumer support in `nats-sinks`. It is written for operators and
+maintainers who already use NATS push-consumer patterns and want to understand
+how those patterns fit the `nats-sinks` delivery contract.
 
 The conclusion is deliberately conservative:
 
 - pull consumers remain the production default for sink workers,
-- push consumers may be supportable as a future opt-in runner mode,
-- push support must be gated by strict backpressure and shutdown controls,
+- push consumers are available only as an explicit opt-in runner mode,
+- push support is gated by strict backpressure and shutdown controls,
 - push support must use manual acknowledgement only,
 - push support must never acknowledge before durable sink success,
-- implementation work should be split into separate, testable backlog items.
-
-The current release documents the evaluation and creates follow-up backlog
-items. It does not yet add push-consumer runtime behavior.
+- delivery-contract and flow-control certification exists in the unit suite,
+  while live NATS push-consumer testing remains explicitly environment-gated.
 
 ## Background
 
@@ -82,9 +80,9 @@ sequenceDiagram
     R->>P: ACK after durable success
 ```
 
-For `nats-sinks`, a future push mode would need its own bounded internal
-queue, explicit manual ACK behavior, and a shutdown process that stops
-accepting new messages before finishing or releasing in-flight work.
+For `nats-sinks`, push mode uses its own bounded internal queue, explicit
+manual ACK behavior, and a shutdown process that stops accepting new messages
+before draining already accepted work.
 
 ## Required Safety Properties
 
@@ -96,8 +94,8 @@ the pull runner.
 | Manual ACK only | Auto-ACK after callback return would violate commit-then-acknowledge. |
 | Bounded pending messages | The server can push faster than the sink can commit. The runner must avoid unbounded memory growth. |
 | `MaxAckPending` guardrails | NATS describes `MaxAckPending` as the flow-control mechanism that applies to push consumers. |
-| Client pending limits | The Python client exposes `pending_msgs_limit` and `pending_bytes_limit`; future push mode must set them deliberately. |
-| Flow control and idle heartbeat | NATS exposes push-specific `FlowControl` and `IdleHeartbeat`; future push mode must handle them explicitly or fail closed. |
+| Client pending limits | The Python client exposes `pending_msgs_limit` and `pending_bytes_limit`; push mode sets them deliberately. |
+| Flow control and idle heartbeat | NATS exposes push-specific `FlowControl` and `IdleHeartbeat`; push mode configures them explicitly or fails closed when client support is absent. |
 | Graceful shutdown | The runner must stop accepting new messages, finish or release in-flight work, and close cleanly. |
 | Retry and DLQ parity | Temporary failures must not ACK; permanent failures must publish DLQ before ACK. |
 | Metrics parity | Push mode needs counters for pushed, queued, dropped-or-rejected, in-flight, ACKed, NAKed, and callback errors. |
@@ -109,8 +107,8 @@ The local `nats.py` API exposes `JetStreamContext.subscribe(...)` and
 `pending_msgs_limit`, and `pending_bytes_limit` arguments. That is a useful
 starting point, but it is not enough by itself.
 
-The framework still needs a small compatibility and configuration layer so
-push mode can:
+The framework has a small compatibility and configuration layer so push mode
+can:
 
 - require `manual_ack=True`,
 - reject unsafe or ambiguous callback behavior,
@@ -120,17 +118,23 @@ push mode can:
   client version,
 - keep production pull-mode behavior unchanged.
 
-## Recommended Implementation Split
+## Implementation Split
 
-The evaluation recommends three separate follow-up items:
+The evaluation split the work into three separately testable items:
 
-1. Add a fail-closed push-consumer capability and configuration layer.
-2. Add an opt-in push-consumer runner mode with bounded in-flight work.
-3. Add push-consumer delivery-contract, shutdown, and flow-control
-   certification tests.
+1. Fail-closed push-consumer capability and configuration guardrails.
+2. Opt-in push-consumer runner mode with bounded in-flight work.
+3. Push-consumer delivery-contract, shutdown, and flow-control certification
+   tests.
 
-This split keeps the design reviewable. It prevents one large feature from
-mixing client compatibility, runtime behavior, and certification evidence.
+All three items are implemented in the current development line. The
+certification tests prove ACK-after-commit ordering, no ACK on temporary sink
+failure, DLQ publication before original ACK on permanent failure, bounded
+queue overflow behavior, callback exception containment, flow-control and
+idle-heartbeat option propagation, and cooperative shutdown. A live NATS
+push-consumer test is present but skipped unless
+`NATS_SINKS_PUSH_CONSUMER_INTEGRATION=1` is set, keeping normal release checks
+deterministic and free of external-service assumptions.
 
 ## Why Pull Remains Default
 
@@ -153,5 +157,35 @@ treated as production-ready.
 
 ## Current Status
 
-This release documents the evaluation and creates follow-up feature requests.
-No push-consumer runtime behavior is enabled yet.
+Push-consumer runtime behavior is available only when `push_consumer.enabled`
+is set to `true` and the required delivery subject is configured. Pull mode
+remains the default, and push delivery still uses the same sink write, DLQ, and
+ACK-after-durable-success pipeline as pull delivery.
+
+## Certification Evidence
+
+The focused certification suite is:
+
+```bash
+python -m pytest tests/unit/test_push_consumer.py tests/integration/test_push_consumer_integration.py -q
+```
+
+By default the live integration test is skipped:
+
+```text
+16 passed, 1 skipped
+```
+
+To run the optional live path, start a disposable NATS server with JetStream
+enabled and run:
+
+```bash
+NATS_SINKS_PUSH_CONSUMER_INTEGRATION=1 \
+NATS_SINKS_PUSH_CONSUMER_NATS_URL=nats://127.0.0.1:4222 \
+python -m pytest tests/integration/test_push_consumer_integration.py -q
+```
+
+The live test creates a unique stream, subject, durable push consumer, and
+deliver subject, writes one synthetic payload through the real NATS client, and
+then deletes the stream. It must be used only with local disposable
+infrastructure. Do not point it at production streams or operational subjects.

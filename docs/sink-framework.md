@@ -2,8 +2,9 @@
 
 This page documents the generic sink framework. Destination-specific behavior,
 including Oracle table DDL, Oracle SQL modes, local file durability settings,
-and filesystem duplicate policies, lives in destination pages such as
-[Oracle Sink](oracle-sink.md) and [File Sink](file-sink.md).
+filesystem duplicate policies, and object-key construction lives in
+destination pages such as [Oracle Sink](oracle-sink.md),
+[File Sink](file-sink.md), and [S3-Compatible Object Sink](s3-sink.md).
 
 The purpose of the framework is to keep delivery semantics in one place. Every
 destination should plug into the same small contract and should inherit the same
@@ -40,6 +41,9 @@ flowchart TB
     subgraph Destinations[Destination modules]
         Oracle[nats_sinks.oracle]
         File[nats_sinks.file]
+        S3[nats_sinks.s3]
+        Foundry[nats_sinks.foundry experimental]
+        Gotham[nats_sinks.gotham experimental]
         Future[future sinks]
     end
 
@@ -47,11 +51,17 @@ flowchart TB
     CLI --> Config --> Runner
     Runner --> Envelope --> Protocol
     Protocol --> Oracle
+    Protocol --> File
+    Protocol --> S3
+    Protocol --> Foundry
+    Protocol --> Gotham
     Protocol --> Future
     Runner --> DLQ
     Runner --> Metrics
-    Registry --> Oracle
-    Registry --> File
+Registry --> Oracle
+Registry --> File
+Registry --> S3
+Registry --> Gotham
 ```
 
 The core layer owns NATS connectivity, JetStream consumer behavior, batching,
@@ -60,6 +70,46 @@ metrics hooks. It also owns destination-neutral per-message transformations,
 including priority/classification/labels metadata resolution and optional payload
 encryption. Destination modules own destination writes and destination commit
 behavior only.
+
+The current built-in registry includes production-ready Oracle Database,
+Oracle MySQL, file, edge spool, HTTP, and S3-compatible object sinks plus
+experimental Oracle NoSQL Database, Oracle Coherence Community Edition,
+Palantir Foundry Streams, and Palantir Gotham RevDB object sinks.
+Experimental sinks are still bound by the same commit-then-ACK contract, but
+their documentation must separate local mock certification from live
+destination certification.
+
+## Named Sink Registry
+
+The top-level `sinks` object is the shared configuration registry for multiple
+destination instances. It does not write messages by itself and it does not
+change ACK behavior. Its purpose is to give routing policy, CLI validation,
+redacted config output, health checks, and active fan-out execution one stable
+set of names for destination instances.
+
+```json
+{
+  "sinks": {
+    "oracle_secret": {
+      "type": "oracle",
+      "dsn": "tcps://adb.example.invalid/secret",
+      "user": "app_secret",
+      "password_env": "ORACLE_SECRET_PASSWORD",
+      "table": "NATS_SECRET_EVENTS"
+    },
+    "file_audit": {
+      "type": "file",
+      "directory": "/var/lib/nats-sinks/audit",
+      "fsync": true
+    }
+  }
+}
+```
+
+Route policy references these names, not destination details. This keeps
+generic matching independent from Oracle tables, Oracle connection sources,
+file-system paths, and future sink-specific options. See
+[Named Sinks And Routing](named-sinks.md) for the full operator guide.
 
 ## Generic Contract
 
@@ -82,6 +132,14 @@ A sink returns from `write_batch` only after its destination work is durable. If
 it cannot complete the durable write, it raises a framework error. Sinks must
 not ACK, NAK, terminate, or in-progress JetStream messages because sinks receive
 `NatsEnvelope` objects rather than raw `nats-py` messages.
+
+The same contract applies to replay workflows. A future durable replay runner
+should still call `write_batch` and should still ACK only after the selected
+sink or required fan-out targets return durable success. Replay tooling must
+not add a separate sink API, bypass idempotency, or use ordered inspection
+consumers for production writes. See
+[Durable Replay To Sinks](durable-replay-to-sinks.md) for the replay design
+boundary and required test evidence.
 
 ## Standard Payload Normalization
 
@@ -140,11 +198,11 @@ future JSON document, relational, object-storage, HTTP, and Kafka sinks should
 either reuse it or explicitly document why their destination requires a
 different payload storage model.
 
-Headers-only JetStream delivery needs an additional payload-presence contract.
-The current framework safely handles `b""`, but a future headers-only mode must
-record whether the producer sent an empty body or whether the NATS server
-omitted the body for metadata-only delivery. The design is tracked in
-[Headers-Only Delivery Evaluation](headers-only-delivery.md).
+Headers-only JetStream delivery uses the same destination-neutral payload
+contract plus explicit payload-presence metadata. The framework records whether
+the producer sent an empty body or whether the NATS server omitted the body for
+metadata-only delivery. The behavior is documented in
+[Headers-Only Delivery](headers-only-delivery.md).
 
 For operational and defence-oriented streams, this neutrality is important
 because payloads may be JSON, plain text, opaque encrypted text, compressed
@@ -224,6 +282,63 @@ trace headers, schedule headers, or republish headers. The metadata snapshot
 stores what is present and uses `null` or absence for what is not present. This
 keeps sinks stable across NATS server versions and producer styles.
 
+## Generic Route-Match Policy
+
+The core now includes a validated route-match policy, selector, and active
+fan-out sink. The selector evaluates one normalized `NatsEnvelope` and returns
+logical sink target names based on subject, priority, classification, labels,
+and approved non-secret headers. The `fanout` sink binds those target names to
+named child sink instances, partitions the batch per selected child sink, and
+returns success only after required child sinks complete. Route targets can
+also carry ACK-gating policy. A plain target name is required by default; an
+object target can opt into bounded optional side-copy behavior.
+
+```mermaid
+flowchart LR
+    Env[NatsEnvelope] --> Selector[route-match selector]
+    Policy[routing policy] --> Selector
+    Selector --> Targets[logical target names]
+    Targets --> Fanout[FanoutSink]
+    Fanout --> Required[required child sinks]
+    Fanout --> Optional[optional child sinks]
+```
+
+This separation matters for the sink framework. All destination modules still
+implement the same durable `write_batch` contract, and ACK behavior remains in
+the runner. `FanoutSink` uses the selector output while deciding which targets
+are commit-required, which targets are optional side effects, and when the
+JetStream ACK is allowed to happen. The reusable ACK-gate helper waits for
+required targets and records optional timeout or failure categories without
+exposing payloads or destination secrets.
+
+Fan-out observability is kept separate from the ACK gate itself. `FanoutSink`
+calls the aggregate helpers in `nats_sinks.core.fanout_observability` to record
+route matches, selected child sink counts, required success or failure,
+optional success, optional failure, optional timeout, ACK-gate wait time, and
+fan-out batch duration. Those helpers record only counts and timings. They do
+not export route names, child sink names, subjects, classification values,
+labels, payload data, file paths, or database connection details unless a
+future explicit observability policy adds such sharing with bounded
+cardinality.
+
+`tests/unit/test_fanout_certification.py` is the reusable certification surface
+for this boundary. It proves the documented NATO SECRET and NATO UNCLASS
+route examples, one-to-one selection, one-to-many selection, required failure
+before ACK, optional timeout before ACK release, no-route policies, CLI
+validation, and redaction behavior. New fan-out-capable sink work should add
+cases there or reuse the same helpers from `nats_sinks.testing`.
+
+`scripts/run-multi-sink-routing-e2e.py` adds a deterministic end-to-end layer
+over the same boundary. It uses local file-backed probe sinks to certify that
+one route matrix can select Oracle Database, Oracle MySQL Database, File, and
+Oracle Coherence Community Edition logical targets without requiring live
+credentials or network access. See
+[Multi-Sink Routing End-To-End Flow](multi-sink-routing-e2e.md).
+
+The route policy uses exact bounded values and the existing NATS wildcard
+subject matcher. It does not load plugins, execute code, evaluate expressions,
+or use regular expressions supplied by configuration.
+
 ## Lifecycle
 
 ```mermaid
@@ -289,7 +404,9 @@ flowchart LR
     BuiltIn --> File[FileSink]
     BuiltIn --> Oracle[OracleSink]
     BuiltIn --> MySQL[MySqlSink]
+    BuiltIn --> Coherence[CoherenceSink]
     BuiltIn --> Spool[SpoolSink]
+    BuiltIn --> HTTP[HttpSink]
     Optional --> ThirdParty[Reviewed external connector]
     ThirdParty --> Contract[Sink protocol and certification tests]
 ```
@@ -300,20 +417,36 @@ Today, the first-party production connectors are built in:
 | --- | --- | --- | --- |
 | Oracle Database | `oracle` | `nats_sinks.oracle.OracleSink` | Production connector in this repository. |
 | Oracle MySQL | `mysql` | `nats_sinks.mysql.MySqlSink` | Production connector in this repository. |
+| Oracle NoSQL Database | `oracle_nosql` | `nats_sinks.oracle_nosql.OracleNoSqlSink` | Experimental first-party connector in this repository with a documented production-readiness matrix and local KVLite container-backed e2e evidence. |
+| Oracle Coherence Community Edition | `coherence` | `nats_sinks.coherence.CoherenceSink` | Experimental first-party connector in this repository. |
 | File | `file` | `nats_sinks.file.FileSink` | Production connector in this repository. |
 | Edge spool | `spool` | `nats_sinks.spool.SpoolSink` | Production connector in this repository. |
+| HTTP | `http` | `nats_sinks.http.HttpSink` | Production connector in this repository. |
+| S3-compatible object storage | `s3` | `nats_sinks.s3.S3Sink` | Production connector in this repository. |
 
 Future Oracle-family sinks such as OCI Object Storage, Oracle Berkeley DB,
-Oracle NoSQL Database, and OCI Streaming are intended to
-be first-party connectors in this repository unless project governance decides
-otherwise later. They should use the same connector descriptor and certification
-tests as Oracle Database, Oracle MySQL, FileSink, and SpoolSink, but they do
-not need external plugin discovery.
+and OCI Streaming are intended to be first-party
+connectors in this repository unless project governance decides otherwise
+later. They should use the same connector descriptor and certification tests as
+Oracle Database, Oracle MySQL, Oracle Coherence Community Edition, FileSink,
+SpoolSink, and HttpSink, but they do not need external plugin discovery.
 
 The repository includes a local
 [Oracle MySQL test database container](oracle-mysql-test-container.md) used by
 the [Oracle MySQL Sink](mysql-sink.md) e2e certification path. The container is
 test infrastructure, not a production database image.
+
+The repository includes a local
+[Oracle NoSQL Database test backend](oracle-nosql-test-container.md) used by
+the [Oracle NoSQL Database Sink](oracle-nosql-sink.md) container-backed e2e
+path. It wraps Oracle's documented Community Edition KVLite image and is test
+infrastructure, not a production Oracle NoSQL deployment.
+
+The repository also includes a local
+[Oracle Coherence Community Edition test backend](oracle-coherence-test-container.md)
+for future Oracle Coherence sink and multi-sink routing certification. It is
+test infrastructure, not a production Coherence deployment and not a sink
+implementation.
 
 Optional third-party connector discovery is intentionally disabled by default.
 When enabled, it uses Python packaging entry points under the group
@@ -425,6 +558,15 @@ Current production sinks and their durable success boundaries:
 | Oracle MySQL | `nats_sinks.mysql` | Oracle MySQL transaction committed. |
 | File | `nats_sinks.file` | Output file atomically placed after temporary write, flush, and configured fsync behavior. |
 | Edge spool | `nats_sinks.spool` | Encrypted spool record atomically placed after temporary write, flush, and configured fsync behavior. |
+| HTTP | `nats_sinks.http` | Configured endpoint returned a configured success status for every request. |
+| S3-compatible object storage | `nats_sinks.s3` | Configured object-storage service accepted the primary object and any required metadata sidecar object. |
+
+Current experimental first-party sinks and their success boundaries:
+
+| Sink | Module | Success boundary |
+| --- | --- | --- |
+| Oracle NoSQL Database | `nats_sinks.oracle_nosql` | Oracle NoSQL SDK put operation completed. Production ACK-gated custody depends on operator-confirmed Oracle NoSQL Database deployment durability. |
+| Oracle Coherence Community Edition | `nats_sinks.coherence` | Configured Coherence cache or map operation completed. Production ACK-gated custody depends on operator-confirmed Coherence cluster durability. |
 
 ## Adding Future Sinks Without Breaking Users
 
@@ -446,7 +588,7 @@ The stable extension points are:
 - the JSON `sink` object, which requires `type` and allows sink-specific fields
   to be validated by the selected destination implementation.
 
-In practice, adding a future `postgres`, `http`, or `s3` sink should
+In practice, adding a future `postgres`, `kafka`, or another sink should
 look like this:
 
 1. Add a new module, for example `src/nats_sinks/postgres/`.
@@ -483,25 +625,22 @@ publish DLQ records, parse CLI arguments, or own process signal handling. Those
 jobs belong to the core runner and CLI.
 
 Keeping those responsibilities outside destination modules makes it possible to
-add future sinks such as Oracle MySQL, HTTP, S3, or Kafka without copying ACK
-logic into every backend.
+add future sinks such as OCI Object Storage, Kafka, or search indexes without copying
+ACK logic into every backend.
 
 ## Future Destinations
 
 Future first-party sinks should live in destination modules such as:
 
 - `nats_sinks.oci_object_storage`
-- `nats_sinks.mysql`
 - `nats_sinks.oci_streaming`
-- `nats_sinks.oracle_nosql`
 - `nats_sinks.berkeley_db`
 
 Future non-Oracle sinks may be first-party modules, carefully reviewed optional
 connectors, or research backlog items depending on demand, maintainership, and
-security posture. Examples include HTTP, S3-compatible object storage,
-Elasticsearch or OpenSearch, Snowflake, BigQuery, Azure object storage, Kafka,
-MongoDB, Redis, Cassandra-compatible stores, Palantir Foundry, and Palantir
-Gotham.
+security posture. Examples include Elasticsearch or OpenSearch, Snowflake,
+BigQuery, Azure object storage, Kafka, MongoDB, Redis, Cassandra-compatible
+stores, Palantir Foundry, and Palantir Gotham.
 
 No future sink should be considered production-ready until it has tests proving
 that durable success happens before ACK and that duplicate redelivery is safe.

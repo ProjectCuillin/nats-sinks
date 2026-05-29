@@ -15,11 +15,13 @@ examples, or support tickets.
 
 ## Why Permissions Matter
 
-`nats-sinks` is deliberately conservative about delivery semantics. The core
-runtime fetches messages from a pull-based JetStream consumer, hands normalized
-`NatsEnvelope` objects to a sink, waits for the sink to complete durable work,
-and only then ACKs JetStream. NATS permissions should support that flow without
-granting broad account access.
+`nats-sinks` is deliberately conservative about delivery semantics. The
+default runtime fetches messages from a pull-based JetStream consumer, hands
+normalized `NatsEnvelope` objects to a sink, waits for the sink to complete
+durable work, and only then ACKs JetStream. The optional push-consumer mode
+uses the same ACK rule with a bounded manual-ACK callback queue. NATS
+permissions should support the chosen flow without granting broad account
+access.
 
 ```mermaid
 sequenceDiagram
@@ -102,9 +104,13 @@ authorization {
 ```
 
 The `publish.allow` entry for `$JS.API.CONSUMER.INFO...` is included because
-many deployments want startup or health tooling to verify that the durable
-consumer exists. If your deployment has a separate validation account and the
-runtime worker never performs that check, you may remove it after testing.
+startup validates the durable consumer before fetching messages. It is also
+required when `delivery.in_progress.enabled=true` and
+`consumer_management.mode=bind_only`, because the runtime must inspect the
+effective AckWait and BackOff policy before it may send progress heartbeats.
+If your deployment has a separate validation account and the runtime worker
+never performs those checks, you may remove it only after testing that your
+chosen runtime mode still starts safely.
 
 The `subscribe.allow` entry for `_INBOX.>` is necessary for NATS request/reply
 patterns used by JetStream API requests and pull delivery. In more sensitive

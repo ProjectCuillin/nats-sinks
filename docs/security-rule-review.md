@@ -16,7 +16,9 @@ The rules were evaluated against the current project shape:
 - a Python package and CLI,
 - JSON configuration loading,
 - NATS JetStream consumption,
-- Oracle and file sink implementations,
+- Oracle Database, Oracle MySQL, Oracle NoSQL Database, Oracle Coherence
+  Community Edition, file, edge spool, HTTP, and S3-compatible sink
+  implementations,
 - payload encryption,
 - message metadata,
 - metrics snapshots and policy-controlled observability export,
@@ -24,11 +26,12 @@ The rules were evaluated against the current project shape:
 - release and documentation workflows.
 
 Several controls describe browser applications, web sessions, uploads, archive
-extraction, native C/C++ code, password login systems, or server-side HTTP
-fetching. Those surfaces do not currently exist in `nats-sinks`, so the correct
-status is `Not applicable`. If a future HTTP sink, web UI, upload feature, or
-native extension is added, those controls must be reopened before the feature
-is merged.
+extraction, native C/C++ code, or password login systems. Those surfaces do not
+currently exist in `nats-sinks`, so the correct status is `Not applicable`.
+Outbound HTTP is present only as a fixed, operator-configured sink endpoint; it
+is not a message-controlled fetch facility. If a future web UI, upload feature,
+native extension, or user-selected outbound fetch feature is added, the
+matching controls must be reopened before the feature is merged.
 
 ## Status Terms
 
@@ -50,9 +53,13 @@ is merged.
 | `Envelope` | `src/nats_sinks/core/envelope.py`, `src/nats_sinks/core/consumer.py`, `tests/unit/test_envelope.py` |
 | `Encryption` | `src/nats_sinks/core/encryption.py`, `tests/unit/test_encryption.py`, `docs/payload-encryption.md` |
 | `Oracle` | `src/nats_sinks/oracle/*`, `tests/unit/test_oracle_*.py`, `docs/oracle-sink.md` |
+| `Oracle NoSQL` | `src/nats_sinks/oracle_nosql/*`, `tests/unit/test_oracle_nosql_sink.py`, `tests/unit/test_oracle_nosql_test_container.py`, `docs/oracle-nosql-sink.md`, `docs/oracle-nosql-test-container.md` |
+| `Coherence` | `src/nats_sinks/coherence/*`, `tests/unit/test_coherence_sink.py`, `tests/integration/test_coherence_sink_e2e.py`, `docs/coherence-sink.md` |
+| `HTTP` | `src/nats_sinks/http/*`, `tests/unit/test_http_sink.py`, `docs/http-sink.md` |
+| `S3` | `src/nats_sinks/s3/*`, `tests/unit/test_s3_sink.py`, `docs/s3-sink.md` |
 | `File` | `src/nats_sinks/file/*`, `tests/unit/test_file_*.py`, `docs/file-sink.md` |
 | `CI` | `.github/workflows/*`, `scripts/check.sh`, `scripts/security.sh`, `scripts/secret-scan.sh` |
-| `Observability` | `src/nats_sinks/observability/*`, `src/nats_sinks/cli/observability.py`, `docs/observability.md`, `docs/prometheus.md`, `docs/otlp.md` |
+| `Observability` | `src/nats_sinks/observability/*`, `src/nats_sinks/cli/observability.py`, `docs/observability.md`, `docs/prometheus.md`, `docs/otlp.md`, `docs/oci-monitoring.md`, `docs/datadog.md`, `docs/cloudwatch.md`, `docs/azure-monitor.md` |
 | `Docs` | `README.md`, `docs/*.md`, `ROBOTS.md`, `AGENTS.md`, `CHANGELOG.md` |
 | `N/A` | No current web, session, upload, native-extension, SSRF, or password-authentication surface. |
 
@@ -60,7 +67,7 @@ is merged.
 
 | ID | Guidance summary | Status | Evidence or disposition |
 | --- | --- | --- | --- |
-| SD-001 | Treat all external input as hostile until validated, normalized, authorized, and safely handled. | Applied | Config, Envelope, Oracle, File, Docs |
+| SD-001 | Treat all external input as hostile until validated, normalized, authorized, and safely handled. | Applied | Config, Envelope, Oracle, Oracle NoSQL, Coherence, S3, File, Docs |
 | SD-002 | Apply least privilege for users, services, database accounts, containers, CI jobs, and cloud identities. | Already covered | Oracle least-privilege docs, CI permissions, Docs |
 | SD-003 | Fail closed by default for authentication, authorization, validation, configuration, dependency loading, and policy failures. | Applied | Config, Logging, Runner, tests |
 | SD-004 | Use defense in depth across validation, authorization, rate limiting, logging, monitoring, isolation, dependency scanning, and runtime controls. | Partially covered | CI, Config, Logging, Observability, Docs; rate limiting remains roadmap |
@@ -70,11 +77,11 @@ is merged.
 | SD-008 | Make secure behavior the default and risky behavior explicit opt-in. | Already covered | payload logging false, TLS verify true, idempotent modes, File skip_existing |
 | SD-009 | Treat internal systems as potentially hostile. | Applied | Docs, Envelope normalization, DLQ safety |
 | SD-010 | Document security invariants in code, tests, and architecture notes. | Applied | ROBOTS, AGENTS, commit-then-ACK docs, tests |
-| SD-011 | Validate all input at trust boundaries. | Applied | Config, CLI, Envelope, Oracle, File |
-| SD-012 | Use allow-list validation for values, formats, types, lengths, ranges, extensions, schemes, and enums. | Already covered | Pydantic literals, SQL identifier regex, file extension validators |
-| SD-013 | Reject malformed input early instead of repairing or guessing. | Applied | Config duplicate-key/null-root/size checks |
+| SD-011 | Validate all input at trust boundaries. | Applied | Config, CLI, Envelope, Oracle, Oracle NoSQL, Coherence, S3, File |
+| SD-012 | Use allow-list validation for values, formats, types, lengths, ranges, extensions, schemes, and enums. | Already covered | Pydantic literals, SQL identifier regex, file and object suffix validators, URL scheme validators |
+| SD-013 | Reject malformed input early instead of repairing or guessing. | Applied | Config duplicate-key/null-root/size checks; malformed headers-only `Nats-Msg-Size` is marked invalid instead of guessed |
 | SD-014 | Normalize paths, URLs, encodings, Unicode, hostnames, and filenames before validation or comparison. | Already covered | File path resolution, subject component sanitizer, UTF-8 config validation |
-| SD-015 | Enforce maximum sizes for bodies, files, JSON, strings, arrays, recursion depth, and batches. | Applied | Delivery batch bounds, config size, mission metadata bounds, and optional core `size_policy` for payload, headers, labels, metadata, record, and batch size |
+| SD-015 | Enforce maximum sizes for bodies, files, JSON, strings, arrays, recursion depth, and batches. | Applied | Delivery batch bounds, config size, mission metadata bounds, payload-presence size parsing, and optional core `size_policy` for payload, headers, labels, metadata, record, and batch size |
 | SD-016 | Parse structured input with real parsers. | Already covered | JSON parser, Pydantic, no YAML |
 | SD-017 | Treat data from databases, caches, logs, and queues as untrusted when it can originate externally. | Already covered | Envelope normalization, Oracle JSON normalization in tests |
 | SD-018 | Store validated data in typed internal structures. | Already covered | Pydantic configs, dataclass envelope, typed sink protocols |
@@ -221,16 +228,16 @@ is merged.
 | SD-159 | Use schema validation for APIs and configuration files. | Already covered | Pydantic |
 | SD-160 | Keep parsers updated. | Already covered | Dependabot/dependency review |
 | SD-161 | Fuzz custom parsers/converters with malformed and oversized inputs. | Applied | Deterministic fuzz-style and bounded generator tests cover malformed, oversized, control-character, and traversal-like cases |
-| SD-162 | Treat user-supplied URLs as dangerous. | Not applicable | No server-side fetch from user URLs |
-| SD-163 | Allow-list URL schemes, hostnames, ports, and services for server-side fetches. | Not applicable | No server-side fetch |
-| SD-164 | Block private/loopback/link-local/multicast/metadata IPs after DNS and redirects. | Not applicable | No server-side fetch |
-| SD-165 | Re-resolve and revalidate destinations on redirects. | Not applicable | No server-side fetch |
-| SD-166 | Disable redirects unless required and safely validated. | Not applicable | No server-side fetch |
-| SD-167 | Set strict connection/read/total/response-size limits for HTTP clients. | Roadmap | Relevant to future HTTP sink |
-| SD-168 | Do not send internal credentials to user-controlled URLs. | Roadmap | Relevant to future HTTP sink |
+| SD-162 | Treat user-supplied URLs as dangerous. | Applied | HTTP endpoint URLs are static operator configuration, never message-controlled, and reject userinfo, query strings, fragments, control characters, and unsafe schemes |
+| SD-163 | Allow-list URL schemes, hostnames, ports, and services for server-side fetches. | Applied | HTTP validates `https` by default, permits loopback-only cleartext only through explicit local-testing opt-in, and supports endpoint host allow lists; S3 endpoint URLs reject credentials, paths, query strings, fragments, and non-loopback HTTP |
+| SD-164 | Block private/loopback/link-local/multicast/metadata IPs after DNS and redirects. | Partially covered | HTTP does not accept message-supplied URLs and disables redirects; private-network egress policy remains a deployment/network-control concern |
+| SD-165 | Re-resolve and revalidate destinations on redirects. | Not applicable | HTTP sink does not follow redirects |
+| SD-166 | Disable redirects unless required and safely validated. | Applied | HTTP uses a request-scoped standard-library client with no redirect following |
+| SD-167 | Set strict connection/read/total/response-size limits for HTTP clients. | Applied | HTTP enforces request timeout, request body size, and response body size limits |
+| SD-168 | Do not send internal credentials to user-controlled URLs. | Applied | HTTP rejects direct sensitive header values, reads secret header values from named environment variables, and does not allow messages to choose destinations |
 | SD-169 | Restrict network egress from containers. | Roadmap | Docker/Kubernetes hardening |
-| SD-170 | Log outbound destination metadata for high-risk fetches. | Roadmap | Relevant to future HTTP sink |
-| SD-171 | Use a hardened proxy for SSRF policy where practical. | Roadmap | Relevant to future HTTP sink |
+| SD-170 | Log outbound destination metadata for high-risk fetches. | Applied | HTTP errors report sanitized status and framework context without payloads, credentials, or full destination values |
+| SD-171 | Use a hardened proxy for SSRF policy where practical. | Roadmap | Optional deployment architecture for high-control environments; not required for fixed operator-configured endpoints |
 | SD-172 | Avoid check-then-act security logic when resources can change. | Already covered | File atomic writes, DB constraints |
 | SD-173 | Use atomic DB constraints, transactions, CAS, locks, or unique indexes. | Already covered | Oracle commit and idempotency constraints |
 | SD-174 | Treat races affecting auth, balances, quotas, inventory, idempotency, or privileges as security bugs. | Already covered | Idempotency tests and docs |
@@ -394,7 +401,7 @@ stability, and documentation quality.
 | NS-006 | Security-review findings that change the project posture must update this register, the agent guidance, tests, documentation, and `CHANGELOG.md` together. | Applied | `ROBOTS.md`, `AGENTS.md`, `CHANGELOG.md`, and this page. |
 | NS-007 | The latest test report must remain sanitized and should summarize the newest validation run without exposing live infrastructure details. | Already covered | `docs/test-report.md` retention and redaction policy. |
 | NS-008 | Release automation must use short-lived credentials or trusted publishing and must not depend on committed tokens. | Already covered | Release workflow permissions, release docs, and GitHub CLI authentication preflight. |
-| NS-009 | Any future HTTP, web UI, upload, archive, native extension, or plugin-execution feature must reopen the relevant `Not applicable` controls before implementation. | Applied | Follow-up items below and `ROBOTS.md`/`AGENTS.md` threat-modeling guidance. |
+| NS-009 | Any future user-selected outbound fetch, web UI, upload, archive, native extension, or plugin-execution feature must reopen the relevant `Not applicable` controls before implementation. | Applied | Follow-up items below and `ROBOTS.md`/`AGENTS.md` threat-modeling guidance. |
 | NS-010 | Runtime version drift is a release-blocking issue because operators, support teams, and package consumers rely on coherent version reporting. | Applied | `src/nats_sinks/__init__.py` is now aligned with `pyproject.toml`, and automated checks guard future drift. |
 
 ## Follow-Up Items
@@ -410,6 +417,6 @@ items are:
 3. Add hash-verified install guidance for high-trust environments.
 4. Add more explicit container/Kubernetes hardening guidance once official
    container images are introduced.
-5. Reopen the web/session/SSRF/upload/native-code controls before adding an
-   HTTP sink with outbound user-configured destinations, a web UI, upload
-   handling, archive parsing, or native extensions.
+5. Reopen the web/session/SSRF/upload/native-code controls before adding
+   message-selected outbound URLs, a web UI, upload handling, archive parsing,
+   or native extensions.

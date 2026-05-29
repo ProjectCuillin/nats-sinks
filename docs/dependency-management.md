@@ -38,6 +38,7 @@ The following files are generated from `pyproject.toml`:
 | `requirements.txt` | Runtime dependencies published by the package. |
 | `requirements-crypto.txt` | Runtime dependencies plus the `crypto` optional dependency group. |
 | `requirements-oracle.txt` | Runtime dependencies plus the `oracle` optional dependency group. |
+| `requirements-oci.txt` | Runtime dependencies plus the `oci` optional dependency group used by live OCI Monitoring export. |
 | `requirements-test.txt` | Runtime dependencies plus the `test` optional dependency group. |
 | `requirements-dev.txt` | Runtime dependencies plus the `dev` optional dependency group. |
 | `requirements-docs.txt` | Runtime dependencies plus the `docs` optional dependency group. |
@@ -105,10 +106,43 @@ or protobuf dependency to the base package. That choice keeps the default
 installation small, makes dependency review simpler, and avoids changing the
 runtime footprint for users who do not enable OTLP export.
 
-If a future connector needs a vendor SDK, gRPC transport, protobuf encoder, or
-cloud authentication library, add it behind an optional extra, document why the
-dependency is required, update the generated manifest files, and include tests
-proving the base install still works without that optional connector.
+OCI Monitoring is the first observability connector with a vendor SDK. The
+`oci` optional extra installs the OCI Python SDK only on hosts that perform
+live OCI Monitoring export; dry-run rendering and the base sink package do not
+require it.
+The Amazon CloudWatch connector follows the same rule by keeping boto3 behind
+the `cloudwatch` optional extra. Dry-run rendering and unit tests work without
+boto3; live export requires `python -m pip install "nats-sinks[cloudwatch]"`.
+The Azure Monitor connector currently uses the Python standard library HTTP
+stack and an environment-backed bearer token, so it adds no Azure SDK
+dependency to the base package.
+
+If a future connector needs another vendor SDK, gRPC transport, protobuf
+encoder, or cloud authentication library, add it behind an optional extra,
+document why the dependency is required, update the generated manifest files,
+and include tests proving the base install still works without that optional
+connector.
+
+## NATS Python Client Capability Checks
+
+The runtime package depends on `nats-py` through the version range declared in
+`pyproject.toml`. Some NATS client capabilities are not only a package-version
+question; they also depend on which public client API the installed library
+exposes. Ordered-consumer inspection is handled this way.
+
+`nats-sink inspect-ordered` checks the active JetStream context before it
+subscribes. It requires a callable public `JetStreamContext.subscribe` API with
+an `ordered_consumer` keyword. If that support is missing, partial, or
+ambiguous, the command fails closed with a short sanitized configuration error.
+It does not fall back to ordinary push delivery, durable pull delivery, private
+client attributes, or dynamic imports.
+
+This check is deliberately limited to explicit inspection tooling. It does not
+change the production durable pull runner, sink construction, commit
+semantics, ACK ordering, DLQ handling, or idempotency behavior. Operators who
+pin dependencies for controlled environments should validate
+`nats-sink inspect-ordered` in their own runtime image if they intend to use
+ordered inspection during incident response or lab analysis.
 
 ## Security Notes
 

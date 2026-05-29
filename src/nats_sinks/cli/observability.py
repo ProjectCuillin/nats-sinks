@@ -28,6 +28,24 @@ from nats_sinks.core.metrics import (
     METRIC_SPECS,
     load_metrics_snapshot,
 )
+from nats_sinks.observability.azure_monitor import (
+    DISABLED_AZURE_MONITOR_TEXT,
+    EMPTY_AZURE_MONITOR_TEXT,
+    export_azure_monitor_metrics,
+    render_azure_monitor_metric_requests_json,
+)
+from nats_sinks.observability.cloudwatch import (
+    DISABLED_CLOUDWATCH_TEXT,
+    EMPTY_CLOUDWATCH_TEXT,
+    export_cloudwatch_metrics,
+    render_cloudwatch_put_metric_data_requests_json,
+)
+from nats_sinks.observability.datadog import (
+    DISABLED_DATADOG_TEXT,
+    EMPTY_DATADOG_TEXT,
+    export_datadog_metrics,
+    render_datadog_lines,
+)
 from nats_sinks.observability.elastic import (
     DISABLED_ELASTIC_TEXT,
     EMPTY_ELASTIC_TEXT,
@@ -47,6 +65,12 @@ from nats_sinks.observability.nats_monitoring import (
     load_nats_monitoring_snapshot,
     render_nats_monitoring_prometheus,
     write_nats_monitoring_snapshot,
+)
+from nats_sinks.observability.oci_monitoring import (
+    DISABLED_OCI_MONITORING_TEXT,
+    EMPTY_OCI_MONITORING_TEXT,
+    export_oci_monitoring_metrics,
+    render_oci_monitoring_post_metric_data_requests_json,
 )
 from nats_sinks.observability.otlp import (
     DISABLED_OTLP_TEXT,
@@ -184,6 +208,10 @@ def _policy_summary(policy: ObservabilityPolicy) -> str:
             f"grafana_alloy_enabled={str(policy.grafana_alloy.enabled).lower()}",
             f"splunk_hec_enabled={str(policy.splunk_hec.enabled).lower()}",
             f"statsd_enabled={str(policy.statsd.enabled).lower()}",
+            f"datadog_enabled={str(policy.datadog.enabled).lower()}",
+            f"oci_monitoring_enabled={str(policy.oci_monitoring.enabled).lower()}",
+            f"cloudwatch_enabled={str(policy.cloudwatch.enabled).lower()}",
+            f"azure_monitor_enabled={str(policy.azure_monitor.enabled).lower()}",
             f"syslog_enabled={str(policy.syslog.enabled).lower()}",
             f"nats_server_monitoring_enabled={str(policy.nats_server_monitoring.enabled).lower()}",
             "nats_server_monitoring_prometheus_enabled="
@@ -889,6 +917,329 @@ def statsd_export(
         f"message={result.message}"
     )
     if result.message == EMPTY_STATSD_TEXT.strip():
+        return
+    if not result.delivered:
+        raise typer.Exit(3)
+
+
+@app.command("datadog-export")
+def datadog_export(
+    snapshot_file: Annotated[
+        Path,
+        typer.Argument(help="Metrics snapshot JSON written by nats-sink."),
+    ],
+    policy_file: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="Render DogStatsD lines to stdout instead of sending datagrams.",
+        ),
+    ] = False,
+    allow_stale: Annotated[
+        bool,
+        typer.Option("--allow-stale", help="Warn but export when the snapshot is stale."),
+    ] = False,
+) -> None:
+    """Export approved metrics to Datadog through DogStatsD.
+
+    Datadog output is best-effort observability. It reads only a local metrics
+    snapshot, applies the shared allow and deny policy, and sends bounded
+    DogStatsD datagrams to the configured Datadog Agent listener. Failures
+    cannot change JetStream ACK, NAK, DLQ, retry, fan-out, or sink behavior.
+    """
+
+    policy = _load_policy_or_exit(policy_file)
+    snapshot: dict[str, object] | None = None
+    if policy.enabled and policy.datadog.enabled:
+        snapshot = _load_snapshot_or_exit(snapshot_file)
+        try:
+            _check_staleness(
+                snapshot,
+                stale_after_seconds=policy.datadog.stale_after_seconds,
+                allow_stale=allow_stale,
+            )
+        except ValueError as exc:
+            typer.echo(f"Metrics snapshot error: {exc}", err=True)
+            raise typer.Exit(2) from exc
+
+    if not policy.enabled or not policy.datadog.enabled:
+        typer.echo(DISABLED_DATADOG_TEXT, nl=False)
+        return
+    if snapshot is None:
+        typer.echo(
+            "Datadog export error: enabled Datadog export requires a metrics snapshot",
+            err=True,
+        )
+        raise typer.Exit(2)
+
+    if dry_run:
+        try:
+            rendered = render_datadog_lines(snapshot, policy)
+        except (ConfigurationError, ValueError) as exc:
+            typer.echo(f"Datadog render error: {exc}", err=True)
+            raise typer.Exit(2) from exc
+        typer.echo(rendered, nl=False)
+        return
+
+    try:
+        result = export_datadog_metrics(snapshot, policy)
+    except (ConfigurationError, ValueError) as exc:
+        typer.echo(f"Datadog export error: {exc}", err=True)
+        raise typer.Exit(2) from exc
+
+    typer.echo(
+        "Datadog export: "
+        f"attempted={str(result.attempted).lower()} "
+        f"delivered={str(result.delivered).lower()} "
+        f"attempts={result.attempts} "
+        f"datagrams={result.datagrams} "
+        f"message={result.message}"
+    )
+    if result.message == EMPTY_DATADOG_TEXT.strip():
+        return
+    if not result.delivered:
+        raise typer.Exit(3)
+
+
+@app.command("oci-monitoring-export")
+def oci_monitoring_export(
+    snapshot_file: Annotated[
+        Path,
+        typer.Argument(help="Metrics snapshot JSON written by nats-sink."),
+    ],
+    policy_file: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="Render sanitized OCI Monitoring PostMetricData JSON instead of sending it.",
+        ),
+    ] = False,
+    allow_stale: Annotated[
+        bool,
+        typer.Option("--allow-stale", help="Warn but export when the snapshot is stale."),
+    ] = False,
+) -> None:
+    """Export approved metrics to Oracle Cloud Infrastructure Monitoring.
+
+    The command reads only a local metrics snapshot and sends policy-approved
+    custom metric data through the optional OCI SDK path. Failures cannot change
+    JetStream ACK, NAK, DLQ, retry, fan-out, idempotency, or sink behavior.
+    """
+
+    policy = _load_policy_or_exit(policy_file)
+    snapshot: dict[str, object] | None = None
+    if policy.enabled and policy.oci_monitoring.enabled:
+        snapshot = _load_snapshot_or_exit(snapshot_file)
+        try:
+            _check_staleness(
+                snapshot,
+                stale_after_seconds=policy.oci_monitoring.stale_after_seconds,
+                allow_stale=allow_stale,
+            )
+        except ValueError as exc:
+            typer.echo(f"Metrics snapshot error: {exc}", err=True)
+            raise typer.Exit(2) from exc
+
+    if not policy.enabled or not policy.oci_monitoring.enabled:
+        typer.echo(DISABLED_OCI_MONITORING_TEXT, nl=False)
+        return
+    if snapshot is None:
+        typer.echo(
+            "OCI Monitoring export error: enabled OCI Monitoring export requires "
+            "a metrics snapshot",
+            err=True,
+        )
+        raise typer.Exit(2)
+
+    if dry_run:
+        try:
+            rendered = render_oci_monitoring_post_metric_data_requests_json(snapshot, policy)
+        except (ConfigurationError, ValueError) as exc:
+            typer.echo(f"OCI Monitoring render error: {exc}", err=True)
+            raise typer.Exit(2) from exc
+        typer.echo(rendered.decode("utf-8"))
+        return
+
+    try:
+        result = export_oci_monitoring_metrics(snapshot, policy)
+    except (ConfigurationError, ValueError) as exc:
+        typer.echo(f"OCI Monitoring export error: {exc}", err=True)
+        raise typer.Exit(2) from exc
+
+    typer.echo(
+        "OCI Monitoring export: "
+        f"attempted={str(result.attempted).lower()} "
+        f"delivered={str(result.delivered).lower()} "
+        f"attempts={result.attempts} "
+        f"requests={result.requests} "
+        f"metrics={result.metrics} "
+        f"message={result.message}"
+    )
+    if result.message == EMPTY_OCI_MONITORING_TEXT.strip():
+        return
+    if not result.delivered:
+        raise typer.Exit(3)
+
+
+@app.command("cloudwatch-export")
+def cloudwatch_export(
+    snapshot_file: Annotated[
+        Path,
+        typer.Argument(help="Metrics snapshot JSON written by nats-sink."),
+    ],
+    policy_file: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="Render CloudWatch PutMetricData JSON requests instead of sending them.",
+        ),
+    ] = False,
+    allow_stale: Annotated[
+        bool,
+        typer.Option("--allow-stale", help="Warn but export when the snapshot is stale."),
+    ] = False,
+) -> None:
+    """Export approved metrics to Amazon CloudWatch custom metrics.
+
+    The command reads only a local metrics snapshot and sends policy-approved
+    custom metric data through the optional AWS SDK path. Failures cannot change
+    JetStream ACK, NAK, DLQ, retry, or sink behavior.
+    """
+
+    policy = _load_policy_or_exit(policy_file)
+    snapshot: dict[str, object] | None = None
+    if policy.enabled and policy.cloudwatch.enabled:
+        snapshot = _load_snapshot_or_exit(snapshot_file)
+        try:
+            _check_staleness(
+                snapshot,
+                stale_after_seconds=policy.cloudwatch.stale_after_seconds,
+                allow_stale=allow_stale,
+            )
+        except ValueError as exc:
+            typer.echo(f"Metrics snapshot error: {exc}", err=True)
+            raise typer.Exit(2) from exc
+
+    if not policy.enabled or not policy.cloudwatch.enabled:
+        typer.echo(DISABLED_CLOUDWATCH_TEXT, nl=False)
+        return
+    if snapshot is None:
+        typer.echo(
+            "Amazon CloudWatch export error: enabled CloudWatch export requires a metrics snapshot",
+            err=True,
+        )
+        raise typer.Exit(2)
+
+    if dry_run:
+        try:
+            rendered = render_cloudwatch_put_metric_data_requests_json(snapshot, policy)
+        except (ConfigurationError, ValueError) as exc:
+            typer.echo(f"Amazon CloudWatch render error: {exc}", err=True)
+            raise typer.Exit(2) from exc
+        typer.echo(rendered.decode("utf-8"))
+        return
+
+    try:
+        result = export_cloudwatch_metrics(snapshot, policy)
+    except (ConfigurationError, ValueError) as exc:
+        typer.echo(f"Amazon CloudWatch export error: {exc}", err=True)
+        raise typer.Exit(2) from exc
+
+    typer.echo(
+        "Amazon CloudWatch export: "
+        f"attempted={str(result.attempted).lower()} "
+        f"delivered={str(result.delivered).lower()} "
+        f"attempts={result.attempts} "
+        f"requests={result.requests} "
+        f"metrics={result.metrics} "
+        f"message={result.message}"
+    )
+    if result.message == EMPTY_CLOUDWATCH_TEXT.strip():
+        return
+    if not result.delivered:
+        raise typer.Exit(3)
+
+
+@app.command("azure-monitor-export")
+def azure_monitor_export(
+    snapshot_file: Annotated[
+        Path,
+        typer.Argument(help="Metrics snapshot JSON written by nats-sink."),
+    ],
+    policy_file: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="Render sanitized Azure Monitor custom metric JSON instead of posting it.",
+        ),
+    ] = False,
+    allow_stale: Annotated[
+        bool,
+        typer.Option("--allow-stale", help="Warn but export when the snapshot is stale."),
+    ] = False,
+) -> None:
+    """Export approved metrics to Azure Monitor custom metrics.
+
+    The command reads only a local metrics snapshot and sends policy-approved
+    custom metric data to one explicitly configured Azure resource. Failures
+    cannot change JetStream ACK, NAK, DLQ, retry, fan-out, idempotency, or sink
+    behavior.
+    """
+
+    policy = _load_policy_or_exit(policy_file)
+    snapshot: dict[str, object] | None = None
+    if policy.enabled and policy.azure_monitor.enabled:
+        snapshot = _load_snapshot_or_exit(snapshot_file)
+        try:
+            _check_staleness(
+                snapshot,
+                stale_after_seconds=policy.azure_monitor.stale_after_seconds,
+                allow_stale=allow_stale,
+            )
+        except ValueError as exc:
+            typer.echo(f"Metrics snapshot error: {exc}", err=True)
+            raise typer.Exit(2) from exc
+
+    if not policy.enabled or not policy.azure_monitor.enabled:
+        typer.echo(DISABLED_AZURE_MONITOR_TEXT, nl=False)
+        return
+    if snapshot is None:
+        typer.echo(
+            "Azure Monitor export error: enabled Azure Monitor export requires a metrics snapshot",
+            err=True,
+        )
+        raise typer.Exit(2)
+
+    if dry_run:
+        try:
+            rendered = render_azure_monitor_metric_requests_json(snapshot, policy)
+        except (ConfigurationError, ValueError) as exc:
+            typer.echo(f"Azure Monitor render error: {exc}", err=True)
+            raise typer.Exit(2) from exc
+        typer.echo(rendered.decode("utf-8"))
+        return
+
+    try:
+        result = export_azure_monitor_metrics(snapshot, policy)
+    except (ConfigurationError, ValueError) as exc:
+        typer.echo(f"Azure Monitor export error: {exc}", err=True)
+        raise typer.Exit(2) from exc
+
+    typer.echo(
+        "Azure Monitor export: "
+        f"attempted={str(result.attempted).lower()} "
+        f"delivered={str(result.delivered).lower()} "
+        f"attempts={result.attempts} "
+        f"requests={result.requests} "
+        f"metrics={result.metrics} "
+        f"status={result.status_code if result.status_code is not None else 'none'} "
+        f"message={result.message}"
+    )
+    if result.message == EMPTY_AZURE_MONITOR_TEXT.strip():
         return
     if not result.delivered:
         raise typer.Exit(3)

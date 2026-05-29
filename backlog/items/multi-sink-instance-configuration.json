@@ -3,7 +3,7 @@
   "title": "[Feature]: Add named multi-sink instance configuration",
   "area": "Configuration",
   "priority": "P2 - next minor release candidate",
-  "target_release": "unscheduled",
+  "target_release": "v0.4.2",
   "labels": ["sink-new", "sink-oracle", "sink-file", "security"],
   "problem": "The current configuration model centers on one sink object. To route one message to multiple Oracle databases, multiple tables represented by independent Oracle sink instances, one Oracle sink plus one file sink, or multiple file destinations, the project needs a stable way to declare and validate multiple named sink instances without breaking existing single-sink users.",
   "proposal": "Introduce a backward-compatible multi-sink configuration shape with a named sink registry, such as a top-level sinks object or equivalent routing section. Each named sink should contain the same sink-specific configuration currently used by standalone sinks. Route configuration should reference child sinks by validated names rather than copying full sink definitions into every route. The CLI should validate all named sinks, show redacted effective configuration for each, and support testing a specific sink or all configured sinks where practical. The documentation must explain that individual sinks are configured in the named sink registry, for example oracle_secret, file_audit, and oracle_unclass, and routes only reference those names under their targets. The sample configuration must show oracle_secret and oracle_unclass as separate Oracle sink instances with independent connection settings and target tables, plus file_audit as a separate file sink destination.",

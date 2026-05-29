@@ -1,0 +1,37 @@
+{
+  "id": "oracle-coherence-ce-sink",
+  "title": "[Feature]: Add a first-party Oracle Coherence Community Edition sink",
+  "area": "Future sink",
+  "priority": "P3 - backlog candidate",
+  "target_release": "v0.4.2",
+  "labels": ["sink-new", "sink-oracle", "security", "testing"],
+  "problem": "Oracle Coherence Community Edition is a natural Oracle-oriented key/value backend for teams that already use Oracle data-grid patterns and want low-latency event custody in a named map or cache. nats-sinks does not yet have a first-party Oracle Coherence Community Edition sink. Without a maintained design, users could build ad hoc integrations that store only partial payloads, acknowledge before a key/value write is accepted, use weak key strategies, or treat cache acceptance as stronger durability than the configured Coherence cluster actually provides.",
+  "proposal": "Research and implement a first-party Oracle Coherence Community Edition sink that stores one complete normalized nats-sinks event JSON object as the value of a key/value entry. The initial design should prefer the official Python client and its gRPC transport when it can satisfy the sink contract. The sink should write to a configured NamedMap or NamedCache, use a deterministic event key derived from an approved idempotency source, validate cache names and key strategies, and expose the optional dependency through a dedicated extra. Research found that Oracle Coherence supports key-based map access, polyglot clients, Python client map-like operations, gRPC proxy access, JSON object storage, JSON field querying, and JSON values through the Coherence JSON module. The implementation must document that Coherence acceptance is only a durable sink success when the target cluster, persistence, backup, and operational profile are configured to provide the required custody.",
+  "users": "Operators and developers using NATS JetStream with Oracle Coherence Community Edition, maintainers extending the first-party Oracle sink family, security reviewers validating key/value storage boundaries, and teams that need an Oracle-oriented data-grid destination without weakening commit-then-acknowledge semantics.",
+  "delivery_semantics": "The core runner must continue to own all NATS and JetStream delivery semantics. The Oracle Coherence Community Edition sink must never ACK messages. A write may return success only after the configured Coherence client operation has completed successfully and the result is unambiguous. If the write times out, is rejected, is ambiguous, or cannot prove acceptance, the sink must raise a framework error so the core does not ACK. If Coherence accepts the write but the process fails before ACK, redelivery must be safe through deterministic keying and duplicate handling.",
+  "security": "Treat payloads, subjects, headers, cache entries, configuration, environment variables, and Coherence responses as untrusted. Cache names, client profile names, key strategies, TTL values, serializer modes, payload size limits, and optional overwrite policies must be allow-listed and bounded. Logs must not expose JSON payloads, keys when configured as sensitive, connection details, TLS material, credentials, or high-cardinality metadata by default. The feature must document TLS and authentication support available through the selected client, use environment-backed secrets where needed, and avoid arbitrary dynamic imports or user-selected client classes.",
+  "acceptance": [
+    "A design note records the chosen client approach, optional extra name, public import path, config type, supported Coherence versions, and durability assumptions.",
+    "The sink stores the complete normalized nats-sinks event as one JSON object value in a configured Oracle Coherence Community Edition map or cache.",
+    "The key strategy is deterministic, documented, bounded, and based on approved idempotency metadata rather than payload ciphertext or sensitive labels.",
+    "Config validation rejects unsafe cache names, unknown serializer modes, invalid TTL values, oversized payload limits, unsafe overwrite modes, and ambiguous durability settings.",
+    "Duplicate behavior is explicit through put-if-absent, replace, or overwrite policy choices and is covered by tests.",
+    "Timeouts, ambiguous responses, serialization failures, rejected writes, and connection failures do not produce ACKs.",
+    "Documentation clearly states when Oracle Coherence Community Edition is suitable for ACK-gated durable custody and when it should only be used as an optional fan-out target.",
+    "The sink participates in the sink certification tests, routing and fan-out tests, metrics snapshots, configuration validation, and release evidence.",
+    "No implementation is production recommended until a local Oracle Coherence Community Edition test backend and certification flow exist."
+  ],
+  "tests": "Add deterministic unit tests with fake Coherence sessions, maps, caches, and operation results before any live tests. Cover config parsing, client option construction, cache name validation, key derivation, JSON value mapping, duplicate policies, TTL bounds, overwrite decisions, timeout handling, ambiguous response handling, serialization errors, redaction, and no ACK on failure. Add contract tests proving commit-then-acknowledge behavior through the runner. Add optional container-backed e2e tests only after the Oracle Coherence Community Edition test backend exists, and keep all live configuration local, gated, fake, and sanitized.",
+  "documentation": "Add a dedicated Oracle Coherence Community Edition sink page under the sink documentation tree. Update README.md, docs/index.md, docs/sink-framework.md, docs/configuration.md, docs/idempotency.md, docs/security.md, docs/operations.md, docs/testing.md, docs/roadmap.md, ROADMAP.md, and CHANGELOG.md when implementation starts. Documentation must include full JSON value storage, key strategy examples, duplicate behavior, durability limitations, TLS and authentication posture, local testing, routing and fan-out usage, and known limitations.",
+  "closeout": "Close only after the release containing the Oracle Coherence Community Edition sink is published. Include release tag, final public API, config schema, dependency extra, tested client and backend versions, durability posture, tests run, documentation links, known limitations, and follow-up issues for advanced Coherence behavior.",
+  "relationships": {
+    "blocked_by": [
+      "backlog:oracle-coherence-ce-test-container"
+    ],
+    "related": [
+      "backlog:sink-certification-contract-and-tests",
+      "backlog:core-routing-fanout-sink",
+      "backlog:multi-sink-instance-configuration"
+    ]
+  }
+}

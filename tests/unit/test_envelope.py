@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from nats_sinks import NatsEnvelope, SerializationError
+from nats_sinks import NatsEnvelope, SerializationError, ValidationError
 
 
 def envelope(**overrides: object) -> NatsEnvelope:
@@ -75,6 +75,19 @@ def test_idempotency_key_falls_back_to_message_id() -> None:
     assert item.idempotency_key() == "message-id:m-1"
 
 
+def test_idempotency_key_rejects_payload_hash_when_payload_was_omitted() -> None:
+    item = envelope(
+        stream=None,
+        stream_sequence=None,
+        headers={"Nats-Msg-Size": "128"},
+        data=b"",
+        message_id=None,
+    )
+
+    with pytest.raises(ValidationError, match="payload-sha256 idempotency fallback is unavailable"):
+        item.idempotency_key()
+
+
 def test_payload_as_json_reports_clear_error() -> None:
     item = envelope(data=b"not-json")
     with pytest.raises(SerializationError, match="not valid JSON"):
@@ -120,6 +133,52 @@ def test_metadata_snapshot_captures_optional_nats_headers_and_epoch_times() -> N
     assert metadata["freshness"]["event_age_at_receive_seconds"] == 90.0
     assert metadata["freshness"]["event_age_at_store_seconds"] == 150.0
     assert metadata["freshness"]["source_clock_skew_seconds"] == 0.0
+    assert metadata["payload"] == {
+        "present": True,
+        "omitted": False,
+        "omitted_reason": None,
+        "original_size_bytes": len(item.data),
+        "delivered_size_bytes": len(item.data),
+        "nats_msg_size_header": None,
+        "nats_msg_size_header_malformed": False,
+    }
+
+
+def test_payload_presence_distinguishes_empty_from_headers_only() -> None:
+    producer_empty = envelope(data=b"", headers={})
+    headers_only = envelope(data=b"", headers={"Nats-Msg-Size": "4096"})
+
+    assert producer_empty.payload_present is True
+    assert producer_empty.payload_omitted is False
+    assert producer_empty.original_payload_size_bytes == 0
+    assert headers_only.payload_present is False
+    assert headers_only.payload_omitted is True
+    assert headers_only.payload_omitted_reason == "headers_only"
+    assert headers_only.original_payload_size_bytes == 4096
+
+    metadata = headers_only.metadata_for_json_storage()
+    assert metadata["payload"] == {
+        "present": False,
+        "omitted": True,
+        "omitted_reason": "headers_only",
+        "original_size_bytes": 4096,
+        "delivered_size_bytes": 0,
+        "nats_msg_size_header": "4096",
+        "nats_msg_size_header_malformed": False,
+    }
+
+
+def test_payload_presence_records_malformed_size_header_without_guessing() -> None:
+    item = envelope(data=b"", headers={"Nats-Msg-Size": "not-a-number"})
+
+    assert item.payload_present is True
+    assert item.payload_omitted is False
+    assert item.original_payload_size_bytes == 0
+    assert item.payload_size_header_malformed is True
+
+    metadata = item.metadata_for_json_storage()
+    assert metadata["payload"]["nats_msg_size_header"] == "not-a-number"
+    assert metadata["payload"]["nats_msg_size_header_malformed"] is True
 
 
 def test_metadata_snapshot_handles_missing_reserved_headers() -> None:
