@@ -1,0 +1,27 @@
+{
+  "id": "release-ci-latest-ruff-lint",
+  "title": "[Bug]: release validation CI fails with latest Ruff lint rules",
+  "area": "CI and automation",
+  "severity": "high",
+  "priority": "P1 - release blocker",
+  "target_release": "v0.4.2",
+  "labels": ["release", "testing", "completed"],
+  "summary": "The v0.4.2 release-validation CI run failed in the lint step because the hosted runner installed a newer Ruff version than the local environment and surfaced stricter lint findings.",
+  "observed": "Release-validation run 26654606716 failed `ruff check .` on all Python matrix jobs. The log reported two unused `noqa: S603` directives in local container e2e helper scripts and one ASYNC240 warning for calling a pathlib method directly inside an async multi-sink routing helper.",
+  "expected": "Release validation should pass with the current CI-resolved Ruff version, and local regression coverage should prevent stale suppressions or async pathlib calls from returning.",
+  "reproduction": "Run the release-validation CI workflow for PR #330 or run `ruff check .` with the CI-resolved Ruff version.",
+  "failing_test": "Add a focused static regression test that detects bare stale S603 suppressions in the container e2e helpers and direct `Path.mkdir` use inside the async multi-sink routing flow.",
+  "impact": "The release is blocked until the lint findings are fixed. Runtime sink delivery semantics are unaffected.",
+  "delivery_semantics": "This bug is limited to CI lint compatibility and local test helper structure. It cannot alter JetStream ACK, retry, DLQ, or durable sink commit behavior.",
+  "security": "The fix must not weaken subprocess safety. Container e2e helpers must continue to use fixed argv lists, `shell=False`, bounded timeouts, and explicit environments.",
+  "acceptance": [
+    "The stale bare S603 suppressions are replaced with version-compatible suppressions without changing safe subprocess argument-list behavior.",
+    "The async multi-sink routing helper no longer calls pathlib methods directly from async code.",
+    "A focused static regression covers the lint compatibility expectations.",
+    "The release-validation CI workflow passes after the fix.",
+    "The latest test report and changelog record the release-blocking CI fix."
+  ],
+  "tests": "Run the focused static regression, `python -m ruff check .`, `scripts/check.sh`, and the release-validation GitHub workflow for PR #330.",
+  "documentation": "Update the latest test report and changelog. Public runtime documentation does not need a behavior change note because the fix is CI and helper-structure only.",
+  "closeout": "Close after the fix merges into the release branch, release validation passes, and release-gated closure confirms v0.4.2 has shipped."
+}
