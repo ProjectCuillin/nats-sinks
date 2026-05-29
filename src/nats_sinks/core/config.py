@@ -2956,7 +2956,7 @@ class RoutingMatchPolicyConfig(BaseModel):
     no_match: Literal["reject", "default_route", "ignore"] = "reject"
     target_sink_types: dict[
         str,
-        Literal["coherence", "file", "mysql", "oracle", "oracle_nosql", "spool"],
+        Literal["coherence", "file", "http", "mysql", "oracle", "oracle_nosql", "spool"],
     ] = Field(default_factory=dict)
     default_targets: tuple[RouteTargetConfig, ...] = Field(default_factory=tuple)
     routes: tuple[RoutePolicyRouteConfig, ...] = Field(default_factory=tuple)
@@ -2967,7 +2967,7 @@ class RoutingMatchPolicyConfig(BaseModel):
         cls, value: object
     ) -> dict[
         str,
-        Literal["coherence", "file", "mysql", "oracle", "oracle_nosql", "spool"],
+        Literal["coherence", "file", "http", "mysql", "oracle", "oracle_nosql", "spool"],
     ]:
         """Validate the target-to-sink-type map used for ACK-gating defaults."""
 
@@ -2977,7 +2977,7 @@ class RoutingMatchPolicyConfig(BaseModel):
             raise ValueError("routing.target_sink_types must be an object")
         normalized: dict[
             str,
-            Literal["coherence", "file", "mysql", "oracle", "oracle_nosql", "spool"],
+            Literal["coherence", "file", "http", "mysql", "oracle", "oracle_nosql", "spool"],
         ] = {}
         seen: set[str] = set()
         for raw_name, raw_type in value.items():
@@ -2994,7 +2994,7 @@ class RoutingMatchPolicyConfig(BaseModel):
                 )
             seen.add(name)
             normalized[name] = cast(
-                "Literal['coherence', 'file', 'mysql', 'oracle', 'oracle_nosql', 'spool']",
+                "Literal['coherence', 'file', 'http', 'mysql', 'oracle', 'oracle_nosql', 'spool']",
                 sink_type,
             )
         return normalized
