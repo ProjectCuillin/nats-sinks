@@ -188,6 +188,12 @@ used immediately:
   plural filter subjects, server-side BackOff sequences, MaxDeliver,
   MaxAckPending, MaxWaiting, headers-only state, consumer replicas,
   memory-storage selection, and bounded low-sensitivity consumer metadata.
+- Explicit payload-presence metadata for headers-only delivery, so
+  producer-empty payloads remain distinct from bodies intentionally omitted by
+  JetStream and DLQ records do not pretend to contain withheld payload bytes.
+- Optional bounded server-confirmed ACK handling after durable sink success or
+  successful DLQ publication, with separate metrics for attempts, successes,
+  timeouts, failures, unsupported client paths, and elapsed confirmation time.
 - NATS reconnect tuning for clustered or controlled-network deployments,
   including multiple seed URLs, reconnect wait, maximum reconnect attempts,
   ping behavior, pending buffer size, drain timeout, and connection event
@@ -1266,9 +1272,7 @@ Phase 2:
 - Expanded live certification runbooks for NATS TLS certificate, NKEY, and
   decentralized JWT deployments across representative server policies.
 - Deeper sequence-based and timestamp-based JetStream replay-start controls.
-- Optional confirmed ACK support and explicit BackOff-aware `InProgress`
-  heartbeat timing.
-- Payload-presence metadata and sink certification for headers-only delivery.
+- Explicit BackOff-aware `InProgress` heartbeat timing.
 
 Phase 3:
 

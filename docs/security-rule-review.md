@@ -75,9 +75,9 @@ is merged.
 | SD-010 | Document security invariants in code, tests, and architecture notes. | Applied | ROBOTS, AGENTS, commit-then-ACK docs, tests |
 | SD-011 | Validate all input at trust boundaries. | Applied | Config, CLI, Envelope, Oracle, Oracle NoSQL, Coherence, File |
 | SD-012 | Use allow-list validation for values, formats, types, lengths, ranges, extensions, schemes, and enums. | Already covered | Pydantic literals, SQL identifier regex, file extension validators |
-| SD-013 | Reject malformed input early instead of repairing or guessing. | Applied | Config duplicate-key/null-root/size checks |
+| SD-013 | Reject malformed input early instead of repairing or guessing. | Applied | Config duplicate-key/null-root/size checks; malformed headers-only `Nats-Msg-Size` is marked invalid instead of guessed |
 | SD-014 | Normalize paths, URLs, encodings, Unicode, hostnames, and filenames before validation or comparison. | Already covered | File path resolution, subject component sanitizer, UTF-8 config validation |
-| SD-015 | Enforce maximum sizes for bodies, files, JSON, strings, arrays, recursion depth, and batches. | Applied | Delivery batch bounds, config size, mission metadata bounds, and optional core `size_policy` for payload, headers, labels, metadata, record, and batch size |
+| SD-015 | Enforce maximum sizes for bodies, files, JSON, strings, arrays, recursion depth, and batches. | Applied | Delivery batch bounds, config size, mission metadata bounds, payload-presence size parsing, and optional core `size_policy` for payload, headers, labels, metadata, record, and batch size |
 | SD-016 | Parse structured input with real parsers. | Already covered | JSON parser, Pydantic, no YAML |
 | SD-017 | Treat data from databases, caches, logs, and queues as untrusted when it can originate externally. | Already covered | Envelope normalization, Oracle JSON normalization in tests |
 | SD-018 | Store validated data in typed internal structures. | Already covered | Pydantic configs, dataclass envelope, typed sink protocols |

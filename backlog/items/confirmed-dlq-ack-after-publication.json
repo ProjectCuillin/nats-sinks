@@ -3,7 +3,7 @@
   "title": "[Feature]: Evaluate and add optional confirmed ACK or TERM after successful DLQ publication",
   "area": "Core runtime and delivery semantics",
   "priority": "P3 - backlog candidate",
-  "target_release": "unscheduled",
+  "target_release": "v0.4.2",
   "labels": ["nats", "testing", "observability"],
   "problem": "Permanent failures are safe only when the original message is acknowledged or terminally acknowledged after the DLQ record has been durably published. The project now supports an optional AckTerm policy after DLQ publication, but it does not yet provide a confirmed acknowledgement path for either normal ACK after DLQ success or any terminal acknowledgement variant that the client can safely confirm.",
   "proposal": "Design and implement a bounded, disabled-by-default confirmation path for the permanent-failure DLQ branch. The feature should confirm the post-DLQ acknowledgement where the NATS client supports confirmation, clearly document ordinary terminal acknowledgement limitations where confirmation is not available, and preserve the rule that DLQ publication success must happen before the original message is ACKed or terminated.",

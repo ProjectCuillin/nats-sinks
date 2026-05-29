@@ -47,6 +47,7 @@ from nats_sinks.core.authenticity import (
 )
 from nats_sinks.core.config import (
     FANOUT_OPTIONAL_ACK_DEFAULTS,
+    AckConfirmationConfig,
     ConsumerManagementConfig,
     CustodyConfig,
     EncryptionConfig,
@@ -204,6 +205,7 @@ __all__ = [
     "SINK_CONNECTOR_API_VERSION",
     "SINK_CONNECTOR_ENTRY_POINT_GROUP",
     "SUPPORTED_MESSAGE_AUTHENTICITY_ALGORITHMS",
+    "AckConfirmationConfig",
     "AckError",
     "CoherenceSink",
     "CoherenceSinkConfig",

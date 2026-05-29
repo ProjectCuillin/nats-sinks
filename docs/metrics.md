@@ -475,11 +475,26 @@ published to DLQ and `dead_letter.ack_term_after_publish` is enabled. They are
 separate from normal ACK metrics because `AckTerm` means "stop redelivery after
 terminal failure handling", not "the sink successfully wrote the message".
 
-Confirmed ACK metrics are not emitted yet because the runtime does not yet
-expose a confirmed ACK option. The evaluated future metrics are documented in
-[Acknowledgement Confirmation Evaluation](acknowledgement-confirmation.md).
-Those future metrics should remain separate from ordinary ACK counters so an
+Confirmed ACK metrics are emitted when `delivery.ack_confirmation.enabled=true`
+and the runner attempts a server-confirmed ACK after durable sink success or
+successful DLQ publication. They are separate from ordinary ACK counters so an
 operator can distinguish "ACK sent" from "ACK confirmation received".
+Confirmation failure after durable success can still lead to redelivery, so
+these counters should be interpreted alongside idempotency and duplicate
+metrics.
+
+```bash
+nats-sink-metrics show .local/nats-sinks/metrics.json --metric "ack_confirmation_*"
+```
+
+Example shell output:
+
+```text
+ACK_CONFIRMATION_ATTEMPTS_TOTAL=3
+ACK_CONFIRMATION_SUCCESSES_TOTAL=2
+ACK_CONFIRMATION_TIMEOUTS_TOTAL=1
+ACK_CONFIRMATION_SECONDS_COUNT=1
+```
 
 The InProgress metric contract is available for the optional runtime heartbeat.
 The metrics and operator interpretation guidance are documented in the
@@ -1239,6 +1254,12 @@ The preferred metric suffixes are:
 | `payload_encryption_errors_total` | counter | Messages that failed core payload encryption before sink delivery. |
 | `dlq_publish_errors_total` | counter | Messages whose DLQ publication failed before original ACK. |
 | `ack_errors_total` | counter | Messages whose JetStream ACK failed after durable success. |
+| `ack_confirmation_attempts_total` | counter | JetStream ACK confirmation attempts after durable success or DLQ success. |
+| `ack_confirmation_successes_total` | counter | JetStream ACK confirmations accepted by the server after durable success or DLQ success. |
+| `ack_confirmation_timeouts_total` | counter | JetStream ACK confirmation attempts that timed out after durable success or DLQ success. |
+| `ack_confirmation_failures_total` | counter | JetStream ACK confirmation attempts that failed after durable success or DLQ success. |
+| `ack_confirmation_unsupported_total` | counter | Messages where ACK confirmation was requested but unsupported by the client path. |
+| `ack_confirmation_seconds` | observation | Elapsed seconds spent waiting for JetStream ACK confirmation responses. |
 | `term_errors_total` | counter | Messages whose terminal acknowledgement failed after successful DLQ publication. |
 | `policy_messages_passed_total` | counter | Messages accepted by pre-sink policy evaluation. |
 | `policy_messages_rejected_total` | counter | Messages rejected by pre-sink policy evaluation before any sink write. |

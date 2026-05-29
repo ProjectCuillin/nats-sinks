@@ -12,6 +12,15 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Added
 
+- Added explicit headers-only payload-presence handling and confirmed
+  acknowledgement controls for issues #111, #112, #113, #114, #115, and #116.
+  `NatsEnvelope` now distinguishes producer-empty payloads from JetStream
+  headers-only body omission, standard metadata and DLQ records persist the
+  payload-presence state, payload-hash idempotency fallback is rejected when a
+  body was omitted, `delivery.ack_confirmation` can opt into bounded
+  server-confirmed ACKs after durable sink or DLQ success, and
+  `nats-sink-metrics` exposes low-cardinality ACK confirmation counters and
+  timing observations.
 - Added the full local container-backed key/value sink e2e gate for issue
   #316. Setting `NATS_SINKS_RUN_CONTAINER_E2E=1` now makes
   `scripts/check-sinks.sh` run the maintained Oracle NoSQL Database sink e2e

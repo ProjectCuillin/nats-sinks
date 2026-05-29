@@ -1,22 +1,21 @@
-# Acknowledgement Confirmation Evaluation
+# Acknowledgement Confirmation
 
-This page records the evaluation for optional confirmed JetStream
-acknowledgements in `nats-sinks`. It is written for operators and maintainers
-who need to understand the difference between an ordinary ACK and a confirmed
-ACK before deciding whether the feature should be enabled in a future release.
+This page records the evaluation and supported behavior for optional confirmed
+JetStream acknowledgements in `nats-sinks`. It is written for operators and
+maintainers who need to understand the difference between an ordinary ACK and a
+confirmed ACK before deciding whether the feature should be enabled.
 
 The conclusion is intentionally conservative:
 
 - ordinary ACK remains the default behavior,
-- confirmed ACK support should be implemented only as an opt-in feature,
+- confirmed ACK support is an opt-in feature,
 - confirmation must happen only after durable sink success or after successful
   DLQ publication,
 - confirmation failure after durable success can still lead to redelivery,
 - idempotent sink behavior remains mandatory.
 
-The evaluation resulted in separate backlog items for future implementation
-work. The current release documents the design boundary but does not yet expose
-a runtime `AckSync` configuration option.
+The runtime exposes confirmed ACK through the disabled-by-default
+`delivery.ack_confirmation` configuration. The durable boundary is unchanged.
 
 ## Background
 
@@ -61,11 +60,12 @@ This is already safe for at-least-once delivery. If the destination commit
 fails, the runner does not ACK. If the commit succeeds but the ACK is lost, the
 message may redeliver and the sink must handle the duplicate.
 
-## Confirmed ACK Proposed Future Behavior
+## Confirmed ACK Behavior
 
-Confirmed ACK would replace the final ordinary ACK operation with a client
-operation that waits for the server to confirm that it processed the ACK. In
-`nats.py`, this is exposed as `ack_sync(timeout=...)`.
+Confirmed ACK replaces the final ordinary ACK operation with a client operation
+that waits for the server to confirm that it processed the ACK. In `nats.py`,
+this is exposed as `ack_sync(timeout=...)`. `nats-sinks` calls it only when
+`delivery.ack_confirmation.enabled=true`.
 
 ```mermaid
 sequenceDiagram
@@ -134,60 +134,51 @@ sequenceDiagram
     R->>JS: ACK or opt-in terminal ACK
 ```
 
-Future confirmed acknowledgement work should cover this path separately. If
-DLQ publication succeeds but confirmation of the original-message ACK fails,
-the original message may redeliver and DLQ publication must be idempotent.
+Confirmed acknowledgement covers this normal-ACK DLQ path as well. If DLQ
+publication succeeds but confirmation of the original-message ACK fails, the
+original message may redeliver and DLQ publication must be idempotent.
 
-## Recommendation
+If `dead_letter.ack_term_after_publish=true`, the runner sends JetStream
+`AckTerm` after DLQ publication succeeds. Current `nats-py` message support
+does not expose a confirmed terminal acknowledgement path, so the runner
+records `ack_confirmation_unsupported_total` and keeps the existing
+unconfirmed `AckTerm` behavior for that explicit terminal-failure mode.
 
-The evaluation recommends splitting the work into three implementation items:
+## Configuration
 
-1. Add optional confirmed ACK after durable sink success.
-2. Evaluate and add optional confirmed ACK or terminal acknowledgement handling
-   after successful DLQ publication.
-3. Add ACK confirmation metrics and an operator runbook.
-
-Keeping these items separate makes review easier. The runtime ACK path, the DLQ
-failure path, and the operator-facing observability model each carry different
-risks.
-
-## Configuration Direction
-
-A future configuration shape should keep ordinary ACK as the default. A
-possible direction is shown below for illustration only:
+Ordinary ACK remains the default. Confirmed ACK is enabled explicitly:
 
 ```json
 {
   "delivery": {
     "ack_policy": "after_sink_commit",
-    "ack_confirmation": "ordinary",
-    "ack_confirmation_timeout_ms": 1000
+    "ack_confirmation": {
+      "enabled": true,
+      "timeout_ms": 1000,
+      "unsupported_action": "fail"
+    }
   }
 }
 ```
 
-Valid future values could include:
-
-| Value | Meaning |
-| --- | --- |
-| `ordinary` | Use the existing post-commit ordinary ACK behavior. |
-| `confirmed` | Use confirmed ACK after durable success with a bounded timeout. |
-
-The feature should fail closed if the configured client does not support the
-selected mode, if the timeout is invalid, or if the delivery policy would blur
-the durable boundary.
+The feature fails closed if the configured client does not support `ack_sync`
+and `unsupported_action` is `fail`. Operators can explicitly choose
+`unsupported_action: "standard_ack"` for compatibility with a client path that
+does not expose confirmed ACK, but that fallback is deliberately visible in
+configuration and metrics.
 
 ## Metrics Direction
 
-Future metrics should be explicit and low-cardinality. Suggested names include:
+ACK confirmation metrics are explicit and low-cardinality:
 
 | Metric suffix | Type | Meaning |
 | --- | --- | --- |
 | `ack_confirmation_attempts_total` | counter | Messages for which confirmed ACK was attempted. |
-| `ack_confirmation_success_total` | counter | Confirmed ACK attempts accepted by the server. |
+| `ack_confirmation_successes_total` | counter | Confirmed ACK attempts accepted by the server. |
 | `ack_confirmation_timeouts_total` | counter | Confirmed ACK attempts that timed out. |
-| `ack_confirmation_errors_total` | counter | Confirmed ACK attempts that failed for another reason. |
-| `message_ack_confirmation_seconds` | observation | Elapsed time spent waiting for ACK confirmation. |
+| `ack_confirmation_failures_total` | counter | Confirmed ACK attempts that failed for another reason. |
+| `ack_confirmation_unsupported_total` | counter | Messages where confirmation was requested but unsupported by the client path. |
+| `ack_confirmation_seconds` | observation | Elapsed time spent waiting for ACK confirmation. |
 
 These metrics should be readable through `nats-sink-metrics` and shareable only
 through the disabled-by-default observability policy layer.
@@ -206,5 +197,7 @@ enabling the option in production.
 
 ## Current Status
 
-This release documents the evaluation and creates follow-up feature requests.
-No runtime confirmed ACK option is enabled yet.
+Confirmed ACK is implemented as an opt-in runtime feature for normal ACK paths.
+The default remains ordinary ACK. Confirmed terminal acknowledgements are not
+available through the current client boundary, so `AckTerm` remains an
+unconfirmed opt-in DLQ terminal-failure action.

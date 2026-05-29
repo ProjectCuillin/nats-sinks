@@ -3,7 +3,7 @@
   "title": "[Feature]: Add ACK confirmation metrics and operator runbook",
   "area": "Metrics and observability",
   "priority": "P3 - backlog candidate",
-  "target_release": "unscheduled",
+  "target_release": "v0.4.2",
   "labels": ["nats", "observability", "documentation", "testing"],
   "problem": "If optional ACK confirmation is added, operators need metrics and runbook guidance that distinguish ordinary ACK attempts, confirmed ACK attempts, confirmation successes, timeouts, and failures after durable commit. Without clear names and operational guidance, confirmed ACK failures could be misread as sink failures or message loss.",
   "proposal": "Add a small ACK confirmation metrics set and a public operator runbook. Suggested metric suffixes include acknowledgement confirmation attempts, successes, timeouts, failures, and elapsed seconds. The runbook should explain how to interpret a durable sink success followed by ACK confirmation failure, how idempotency handles redelivery, and which alerts should be symptoms-based rather than payload-specific.",

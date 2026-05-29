@@ -312,10 +312,13 @@ Each uncompressed file contains a single JSON document:
 The actual `metadata` document contains the standard framework metadata
 snapshot: headers, known and future `Nats-*` reserved headers, JetStream stream
 and sequence values, epoch nanosecond timing fields, and the normalized
-`priority`, `classification`, and `labels` values. When priority or
-classification is missing, the file sink writes JSON `null` rather than the
-literal string `"null"`. When labels are missing, the scalar `labels` field is
-JSON `null` and `labels_list` is an empty JSON array.
+`priority`, `classification`, `labels`, and payload-presence values. When
+priority or classification is missing, the file sink writes JSON `null` rather
+than the literal string `"null"`. When labels are missing, the scalar `labels`
+field is JSON `null` and `labels_list` is an empty JSON array. When a
+headers-only consumer omitted the message body, `metadata.payload` records
+`present=false`, `omitted=true`, the omission reason, the delivered byte count,
+and the parsed `Nats-Msg-Size` value when available.
 
 When the core `mission_metadata` feature is enabled, the file sink writes the
 validated object as top-level `mission_metadata` and also includes it in

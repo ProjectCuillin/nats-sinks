@@ -1,16 +1,16 @@
-# Headers-Only Delivery Evaluation
+# Headers-Only Delivery
 
 NATS JetStream can deliver a message to a consumer without the original body.
 This is called headers-only delivery. It is useful when a workflow needs to
 inspect metadata, route an event, or prove that a message existed without
 exposing the full payload to the consumer.
 
-This page records the nats-sinks evaluation of that capability. Current
+This page records the nats-sinks behavior for that capability. Current
 releases can create, reconcile, or validate the JetStream `headers_only`
-consumer setting through `consumer_management.headers_only`. The remaining
-gap is payload-presence semantics: the runtime safely handles empty message
-bodies, but it does not yet distinguish a genuinely empty producer payload
-from a payload that the NATS server intentionally omitted.
+consumer setting through `consumer_management.headers_only`, and the runtime
+persists explicit payload-presence metadata so operators can distinguish a
+genuinely empty producer payload from a payload that the NATS server
+intentionally omitted.
 
 ## What NATS Provides
 
@@ -27,19 +27,17 @@ a JetStream consumer. nats-sinks exposes that setting through the validated
 
 ## Current nats-sinks Behavior
 
-Today, nats-sinks converts every message into `NatsEnvelope`. The envelope
-always has a `data: bytes` field. If a NATS message has no data, the core uses
-`b""` and continues processing. This is stable and intentional: empty payloads
-must not crash the runner, Oracle sink, file sink, DLQ builder, metrics, or
-commit-then-acknowledge flow.
-
-However, that behavior is not enough to claim support for headers-only
-delivery. These two events currently look the same to most sink logic:
+`nats-sinks` converts every message into `NatsEnvelope`. The envelope always
+has a `data: bytes` field for backward compatibility. If JetStream omits the
+body for headers-only delivery, `data` remains `b""`, but the envelope records
+that the original body was not delivered. This is different from a producer
+that actually published an empty payload:
 
 - the producer published an empty payload,
 - the server omitted a non-empty payload because the consumer is headers-only.
 
-That difference matters for audit, replay, idempotency, DLQ records, and
+That difference is now visible in standard metadata, DLQ records, file records,
+and Oracle metadata JSON. It matters for audit, replay, idempotency, and
 destination schemas.
 
 ```mermaid
@@ -55,31 +53,29 @@ flowchart LR
 
 ## Design Decision
 
-Headers-only delivery should become an explicit nats-sinks feature rather than
-an accidental side effect of seeing an empty byte string.
+Headers-only delivery is an explicit nats-sinks feature rather than an
+accidental side effect of seeing an empty byte string.
 
-The recommended design is:
+The implemented contract is:
 
-1. Keep validated consumer configuration for requesting or verifying
+1. Use validated consumer configuration for requesting or verifying
    `headers_only`.
-2. Add a destination-neutral payload-presence contract to `NatsEnvelope`.
+2. Keep a destination-neutral payload-presence contract on `NatsEnvelope`.
 3. Persist the payload-presence state in sink metadata so operators can see
    whether the original payload was present, empty, or intentionally omitted.
 4. Keep ACK ordering unchanged: ACK only after the metadata-only workflow has
    durably succeeded.
-5. Treat DLQ records carefully: a headers-only consumer cannot include the
+5. Build DLQ records carefully: a headers-only consumer cannot include the
    original payload in the DLQ because it never received that payload.
 
 The feature must not imply confidentiality. Headers, subjects, stream names,
 sequences, timestamps, priority, classification, labels, mission metadata, and
 `Nats-Msg-Size` can still reveal sensitive operational information.
 
-## Proposed Envelope Semantics
+## Envelope Semantics
 
-A future implementation should add explicit payload-presence fields while
-preserving backward compatibility for `NatsEnvelope.data`.
-
-Recommended internal fields:
+`NatsEnvelope` exposes explicit payload-presence fields while preserving
+backward compatibility for `NatsEnvelope.data`.
 
 | Field | Meaning |
 | --- | --- |
@@ -94,6 +90,11 @@ is `b""`, and `original_payload_size_bytes` is `0` when known. For
 headers-only messages, `payload_present` is `false`, `payload_omitted` is
 `true`, `data` remains `b""` for compatibility, and `original_payload_size_bytes`
 comes from `Nats-Msg-Size`.
+
+Malformed or negative `Nats-Msg-Size` values are not guessed or repaired. The
+envelope marks `payload_size_header_malformed=true`, keeps
+`original_payload_size_bytes=null`, and leaves the rest of the delivery
+contract unchanged.
 
 ```mermaid
 sequenceDiagram
@@ -119,21 +120,21 @@ continues to identify the source message safely.
 
 Message ID idempotency can also work when `Nats-Msg-Id` is present.
 
-Payload-hash fallback must be treated as unsafe for headers-only mode. If the
+Payload-hash fallback is rejected for headers-only mode. If the
 server omits bodies, many different messages may appear to have `b""` as their
-payload, which can cause false duplicate detection. A future implementation
-should reject payload-hash fallback when `payload_omitted` is true and no
-stream sequence or message ID is available.
+payload, which can cause false duplicate detection. When `payload_omitted` is
+true and no stream sequence or message ID is available, the envelope raises a
+validation error instead of deriving a key from the empty delivered body.
 
 ## DLQ Behavior
 
-DLQ behavior must be explicit:
+DLQ behavior is explicit:
 
 - if a headers-only message fails permanently, the DLQ record may include
   headers and metadata,
 - it cannot include the original payload unless a different consumer retrieves
   the full message,
-- the DLQ payload should record that the original body was intentionally
+- the DLQ payload records that the original body was intentionally
   omitted and include `Nats-Msg-Size` when present,
 - the original message must only be ACKed after DLQ publication succeeds.
 
@@ -144,8 +145,8 @@ This keeps the existing safety rule intact:
 
 ## Sink Storage Impact
 
-Oracle and file sinks should store payload-presence metadata in the standard
-metadata document. Oracle may also need optional dedicated columns for
+Oracle and file sinks store payload-presence metadata in the standard metadata
+document. Future schema work can still add optional dedicated columns for
 operators who query metadata-only custody records frequently.
 
 Recommended metadata shape:
@@ -156,14 +157,18 @@ Recommended metadata shape:
     "present": false,
     "omitted": true,
     "omitted_reason": "headers_only",
-    "original_size_bytes": 4096
+    "original_size_bytes": 4096,
+    "delivered_size_bytes": 0,
+    "nats_msg_size_header": "4096",
+    "nats_msg_size_header_malformed": false
   }
 }
 ```
 
 The normal payload field should not be filled with a fake placeholder that
-looks like producer data. If a sink needs a JSON-compatible representation, it
-should store a clear nats-sinks envelope that states the body was omitted.
+looks like producer data. If the DLQ builder is configured to include payloads
+and the body was omitted, the DLQ record emits `payload_unavailable_reason`
+instead of `payload_base64`.
 
 ## Security Notes
 
@@ -185,13 +190,11 @@ Operators must still protect:
 The feature should be disabled by default and documented as a deliberate
 metadata-only custody mode.
 
-## Follow-Up Work
+## Supported Scope
 
-The research split created separate backlog items for implementation work:
-
-- validated headers-only consumer configuration,
-- a payload-presence contract in the envelope and metadata model,
-- sink and DLQ certification for headers-only workflows.
-
-Those items should be implemented independently so each change can be tested,
-reviewed, documented, and released without overloading this evaluation issue.
+The current supported scope covers durable pull consumers managed through
+`consumer_management.headers_only`, payload-presence metadata on the envelope,
+standard sink metadata, DLQ payloads, and focused commit-then-ACK tests. It
+does not recover the omitted body from JetStream. Operators that need the full
+payload later should retain the source stream long enough for a separate,
+authorized full-payload replay or investigation workflow.

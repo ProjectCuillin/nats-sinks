@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -18,6 +19,7 @@ from nats_sinks import (
     TemporarySinkError,
 )
 from nats_sinks.core.config import (
+    AckConfirmationConfig,
     ConfigurationError,
     ConsumerManagementConfig,
     CustodyConfig,
@@ -81,6 +83,28 @@ class FakeMessage:
 
     async def in_progress(self) -> None:
         self.events.append("in_progress")
+
+
+class ConfirmedAckMessage(FakeMessage):
+    async def ack_sync(self, **kwargs: float) -> object:
+        timeout = kwargs.get("timeout", 1.0)
+        self.events.append(f"ack_sync:{timeout:.3f}")
+        self.acked = True
+        return self
+
+
+class ConfirmedAckTimeoutMessage(FakeMessage):
+    async def ack_sync(self, **kwargs: float) -> object:
+        timeout = kwargs.get("timeout", 1.0)
+        self.events.append(f"ack_sync_timeout:{timeout:.3f}")
+        raise TimeoutError("ack confirmation timed out")
+
+
+class ConfirmedAckFailingMessage(FakeMessage):
+    async def ack_sync(self, **kwargs: float) -> object:
+        timeout = kwargs.get("timeout", 1.0)
+        self.events.append(f"ack_sync_failed:{timeout:.3f}")
+        raise RuntimeError("ack confirmation failed")
 
 
 class AckFailingMessage(FakeMessage):
@@ -1346,6 +1370,61 @@ async def test_permanent_failure_records_dlq_and_ack_metrics() -> None:
 
 
 @pytest.mark.asyncio
+async def test_permanent_failure_dlq_uses_confirmed_ack_after_publication() -> None:
+    events: list[str] = []
+    message = ConfirmedAckMessage(events)
+    metrics = InMemoryMetrics()
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=RecordingSink(events, PermanentSinkError("bad input")),
+        dead_letter=DeadLetterConfig(enabled=True, subject="orders.dlq"),
+        delivery=DeliveryConfig(
+            ack_confirmation=AckConfirmationConfig(enabled=True, timeout_ms=400)
+        ),
+        jetstream=FakeJetStream(events),
+        metrics=metrics,
+    )
+
+    await runner.process_raw_batch([message])
+
+    assert events == ["write", "dlq", "ack_sync:0.400"]
+    assert message.acked
+    assert metrics.counters[MetricNames.MESSAGES_DLQ_TOTAL] == 1
+    assert metrics.counters[MetricNames.MESSAGES_ACKED_TOTAL] == 1
+    assert metrics.counters[MetricNames.ACK_CONFIRMATION_SUCCESSES_TOTAL] == 1
+
+
+@pytest.mark.asyncio
+async def test_dlq_ack_confirmation_timeout_after_publication_allows_redelivery() -> None:
+    events: list[str] = []
+    message = ConfirmedAckTimeoutMessage(events)
+    metrics = InMemoryMetrics()
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=RecordingSink(events, PermanentSinkError("bad input")),
+        dead_letter=DeadLetterConfig(enabled=True, subject="orders.dlq"),
+        delivery=DeliveryConfig(ack_confirmation=AckConfirmationConfig(enabled=True)),
+        jetstream=FakeJetStream(events),
+        metrics=metrics,
+    )
+
+    with pytest.raises(AckError, match="failed to ACK JetStream message"):
+        await runner.process_raw_batch([message])
+
+    assert events == ["write", "dlq", "ack_sync_timeout:1.000"]
+    assert not message.acked
+    assert metrics.counters[MetricNames.MESSAGES_DLQ_TOTAL] == 1
+    assert metrics.counters[MetricNames.MESSAGES_ACKED_TOTAL] == 0
+    assert metrics.counters[MetricNames.ACK_CONFIRMATION_TIMEOUTS_TOTAL] == 1
+
+
+@pytest.mark.asyncio
 async def test_ackterm_after_dlq_publish_is_explicit_opt_in() -> None:
     events: list[str] = []
     message = FakeMessage(events)
@@ -1374,6 +1453,37 @@ async def test_ackterm_after_dlq_publish_is_explicit_opt_in() -> None:
     assert js.published[0][0] == "orders.dlq"
     assert metrics.counters[MetricNames.MESSAGES_DLQ_TOTAL] == 1
     assert metrics.counters[MetricNames.MESSAGES_ACKED_TOTAL] == 0
+    assert metrics.counters[MetricNames.MESSAGES_TERMINATED_TOTAL] == 1
+
+
+@pytest.mark.asyncio
+async def test_ackterm_after_dlq_publish_records_confirmation_limitation() -> None:
+    events: list[str] = []
+    message = ConfirmedAckMessage(events)
+    metrics = InMemoryMetrics()
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=RecordingSink(events, PermanentSinkError("bad input")),
+        dead_letter=DeadLetterConfig(
+            enabled=True,
+            subject="orders.dlq",
+            ack_term_after_publish=True,
+        ),
+        delivery=DeliveryConfig(ack_confirmation=AckConfirmationConfig(enabled=True)),
+        jetstream=FakeJetStream(events),
+        metrics=metrics,
+    )
+
+    await runner.process_raw_batch([message])
+
+    assert events == ["write", "dlq", "term"]
+    assert not message.acked
+    assert message.termed
+    assert metrics.counters[MetricNames.ACK_CONFIRMATION_ATTEMPTS_TOTAL] == 0
+    assert metrics.counters[MetricNames.ACK_CONFIRMATION_UNSUPPORTED_TOTAL] == 1
     assert metrics.counters[MetricNames.MESSAGES_TERMINATED_TOTAL] == 1
 
 
@@ -1425,6 +1535,42 @@ async def test_malformed_json_payload_goes_to_dlq_before_ack() -> None:
     assert events == ["write", "dlq", "ack"]
     assert message.acked
     assert js.published[0][0] == "orders.dlq"
+
+
+@pytest.mark.asyncio
+async def test_headers_only_dlq_payload_records_omitted_body_without_fake_payload() -> None:
+    events: list[str] = []
+    message = FakeMessage(events, data=b"")
+    message.headers = {"Nats-Msg-Size": "4096"}
+    message.metadata.sequence.stream = None  # type: ignore[assignment]
+    js = FakeJetStream(events)
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=RecordingSink(events, PermanentSinkError("bad input")),
+        dead_letter=DeadLetterConfig(enabled=True, subject="orders.dlq"),
+        jetstream=js,
+    )
+
+    await runner.process_raw_batch([message])
+
+    payload = json.loads(js.published[0][1])
+    assert events == ["write", "dlq", "ack"]
+    assert payload["payload"] == {
+        "present": False,
+        "omitted": True,
+        "omitted_reason": "headers_only",
+        "original_size_bytes": 4096,
+        "delivered_size_bytes": 0,
+        "nats_msg_size_header": "4096",
+        "nats_msg_size_header_malformed": False,
+    }
+    assert "payload_base64" not in payload
+    assert payload["payload_unavailable_reason"] == "headers_only"
+    assert payload["idempotency_key"] is None
+    assert payload["idempotency_key_unavailable_reason"] == "payload_omitted"
 
 
 @pytest.mark.asyncio
@@ -1560,6 +1706,33 @@ async def test_dlq_publish_failure_records_metric_without_ack() -> None:
 
 
 @pytest.mark.asyncio
+async def test_dlq_publish_failure_does_not_attempt_confirmed_ack() -> None:
+    events: list[str] = []
+    message = ConfirmedAckMessage(events)
+    metrics = InMemoryMetrics()
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=RecordingSink(events, PermanentSinkError("bad input")),
+        dead_letter=DeadLetterConfig(enabled=True, subject="orders.dlq"),
+        delivery=DeliveryConfig(ack_confirmation=AckConfirmationConfig(enabled=True)),
+        jetstream=FakeJetStream(events, fail_publish=True),
+        metrics=metrics,
+    )
+
+    with pytest.raises(DeadLetterError):
+        await runner.process_raw_batch([message])
+
+    assert events == ["write", "dlq"]
+    assert not message.acked
+    assert metrics.counters[MetricNames.DLQ_PUBLISH_ERRORS_TOTAL] == 1
+    assert metrics.counters[MetricNames.ACK_CONFIRMATION_ATTEMPTS_TOTAL] == 0
+    assert metrics.counters[MetricNames.MESSAGES_ACKED_TOTAL] == 0
+
+
+@pytest.mark.asyncio
 async def test_ackterm_failure_records_metric_after_dlq_success() -> None:
     events: list[str] = []
     message = TermFailingMessage(events)
@@ -1610,6 +1783,165 @@ async def test_ack_failure_records_metric_after_sink_success() -> None:
     assert events == ["write", "commit", "ack_failed"]
     assert metrics.counters[MetricNames.MESSAGES_WRITTEN_TOTAL] == 1
     assert metrics.counters[MetricNames.ACK_ERRORS_TOTAL] == 1
+    assert metrics.counters[MetricNames.MESSAGES_ACKED_TOTAL] == 0
+
+
+@pytest.mark.asyncio
+async def test_confirmed_ack_after_sink_success_is_optional_and_bounded() -> None:
+    events: list[str] = []
+    message = ConfirmedAckMessage(events)
+    metrics = InMemoryMetrics()
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=RecordingSink(events),
+        delivery=DeliveryConfig(
+            ack_confirmation=AckConfirmationConfig(enabled=True, timeout_ms=250)
+        ),
+        metrics=metrics,
+    )
+
+    await runner.process_raw_batch([message])
+
+    assert events == ["write", "commit", "ack_sync:0.250"]
+    assert message.acked
+    assert metrics.counters[MetricNames.MESSAGES_WRITTEN_TOTAL] == 1
+    assert metrics.counters[MetricNames.MESSAGES_ACKED_TOTAL] == 1
+    assert metrics.counters[MetricNames.ACK_CONFIRMATION_ATTEMPTS_TOTAL] == 1
+    assert metrics.counters[MetricNames.ACK_CONFIRMATION_SUCCESSES_TOTAL] == 1
+    assert metrics.observations[MetricNames.ACK_CONFIRMATION_SECONDS]
+
+
+@pytest.mark.asyncio
+async def test_confirmed_ack_timeout_after_commit_preserves_redelivery() -> None:
+    events: list[str] = []
+    message = ConfirmedAckTimeoutMessage(events)
+    metrics = InMemoryMetrics()
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=RecordingSink(events),
+        delivery=DeliveryConfig(
+            ack_confirmation=AckConfirmationConfig(enabled=True, timeout_ms=125)
+        ),
+        metrics=metrics,
+    )
+
+    with pytest.raises(AckError, match="failed to ACK JetStream message"):
+        await runner.process_raw_batch([message])
+
+    assert events == ["write", "commit", "ack_sync_timeout:0.125"]
+    assert not message.acked
+    assert metrics.counters[MetricNames.MESSAGES_WRITTEN_TOTAL] == 1
+    assert metrics.counters[MetricNames.MESSAGES_ACKED_TOTAL] == 0
+    assert metrics.counters[MetricNames.ACK_CONFIRMATION_ATTEMPTS_TOTAL] == 1
+    assert metrics.counters[MetricNames.ACK_CONFIRMATION_TIMEOUTS_TOTAL] == 1
+    assert metrics.counters[MetricNames.ACK_ERRORS_TOTAL] == 1
+
+
+@pytest.mark.asyncio
+async def test_confirmed_ack_failure_after_commit_is_counted_separately() -> None:
+    events: list[str] = []
+    message = ConfirmedAckFailingMessage(events)
+    metrics = InMemoryMetrics()
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=RecordingSink(events),
+        delivery=DeliveryConfig(
+            ack_confirmation=AckConfirmationConfig(enabled=True, timeout_ms=500)
+        ),
+        metrics=metrics,
+    )
+
+    with pytest.raises(AckError, match="failed to ACK JetStream message"):
+        await runner.process_raw_batch([message])
+
+    assert events == ["write", "commit", "ack_sync_failed:0.500"]
+    assert metrics.counters[MetricNames.ACK_CONFIRMATION_FAILURES_TOTAL] == 1
+    assert metrics.counters[MetricNames.ACK_ERRORS_TOTAL] == 1
+    assert metrics.counters[MetricNames.MESSAGES_ACKED_TOTAL] == 0
+
+
+@pytest.mark.asyncio
+async def test_confirmed_ack_fails_closed_when_client_lacks_confirmation() -> None:
+    events: list[str] = []
+    message = FakeMessage(events)
+    metrics = InMemoryMetrics()
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=RecordingSink(events),
+        delivery=DeliveryConfig(ack_confirmation=AckConfirmationConfig(enabled=True)),
+        metrics=metrics,
+    )
+
+    with pytest.raises(AckError, match="failed to ACK JetStream message"):
+        await runner.process_raw_batch([message])
+
+    assert events == ["write", "commit"]
+    assert not message.acked
+    assert metrics.counters[MetricNames.ACK_CONFIRMATION_UNSUPPORTED_TOTAL] == 1
+    assert metrics.counters[MetricNames.ACK_ERRORS_TOTAL] == 1
+
+
+@pytest.mark.asyncio
+async def test_confirmed_ack_can_explicitly_fallback_to_standard_ack() -> None:
+    events: list[str] = []
+    message = FakeMessage(events)
+    metrics = InMemoryMetrics()
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=RecordingSink(events),
+        delivery=DeliveryConfig(
+            ack_confirmation=AckConfirmationConfig(
+                enabled=True,
+                unsupported_action="standard_ack",
+            )
+        ),
+        metrics=metrics,
+    )
+
+    await runner.process_raw_batch([message])
+
+    assert events == ["write", "commit", "ack"]
+    assert message.acked
+    assert metrics.counters[MetricNames.ACK_CONFIRMATION_UNSUPPORTED_TOTAL] == 1
+    assert metrics.counters[MetricNames.ACK_CONFIRMATION_SUCCESSES_TOTAL] == 0
+    assert metrics.counters[MetricNames.MESSAGES_ACKED_TOTAL] == 1
+
+
+@pytest.mark.asyncio
+async def test_confirmed_ack_is_not_attempted_before_sink_success() -> None:
+    events: list[str] = []
+    message = ConfirmedAckMessage(events)
+    metrics = InMemoryMetrics()
+    runner = JetStreamSinkRunner(
+        nats_url="nats://localhost:4222",
+        stream="ORDERS",
+        consumer="oracle",
+        subject="orders.*",
+        sink=RecordingSink(events, TemporarySinkError("database unavailable")),
+        delivery=DeliveryConfig(ack_confirmation=AckConfirmationConfig(enabled=True)),
+        metrics=metrics,
+    )
+
+    await runner.process_raw_batch([message])
+
+    assert events == ["write", "nak"]
+    assert not message.acked
+    assert metrics.counters[MetricNames.ACK_CONFIRMATION_ATTEMPTS_TOTAL] == 0
     assert metrics.counters[MetricNames.MESSAGES_ACKED_TOTAL] == 0
 
 

@@ -94,6 +94,11 @@ fan-out, it can also declare additional named instances in the top-level
       "interval_ms": 5000,
       "max_heartbeats": 12,
       "shutdown_timeout_ms": 5000
+    },
+    "ack_confirmation": {
+      "enabled": false,
+      "timeout_ms": 1000,
+      "unsupported_action": "fail"
     }
   },
   "dead_letter": {
@@ -346,11 +351,14 @@ production sink processing because it combines acknowledgement and fetching.
 `dead_letter.ack_term_after_publish` option and only after DLQ publication
 succeeds.
 
-Confirmed ACK, sometimes called `AckSync` or double ACK in client APIs, has
-been evaluated but is not yet a runtime configuration option. Any future option
-will be disabled by default and will run only after durable sink success. See
-[Acknowledgement Confirmation Evaluation](acknowledgement-confirmation.md) for
-the current design direction and limitations.
+Confirmed ACK, sometimes called `AckSync` or double ACK in client APIs, is
+available through the disabled-by-default `delivery.ack_confirmation` section.
+When enabled, the runner asks the NATS client to wait for server confirmation
+only after durable sink success or successful DLQ publication. Confirmation
+failure after durable success is still a redelivery-risk event, so idempotent
+sink behavior remains mandatory. See
+[Acknowledgement Confirmation](acknowledgement-confirmation.md) for
+operator guidance and limitations.
 
 JetStream `InProgress` handling is available as an optional, disabled-by-default
 heartbeat around active sink writes. It is advisory only: it can extend the
@@ -522,12 +530,12 @@ If an embedding application passes its own `nats-py` callbacks through
 `nats_options`, the runner wraps them so the application callback still runs
 after metrics have been recorded.
 
-Headers-only JetStream delivery is not yet a supported configuration switch in
-nats-sinks. The current runtime can process empty payload bytes, but it does
-not yet distinguish a producer-empty payload from a body omitted by a
-headers-only consumer. See
-[Headers-Only Delivery Evaluation](headers-only-delivery.md) for the design
-decision and follow-up backlog items.
+Headers-only JetStream delivery is supported for durable pull-consumer
+management through `consumer_management.headers_only`. When JetStream omits a
+body, the runtime records payload-presence metadata from `Nats-Msg-Size` and
+does not invent a fake payload. See
+[Headers-Only Delivery](headers-only-delivery.md) for sink, DLQ, and
+idempotency guidance.
 
 The `nats` section is also the source of truth for least-privilege NATS
 authorization planning. `nats.stream`, `nats.consumer`, `nats.subject`, and
@@ -585,7 +593,7 @@ sequenceDiagram
 | `backoff_seconds` | no | `null` | List of positive numbers, each at most `604800`, or `null`. | Optional server-side JetStream `BackOff` sequence. When set, `max_deliver` is required, the list length must be less than or equal to `max_deliver`, and `ack_wait_seconds` must remain `null` because JetStream BackOff overrides AckWait. |
 | `max_ack_pending` | no | `null` | Integer `1` to `1000000`, or `null`. | Optional server-side outstanding ACK limit. This complements, but does not replace, `delivery.batch_size`. |
 | `max_waiting` | no | `null` | Integer `1` to `1000000`, or `null`. | Optional pull-request wait limit on the server-side consumer. |
-| `headers_only` | no | `null` | `true`, `false`, or `null`. | Optional JetStream headers-only delivery setting. The server-side consumer policy is supported here; payload-presence metadata and sink/DLQ certification for metadata-only workflows remain tracked separately. |
+| `headers_only` | no | `null` | `true`, `false`, or `null`. | Optional JetStream headers-only delivery setting. When enabled and JetStream supplies `Nats-Msg-Size`, nats-sinks records that the payload body was intentionally omitted while preserving commit-then-ACK behavior. |
 | `num_replicas` | no | `null` | Integer `0` to `5`, or `null`. | Optional consumer-state replica count. `0` means inherit from the stream when sent to JetStream. `null` leaves the field unmanaged by nats-sinks. |
 | `memory_storage` | no | `null` | `true`, `false`, or `null`. | Optional JetStream `MemoryStorage` flag for consumer state. Use cautiously for durable sink workers because consumer state participates in redelivery behavior. |
 | `metadata` | no | `{}` | Object with up to `32` safe string keys and values. | Optional JetStream consumer metadata. Keys and values are bounded, values reject control characters, and secret-looking keys are rejected. Do not place credentials, payloads, private hostnames, or sensitive operational details in consumer metadata. |
@@ -756,6 +764,7 @@ sinks all receive batches according to these settings.
 | `prefer_safe_duplication` | no | `true` | `true` or `false`. | Documents the intended reliability posture: duplicates are acceptable when idempotency handles them; silent loss is not. Keep true unless a future sink documents a reviewed alternative. |
 | `priority_lanes` | no | disabled default lane | Object. | Optional in-batch priority scheduling policy. See [Priority-Aware Processing Lanes](priority-lanes.md). |
 | `in_progress` | no | disabled | Object. | Optional JetStream progress heartbeat during active sink writes. Disabled by default and fail-closed unless safe consumer timing is configured. |
+| `ack_confirmation` | no | disabled | Object. | Optional server-confirmed ACK handling after durable sink success or successful DLQ publication. Disabled by default and bounded by timeout. |
 
 Retry delays are based on JetStream delivery-attempt metadata when available.
 For example, with the defaults, the first retryable failure uses a base delay
@@ -903,6 +912,46 @@ without trusting every publisher to set a priority header.
 For the full design, limitations, starvation controls, and metrics, read
 [Priority-Aware Processing Lanes](priority-lanes.md).
 
+#### `delivery.ack_confirmation`
+
+`delivery.ack_confirmation` controls optional server-confirmed JetStream ACKs.
+It is disabled by default. When enabled, the runner calls the client
+`ack_sync(timeout=...)` method only after the durable boundary has already been
+crossed:
+
+- after `sink.write_batch(...)` returns success for normal delivery;
+- after DLQ publication succeeds for permanent failures that use normal ACK.
+
+Confirmed ACK does not make delivery exactly once. If a sink commit succeeds
+and ACK confirmation times out, JetStream may redeliver the message. Sinks must
+therefore remain idempotent. `AckTerm` has no confirmed client path in the
+current runtime; when `dead_letter.ack_term_after_publish=true`, the runner
+records that confirmation was unsupported and sends the existing unconfirmed
+terminal acknowledgement only after DLQ publication succeeds.
+
+| Field | Required | Default | Valid values | Description |
+| --- | --- | --- | --- | --- |
+| `enabled` | no | `false` | Boolean. | Enables `ack_sync` for normal ACKs after durable success and DLQ success. Keep disabled unless the extra round trip and redelivery-risk interpretation have been reviewed. |
+| `timeout_ms` | no | `1000` | Integer `1` to `60000`. | Maximum time to wait for the server to confirm each ACK. Timeout is counted separately from sink commit time. |
+| `unsupported_action` | no | `fail` | `fail` or `standard_ack`. | Behavior when the raw client message has no `ack_sync` method. `fail` preserves fail-closed behavior; `standard_ack` is an explicit compatibility fallback. |
+
+Example:
+
+```json
+{
+  "delivery": {
+    "ack_confirmation": {
+      "enabled": true,
+      "timeout_ms": 1500,
+      "unsupported_action": "fail"
+    }
+  }
+}
+```
+
+Metrics for attempts, successes, timeouts, failures, unsupported client paths,
+and elapsed confirmation time are documented in [Metrics](metrics.md).
+
 ### `dead_letter`
 
 The `dead_letter` section controls what happens to permanently invalid messages,
@@ -918,7 +967,7 @@ ACKed only after DLQ publication succeeds.
 | `include_payload` | no | `true` | `true` or `false`. | Includes the original message body in the DLQ payload. Disable when payload privacy is more important than DLQ replay convenience. |
 | `include_headers` | no | `true` | `true` or `false`. | Includes original message headers in the DLQ payload. Disable if headers may contain sensitive values. |
 | `include_error` | no | `true` | `true` or `false`. | Includes framework error type and message in the DLQ payload. |
-| `ack_term_after_publish` | no | `false` | `true` or `false`. | When true, sends JetStream `AckTerm` after DLQ publication succeeds instead of normal ACK. This is disabled by default, applies only to permanent failures with successful DLQ publication, and must not be used to signal successful sink writes. |
+| `ack_term_after_publish` | no | `false` | `true` or `false`. | When true, sends JetStream `AckTerm` after DLQ publication succeeds instead of normal ACK. This is disabled by default, applies only to permanent failures with successful DLQ publication, and must not be used to signal successful sink writes. `delivery.ack_confirmation` confirms normal ACKs only; current client support does not provide confirmed `AckTerm`. |
 
 ### `logging`
 

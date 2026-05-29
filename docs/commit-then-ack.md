@@ -133,15 +133,15 @@ double ACK. Confirmed ACK waits for the server to confirm that it processed the
 ACK. That can improve operational visibility, but it does not move the safety
 boundary.
 
-For `nats-sinks`, confirmed ACK must still be the final step. It may be useful
-as a future opt-in option after durable sink success, but it must never run
-before `sink.write_batch(...)` returns success and it must never be used to
-claim exactly-once delivery. If the sink commit succeeds and ACK confirmation
-then times out, the message may redeliver and idempotency must handle the
-duplicate.
+For `nats-sinks`, confirmed ACK is still the final step. It is available as a
+disabled-by-default `delivery.ack_confirmation` option after durable sink
+success or successful DLQ publication, but it never runs before
+`sink.write_batch(...)` returns success and it must never be used to claim
+exactly-once delivery. If the sink commit succeeds and ACK confirmation then
+times out, the message may redeliver and idempotency must handle the duplicate.
 
-The evaluation and future implementation split are documented in
-[Acknowledgement Confirmation Evaluation](acknowledgement-confirmation.md).
+The evaluation, configuration, metrics, and `AckTerm` limitation are documented
+in [Acknowledgement Confirmation](acknowledgement-confirmation.md).
 
 ## InProgress Signals
 

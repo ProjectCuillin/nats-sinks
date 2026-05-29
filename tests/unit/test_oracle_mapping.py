@@ -167,6 +167,27 @@ def test_empty_payload_is_stored_as_json_envelope() -> None:
     assert payload["payload"] == ""
     assert payload["_nats_sinks"]["payload_format"] == "text"
     assert payload["_nats_sinks"]["size_bytes"] == 0
+    metadata = json.loads(row["metadata_json"])
+    assert metadata["payload"]["present"] is True
+    assert metadata["payload"]["omitted"] is False
+
+
+def test_headers_only_payload_omission_is_persisted_in_metadata_json() -> None:
+    row = envelope_to_row(
+        envelope(data=b"", headers={"Nats-Msg-Size": "2048"}),
+        idempotency=OracleIdempotencyConfig(),
+    )
+
+    metadata = json.loads(row["metadata_json"])
+    assert metadata["payload"] == {
+        "present": False,
+        "omitted": True,
+        "omitted_reason": "headers_only",
+        "original_size_bytes": 2048,
+        "delivered_size_bytes": 0,
+        "nats_msg_size_header": "2048",
+        "nats_msg_size_header_malformed": False,
+    }
 
 
 def test_json_only_payload_mode_rejects_non_json_text() -> None:

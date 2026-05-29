@@ -297,7 +297,8 @@ The table stores:
   store time;
 - normalized payload JSON;
 - headers JSON;
-- full metadata JSON;
+- full metadata JSON, including payload-presence state for headers-only
+  delivery;
 - optional mission metadata JSON;
 - optional security label profile JSON.
 

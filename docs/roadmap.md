@@ -170,8 +170,6 @@
 - Individual observability connector backlog items for Azure Monitor and any
   additional future connectors, all following the shared disabled-by-default
   observability connector contract.
-- Headers-only JetStream delivery support split into validated consumer
-  configuration, payload-presence metadata, and sink or DLQ certification.
 - Additional mission-support documentation examples for future operator
   runbooks, deeper replay drills, and sink-specific certification evidence.
 - Deeper certification evidence and runbooks for complex multi-route Oracle
@@ -228,11 +226,6 @@
   server policies.
 - Deeper replay-start options for sequence or timestamp-based delivery
   policies.
-- Optional confirmed ACK support after durable sink success.
-- Optional confirmed ACK or terminal acknowledgement handling after successful
-  DLQ publication.
-- ACK confirmation metrics and an operator runbook for interpreting durable
-  success followed by ACK confirmation failure.
 - Explicit BackOff-aware `InProgress` heartbeat timing if future work can prove
   safe support for JetStream BackOff sequences.
 
@@ -243,8 +236,6 @@
 - Sink certification tests.
 - Helm chart.
 - Advanced observability.
-- Payload-presence metadata and sink certification for headers-only
-  metadata-only workflows.
 - Stream management helpers for retention, discard, storage, replicas, and
   duplicate-window documentation.
 - Stream mirror, source, subject transform, republish, compression, placement,

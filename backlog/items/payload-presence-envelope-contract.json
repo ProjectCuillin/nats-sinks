@@ -3,7 +3,7 @@
   "title": "[Feature]: Add payload presence metadata to NatsEnvelope",
   "area": "Core runtime and delivery semantics",
   "priority": "P3 - backlog candidate",
-  "target_release": "unscheduled",
+  "target_release": "v0.4.2",
   "labels": ["nats", "security", "testing"],
   "problem": "The current envelope safely represents missing or empty message data as bytes, but it cannot distinguish a producer-sent empty payload from a payload intentionally omitted by a headers-only JetStream consumer. That ambiguity weakens audit records, DLQ explanations, and payload-hash idempotency fallback.",
   "proposal": "Add a backward-compatible payload-presence contract to NatsEnvelope and the standard metadata snapshot. The core should detect headers-only messages through the NATS-provided message-size header, keep data as bytes for API compatibility, and expose explicit fields such as payload_present, payload_omitted, payload_omitted_reason, and original_payload_size_bytes. The contract should reject unsafe payload-hash fallback when payload bytes were omitted and no stronger idempotency key is available.",

@@ -1411,6 +1411,106 @@ def test_consumer_management_loads_richer_policy_fields(tmp_path: Path) -> None:
     }
 
 
+def test_delivery_ack_confirmation_defaults_to_disabled(tmp_path: Path) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*"
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/var/lib/nats-sinks/events"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(path, env_overrides=False)
+
+    assert config.delivery.ack_confirmation.enabled is False
+    assert config.delivery.ack_confirmation.timeout_ms == 1000
+    assert config.delivery.ack_confirmation.unsupported_action == "fail"
+
+
+def test_delivery_ack_confirmation_can_be_enabled_with_bounded_timeout(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        """
+{
+  "nats": {
+    "url": "nats://localhost:4222",
+    "stream": "ORDERS",
+    "consumer": "file-orders-sink",
+    "subject": "orders.*"
+  },
+  "delivery": {
+    "ack_confirmation": {
+      "enabled": true,
+      "timeout_ms": 250,
+      "unsupported_action": "standard_ack"
+    }
+  },
+  "sink": {
+    "type": "file",
+    "directory": "/var/lib/nats-sinks/events"
+  }
+}
+""",
+        encoding="utf-8",
+    )
+
+    config = load_config(path, env_overrides=False)
+
+    assert config.delivery.ack_confirmation.enabled is True
+    assert config.delivery.ack_confirmation.timeout_ms == 250
+    assert config.delivery.ack_confirmation.unsupported_action == "standard_ack"
+
+
+@pytest.mark.parametrize(
+    ("ack_confirmation", "expected"),
+    [
+        ({"timeout_ms": 0}, "greater than or equal to 1"),
+        ({"timeout_ms": 60001}, "less than or equal to 60000"),
+        ({"unsupported_action": "silent-fallback"}, "unsupported_action"),
+    ],
+)
+def test_delivery_ack_confirmation_rejects_unsafe_values(
+    ack_confirmation: dict[str, object],
+    expected: str,
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "config.json"
+    path.write_text(
+        json.dumps(
+            {
+                "nats": {
+                    "url": "nats://localhost:4222",
+                    "stream": "ORDERS",
+                    "consumer": "file-orders-sink",
+                    "subject": "orders.*",
+                },
+                "delivery": {"ack_confirmation": ack_confirmation},
+                "sink": {
+                    "type": "file",
+                    "directory": "/var/lib/nats-sinks/events",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ConfigurationError, match=expected):
+        load_config(path, env_overrides=False)
+
+
 @pytest.mark.parametrize(
     ("consumer_management", "expected"),
     [

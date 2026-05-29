@@ -101,6 +101,12 @@ class MetricNames:
     PAYLOAD_ENCRYPTION_ERRORS_TOTAL = "payload_encryption_errors_total"
     DLQ_PUBLISH_ERRORS_TOTAL = "dlq_publish_errors_total"
     ACK_ERRORS_TOTAL = "ack_errors_total"
+    ACK_CONFIRMATION_ATTEMPTS_TOTAL = "ack_confirmation_attempts_total"
+    ACK_CONFIRMATION_SUCCESSES_TOTAL = "ack_confirmation_successes_total"
+    ACK_CONFIRMATION_TIMEOUTS_TOTAL = "ack_confirmation_timeouts_total"
+    ACK_CONFIRMATION_FAILURES_TOTAL = "ack_confirmation_failures_total"
+    ACK_CONFIRMATION_UNSUPPORTED_TOTAL = "ack_confirmation_unsupported_total"
+    ACK_CONFIRMATION_SECONDS = "ack_confirmation_seconds"
     TERM_ERRORS_TOTAL = "term_errors_total"
     NATS_CONNECTION_DISCONNECTED_TOTAL = "nats_connection_disconnected_total"
     NATS_CONNECTION_RECONNECTED_TOTAL = "nats_connection_reconnected_total"
@@ -339,6 +345,36 @@ METRIC_SPECS: tuple[MetricSpec, ...] = (
         MetricNames.ACK_ERRORS_TOTAL,
         "counter",
         "Messages whose JetStream ACK failed after durable success.",
+    ),
+    MetricSpec(
+        MetricNames.ACK_CONFIRMATION_ATTEMPTS_TOTAL,
+        "counter",
+        "JetStream ACK confirmation attempts after durable success or DLQ success.",
+    ),
+    MetricSpec(
+        MetricNames.ACK_CONFIRMATION_SUCCESSES_TOTAL,
+        "counter",
+        "JetStream ACK confirmations accepted by the server after durable success or DLQ success.",
+    ),
+    MetricSpec(
+        MetricNames.ACK_CONFIRMATION_TIMEOUTS_TOTAL,
+        "counter",
+        "JetStream ACK confirmation attempts that timed out after durable success or DLQ success.",
+    ),
+    MetricSpec(
+        MetricNames.ACK_CONFIRMATION_FAILURES_TOTAL,
+        "counter",
+        "JetStream ACK confirmation attempts that failed after durable success or DLQ success.",
+    ),
+    MetricSpec(
+        MetricNames.ACK_CONFIRMATION_UNSUPPORTED_TOTAL,
+        "counter",
+        "Messages where ACK confirmation was requested but unsupported by the client path.",
+    ),
+    MetricSpec(
+        MetricNames.ACK_CONFIRMATION_SECONDS,
+        "histogram",
+        "Elapsed seconds spent waiting for JetStream ACK confirmation responses.",
     ),
     MetricSpec(
         MetricNames.TERM_ERRORS_TOTAL,

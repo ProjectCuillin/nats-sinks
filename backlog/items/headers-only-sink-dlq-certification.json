@@ -3,7 +3,7 @@
   "title": "[Feature]: Certify sink and DLQ behavior for headers-only workflows",
   "area": "Core runtime and delivery semantics",
   "priority": "P3 - backlog candidate",
-  "target_release": "unscheduled",
+  "target_release": "v0.4.2",
   "labels": ["nats", "oracle", "file", "security", "testing"],
   "problem": "Headers-only delivery changes what data reaches sinks and DLQ publication. Oracle, file, and future sinks must not silently store an empty payload as if the producer sent one, and DLQ records must not imply that the original payload was captured when NATS intentionally omitted it.",
   "proposal": "Certify Oracle, file, and generic sink-contract behavior for headers-only messages once the envelope exposes payload-presence metadata. The standard sink metadata document should record omitted-body status, original size when known, and omission reason. DLQ payloads should include the same metadata and explicitly state that the original body was not available to the consumer.",
