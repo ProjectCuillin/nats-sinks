@@ -1,0 +1,34 @@
+{
+  "id": "oracle-nosql-production-readiness-certification",
+  "title": "[Feature]: Certify Oracle NoSQL Database sink for production-ready status",
+  "area": "Future sink",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.2",
+  "labels": ["sink-oracle", "security", "testing", "documentation"],
+  "problem": "The Oracle NoSQL Database sink is implemented as a real first-party sink over the official Oracle NoSQL Python SDK and already has unit, contract, and local KVLite container-backed e2e evidence. However, the connector registry and documentation still mark it experimental and not production-ready because the certified surface is limited to local fake-client and local KVLite container validation. Operators need a clear, release-gated path for promoting the sink from experimental implementation to production-ready recommendation without overstating coverage for Oracle NoSQL Database Cloud Service, Cloud Simulator, proxy, identity, consistency, replication, backup, restore, and least-privilege deployment modes.",
+  "proposal": "Create a production-readiness certification package for the Oracle NoSQL Database sink. The work should inventory every supported deployment mode and authentication mode, add missing deterministic unit tests for SDK option construction, define live certification runbooks for Oracle NoSQL Database KVStore proxy, Cloud Simulator, and Oracle NoSQL Database Cloud Service where practical, and update connector metadata only after evidence exists. The promotion must preserve the existing commit-then-ACK delivery invariant, deterministic key model, duplicate policy behavior, bounded JSON value storage, redacted logging, and local Docker test isolation.",
+  "users": "Maintainers deciding whether the Oracle NoSQL Database sink can be recommended as production-ready, operators evaluating Oracle-family sink choices, release engineers collecting certification evidence, and security reviewers checking identity, data handling, and durability assumptions.",
+  "delivery_semantics": "The sink must continue to return success only after the Oracle NoSQL Python SDK reports an unambiguous successful put or duplicate-safe conditional put result for every message. No production-readiness promotion may weaken ACK-after-durable-success behavior, fail-open handling, duplicate redelivery behavior, timeout handling, or DLQ semantics. If a deployment mode cannot provide the required success signal, that mode must remain documented as unsupported or experimental.",
+  "security": "The certification package must prove that endpoints, table names, field names, deployment modes, authentication modes, OCI profile names, passphrase environment variable names, key prefixes, payload sizes, request timeouts, and table limits remain validated and bounded. Evidence and comments must not include credentials, private endpoints, IP addresses, tenancy details, config-file contents, passphrases, payloads, tokens, certificate material, or generated container identifiers. Cloud least-privilege examples must be reviewed as patterns only and must avoid broad administrative permissions.",
+  "acceptance": [
+    "A production-readiness matrix lists every supported Oracle NoSQL Database deployment mode and authentication mode, with explicit certified, experimental, unsupported, or blocked status.",
+    "Unit tests cover SDK authorization-provider construction for KVStore proxy, Cloud Simulator, OCI config-file auth, and instance-principal auth without making network calls.",
+    "Unit tests cover cloud table-limit request construction, default namespace handling, conditional put success parsing, ambiguous SDK responses, and fail-closed startup behavior.",
+    "The local KVLite container e2e path remains passing and continues to use fake event data, loopback-only port binding, bounded timeouts, cleanup by default, and shell-free subprocess calls.",
+    "A live certification runbook explains how to test Oracle NoSQL Database Cloud Service and Cloud Simulator with sanitized evidence and environment-gated commands.",
+    "Documentation clearly separates production implementation from production certification and does not claim production-ready status until the registry metadata is updated.",
+    "Connector metadata is promoted from experimental to production-ready only after the accepted certification matrix and test evidence are complete.",
+    "CHANGELOG.md, docs/test-report.md, README.md, docs/oracle-nosql-sink.md, docs/sink-certification.md, ROADMAP.md, and docs/roadmap.md are updated together when promotion happens."
+  ],
+  "tests": "Run focused Oracle NoSQL Database unit tests, configuration validation, ruff, mypy for the Oracle NoSQL package and helper scripts, the Oracle NoSQL Database container-backed sink e2e runner, and the full opt-in sink container e2e gate. Add deterministic tests for authorization-provider construction and deployment-mode-specific SDK request behavior before any connector metadata is promoted. Live service tests must be explicitly gated and must write only fake sanitized events to operator-approved test tables.",
+  "documentation": "Add or update Oracle NoSQL Database sink production-certification guidance under the sink documentation and certification documentation. Include a mode matrix, local KVLite evidence, live-certification runbook, credential-redaction expectations, least-privilege review notes, known limitations, and exact criteria for changing connector metadata from experimental to production-ready.",
+  "closeout": "Close only after the release containing the production-readiness certification work is published. Include the release tag, connector metadata before and after, test commands and sanitized results, deployment modes certified, deployment modes still experimental or unsupported, documentation links, and confirmation that no mock or fake client is used in the production runtime path.",
+  "relationships": {
+    "related": [
+      "backlog:oracle-nosql-database-sink",
+      "backlog:oracle-nosql-database-test-container",
+      "backlog:full-container-e2e-suite-oracle-kv-sinks",
+      "backlog:sink-certification-contract-and-tests"
+    ]
+  }
+}

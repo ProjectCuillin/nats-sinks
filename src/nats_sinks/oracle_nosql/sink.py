@@ -263,6 +263,7 @@ class _BorneoOracleNoSqlClient:
             provider=provider,
         )
         _maybe_call(handle_config, "set_default_namespace", config.namespace)
+        _maybe_call(handle_config, "set_default_compartment", config.compartment_id)
         handle = borneo.NoSQLHandle(handle_config)
         return cls(config=config, borneo=borneo, handle=handle)
 

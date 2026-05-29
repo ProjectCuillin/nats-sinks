@@ -35,7 +35,18 @@ async def test_oracle_nosql_sink_writes_to_live_gated_backend() -> None:
     config = OracleNoSqlSinkConfig(
         endpoint=endpoint,
         deployment_mode=os.environ.get("NATS_SINKS_ORACLE_NOSQL_MODE", "kvstore"),
+        auth_mode=os.environ.get("NATS_SINKS_ORACLE_NOSQL_AUTH_MODE") or None,
         table_name=table_name,
+        namespace=os.environ.get("NATS_SINKS_ORACLE_NOSQL_NAMESPACE") or None,
+        compartment_id=os.environ.get("NATS_SINKS_ORACLE_NOSQL_COMPARTMENT_ID") or None,
+        cloudsim_tenant_id=os.environ.get("NATS_SINKS_ORACLE_NOSQL_CLOUDSIM_TENANT_ID")
+        or "cloudsim",
+        oci_config_file=os.environ.get("NATS_SINKS_ORACLE_NOSQL_OCI_CONFIG_FILE") or None,
+        oci_profile=os.environ.get("NATS_SINKS_ORACLE_NOSQL_OCI_PROFILE", "DEFAULT"),
+        oci_private_key_passphrase_env=os.environ.get(
+            "NATS_SINKS_ORACLE_NOSQL_OCI_PRIVATE_KEY_PASSPHRASE_ENV"
+        )
+        or None,
         key_prefix="integration",
         auto_create=os.environ.get("NATS_SINKS_ORACLE_NOSQL_AUTO_CREATE") == "1",
     )

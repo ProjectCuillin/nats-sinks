@@ -31,6 +31,32 @@ proxy, backup, identity, and restore posture. Until then, it is often better
 to use the sink as an optional fan-out target next to a required Oracle
 Database, Oracle MySQL, file, or encrypted edge spool target.
 
+The production runtime does not use a mock, stub, or local fake client. The
+runtime path imports the official Oracle NoSQL Python SDK lazily when the sink
+starts and builds a fixed SDK handle configuration from validated nats-sinks
+configuration. Fake clients are used only by deterministic unit and
+certification tests so normal test runs do not require network access.
+
+## Production-Readiness Matrix
+
+The connector-wide registry status remains `experimental` and
+`production_ready: false` until every deployment mode selected for production
+recommendation has accepted live evidence. The current certification surface is
+explicit:
+
+| Deployment mode | Auth mode | Current status | Evidence |
+| --- | --- | --- | --- |
+| `kvstore` | `store_access_token` | Locally certified against the maintained short-lived KVLite container e2e path. Production deployments still require operator review of the actual store, proxy, replication, backup, restore, and access-control posture. | Unit tests, sink certification helpers, and `python scripts/run-oracle-nosql-sink-e2e.py`. |
+| `cloudsim` | `cloudsim` | Experimental. The SDK provider construction is covered by deterministic tests, but the standard release gate does not currently start an Oracle NoSQL Cloud Simulator target. | Unit tests and the live-certification runbook below. |
+| `cloud` | `oci_config_file` | Experimental. The SDK signature-provider construction, OCI profile/config-file option handling, optional passphrase environment lookup, and default compartment application are covered by deterministic tests. Live Oracle NoSQL Database Cloud Service certification is environment-gated. | Unit tests and the live-certification runbook below. |
+| `cloud` | `instance_principal` | Experimental. The SDK instance-principal provider construction is covered by deterministic tests, but live certification requires an approved OCI runtime identity. | Unit tests and the live-certification runbook below. |
+| Any other deployment/auth combination | n/a | Unsupported and rejected during configuration validation. | Configuration validation tests. |
+
+Do not change the connector registry to production-ready while any mode that
+operators are expected to use for production remains untested or undocumented.
+If only one mode is certified, document that mode explicitly and leave the
+connector-wide metadata conservative.
+
 ## Install
 
 The base package does not install the Oracle NoSQL Python SDK. Install the
@@ -131,7 +157,7 @@ ACK policy: commit-then-acknowledge
 | `value_field` | no | `event_json` | Identifier. | JSON field containing the full normalized event value. |
 | `stored_at_field` | no | `stored_at_epoch_ns` | Identifier. | Long field containing the sink storage timestamp in epoch nanoseconds. |
 | `namespace` | no | none | Bounded text. | Optional SDK default namespace when supported by the target. |
-| `compartment_id` | no | none | Bounded text. | Optional cloud compartment reference for operator documentation and future cloud-specific calls. |
+| `compartment_id` | no | none | Bounded text. | Optional cloud compartment reference applied to the SDK handle configuration when supported by the Oracle NoSQL Python SDK. |
 | `cloudsim_tenant_id` | no | `cloudsim` | Bounded text. | Non-secret Cloud Simulator namespace token. |
 | `oci_config_file` | no | none | Local path string. | Optional OCI SDK config-file path. The file contents are never printed by nats-sinks. |
 | `oci_profile` | no | `DEFAULT` | Bounded profile name. | OCI SDK profile name for cloud deployments. |
@@ -329,6 +355,70 @@ Oracle NoSQL sink container e2e test passed.
 Both helpers are local-only, bind the Oracle NoSQL proxy to `127.0.0.1`, use
 fake event data, and remove the container by default. Do not commit container
 layers, runtime database files, generated logs, or preserved debug artifacts.
+
+## Live Certification Runbook
+
+Live certification is intentionally gated. Run it only from an approved local
+environment with fake event data, an operator-approved test table, and
+sanitized evidence capture. Do not paste private endpoints, tenancy names,
+profile contents, credential paths, tokens, passphrases, payloads, or table
+contents into issue comments or release notes.
+
+For a local KVLite or Oracle NoSQL Database proxy target, prefer the maintained
+container e2e helper:
+
+```bash
+python scripts/run-oracle-nosql-sink-e2e.py --timeout-seconds 300
+```
+
+Expected output:
+
+```text
+Oracle NoSQL sink container e2e test passed.
+```
+
+For an operator-managed Cloud Simulator or Oracle NoSQL Database Cloud Service
+test target, use the environment-gated integration test. Replace the example
+values with local, sanitized test-only values and keep any secret-bearing OCI
+configuration outside the repository:
+
+```bash
+NATS_SINKS_ORACLE_NOSQL_INTEGRATION=1 \
+NATS_SINKS_ORACLE_NOSQL_MODE=cloud \
+NATS_SINKS_ORACLE_NOSQL_ENDPOINT=https://nosql.example.invalid \
+NATS_SINKS_ORACLE_NOSQL_TABLE=nats_sinks_certification_events \
+NATS_SINKS_ORACLE_NOSQL_AUTO_CREATE=1 \
+python -m pytest tests/integration/test_oracle_nosql_sink_e2e.py -q
+```
+
+Expected sanitized result:
+
+```text
+1 passed
+```
+
+For Cloud Simulator certification, set
+`NATS_SINKS_ORACLE_NOSQL_MODE=cloudsim` and use the simulator endpoint and
+test table approved for the local run. For OCI config-file or
+instance-principal cloud runs, verify the runtime identity and least-privilege
+policy outside the repository before executing the test. The gated integration
+test also accepts these optional environment variables when the live target
+needs them:
+
+| Environment variable | Purpose |
+| --- | --- |
+| `NATS_SINKS_ORACLE_NOSQL_AUTH_MODE` | Optional explicit auth mode such as `oci_config_file` or `instance_principal`. |
+| `NATS_SINKS_ORACLE_NOSQL_NAMESPACE` | Optional SDK default namespace. |
+| `NATS_SINKS_ORACLE_NOSQL_COMPARTMENT_ID` | Optional SDK default compartment reference. |
+| `NATS_SINKS_ORACLE_NOSQL_CLOUDSIM_TENANT_ID` | Optional non-secret Cloud Simulator tenant token. |
+| `NATS_SINKS_ORACLE_NOSQL_OCI_CONFIG_FILE` | Optional local OCI config-file path. Do not commit the file or path into evidence. |
+| `NATS_SINKS_ORACLE_NOSQL_OCI_PROFILE` | Optional OCI config profile name. |
+| `NATS_SINKS_ORACLE_NOSQL_OCI_PRIVATE_KEY_PASSPHRASE_ENV` | Optional name of the environment variable that contains the private-key passphrase. This is the variable name only, not the passphrase value. |
+
+Evidence is acceptable for release notes only when it says which deployment
+mode was tested, which command shape was run, whether the connector metadata
+changed, and whether any deployment modes remain experimental. Keep raw logs
+and live service details out of committed documentation.
 
 ## Limitations
 

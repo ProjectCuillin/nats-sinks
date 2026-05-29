@@ -1,0 +1,37 @@
+{
+  "id": "oracle-nosql-compartment-not-applied",
+  "title": "[Bug]: Oracle NoSQL cloud compartment config should be applied to the SDK handle",
+  "area": "Future sink",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.2",
+  "labels": [
+    "sink-oracle",
+    "security",
+    "testing"
+  ],
+  "summary": "The Oracle NoSQL Database sink accepts `sink.compartment_id`, but the production SDK handle construction does not apply it to the Oracle NoSQL handle configuration.",
+  "observed": "During issue #319 production-readiness certification review, the client construction path applied `namespace` but did not pass the configured cloud compartment to the SDK handle config.",
+  "expected": "When `sink.compartment_id` is configured for Oracle NoSQL Database cloud deployments, the sink should apply it through the SDK handle configuration before opening the handle.",
+  "reproduction": "Build an Oracle NoSQL Database cloud sink config with a non-empty `compartment_id` and inspect the SDK handle config object created by `_BorneoOracleNoSqlClient.from_config` using a deterministic fake SDK object.",
+  "failing_test": "Add a focused unit test that constructs the Oracle NoSQL client from config with `compartment_id` and asserts the fake SDK handle config receives the configured default compartment.",
+  "impact": "Cloud certification and operator setup can be misleading because the configuration appears to support a default compartment while runtime SDK requests may still require per-request compartment handling or fail in live Oracle NoSQL Database Cloud Service tests.",
+  "delivery_semantics": "The bug affects Oracle NoSQL cloud startup and request configuration, not core JetStream ACK logic. If the destination rejects requests, the sink should still raise and the core must not ACK.",
+  "security": "The fix must not log compartment identifiers, OCI config paths, profile names, credentials, private endpoints, payloads, or generated test identifiers. Tests must use sanitized fake values only.",
+  "acceptance": [
+    "The Oracle NoSQL client construction path applies `sink.compartment_id` through the SDK handle config when configured.",
+    "The focused regression test proves the default compartment is passed without making network calls.",
+    "Existing namespace handling remains unchanged.",
+    "Oracle NoSQL focused unit tests and linting pass.",
+    "Issue #319 certification documentation reflects the cloud compartment behavior accurately."
+  ],
+  "tests": "Run python -m pytest tests/unit/test_oracle_nosql_sink.py -q and python -m ruff check tests/unit/test_oracle_nosql_sink.py src/nats_sinks/oracle_nosql. Include this regression in the broader issue #319 validation pass.",
+  "documentation": "Update Oracle NoSQL production-readiness documentation to note that configured cloud compartment defaults are applied to the SDK handle config and that live cloud certification still remains gated.",
+  "closeout": "Mark completed after the regression test fails before the fix, passes after the fix, and the issue #319 certification branch includes sanitized evidence.",
+  "relationships": {
+    "related": [
+      "backlog:oracle-nosql-production-readiness-certification",
+      "backlog:oracle-nosql-database-sink"
+    ]
+  }
+}

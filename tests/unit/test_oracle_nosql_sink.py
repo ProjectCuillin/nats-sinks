@@ -6,7 +6,8 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Sequence
 from datetime import UTC, datetime
-from typing import Any
+from types import SimpleNamespace
+from typing import Any, ClassVar
 
 import pytest
 from pydantic import ValidationError as PydanticValidationError
@@ -388,6 +389,287 @@ def test_oracle_nosql_handle_config_supports_current_sdk_shape() -> None:
 
     assert config.endpoint == "http://127.0.0.1:8080"
     assert config.provider is provider
+
+
+def test_oracle_nosql_handle_config_fails_closed_without_provider_setup() -> None:
+    """Ambiguous SDK authorization setup must not silently continue."""
+
+    def no_sql_handle_config(endpoint: str, provider: object | None = None) -> object:
+        _ = endpoint
+        if provider is not None:
+            raise TypeError("constructor shape does not accept provider")
+        return object()
+
+    fake_borneo = SimpleNamespace(NoSQLHandleConfig=no_sql_handle_config)
+
+    with pytest.raises(ConfigurationError, match="authorization-provider setup"):
+        oracle_nosql_sink_module._build_handle_config(
+            borneo=fake_borneo,
+            endpoint="http://127.0.0.1:8080",
+            provider=object(),
+        )
+
+
+def test_oracle_nosql_auth_provider_construction_is_mode_specific(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Deployment modes should select fixed SDK auth providers without networking."""
+
+    class StoreAccessTokenProvider:
+        pass
+
+    class SignatureProvider:
+        calls: ClassVar[list[dict[str, Any]]] = []
+        instance_principal_calls: ClassVar[int] = 0
+
+        def __init__(self, **kwargs: Any) -> None:
+            self.kwargs = kwargs
+            self.calls.append(kwargs)
+
+        @classmethod
+        def create_with_instance_principal(cls) -> object:
+            cls.instance_principal_calls += 1
+            return SimpleNamespace(kind="instance-principal")
+
+    class AuthorizationProvider:
+        pass
+
+    def fake_import(name: str) -> object:
+        if name == "borneo.kv":
+            return SimpleNamespace(StoreAccessTokenProvider=StoreAccessTokenProvider)
+        if name == "borneo.iam":
+            return SimpleNamespace(SignatureProvider=SignatureProvider)
+        raise AssertionError(f"unexpected import {name}")
+
+    monkeypatch.setattr(oracle_nosql_sink_module.importlib, "import_module", fake_import)
+    env_var_name = "NOSQL_TEST_VALUE_ENV"
+    monkeypatch.setenv(env_var_name, "redacted-local-value")
+    fake_borneo = SimpleNamespace(AuthorizationProvider=AuthorizationProvider)
+
+    kv_provider = oracle_nosql_sink_module._build_authorization_provider(
+        borneo=fake_borneo,
+        config=OracleNoSqlSinkConfig(deployment_mode="kvstore"),
+    )
+    assert isinstance(kv_provider, StoreAccessTokenProvider)
+
+    cloudsim_provider = oracle_nosql_sink_module._build_authorization_provider(
+        borneo=fake_borneo,
+        config=OracleNoSqlSinkConfig(
+            deployment_mode="cloudsim",
+            cloudsim_tenant_id="tenant-demo",
+        ),
+    )
+    assert cloudsim_provider.get_authorization_string() == "Bearer tenant-demo"
+
+    oci_provider = oracle_nosql_sink_module._build_authorization_provider(
+        borneo=fake_borneo,
+        config=OracleNoSqlSinkConfig(
+            deployment_mode="cloud",
+            oci_config_file="/safe/local/oci-config",
+            oci_profile="CERTIFICATION",
+            oci_private_key_passphrase_env=env_var_name,
+        ),
+    )
+    assert isinstance(oci_provider, SignatureProvider)
+    assert SignatureProvider.calls[-1] == {
+        "profile_name": "CERTIFICATION",
+        "config_file": "/safe/local/oci-config",
+        "pass_phrase": "redacted-local-value",
+    }
+
+    instance_provider = oracle_nosql_sink_module._build_authorization_provider(
+        borneo=fake_borneo,
+        config=OracleNoSqlSinkConfig(deployment_mode="cloud", auth_mode="instance_principal"),
+    )
+    assert instance_provider == SimpleNamespace(kind="instance-principal")
+    assert SignatureProvider.instance_principal_calls == 1
+
+
+def test_oracle_nosql_client_from_config_sets_namespace_without_sdk_writes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Client construction should use validated config and avoid dynamic paths."""
+
+    class StoreAccessTokenProvider:
+        pass
+
+    class HandleConfig:
+        def __init__(self, endpoint: str, provider: object) -> None:
+            self.endpoint = endpoint
+            self.provider = provider
+            self.namespace: str | None = None
+            self.compartment: str | None = None
+
+        def set_default_namespace(self, namespace: str) -> None:
+            self.namespace = namespace
+
+        def set_default_compartment(self, compartment: str) -> None:
+            self.compartment = compartment
+
+    class Handle:
+        def __init__(self, config: HandleConfig) -> None:
+            self.config = config
+
+    def fake_import(name: str) -> object:
+        if name == "borneo":
+            return SimpleNamespace(NoSQLHandleConfig=HandleConfig, NoSQLHandle=Handle)
+        if name == "borneo.kv":
+            return SimpleNamespace(StoreAccessTokenProvider=StoreAccessTokenProvider)
+        raise AssertionError(f"unexpected import {name}")
+
+    monkeypatch.setattr(oracle_nosql_sink_module.importlib, "import_module", fake_import)
+
+    client = oracle_nosql_sink_module._BorneoOracleNoSqlClient.from_config(
+        OracleNoSqlSinkConfig(
+            endpoint="http://127.0.0.1:8080",
+            namespace="mission_namespace",
+            compartment_id="ocid1.compartment.oc1..exampleuniqueid",
+        )
+    )
+
+    assert client._handle.config.endpoint == "http://127.0.0.1:8080"
+    assert isinstance(client._handle.config.provider, StoreAccessTokenProvider)
+    assert client._handle.config.namespace == "mission_namespace"
+    assert client._handle.config.compartment == "ocid1.compartment.oc1..exampleuniqueid"
+
+
+@pytest.mark.asyncio
+async def test_oracle_nosql_cloud_table_creation_uses_limits_and_waits() -> None:
+    """Cloud table creation should attach bounded limits and wait for completion."""
+
+    class TableLimits:
+        def __init__(self, read_units: int, write_units: int, storage_gb: int) -> None:
+            self.read_units = read_units
+            self.write_units = write_units
+            self.storage_gb = storage_gb
+
+    class TableRequest:
+        def __init__(self) -> None:
+            self.statement: str | None = None
+            self.limits: TableLimits | None = None
+
+        def set_statement(self, statement: str) -> TableRequest:
+            self.statement = statement
+            return self
+
+        def set_table_limits(self, limits: TableLimits) -> TableRequest:
+            self.limits = limits
+            return self
+
+    class TableResult:
+        def __init__(self) -> None:
+            self.wait_args: tuple[object, int, int] | None = None
+
+        def wait_for_completion(
+            self,
+            handle: object,
+            timeout_ms: int,
+            poll_interval_ms: int,
+        ) -> None:
+            self.wait_args = (handle, timeout_ms, poll_interval_ms)
+
+    class Handle:
+        def __init__(self) -> None:
+            self.request: TableRequest | None = None
+            self.result = TableResult()
+
+        def table_request(self, request: TableRequest) -> TableResult:
+            self.request = request
+            return self.result
+
+    handle = Handle()
+    client = oracle_nosql_sink_module._BorneoOracleNoSqlClient(
+        config=OracleNoSqlSinkConfig(
+            endpoint="https://nosql.example.invalid",
+            deployment_mode="cloud",
+            table_name="events",
+            read_units=7,
+            write_units=11,
+            storage_gb=3,
+            table_timeout_ms=12_000,
+            table_poll_interval_ms=500,
+        ),
+        borneo=SimpleNamespace(TableRequest=TableRequest, TableLimits=TableLimits),
+        handle=handle,
+    )
+
+    await client.ensure_table()
+
+    assert handle.request is not None
+    assert handle.request.statement == (
+        "CREATE TABLE IF NOT EXISTS events "
+        "(sink_key STRING, event_json JSON, stored_at_epoch_ns LONG, PRIMARY KEY(sink_key))"
+    )
+    assert handle.request.limits is not None
+    assert handle.request.limits.read_units == 7
+    assert handle.request.limits.write_units == 11
+    assert handle.request.limits.storage_gb == 3
+    assert handle.result.wait_args == (handle, 12_000, 500)
+
+
+@pytest.mark.asyncio
+async def test_oracle_nosql_put_request_uses_timeout_and_conditional_option() -> None:
+    """SDK put requests should keep code and data separate through fixed setters."""
+
+    class PutOption:
+        IF_ABSENT = "IF_ABSENT"
+
+    class PutRequest:
+        def __init__(self) -> None:
+            self.table_name: str | None = None
+            self.value: dict[str, Any] | None = None
+            self.timeout_ms: int | None = None
+            self.option: object | None = None
+            self.return_row: bool | None = None
+
+        def set_table_name(self, table_name: str) -> PutRequest:
+            self.table_name = table_name
+            return self
+
+        def set_value(self, value: dict[str, Any]) -> PutRequest:
+            self.value = value
+            return self
+
+        def set_timeout(self, timeout_ms: int) -> PutRequest:
+            self.timeout_ms = timeout_ms
+            return self
+
+        def set_option(self, option: object) -> PutRequest:
+            self.option = option
+            return self
+
+        def set_return_row(self, return_row: bool) -> PutRequest:
+            self.return_row = return_row
+            return self
+
+    class Result:
+        @staticmethod
+        def get_success() -> bool:
+            return True
+
+    class Handle:
+        def __init__(self) -> None:
+            self.request: PutRequest | None = None
+
+        def put(self, request: PutRequest) -> Result:
+            self.request = request
+            return Result()
+
+    handle = Handle()
+    client = oracle_nosql_sink_module._BorneoOracleNoSqlClient(
+        config=OracleNoSqlSinkConfig(table_name="events", request_timeout_seconds=2.5),
+        borneo=SimpleNamespace(PutRequest=PutRequest, PutOption=PutOption),
+        handle=handle,
+    )
+    row = {"sink_key": "key-1", "event_json": {"ok": True}, "stored_at_epoch_ns": 1}
+
+    assert await client.put_row(row, if_absent=True) is True
+    assert handle.request is not None
+    assert handle.request.table_name == "events"
+    assert handle.request.value == row
+    assert handle.request.timeout_ms == 2500
+    assert handle.request.option == PutOption.IF_ABSENT
+    assert handle.request.return_row is False
 
 
 def test_oracle_nosql_put_result_parsing_fails_closed_on_ambiguity() -> None:
