@@ -11,14 +11,22 @@ to publish one message to NATS, let `nats-sinks` write it to a durable
 destination, and ACK the message only after that destination reports durable
 success.
 
-The examples assume Python `>=3.11`.
+The examples assume Python `>=3.11`, a local `nats-server`, and the NATS CLI.
+Install the NATS tools with your normal package manager before starting the
+demo.
 
 The local example uses order-style subjects because they are easy to recognize.
 In a mission or defence prototype, the same flow could represent operational
 reports, logistics updates, audit events, or platform telemetry. The important
 behavior is the same: write durably first, then ACK.
 
-## Install
+## Local MVP Demo
+
+This is the shortest local path for experimenting with the project. It uses
+JetStream plus the file sink, so no database, wallet, cloud account, or secret
+store is required.
+
+### 1. Install `nats-sinks`
 
 ```bash
 python -m pip install --upgrade pip
@@ -31,7 +39,9 @@ For development:
 python -m pip install -e ".[dev,oracle,crypto,docs]"
 ```
 
-## Start NATS
+### 2. Start NATS With JetStream
+
+Use one terminal for the local server:
 
 Start a local NATS server with JetStream enabled. The `-js` flag turns on
 JetStream storage. The `-m 8222` flag exposes a monitoring endpoint that is
@@ -41,14 +51,14 @@ useful during local development.
 nats-server -js -m 8222
 ```
 
-Create a stream and publish a test message:
+Use a second terminal for the remaining commands. Create a stream with a
+subject family that matches the tracked file-sink example:
 
 ```bash
-nats stream add ORDERS --subjects "orders.*"
-nats pub orders.created '{"order_id":"O-1001","amount":42.50}'
+nats stream add ORDERS --subjects "orders.*" --storage file --retention limits --defaults
 ```
 
-## Prepare The Destination
+### 3. Validate The Demo Configuration
 
 For the local file sink, choose an output directory. The tracked example uses
 `.local/file-sink/events`, which is ignored by git. No credentials are required.
@@ -57,7 +67,25 @@ Oracle setup is documented separately in [Oracle Sink](oracle-sink.md). File
 sink durability, duplicate behavior, and filesystem safety are documented in
 [File Sink](file-sink.md).
 
-## Configure
+Validate the tracked example before running it:
+
+```bash
+nats-sink validate examples/file-basic/config.json
+nats-sink test-sink examples/file-basic/config.json
+```
+
+Expected output:
+
+```text
+Configuration is valid.
+Active sink: file
+ACK policy: commit-then-acknowledge
+Active sink: file
+ACK policy: commit-then-acknowledge
+Sink test succeeded.
+```
+
+### 4. Run The Sink
 
 Runtime configuration is JSON-only:
 
@@ -83,14 +111,47 @@ Do not put real credentials in config files. The file example does not require
 secrets. Database sinks should use environment-backed fields such as
 `password_env`.
 
-## Validate And Run
+Start the worker:
 
 ```bash
-nats-sink validate examples/file-basic/config.json
-nats-sink show-effective-config examples/file-basic/config.json
-nats-sink test-sink examples/file-basic/config.json
 nats-sink run examples/file-basic/config.json
 ```
+
+Leave this command running while you publish test messages.
+
+### 5. Publish One Message
+
+In another terminal:
+
+```bash
+nats pub orders.created '{"order_id":"O-1001","amount":42.50}'
+```
+
+The sink writes one JSON file only after the file sink reports durable
+placement.
+
+### 6. Inspect The Local Output
+
+```bash
+find .local/file-sink/events -type f -name "*.json" -print
+```
+
+A first message usually produces a file shaped like this:
+
+```text
+.local/file-sink/events/orders.created/ORDERS-00000000000000000001.json
+```
+
+Pretty-print one generated record:
+
+```bash
+python -m json.tool .local/file-sink/events/orders.created/ORDERS-00000000000000000001.json
+```
+
+The record includes the original payload, subject, stream sequence,
+idempotency-related metadata, priority, classification, labels, and store time.
+That makes the file sink a good first demo before moving to Oracle Database,
+Oracle MySQL, S3-compatible object storage, or another durable sink.
 
 ## What Success Means
 

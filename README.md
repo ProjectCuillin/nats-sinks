@@ -409,36 +409,68 @@ pip install "nats-sinks[all]"
 
 Python `>=3.11` is required.
 
-## Quick Start
+## Five-Minute Local MVP Demo
 
-Start NATS with JetStream:
+The fastest way to experiment locally is NATS JetStream plus the file sink. It
+does not need Oracle Database, a cloud account, a wallet, or secrets. You only
+need Python `>=3.11`, `nats-server`, and the NATS CLI.
+
+Install the package:
+
+```bash
+python -m pip install --upgrade pip
+python -m pip install nats-sinks
+```
+
+In one terminal, start NATS with JetStream:
 
 ```bash
 nats-server -js -m 8222
-nats stream add ORDERS --subjects "orders.*"
-nats pub orders.created '{"order_id":"O-1001","amount":42.50}'
 ```
 
-Prepare the destination:
+In a second terminal, create a stream:
 
-For a local no-database quick start, use the file sink. It writes one JSON file
-per message under `.local/file-sink/events`, which is ignored by git. See
-[File Sink](https://nats-sinks.readthedocs.io/en/latest/file-sink/) for the full
-configuration and durability model.
+```bash
+nats stream add ORDERS --subjects "orders.*" --storage file --retention limits --defaults
+```
 
-Run the sink:
+Validate the tracked local file-sink demo configuration:
 
 ```bash
 nats-sink validate examples/file-basic/config.json
 nats-sink test-sink examples/file-basic/config.json
+```
+
+Run the sink and leave it running:
+
+```bash
 nats-sink run examples/file-basic/config.json
 ```
 
-For a mission-system prototype, the file sink is often the fastest way to prove
-the delivery contract before connecting a database. It preserves payloads and
-metadata in ordinary JSON files so operators and maintainers can inspect the
-flow, confirm classification and label handling, and validate redelivery
-behavior without needing database access.
+Publish one message from another terminal:
+
+```bash
+nats pub orders.created '{"order_id":"O-1001","amount":42.50}'
+```
+
+Inspect the generated local JSON file:
+
+```bash
+find .local/file-sink/events -type f -name "*.json" -print
+python -m json.tool .local/file-sink/events/orders.created/ORDERS-00000000000000000001.json
+```
+
+For a fresh local stream, the first message usually has stream sequence `1`.
+If you already had data in the stream, use the path printed by `find`.
+
+That small demo proves the core behavior: JetStream delivers a message,
+`nats-sinks` writes it to a durable local destination, and the message is ACKed
+only after the file sink reports success. The generated file includes payload
+and metadata, so developers can inspect the shape before moving to Oracle
+Database, Oracle MySQL, S3-compatible object storage, or another sink. See
+[Getting Started](https://nats-sinks.readthedocs.io/en/latest/getting-started/)
+and [File Sink](https://nats-sinks.readthedocs.io/en/latest/file-sink/) for the
+full local walkthrough.
 
 ## JSON Configuration
 
