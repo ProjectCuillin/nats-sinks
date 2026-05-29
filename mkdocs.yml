@@ -110,6 +110,8 @@ nav:
       - Defence And Mission Support:
           - Overview: use-cases/defence/index.md
           - F2T2EA Event Phase Tagging: use-cases/defence/f2t2ea-event-phase-tagging.md
+          - Link 16 / TADIL-J J-Series To Oracle Database: use-cases/defence/link16-j-series-oracle.md
+          - LOGFAS-Related Mission Logistics To Oracle Database: use-cases/defence/logfas-logistics-oracle.md
           - Sensor Event Custody: use-cases/defence/sensor-event-custody.md
           - Classification And Labels: use-cases/defence/classification-and-labels.md
           - Chain Of Custody: use-cases/defence/chain-of-custody.md

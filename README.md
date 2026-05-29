@@ -272,6 +272,12 @@ used immediately:
   metadata-only context, with explicit non-goals around targeting,
   fire-control, weapons-release, and autonomous decision behavior. See
   [F2T2EA Event Phase Tagging](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/use-cases/defence/f2t2ea-event-phase-tagging.md).
+- Defence and mission-support blueprints for persisting authorized Link 16 /
+  TADIL-J J-series message events and LOGFAS-related logistics events into
+  Oracle Database, while keeping tactical gateways, protected interfaces,
+  radio functions, cryptography, and classified semantics outside the
+  `nats-sinks` scope. See
+  [Defence And Mission Support](https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/use-cases/defence/index.md).
 
 Production sink modules shipped today:
 
@@ -318,6 +324,8 @@ Included today:
   checks before Oracle, file, or future sink writes.
 - F2T2EA phase-tagging documentation as a use-case blueprint on top of mission
   metadata, not runtime workflow automation.
+- Link 16 / TADIL-J and LOGFAS-related Oracle Database persistence
+  blueprints as conceptual defence and mission-support documentation.
 - Unit tests for ACK ordering, DLQ ordering, config loading, SQL generation, and Oracle mapping.
 - Integration test placeholders isolated behind `integration` markers.
 - MkDocs documentation, examples, GitHub Actions workflows, governance files, and security policy.

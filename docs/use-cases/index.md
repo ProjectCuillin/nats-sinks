@@ -32,6 +32,8 @@ flowchart LR
 - [Destination Outage Recovery](mission-support/destination-outage-recovery.md)
 - [Defence And Mission Support](defence/index.md)
 - [F2T2EA Event Phase Tagging](defence/f2t2ea-event-phase-tagging.md)
+- [Persisting Link 16 / TADIL-J J-Series Messages To Oracle Database](defence/link16-j-series-oracle.md)
+- [Persisting LOGFAS-Related Mission Logistics Events To Oracle Database](defence/logfas-logistics-oracle.md)
 - [Sensor Event Custody](defence/sensor-event-custody.md)
 - [Classification And Labels](defence/classification-and-labels.md)
 - [Chain Of Custody](defence/chain-of-custody.md)

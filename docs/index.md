@@ -371,9 +371,10 @@ operations without hunting through a long flat list.
   restricted event storage, disconnected file handoff, DLQ triage, and
   destination outage recovery.
 - [Defence And Mission Support](use-cases/defence/index.md): sensor event
-  custody, F2T2EA phase tagging, classification and labels, chain of custody,
-  cross-domain handoff preparation, edge operation, audit-oriented persistence,
-  and synthetic mission testing.
+  custody, Link 16 / TADIL-J J-series persistence, LOGFAS-related logistics
+  event persistence, F2T2EA phase tagging, classification and labels, chain of
+  custody, cross-domain handoff preparation, edge operation, audit-oriented
+  persistence, and synthetic mission testing.
 
 ### Project Workflow
 
