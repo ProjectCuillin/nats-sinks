@@ -197,6 +197,7 @@ metadata for routing and audit.
 | Oracle Coherence Community Edition | `from nats_sinks.coherence import CoherenceSink` | Maintain a Coherence cache or map read model using complete event JSON values. | Coherence operation completed; production ACK-gated custody depends on operator-confirmed cluster durability. |
 | Local files | `from nats_sinks.file import FileSink` | Write one JSON or gzip-compressed JSON document per message for local handoff, audit, development, or simple archival flows. | Final file atomically placed after flush and optional `fsync`. |
 | Edge spool | `from nats_sinks.spool import SpoolSink` | Commit encrypted local custody during disconnected operation, then replay later to Oracle, file, or another sink. | Encrypted spool record atomically placed after flush and optional `fsync`. |
+| HTTP | `from nats_sinks.http import HttpSink` | Forward normalized messages to one fixed HTTP endpoint with idempotency-key propagation. | Configured endpoint returned a success status for every request. |
 
 All built-in sinks follow the same framework rule: the sink writes durably and
 returns success; the core runner ACKs JetStream messages afterward.
@@ -279,6 +280,9 @@ operations without hunting through a long flat list.
   and live test gating.
 - [File Sink](file-sink.md): atomic local files, deterministic filenames,
   duplicate handling, gzip compression, and handoff patterns.
+- [HTTP Sink](http-sink.md): fixed endpoint forwarding, HTTPS validation,
+  safe headers, idempotency-key propagation, bounded responses, and retry
+  guidance.
 - [Named Sinks And Routing](named-sinks.md): declare several destination
   instances in one configuration file and validate route target references.
 - [Edge Spool Sink](spool-sink.md): encrypted local custody for disconnected

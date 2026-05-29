@@ -167,11 +167,12 @@ MAX_ROUTING_VALUE_LENGTH = 512
 MAX_FANOUT_OPTIONAL_WAIT_MS = 60_000
 MAX_FANOUT_OPTIONAL_TIMEOUT_MS = 300_000
 FANOUT_ACK_GATE_SINK_TYPES = frozenset(
-    {"coherence", "file", "mysql", "oracle", "oracle_nosql", "spool"}
+    {"coherence", "file", "http", "mysql", "oracle", "oracle_nosql", "spool"}
 )
 FANOUT_OPTIONAL_ACK_DEFAULTS: dict[str, dict[str, int]] = {
     "coherence": {"minimum_wait_ms": 1_000, "timeout_ms": 5_000},
     "file": {"minimum_wait_ms": 100, "timeout_ms": 1_000},
+    "http": {"minimum_wait_ms": 1_000, "timeout_ms": 5_000},
     "mysql": {"minimum_wait_ms": 1_000, "timeout_ms": 5_000},
     "oracle": {"minimum_wait_ms": 1_000, "timeout_ms": 5_000},
     "oracle_nosql": {"minimum_wait_ms": 1_000, "timeout_ms": 5_000},

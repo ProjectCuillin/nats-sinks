@@ -12,6 +12,13 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Added
 
+- Added the first-party HTTP sink for issue #17. The new `http` sink type
+  forwards normalized envelopes or payload JSON to one fixed
+  operator-configured endpoint, validates HTTPS and loopback-only local HTTP
+  usage, static and environment-backed headers, response classifications,
+  request and response size limits, bounded retries, and explicit
+  idempotency-key propagation, while documenting timeout ambiguity and the
+  requirement that HTTP endpoints be idempotent under at-least-once redelivery.
 - Added explicit headers-only payload-presence handling and confirmed
   acknowledgement controls for issues #111, #112, #113, #114, #115, and #116.
   `NatsEnvelope` now distinguishes producer-empty payloads from JetStream

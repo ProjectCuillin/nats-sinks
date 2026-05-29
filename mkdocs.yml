@@ -47,6 +47,7 @@ nav:
       - Oracle Coherence Community Edition Sink: coherence-sink.md
       - File Sink: file-sink.md
       - Edge Spool Sink: spool-sink.md
+      - HTTP Sink: http-sink.md
       - Palantir Foundry Sink: foundry-sink.md
       - Palantir Gotham Sink: gotham-sink.md
   - Data Handling:

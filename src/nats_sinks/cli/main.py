@@ -60,6 +60,7 @@ from nats_sinks.core.stream_management import (
 from nats_sinks.file import FileSink
 from nats_sinks.foundry import FoundrySink
 from nats_sinks.gotham import GothamSink
+from nats_sinks.http import HttpSink
 from nats_sinks.mysql import MySqlSink
 from nats_sinks.oracle import (
     OracleLineageReader,
@@ -90,9 +91,9 @@ def _registry(plugins: SinkPluginConfig | None = None) -> SinkRegistry:
     """Build the explicit sink connector registry.
 
     Oracle Database, Oracle MySQL, Oracle NoSQL Database, Oracle Coherence CE,
-    and FileSink are first-party built-ins and are always registered. External
-    connectors are loaded only when the JSON config explicitly enables plugin
-    discovery and allow-lists the connector name.
+    HTTP, and FileSink are first-party built-ins and are always registered.
+    External connectors are loaded only when the JSON config explicitly enables
+    plugin discovery and allow-lists the connector name.
     """
 
     registry = SinkRegistry()
@@ -167,6 +168,17 @@ def _registry(plugins: SinkPluginConfig | None = None) -> SinkRegistry:
             requires_extra="crypto",
             documentation="docs/spool-sink.md",
             certification=("commit-then-ack", "unit", "replay"),
+        )
+    )
+    registry.register_connector(
+        SinkConnector(
+            name="http",
+            factory=HttpSink.from_mapping,
+            summary="Built-in HTTP endpoint sink.",
+            built_in=True,
+            production_ready=True,
+            documentation="docs/http-sink.md",
+            certification=("commit-then-ack", "unit", "mock-contract"),
         )
     )
     registry.register_connector(

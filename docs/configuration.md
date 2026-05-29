@@ -339,7 +339,7 @@ The top-level sections are:
 | `encryption` | no | Optional core payload encryption before messages are passed to any sink. |
 | `size_policy` | no | Optional destination-neutral payload, header, metadata, label, record, and batch-size bounds evaluated before any sink write. Disabled by default. |
 | `pre_sink_policy` | no | Optional fail-closed validation gate evaluated after normalization and core payload transformation, but before any sink write. |
-| `plugins` | no | Optional allow-listed discovery for externally installed sink connectors. Disabled by default. Built-in Oracle Database, Oracle MySQL, Oracle NoSQL Database, Oracle Coherence Community Edition, file, and spool sinks do not need this section. |
+| `plugins` | no | Optional allow-listed discovery for externally installed sink connectors. Disabled by default. Built-in Oracle Database, Oracle MySQL, Oracle NoSQL Database, Oracle Coherence Community Edition, file, spool, and HTTP sinks do not need this section. |
 | `sinks` | no | Optional registry of named sink instances used by route validation, redacted output, named health checks, and active multi-sink fan-out. See [Named Sinks And Routing](named-sinks.md). |
 | `sink` | yes | Destination-specific sink configuration. `sink.type` chooses the sink implementation. |
 
@@ -1410,6 +1410,7 @@ Optional target defaults:
 | `file` | `100` | `1000` | Local file side copies should not block the main custody path for long. |
 | `spool` | `100` | `1000` | Local spool side effects are normally fast and bounded. |
 | `oracle` | `1000` | `5000` | Network-backed transactional writes need a longer grace window. |
+| `http` | `1000` | `5000` | HTTP endpoint calls have network timing and ambiguous timeout concerns. |
 | `mysql` | `1000` | `5000` | Oracle MySQL writes have similar network and transaction timing concerns. |
 | `oracle_nosql` | `1000` | `5000` | Oracle NoSQL Database writes are network-backed and commonly used as optional K/V side copies until live durability is reviewed. |
 | `coherence` | `1000` | `5000` | Oracle Coherence Community Edition writes are network-backed and often used as read-model side copies. |
@@ -2062,7 +2063,7 @@ remaining fields to the selected sink validator.
 
 | Field | Required | Default | Valid values | Description |
 | --- | --- | --- | --- | --- |
-| `type` | yes | none | `file`, `oracle`, `mysql`, `coherence`, `spool`, or experimental `foundry` and `gotham` in the current release. | Selects the sink implementation. Future sinks should add new values without changing the generic core sections. |
+| `type` | yes | none | `file`, `oracle`, `mysql`, `coherence`, `spool`, `http`, or experimental `foundry` and `gotham` in the current release. | Selects the sink implementation. Future sinks should add new values without changing the generic core sections. |
 
 All other fields under `sink` are sink-specific:
 
@@ -2074,6 +2075,7 @@ All other fields under `sink` are sink-specific:
 - `coherence` fields are documented in
   [Oracle Coherence Community Edition Sink](coherence-sink.md),
 - `spool` fields are documented in [Edge Spool Sink](spool-sink.md),
+- `http` fields are documented in [HTTP Sink](http-sink.md),
 - `foundry` fields are documented in [Palantir Foundry Sink](foundry-sink.md),
 - `gotham` fields are documented in [Palantir Gotham Sink](gotham-sink.md).
 
@@ -2084,8 +2086,8 @@ connectors. It is disabled by default because Python plugin loading is a
 code-execution and supply-chain trust boundary. You do not need this section
 for the built-in Oracle Database sink, built-in Oracle MySQL sink, built-in
 Oracle NoSQL Database sink, built-in Oracle Coherence Community Edition sink,
-built-in FileSink, built-in SpoolSink, built-in experimental Foundry sink, or
-built-in experimental Gotham sink.
+built-in FileSink, built-in SpoolSink, built-in HTTP sink, built-in
+experimental Foundry sink, or built-in experimental Gotham sink.
 
 | Field | Required | Default | Valid values | Description |
 | --- | --- | --- | --- | --- |
@@ -2188,12 +2190,15 @@ secret-handling guidance, and examples. The current production sinks are:
 - `"type": "spool"` for encrypted local edge custody. Spool durability,
   record-level encryption, bounded capacity, deterministic duplicate handling,
   priority-aware replay, and cleanup policy live in [Edge Spool Sink](spool-sink.md).
+- `"type": "http"` for a fixed HTTP endpoint. HTTPS validation, static and
+  environment-backed headers, idempotency-key propagation, bounded request and
+  response handling, and retry guidance live in [HTTP Sink](http-sink.md).
 
 This separation is part of the compatibility contract. Adding a future
-`http`, `s3`, or another database sink should add new sink-specific fields
-under `"sink"` without requiring existing Oracle Database, Oracle MySQL, Oracle
-NoSQL Database, Oracle Coherence Community Edition, file, or spool users to
-change the rest of their configuration.
+`s3` or another database sink should add new sink-specific fields under
+`"sink"` without requiring existing Oracle Database, Oracle MySQL, Oracle
+NoSQL Database, Oracle Coherence Community Edition, file, spool, or HTTP users
+to change the rest of their configuration.
 
 ## Payload Storage Modes
 

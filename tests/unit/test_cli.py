@@ -55,6 +55,34 @@ def test_cli_validates_file_sink_config(tmp_path: Path) -> None:
     assert "Active sink: file" in result.output
 
 
+def test_cli_validates_http_sink_config(tmp_path: Path) -> None:
+    config = tmp_path / "http-config.json"
+    config.write_text(
+        json.dumps(
+            {
+                "nats": {
+                    "url": "nats://localhost:4222",
+                    "stream": "ORDERS",
+                    "consumer": "http-orders-sink",
+                    "subject": "orders.*",
+                },
+                "sink": {
+                    "type": "http",
+                    "url": "https://events.example.invalid/nats-sink",
+                    "endpoint_allowed_hosts": ["events.example.invalid"],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(app, ["validate", str(config)])
+
+    assert result.exit_code == 0
+    assert "Configuration is valid." in result.output
+    assert "Active sink: http" in result.output
+
+
 def test_cli_validates_routing_match_policy_example() -> None:
     config = Path(__file__).resolve().parents[2] / "examples/routing-match-policy/config.json"
 
@@ -196,6 +224,7 @@ def test_cli_registry_always_exposes_first_party_connectors() -> None:
         "file",
         "foundry",
         "gotham",
+        "http",
         "mysql",
         "oracle",
         "oracle_nosql",
@@ -206,6 +235,8 @@ def test_cli_registry_always_exposes_first_party_connectors() -> None:
     assert registry.connector("file").built_in is True
     assert registry.connector("foundry").production_ready is False
     assert registry.connector("gotham").production_ready is False
+    assert registry.connector("http").documentation == "docs/http-sink.md"
+    assert registry.connector("http").production_ready is True
     assert registry.connector("mysql").requires_extra == "mysql"
     assert registry.connector("oracle_nosql").requires_extra == "oracle-nosql"
     assert registry.connector("oracle_nosql").production_ready is False

@@ -173,6 +173,7 @@ from nats_sinks.core.size_policy import (
     evaluate_size_policy,
 )
 from nats_sinks.file import FileSink
+from nats_sinks.http import HttpIdempotencyConfig, HttpRetryConfig, HttpSink, HttpSinkConfig
 from nats_sinks.oracle_nosql import OracleNoSqlSink, OracleNoSqlSinkConfig
 from nats_sinks.sinks.base import FlushableSink, HealthCheckableSink, SchemaAwareSink, Sink
 from nats_sinks.sinks.connectors import (
@@ -226,6 +227,10 @@ __all__ = [
     "FileSink",
     "FlushableSink",
     "HealthCheckableSink",
+    "HttpIdempotencyConfig",
+    "HttpRetryConfig",
+    "HttpSink",
+    "HttpSinkConfig",
     "InMemoryMetrics",
     "JetStreamAdvisory",
     "JetStreamAdvisoryConfig",

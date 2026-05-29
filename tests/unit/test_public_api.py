@@ -31,6 +31,7 @@ from nats_sinks import (
 )
 from nats_sinks.coherence import CoherenceSink as ReadmeCoherenceSink
 from nats_sinks.file import FileSink as ReadmeFileSink
+from nats_sinks.http import HttpSink as ReadmeHttpSink
 from nats_sinks.mysql import MySqlSink as ReadmeMySqlSink
 from nats_sinks.oracle import OracleSink as ReadmeOracleSink
 from nats_sinks.oracle_nosql import OracleNoSqlSink as ReadmeOracleNoSqlSink
@@ -62,6 +63,10 @@ PUBLIC_API_CONTRACT: dict[str, tuple[str, ...]] = {
         "FileSink",
         "FlushableSink",
         "HealthCheckableSink",
+        "HttpIdempotencyConfig",
+        "HttpRetryConfig",
+        "HttpSink",
+        "HttpSinkConfig",
         "InMemoryMetrics",
         "JetStreamAdvisory",
         "JetStreamAdvisoryConfig",
@@ -250,6 +255,21 @@ PUBLIC_API_CONTRACT: dict[str, tuple[str, ...]] = {
         "FileSink",
         "FileSinkConfig",
         "FileWriteMode",
+    ),
+    "nats_sinks.http": (
+        "HttpClient",
+        "HttpIdempotencyConfig",
+        "HttpPreparedRequestBody",
+        "HttpRequest",
+        "HttpResponse",
+        "HttpRetryConfig",
+        "HttpSink",
+        "HttpSinkConfig",
+        "StandardHttpClient",
+        "http_body_value",
+        "http_envelope_value",
+        "http_idempotency_key",
+        "prepare_http_body",
     ),
     "nats_sinks.coherence": (
         "COHERENCE_EVENT_SCHEMA",
@@ -629,6 +649,7 @@ def test_public_api_smoke_imports_match_readme_examples() -> None:
     assert ReadmeSink is nats_sinks.Sink
     assert ReadmeCoherenceSink is nats_sinks.CoherenceSink
     assert ReadmeFileSink is nats_sinks.FileSink
+    assert ReadmeHttpSink is nats_sinks.HttpSink
     assert ReadmeMySqlSink.__name__ == "MySqlSink"
     assert ReadmeOracleNoSqlSink is nats_sinks.OracleNoSqlSink
     assert ReadmeOracleSink.__name__ == "OracleSink"

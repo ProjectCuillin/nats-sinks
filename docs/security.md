@@ -64,7 +64,7 @@ treated as a supply-chain trust decision.
 Secure defaults:
 
 - Oracle Database, Oracle MySQL, Oracle NoSQL Database, Oracle Coherence
-  Community Edition, FileSink, and SpoolSink are first-party built-in
+  Community Edition, FileSink, SpoolSink, and HttpSink are first-party built-in
   connectors and do not require plugin discovery.
 - Optional third-party discovery is disabled by default.
 - When discovery is enabled, `plugins.allowed_sinks` must explicitly list each
