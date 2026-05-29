@@ -126,8 +126,10 @@ used immediately:
 - `nats_sinks.oracle_nosql.OracleNoSqlSink`, an experimental first-party
   Oracle NoSQL Database sink that stores one complete normalized event JSON
   object in a configured JSON value field, with deterministic K/V-style keys,
-  conditional duplicate handling, bounded values, and SDK-backed live test
-  gating.
+  conditional duplicate handling, bounded values, SDK-backed live test
+  gating, and a documented production-readiness matrix that keeps connector
+  metadata conservative until every production-targeted deployment mode has
+  accepted evidence.
 - `nats_sinks.coherence.CoherenceSink`, an experimental first-party Oracle
   Coherence Community Edition sink that stores one complete normalized event
   JSON object as the value of a configured cache or map key, with deterministic

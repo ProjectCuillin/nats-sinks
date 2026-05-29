@@ -25,6 +25,13 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   verify one complete fake event JSON key/value row, run the Oracle NoSQL sink
   live-gated integration test against the short-lived backend, clean up by
   default, and document the local-only non-secure KVLite boundary.
+- Added the Oracle NoSQL Database production-readiness certification package
+  for issue #319. The documentation now separates the real SDK-backed
+  production runtime from connector-wide production-ready status, lists the
+  supported deployment and authentication modes in a certification matrix,
+  documents live Cloud Simulator and Oracle NoSQL Database Cloud Service
+  runbook inputs, and keeps the connector metadata experimental until accepted
+  live evidence exists for production-targeted modes.
 - Added the experimental first-party Oracle NoSQL Database sink for issue
   #149. The new `oracle_nosql` sink type stores one complete normalized event
   JSON object in a configured Oracle NoSQL table value field, validates SDK
@@ -35,6 +42,7 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   the Oracle NoSQL Python SDK behind the optional `oracle-nosql` extra,
   includes fake-client unit and certification tests, and documents live KVLite
   or Cloud Simulator gating for future container-backed validation.
+
 - Added the deterministic multi-sink routing end-to-end flow for issue #301.
   The new `scripts/run-multi-sink-routing-e2e.py` runner validates the tracked
   fan-out config, drives the production `FanoutSink` with local file-backed
@@ -229,6 +237,10 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Fixed
 
+- Fixed Oracle NoSQL Database cloud SDK handle construction for issue #320 by
+  applying configured `sink.compartment_id` through the SDK handle
+  configuration when supported. A focused regression now proves namespace and
+  compartment defaults are both passed without making network calls.
 - Fixed the issue #317 deterministic test-loader regression found while adding
   the full container-backed e2e gate. The new test module now registers the
   dynamically loaded script module before executing it so dataclass processing

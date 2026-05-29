@@ -26,8 +26,13 @@ The [Palantir Foundry Sink](foundry-sink.md) and
 [Palantir Gotham Sink](gotham-sink.md) are built in but experimental. They pass
 local fake-client certification, but they must not be described as
 production-ready until live platform-specific certification evidence exists.
-Future sinks must pass the same certification standard before documentation,
-metadata, or connector descriptors can mark them as production-ready.
+The [Oracle NoSQL Database Sink](oracle-nosql-sink.md) is also built in but
+experimental. It uses the official Oracle NoSQL Python SDK in the production
+runtime path and has local KVLite container-backed e2e evidence, but the
+connector-wide metadata must stay conservative until every production-targeted
+deployment and authentication mode has accepted live evidence. Future sinks
+must pass the same certification standard before documentation, metadata, or
+connector descriptors can mark them as production-ready.
 
 ## Certification Model
 

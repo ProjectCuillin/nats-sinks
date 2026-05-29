@@ -411,7 +411,7 @@ Today, the first-party production connectors are built in:
 | --- | --- | --- | --- |
 | Oracle Database | `oracle` | `nats_sinks.oracle.OracleSink` | Production connector in this repository. |
 | Oracle MySQL | `mysql` | `nats_sinks.mysql.MySqlSink` | Production connector in this repository. |
-| Oracle NoSQL Database | `oracle_nosql` | `nats_sinks.oracle_nosql.OracleNoSqlSink` | Experimental first-party connector in this repository. |
+| Oracle NoSQL Database | `oracle_nosql` | `nats_sinks.oracle_nosql.OracleNoSqlSink` | Experimental first-party connector in this repository with a documented production-readiness matrix and local KVLite container-backed e2e evidence. |
 | Oracle Coherence Community Edition | `coherence` | `nats_sinks.coherence.CoherenceSink` | Experimental first-party connector in this repository. |
 | File | `file` | `nats_sinks.file.FileSink` | Production connector in this repository. |
 | Edge spool | `spool` | `nats_sinks.spool.SpoolSink` | Production connector in this repository. |
