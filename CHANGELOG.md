@@ -279,6 +279,9 @@ No changes yet.
 
 ### Fixed
 
+- Fixed release-validation CI lint failure issue #331 by making the local
+  container e2e subprocess suppressions compatible across local and hosted Ruff
+  versions and moving multi-sink routing directory creation out of async code.
 - Fixed release GitHub authentication helper issue #328 so
   `scripts/check-gh-auth.sh --check-only` validates authenticated GitHub API
   access without printing token values instead of relying on a quiet

@@ -68,7 +68,7 @@ def _pytest_env(*, endpoint: str, table: str) -> dict[str, str]:
 def _run_pytest_with_env(smoke: ModuleType, *, endpoint: str, table: str) -> None:
     """Run pytest with an explicit environment through subprocess."""
 
-    completed = subprocess.run(  # noqa: S603 - fixed local pytest argv list.
+    completed = subprocess.run(  # noqa: S603,RUF100 - fixed local pytest argv list.
         [
             sys.executable,
             "-m",

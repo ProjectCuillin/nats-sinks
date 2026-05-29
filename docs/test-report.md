@@ -14,10 +14,10 @@ generated database passwords, or full raw logs from live systems.
 | Field | Value |
 | --- | --- |
 | Overall result | Pass |
-| Report generated | 2026-05-29 release preparation for `v0.4.2` |
+| Report generated | 2026-05-29 release validation and blocker fix for `v0.4.2` |
 | Project version | `0.4.2` |
 | Python version | 3.12.4 |
-| Git revision checked | Branch `release-v0.4.2-prep`, to be merged back into `release-v0.4.2` |
+| Git revision checked | Branch `bugfix-release-ci-latest-ruff-lint`, to be merged back into `release-v0.4.2` |
 | Live NATS details | Environment-gated live tests skipped unless explicitly enabled |
 | Live Oracle Database details | Environment-gated live tests skipped unless explicitly enabled |
 | Live Oracle MySQL details | Environment-gated live tests skipped unless explicitly enabled |
@@ -29,28 +29,31 @@ generated database passwords, or full raw logs from live systems.
 This refresh prepares the `v0.4.2` release branch after the HTTP, S3, Oracle
 NoSQL Database, Oracle Coherence Community Edition, Palantir Foundry, Palantir
 Gotham, OCI Monitoring, routing, documentation, and release-preparation changes
-planned for the release. One release-preparation bug was found during this run:
-managed bug `#328` covered a GitHub CLI authentication helper false negative.
-It was reproduced with a deterministic fake GitHub CLI test, fixed, commented
-on the issue, marked `completed`, and included in this report.
+planned for the release. Two release-preparation bugs were found during the
+release cycle. Managed bug `#328` covered a GitHub CLI authentication helper
+false negative. Managed bug `#331` covered a hosted release-validation CI lint
+failure caused by newer Ruff rules than the first local release-preparation
+environment used. Both were reproduced with deterministic tests, fixed,
+commented on their issues, marked `completed`, and included in this report.
 
 ## Core And Repository Validation
 
 | Check | Result |
 | --- | --- |
-| Ruff format | Pass, `293` files already formatted |
-| Ruff lint | Pass |
+| Ruff format | Pass, `294` files already formatted |
+| Ruff lint | Pass, including a local check with Ruff `0.15.15` to match the hosted release-validation runner |
 | Mypy | Pass, no issues in `126` source files |
 | Version metadata consistency | Pass for `0.4.2` |
 | Dependency manifests | Pass, manifest files up to date |
 | Backlog metadata | Pass, `148` backlog items validated |
-| Bug report metadata | Pass, `95` bug reports validated |
+| Bug report metadata | Pass, `96` bug reports validated |
 | PyPI-facing Markdown links | Pass |
 | Documentation builds | Pass for Read the Docs and GitHub Pages MkDocs builds |
 | Security checks | Pass; existing reviewed `nosec` warnings remained non-blocking |
 | Package build | Pass, source distribution and wheel built for `0.4.2` |
 | SBOM and checksums | Pass, CycloneDX JSON/XML and checksum manifest generated for `0.4.2` |
 | GitHub CLI release helper | Pass after bug `#328`; authenticated API probing is used without printing token values |
+| Release CI lint compatibility | Pass after bug `#331`; stale Ruff suppressions and async pathlib use were covered by a focused regression |
 
 The documentation build emitted the existing upstream Material for MkDocs
 warning about MkDocs 2.0. The repository checks remained passing.
@@ -59,12 +62,14 @@ warning about MkDocs 2.0. The repository checks remained passing.
 
 | Test Area | Command | Result |
 | --- | --- | --- |
-| Main repository test suite | `scripts/check.sh` | Pass, `1312 passed, 13 skipped` |
+| Main repository test suite | `scripts/check.sh` | Pass, `1314 passed, 13 skipped` |
 | Commit, encryption, file, and Oracle sink subset | run by `scripts/check.sh` | Pass, `142 passed` |
 | Sink certification and example validation | `scripts/check-sinks.sh` through `scripts/check.sh` | Pass, `217 passed` plus configuration validation for file, Oracle Database, Oracle MySQL Database, Oracle NoSQL Database, Oracle Coherence Community Edition, fan-out, Foundry, Gotham, HTTP, and S3 examples |
 | Container-backed sink e2e | `NATS_SINKS_RUN_CONTAINER_E2E=1 scripts/check-sinks.sh` | Pass; Oracle NoSQL Database and Oracle Coherence Community Edition container-backed sink e2e passed |
 | GitHub auth helper regression | `python -m pytest tests/unit/test_check_gh_auth_script.py -q` | Pass, `2 passed` |
 | GitHub auth helper live check | `scripts/check-gh-auth.sh --check-only` | Pass with authenticated API access |
+| Release CI lint compatibility regression | `python -m pytest tests/unit/test_release_ci_lint_compatibility.py -q` | Pass, `2 passed` |
+| Latest Ruff compatibility check | `python -m ruff check .` with Ruff `0.15.15` | Pass |
 | Full local validation | `scripts/check.sh` | Pass |
 
 The skipped tests are the existing environment-gated live NATS, Oracle
@@ -81,8 +86,8 @@ passed and no project code defect was found.
 
 | Check | Result |
 | --- | --- |
-| Open release-labeled issues | `51` open issues with `release-v0.4.2` were checked after bug `#328`; all had the `completed` label |
-| Release-prep bug found during validation | Bug `#328` created, reproduced, fixed, documented, and marked `completed` for `v0.4.2` |
+| Open release-labeled issues | `52` open issues with `release-v0.4.2` were checked after bug `#331`; all completed development work is waiting for release-gated closure |
+| Release-prep bugs found during validation | Bugs `#328` and `#331` created, reproduced, fixed, documented, and marked `completed` for `v0.4.2` |
 | Open PRs into `release-v0.4.2` | None before this release-preparation branch is opened |
 | Open PRs into `main` | None before this release-preparation branch is opened |
 | Dist artifacts | `nats_sinks-0.4.2.tar.gz` and `nats_sinks-0.4.2-py3-none-any.whl` built successfully |
@@ -105,6 +110,20 @@ Managed bug `#328` was found during release preparation:
 - the regression test and live helper check both passed after the fix;
 - the issue has failing-test evidence, completion evidence, checked acceptance
   criteria, and the `completed` label.
+
+Managed bug `#331` was found when the release-validation CI workflow installed
+a newer Ruff version than the first local release-preparation environment:
+
+- the failing CI run reported stale subprocess lint suppressions in local
+  container e2e helper scripts and a direct pathlib call inside an async
+  multi-sink routing helper;
+- a focused static regression now covers both compatibility expectations;
+- the subprocess helpers continue to use fixed argument lists, no shell, bounded
+  timeouts, and explicit environments;
+- the multi-sink routing helper delegates local directory creation outside the
+  async event loop;
+- the focused regression, full local validation, latest Ruff compatibility
+  check, and container-backed sink e2e suite all passed after the fix.
 
 No unresolved code, packaging, documentation, sink, or container-backed e2e
 defects remain from this validation pass.

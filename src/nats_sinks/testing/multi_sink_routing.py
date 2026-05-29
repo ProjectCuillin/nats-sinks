@@ -204,6 +204,12 @@ def run_reduced_multi_sink_routing_flow_sync(
     )
 
 
+def _prepare_work_dir(path: Path) -> None:
+    """Create the local report directory outside the async event loop."""
+
+    path.mkdir(parents=True, exist_ok=True)
+
+
 async def run_reduced_multi_sink_routing_flow(
     *,
     work_dir: Path,
@@ -215,7 +221,7 @@ async def run_reduced_multi_sink_routing_flow(
     if config.routing is None:
         raise MultiSinkRoutingCertificationError("multi-sink config has no routing")
 
-    work_dir.mkdir(parents=True, exist_ok=True)
+    await asyncio.to_thread(_prepare_work_dir, work_dir)
     children = _build_reduced_children(config, work_dir / "success")
     fanout = FanoutSink(children=children, routing=config.routing)
     envelopes = multi_sink_routing_envelopes()
