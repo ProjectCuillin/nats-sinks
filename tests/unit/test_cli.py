@@ -83,6 +83,35 @@ def test_cli_validates_http_sink_config(tmp_path: Path) -> None:
     assert "Active sink: http" in result.output
 
 
+def test_cli_validates_s3_sink_config(tmp_path: Path) -> None:
+    config = tmp_path / "s3-config.json"
+    config.write_text(
+        json.dumps(
+            {
+                "nats": {
+                    "url": "nats://localhost:4222",
+                    "stream": "ORDERS",
+                    "consumer": "s3-orders-sink",
+                    "subject": "orders.*",
+                },
+                "sink": {
+                    "type": "s3",
+                    "bucket": "nats-sinks-events",
+                    "prefix": "orders/archive",
+                    "key_strategy": "stream_sequence",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(app, ["validate", str(config)])
+
+    assert result.exit_code == 0
+    assert "Configuration is valid." in result.output
+    assert "Active sink: s3" in result.output
+
+
 def test_cli_validates_routing_match_policy_example() -> None:
     config = Path(__file__).resolve().parents[2] / "examples/routing-match-policy/config.json"
 
@@ -228,6 +257,7 @@ def test_cli_registry_always_exposes_first_party_connectors() -> None:
         "mysql",
         "oracle",
         "oracle_nosql",
+        "s3",
         "spool",
     )
     assert registry.connector("coherence").requires_extra == "coherence"
@@ -241,6 +271,8 @@ def test_cli_registry_always_exposes_first_party_connectors() -> None:
     assert registry.connector("oracle_nosql").requires_extra == "oracle-nosql"
     assert registry.connector("oracle_nosql").production_ready is False
     assert registry.connector("oracle").production_ready is True
+    assert registry.connector("s3").requires_extra == "s3"
+    assert registry.connector("s3").documentation == "docs/s3-sink.md"
     assert registry.connector("spool").requires_extra == "crypto"
 
 

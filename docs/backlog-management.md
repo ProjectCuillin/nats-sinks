@@ -35,7 +35,7 @@ without reading chat history.
 
 Good issue topics include:
 
-- a new sink such as Postgres, HTTP, S3, or Kafka,
+- a new sink such as Kafka, Snowflake, OpenSearch, or Azure object storage,
 - a new NATS capability such as consumer reconciliation or `AckSync`,
 - a security hardening task such as payload size policies,
 - an observability connector such as OpenTelemetry,

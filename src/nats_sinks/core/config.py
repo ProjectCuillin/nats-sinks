@@ -159,6 +159,16 @@ WEBSOCKET_ENV_ONLY_HEADERS = frozenset(
     }
 )
 ROUTING_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.:-]{0,127}$")
+FanoutAckGateSinkType = Literal[
+    "coherence",
+    "file",
+    "http",
+    "mysql",
+    "oracle",
+    "oracle_nosql",
+    "s3",
+    "spool",
+]
 MAX_ROUTING_ROUTES = 128
 MAX_ROUTING_TARGETS = 64
 MAX_ROUTING_MATCH_VALUES = 64
@@ -167,7 +177,7 @@ MAX_ROUTING_VALUE_LENGTH = 512
 MAX_FANOUT_OPTIONAL_WAIT_MS = 60_000
 MAX_FANOUT_OPTIONAL_TIMEOUT_MS = 300_000
 FANOUT_ACK_GATE_SINK_TYPES = frozenset(
-    {"coherence", "file", "http", "mysql", "oracle", "oracle_nosql", "spool"}
+    {"coherence", "file", "http", "mysql", "oracle", "oracle_nosql", "s3", "spool"}
 )
 FANOUT_OPTIONAL_ACK_DEFAULTS: dict[str, dict[str, int]] = {
     "coherence": {"minimum_wait_ms": 1_000, "timeout_ms": 5_000},
@@ -176,6 +186,7 @@ FANOUT_OPTIONAL_ACK_DEFAULTS: dict[str, dict[str, int]] = {
     "mysql": {"minimum_wait_ms": 1_000, "timeout_ms": 5_000},
     "oracle": {"minimum_wait_ms": 1_000, "timeout_ms": 5_000},
     "oracle_nosql": {"minimum_wait_ms": 1_000, "timeout_ms": 5_000},
+    "s3": {"minimum_wait_ms": 1_000, "timeout_ms": 5_000},
     "spool": {"minimum_wait_ms": 100, "timeout_ms": 1_000},
 }
 ROUTING_SENSITIVE_HEADER_NAMES = frozenset(
@@ -2954,31 +2965,20 @@ class RoutingMatchPolicyConfig(BaseModel):
     enabled: bool = False
     mode: Literal["first", "all"] = "first"
     no_match: Literal["reject", "default_route", "ignore"] = "reject"
-    target_sink_types: dict[
-        str,
-        Literal["coherence", "file", "http", "mysql", "oracle", "oracle_nosql", "spool"],
-    ] = Field(default_factory=dict)
+    target_sink_types: dict[str, FanoutAckGateSinkType] = Field(default_factory=dict)
     default_targets: tuple[RouteTargetConfig, ...] = Field(default_factory=tuple)
     routes: tuple[RoutePolicyRouteConfig, ...] = Field(default_factory=tuple)
 
     @field_validator("target_sink_types", mode="before")
     @classmethod
-    def normalize_target_sink_types(
-        cls, value: object
-    ) -> dict[
-        str,
-        Literal["coherence", "file", "http", "mysql", "oracle", "oracle_nosql", "spool"],
-    ]:
+    def normalize_target_sink_types(cls, value: object) -> dict[str, FanoutAckGateSinkType]:
         """Validate the target-to-sink-type map used for ACK-gating defaults."""
 
         if value is None:
             return {}
         if not isinstance(value, dict):
             raise ValueError("routing.target_sink_types must be an object")
-        normalized: dict[
-            str,
-            Literal["coherence", "file", "http", "mysql", "oracle", "oracle_nosql", "spool"],
-        ] = {}
+        normalized: dict[str, FanoutAckGateSinkType] = {}
         seen: set[str] = set()
         for raw_name, raw_type in value.items():
             name = _normalize_routing_name(raw_name, source="routing target_sink_types name")
@@ -2993,10 +2993,7 @@ class RoutingMatchPolicyConfig(BaseModel):
                     f"routing.target_sink_types values must be one of these sink types: {allowed}"
                 )
             seen.add(name)
-            normalized[name] = cast(
-                "Literal['coherence', 'file', 'http', 'mysql', 'oracle', 'oracle_nosql', 'spool']",
-                sink_type,
-            )
+            normalized[name] = cast("FanoutAckGateSinkType", sink_type)
         return normalized
 
     @field_validator("default_targets", mode="before")

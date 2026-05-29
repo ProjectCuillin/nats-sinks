@@ -2,8 +2,9 @@
 
 This page documents the generic sink framework. Destination-specific behavior,
 including Oracle table DDL, Oracle SQL modes, local file durability settings,
-and filesystem duplicate policies, lives in destination pages such as
-[Oracle Sink](oracle-sink.md) and [File Sink](file-sink.md).
+filesystem duplicate policies, and object-key construction lives in
+destination pages such as [Oracle Sink](oracle-sink.md),
+[File Sink](file-sink.md), and [S3-Compatible Object Sink](s3-sink.md).
 
 The purpose of the framework is to keep delivery semantics in one place. Every
 destination should plug into the same small contract and should inherit the same
@@ -40,6 +41,7 @@ flowchart TB
     subgraph Destinations[Destination modules]
         Oracle[nats_sinks.oracle]
         File[nats_sinks.file]
+        S3[nats_sinks.s3]
         Foundry[nats_sinks.foundry experimental]
         Gotham[nats_sinks.gotham experimental]
         Future[future sinks]
@@ -49,6 +51,8 @@ flowchart TB
     CLI --> Config --> Runner
     Runner --> Envelope --> Protocol
     Protocol --> Oracle
+    Protocol --> File
+    Protocol --> S3
     Protocol --> Foundry
     Protocol --> Gotham
     Protocol --> Future
@@ -56,6 +60,7 @@ flowchart TB
     Runner --> Metrics
 Registry --> Oracle
 Registry --> File
+Registry --> S3
 Registry --> Gotham
 ```
 
@@ -67,9 +72,9 @@ encryption. Destination modules own destination writes and destination commit
 behavior only.
 
 The current built-in registry includes production-ready Oracle Database,
-Oracle MySQL, file, and edge spool sinks plus experimental Oracle NoSQL
-Database, Oracle Coherence Community Edition, Palantir Foundry Streams, and
-Palantir Gotham RevDB object sinks.
+Oracle MySQL, file, edge spool, HTTP, and S3-compatible object sinks plus
+experimental Oracle NoSQL Database, Oracle Coherence Community Edition,
+Palantir Foundry Streams, and Palantir Gotham RevDB object sinks.
 Experimental sinks are still bound by the same commit-then-ACK contract, but
 their documentation must separate local mock certification from live
 destination certification.
@@ -417,6 +422,7 @@ Today, the first-party production connectors are built in:
 | File | `file` | `nats_sinks.file.FileSink` | Production connector in this repository. |
 | Edge spool | `spool` | `nats_sinks.spool.SpoolSink` | Production connector in this repository. |
 | HTTP | `http` | `nats_sinks.http.HttpSink` | Production connector in this repository. |
+| S3-compatible object storage | `s3` | `nats_sinks.s3.S3Sink` | Production connector in this repository. |
 
 Future Oracle-family sinks such as OCI Object Storage, Oracle Berkeley DB,
 and OCI Streaming are intended to be first-party
@@ -553,6 +559,7 @@ Current production sinks and their durable success boundaries:
 | File | `nats_sinks.file` | Output file atomically placed after temporary write, flush, and configured fsync behavior. |
 | Edge spool | `nats_sinks.spool` | Encrypted spool record atomically placed after temporary write, flush, and configured fsync behavior. |
 | HTTP | `nats_sinks.http` | Configured endpoint returned a configured success status for every request. |
+| S3-compatible object storage | `nats_sinks.s3` | Configured object-storage service accepted the primary object and any required metadata sidecar object. |
 
 Current experimental first-party sinks and their success boundaries:
 
@@ -581,7 +588,7 @@ The stable extension points are:
 - the JSON `sink` object, which requires `type` and allows sink-specific fields
   to be validated by the selected destination implementation.
 
-In practice, adding a future `postgres`, `s3`, or another sink should
+In practice, adding a future `postgres`, `kafka`, or another sink should
 look like this:
 
 1. Add a new module, for example `src/nats_sinks/postgres/`.
@@ -618,7 +625,7 @@ publish DLQ records, parse CLI arguments, or own process signal handling. Those
 jobs belong to the core runner and CLI.
 
 Keeping those responsibilities outside destination modules makes it possible to
-add future sinks such as OCI Object Storage, HTTP, S3, or Kafka without copying
+add future sinks such as OCI Object Storage, Kafka, or search indexes without copying
 ACK logic into every backend.
 
 ## Future Destinations
@@ -631,10 +638,9 @@ Future first-party sinks should live in destination modules such as:
 
 Future non-Oracle sinks may be first-party modules, carefully reviewed optional
 connectors, or research backlog items depending on demand, maintainership, and
-security posture. Examples include HTTP, S3-compatible object storage,
-Elasticsearch or OpenSearch, Snowflake, BigQuery, Azure object storage, Kafka,
-MongoDB, Redis, Cassandra-compatible stores, Palantir Foundry, and Palantir
-Gotham.
+security posture. Examples include Elasticsearch or OpenSearch, Snowflake,
+BigQuery, Azure object storage, Kafka, MongoDB, Redis, Cassandra-compatible
+stores, Palantir Foundry, and Palantir Gotham.
 
 No future sink should be considered production-ready until it has tests proving
 that durable success happens before ACK and that duplicate redelivery is safe.

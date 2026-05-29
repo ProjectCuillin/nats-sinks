@@ -17,6 +17,7 @@ pytest \
   tests/unit/test_coherence_sink.py \
   tests/unit/test_foundry_sink.py \
   tests/unit/test_gotham_sink.py \
+  tests/unit/test_s3_sink.py \
   tests/unit/test_multi_sink_routing_e2e.py \
   tests/integration/test_file_sink_e2e.py \
   tests/unit/test_fanout_certification.py \
@@ -36,6 +37,7 @@ nats-sink validate examples/oracle-coherence-basic/config.json
 nats-sink validate examples/multi-sink-routing-e2e/config.json
 nats-sink validate examples/foundry-basic/config.json
 nats-sink validate examples/gotham-basic/config.json
+nats-sink validate examples/s3-basic/config.json
 python scripts/run-multi-sink-routing-e2e.py \
   --mode reduced \
   --output .local/check-sinks/multi-sink-routing-report.json

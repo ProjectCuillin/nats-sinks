@@ -35,6 +35,7 @@ from nats_sinks.http import HttpSink as ReadmeHttpSink
 from nats_sinks.mysql import MySqlSink as ReadmeMySqlSink
 from nats_sinks.oracle import OracleSink as ReadmeOracleSink
 from nats_sinks.oracle_nosql import OracleNoSqlSink as ReadmeOracleNoSqlSink
+from nats_sinks.s3 import S3Sink as ReadmeS3Sink
 from nats_sinks.spool import SpoolSink as ReadmeSpoolSink
 
 PUBLIC_API_CONTRACT: dict[str, tuple[str, ...]] = {
@@ -108,6 +109,8 @@ PUBLIC_API_CONTRACT: dict[str, tuple[str, ...]] = {
         "RouteSelection",
         "RouteTargetConfig",
         "RoutingMatchPolicyConfig",
+        "S3Sink",
+        "S3SinkConfig",
         "SINK_CONNECTOR_API_VERSION",
         "SINK_CONNECTOR_ENTRY_POINT_GROUP",
         "SECURITY_LABEL_PROFILE_NAME",
@@ -301,6 +304,29 @@ PUBLIC_API_CONTRACT: dict[str, tuple[str, ...]] = {
         "oracle_nosql_key_for_envelope",
         "oracle_nosql_row_for_envelope",
         "oracle_nosql_value_for_envelope",
+    ),
+    "nats_sinks.s3": (
+        "S3Client",
+        "S3CompressionMode",
+        "S3CredentialMode",
+        "S3DuplicatePolicy",
+        "S3DurabilityMode",
+        "S3KeyStrategy",
+        "S3MetadataMode",
+        "S3ObjectFormat",
+        "S3PreparedObject",
+        "S3PutObjectRequest",
+        "S3ServerSideEncryption",
+        "S3Sink",
+        "S3SinkConfig",
+        "StandardS3Client",
+        "prepare_s3_object",
+        "prepare_s3_sidecar_object",
+        "s3_key_for_envelope",
+        "s3_object_metadata",
+        "s3_object_value_for_envelope",
+        "s3_sidecar_key_for_object",
+        "s3_sidecar_value_for_envelope",
     ),
     "nats_sinks.oracle": (
         "LINEAGE_FIELD_SPECS",
@@ -653,6 +679,7 @@ def test_public_api_smoke_imports_match_readme_examples() -> None:
     assert ReadmeMySqlSink.__name__ == "MySqlSink"
     assert ReadmeOracleNoSqlSink is nats_sinks.OracleNoSqlSink
     assert ReadmeOracleSink.__name__ == "OracleSink"
+    assert ReadmeS3Sink is nats_sinks.S3Sink
     assert ReadmeSpoolSink is nats_sinks.SpoolSink
 
 

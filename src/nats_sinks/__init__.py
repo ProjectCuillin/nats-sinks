@@ -175,6 +175,7 @@ from nats_sinks.core.size_policy import (
 from nats_sinks.file import FileSink
 from nats_sinks.http import HttpIdempotencyConfig, HttpRetryConfig, HttpSink, HttpSinkConfig
 from nats_sinks.oracle_nosql import OracleNoSqlSink, OracleNoSqlSinkConfig
+from nats_sinks.s3 import S3Sink, S3SinkConfig
 from nats_sinks.sinks.base import FlushableSink, HealthCheckableSink, SchemaAwareSink, Sink
 from nats_sinks.sinks.connectors import (
     SINK_CONNECTOR_API_VERSION,
@@ -276,6 +277,8 @@ __all__ = [
     "RouteSelection",
     "RouteTargetConfig",
     "RoutingMatchPolicyConfig",
+    "S3Sink",
+    "S3SinkConfig",
     "SchemaAwareSink",
     "SecurityLabelProfileConfig",
     "SecurityLabelRuleConfig",

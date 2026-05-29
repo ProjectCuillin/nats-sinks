@@ -109,6 +109,9 @@
   idempotency-key propagation, bounded request and response handling, safe
   static and environment-backed headers, bounded retry guidance, and warnings
   for endpoints that cannot provide idempotent semantics.
+- First-party S3-compatible object sink with deterministic object keys,
+  conditional duplicate handling, optional metadata sidecars, optional gzip
+  compression, bounded retries, and least-privilege object-storage guidance.
 - Documented sink certification contract with reusable test helpers for
   lifecycle, durable write success, duplicate redelivery, ACK-boundary
   protection, and log-redaction checks across current and future production
@@ -180,8 +183,6 @@
   idempotency deployments.
 - Deeper Oracle merge insert-versus-match visibility if future Oracle driver
   metadata can support it reliably without guessing.
-- S3 sink design with atomic object keys and safe duplicate overwrite/skip
-  behavior.
 - Native Oracle Cloud Infrastructure Object Storage sink design with
   deterministic object keys, OCI identity support, checksums, multipart upload,
   and least-privilege bucket guidance.
@@ -241,8 +242,7 @@
   duplicate-window documentation.
 - Stream mirror, source, subject transform, republish, compression, placement,
   and metadata management helpers beyond the current documentation guidance.
-- Sink certification tests for future HTTP, S3, Kafka, and other active sink
-  proposals.
+- Sink certification tests for future Kafka and other active sink proposals.
 
 ## Not Planned Unless Scope Changes
 
