@@ -1,0 +1,34 @@
+{
+  "id": "full-container-e2e-suite-oracle-kv-sinks",
+  "title": "[Feature]: Include Oracle NoSQL and Oracle Coherence containers in the full local e2e suite",
+  "area": "Testing",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.2",
+  "labels": ["deployment", "testing", "sink-oracle"],
+  "problem": "The project now has container-backed e2e runners for Oracle NoSQL Database and Oracle Coherence Community Edition, but the full local validation path still leaves these flows as separate one-off commands. This makes it easy to run normal checks without proving that both key/value style Oracle sink backends still work against their maintained local containers before a release.",
+  "proposal": "Add an explicit full local container e2e gate that runs both the Oracle NoSQL Database sink e2e runner and the Oracle Coherence Community Edition sink e2e runner through the existing check orchestration. The gate must use the maintained local container helpers, keep Docker-backed tests opt-in, preserve normal deterministic check behavior when the gate is disabled, and provide clear operator output for each backend.",
+  "users": "Maintainers preparing release validation, developers changing key/value sink behavior, and reviewers who need repeatable evidence that Oracle NoSQL Database and Oracle Coherence Community Edition sink e2e flows still work against local test backends.",
+  "delivery_semantics": "This feature does not change JetStream delivery behavior. It strengthens release validation by making container-backed sink e2e checks easier to run together. The existing commit-then-ACK contract remains owned by the sink runner and sink tests, and container-backed local tests must not be presented as production durability guarantees.",
+  "security": "The full e2e gate must remain opt-in because it requires Docker and optional backend SDKs. It must use fake local-only data, short-lived containers, loopback endpoints, cleanup by default, bounded timeouts, fixed command argument lists, and sanitized output. It must not log secrets, private endpoints, container internals beyond safe names, payloads, credentials, certificate material, or host-specific identifiers.",
+  "acceptance": [
+    "A single documented opt-in environment flag runs both Oracle NoSQL Database and Oracle Coherence Community Edition container-backed sink e2e flows from the sink check orchestration.",
+    "The Oracle NoSQL Database part uses the maintained Oracle NoSQL Database sink e2e container runner rather than a bare integration test that expects a pre-existing endpoint.",
+    "The Oracle Coherence Community Edition part uses the maintained Oracle Coherence Community Edition sink e2e container runner.",
+    "Normal unit, smoke, documentation, and sink checks still run without Docker or optional backend SDKs when the opt-in flag is not set.",
+    "Focused tests prove the orchestration invokes the expected runners, preserves legacy per-backend gates, and does not accidentally enable container e2e checks by default.",
+    "Documentation explains the new full local container e2e gate, required optional extras, expected commands, expected sanitized output, cleanup behavior, and troubleshooting.",
+    "The changelog and sanitized test report are updated with the new validation path and local evidence."
+  ],
+  "tests": "Add deterministic tests around the check orchestration so the new full e2e flag can be validated without starting Docker. Run focused unit tests for the orchestration and both container helper suites. When Docker and optional SDKs are available, run the Oracle NoSQL Database sink e2e runner and Oracle Coherence Community Edition sink e2e runner through the new full e2e gate. Run scripts/check-sinks.sh and scripts/check.sh without the gate to prove default validation stays deterministic.",
+  "documentation": "Update docs/testing.md, docs/docker.md, docs/oracle-nosql-test-container.md, docs/oracle-coherence-test-container.md, docs/test-report.md, and CHANGELOG.md. Include explicit command examples for the default checks and for the full container e2e gate. State that the gate is local and opt-in, not a GitHub Actions default.",
+  "closeout": "Close only after the release containing the full local container e2e gate is published. Include release tag, script paths, exact local commands, sanitized pass evidence for Oracle NoSQL Database and Oracle Coherence Community Edition, default-check evidence, documentation links, and known limitations.",
+  "relationships": {
+    "related": [
+      "backlog:oracle-nosql-database-test-container",
+      "backlog:oracle-nosql-database-sink",
+      "backlog:oracle-coherence-ce-test-container",
+      "backlog:oracle-coherence-ce-sink",
+      "backlog:sink-certification-contract-and-tests"
+    ]
+  }
+}

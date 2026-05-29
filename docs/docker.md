@@ -175,6 +175,34 @@ layer of the Oracle-provided image. See
 image strategy, local-only security posture, JSON verification, expected
 output, and troubleshooting.
 
+## Full Local Container E2E Suite
+
+Before release, maintainers can run the Oracle key/value sink e2e tests
+together with one explicit gate:
+
+```bash
+python -m pip install -e ".[coherence,oracle-nosql]"
+NATS_SINKS_RUN_CONTAINER_E2E=1 scripts/check-sinks.sh
+```
+
+The gate runs `scripts/run-container-e2e-suite.py`, which invokes the
+container-backed Oracle NoSQL Database sink e2e runner and the
+container-backed Oracle Coherence Community Edition sink e2e runner. Both
+backends use short-lived local containers, loopback endpoints, fake event JSON
+data, bounded readiness waits, and cleanup by default.
+
+Expected successful tail output:
+
+```text
+Oracle NoSQL sink container e2e test passed.
+Oracle Coherence sink e2e test passed.
+Full container-backed sink e2e suite passed.
+```
+
+Keep this as a local release-validation step. It is deliberately not enabled by
+default in GitHub Actions, normal unit tests, or quick smoke checks because it
+requires Docker and optional backend SDKs.
+
 ## Manual Compose Workflow
 
 You can also run the stack manually:

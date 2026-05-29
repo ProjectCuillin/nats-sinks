@@ -12,6 +12,12 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Added
 
+- Added the full local container-backed key/value sink e2e gate for issue
+  #316. Setting `NATS_SINKS_RUN_CONTAINER_E2E=1` now makes
+  `scripts/check-sinks.sh` run the maintained Oracle NoSQL Database sink e2e
+  container helper and the Oracle Coherence Community Edition sink e2e
+  container helper in one opt-in local release-validation pass, while normal
+  checks still avoid Docker and optional backend SDK requirements by default.
 - Added the local Oracle NoSQL Database KVLite test backend for issue #310
   and the container-backed Oracle NoSQL sink e2e harness that revisits issue
   #149. The new helpers use Oracle's documented Community Edition image from
@@ -223,6 +229,10 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Fixed
 
+- Fixed the issue #317 deterministic test-loader regression found while adding
+  the full container-backed e2e gate. The new test module now registers the
+  dynamically loaded script module before executing it so dataclass processing
+  succeeds without Docker or optional backend SDKs.
 - Fixed Oracle NoSQL Database KVLite test backend readiness for issue #313 by
   waiting for SDK-level table/write/read readiness after the proxy TCP port
   opens. This prevents the local smoke and sink e2e helpers from racing a

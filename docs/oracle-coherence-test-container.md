@@ -171,6 +171,34 @@ Use a longer readiness timeout on slow developer workstations:
 python scripts/run-oracle-coherence-container-smoke.py --timeout-seconds 300
 ```
 
+## Sink End-To-End Test
+
+Run the Oracle Coherence Community Edition sink e2e test against a fresh local
+container with:
+
+```bash
+python scripts/run-coherence-sink-e2e.py
+```
+
+Expected sanitized output:
+
+```text
+Oracle Coherence sink e2e test passed.
+```
+
+The Oracle Coherence sink e2e helper is also part of the full local
+container-backed key/value sink e2e suite:
+
+```bash
+python -m pip install -e ".[coherence,oracle-nosql]"
+NATS_SINKS_RUN_CONTAINER_E2E=1 scripts/check-sinks.sh
+```
+
+That suite runs the Oracle Coherence Community Edition container-backed sink
+e2e flow and the Oracle NoSQL Database container-backed sink e2e flow in one
+explicit release-validation pass. Normal `scripts/check-sinks.sh` runs do not
+start Docker unless the gate is set.
+
 Keep the container for diagnosis:
 
 ```bash

@@ -228,6 +228,9 @@ relying on the stored GitHub CLI login.
 - Confirm `python scripts/check-markdown-links.py`.
 - Confirm `scripts/check-docs.sh`.
 - Confirm `scripts/check-sinks.sh`.
+- Confirm `NATS_SINKS_RUN_CONTAINER_E2E=1 scripts/check-sinks.sh` when Docker
+  and the optional Oracle NoSQL Database and Oracle Coherence clients are
+  available locally; otherwise document the skip in `docs/test-report.md`.
 - Confirm `pytest`.
 - Confirm `bandit -q -r src`.
 - Confirm `python scripts/update-dependency-manifests.py --check`.
