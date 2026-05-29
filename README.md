@@ -288,7 +288,7 @@ Production sink modules shipped today:
 
 ## Status
 
-The current release is `0.4.1`.
+The current release is `0.4.2`.
 
 Included today:
 
