@@ -20,6 +20,7 @@ from nats_sinks import FanoutSink, JetStreamSinkRunner, NatsEnvelope, Sink
 from nats_sinks.file import FileSink
 from nats_sinks.mysql import MySqlSink
 from nats_sinks.oracle import OracleSink
+from nats_sinks.s3 import S3Sink
 from nats_sinks.sinks import SinkConnector, SinkRegistry
 ```
 
@@ -90,7 +91,7 @@ The tests also cover:
 - testing helpers such as `run_subject_observability_certification` for
   reusable subject-aware observability release evidence,
 - production sink package exports for `nats_sinks.file`, `nats_sinks.mysql`,
-  and `nats_sinks.oracle`,
+  `nats_sinks.oracle`, and `nats_sinks.s3`,
 - documented configuration helpers such as `load_config` and
   `redacted_config`,
 - command entry points for `nats-sink`, `nats-sink-metrics`, and

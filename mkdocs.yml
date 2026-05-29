@@ -48,6 +48,7 @@ nav:
       - File Sink: file-sink.md
       - Edge Spool Sink: spool-sink.md
       - HTTP Sink: http-sink.md
+      - S3-Compatible Object Sink: s3-sink.md
       - Palantir Foundry Sink: foundry-sink.md
       - Palantir Gotham Sink: gotham-sink.md
   - Data Handling:

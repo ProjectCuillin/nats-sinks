@@ -156,6 +156,10 @@ The current release provides the following production-ready foundation:
   JSON object as a configured cache or map value, with deterministic
   idempotency keys, duplicate handling, bounded values, and container-backed
   local e2e testing.
+- `nats_sinks.s3.S3Sink`, a production first-party S3-compatible object sink
+  with deterministic object keys, conditional duplicate handling, optional
+  metadata sidecars, optional gzip compression, bounded retries, and
+  least-privilege object-storage guidance.
 - `nats_sinks.file.FileSink`, a production local file sink with atomic JSON
   file placement, deterministic filenames, duplicate handling, optional gzip
   compression, metadata persistence, and the same payload normalization contract
@@ -164,14 +168,14 @@ The current release provides the following production-ready foundation:
   for disconnected operation, bounded local custody, deterministic idempotency,
   priority-aware replay, and forwarding into a final destination sink.
 - A safe sink connector framework with first-party Oracle Database,
-  Oracle MySQL, Oracle Coherence Community Edition, file, and spool connector
-  descriptors, explicit registry resolution, public connector metadata, and
-  disabled-by-default allow-listed entry-point discovery for reviewed external
-  connectors.
+  Oracle MySQL, Oracle Coherence Community Edition, file, spool, HTTP, and S3
+  connector descriptors, explicit registry resolution, public connector
+  metadata, and disabled-by-default allow-listed entry-point discovery for
+  reviewed external connectors.
 - A named multi-sink configuration registry that lets one JSON file declare
   several Oracle Database, Oracle MySQL, Oracle Coherence Community Edition,
-  file, or spool sink instances for route validation, redacted review, named
-  health checks, and active fan-out execution.
+  file, spool, HTTP, or S3 sink instances for route validation, redacted
+  review, named health checks, and active fan-out execution.
 - A disabled-by-default generic route-match policy selector and opt-in
   `fanout` sink that can match normalized subject, priority, classification,
   labels, and approved non-secret headers to logical target names and bounded
@@ -390,8 +394,8 @@ are implemented, tested, documented, and released.
 Planned areas include:
 
 - additional idempotency strategies,
-- HTTP, S3, Kafka, OCI Object Storage, Oracle Berkeley DB, OCI Streaming, and
-  other sink modules,
+- Kafka, OCI Object Storage, Oracle Berkeley DB, OCI Streaming, and other sink
+  modules,
 - Docker and Kubernetes deployment assets,
 - more live certification runbooks for secure NATS authentication deployments,
 - more JetStream consumer tuning options,

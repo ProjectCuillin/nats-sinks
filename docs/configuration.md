@@ -13,9 +13,10 @@ where it will write.
 
 The minimal example uses the local file sink because it does not require a
 database or credentials. Oracle Database, Oracle MySQL, Oracle NoSQL Database,
-the edge spool sink, and the experimental Palantir Foundry sink use the same
-generic runtime sections and add destination-specific fields inside the `sink`
-object. When a
+Oracle Coherence Community Edition, the edge spool sink, HTTP, S3-compatible
+object storage, and the experimental Palantir Foundry and Gotham sinks use the
+same generic runtime sections and add destination-specific fields inside the
+`sink` object. When a
 deployment needs to prepare several destinations for routing and future
 fan-out, it can also declare additional named instances in the top-level
 `sinks` object.
@@ -160,6 +161,7 @@ fan-out, it can also declare additional named instances in the top-level
     "target_sink_types": {
       "oracle_secret": "oracle",
       "file_secret_audit": "file",
+      "s3_secret_archive": "s3",
       "oracle_unclass": "oracle"
     },
     "default_targets": [],
@@ -185,6 +187,10 @@ fan-out, it can also declare additional named instances in the top-level
             "required": false,
             "minimum_wait_ms": 250,
             "timeout_ms": 1000
+          },
+          {
+            "sink": "s3_secret_archive",
+            "required": false
           }
         ]
       },
@@ -1353,12 +1359,14 @@ The target names are logical sink names. When the active sink uses
 top-level `sinks` registry or in the compact inline `sink.sinks` form. For
 example, `oracle_secret` can point at one Oracle Database schema,
 `oracle_unclass` at another Oracle Database table or database,
-`coherence_read_model` at an Oracle Coherence Community Edition cache, and
-`file_secret_audit` at a controlled local file destination. The individual
-sink connection, table, cache, filesystem, and durability settings remain in
+`coherence_read_model` at an Oracle Coherence Community Edition cache,
+`file_secret_audit` at a controlled local file destination, and
+`s3_secret_archive` at a configured object-storage bucket and prefix. The
+individual sink connection, table, cache, filesystem, object-storage, and
+durability settings remain in
 sink-specific configuration blocks such as [Oracle Sink](oracle-sink.md),
 [Oracle Coherence Community Edition Sink](coherence-sink.md), and
-[File Sink](file-sink.md).
+[File Sink](file-sink.md), or [S3-Compatible Object Sink](s3-sink.md).
 
 The route target list accepts either a string or an object. A string is the
 short form for a required target. Required targets are the safe default:
@@ -1372,7 +1380,7 @@ optional copy is guaranteed.
 Optional targets require `target_sink_types` so the loader can apply and show
 bounded per-sink-type defaults in the effective redacted configuration. The
 currently recognized sink types are `coherence`, `file`, `mysql`, `oracle`,
-`oracle_nosql`, and `spool`.
+`oracle_nosql`, `s3`, and `spool`.
 Unknown target references, unknown sink types, negative waits, excessive waits,
 and `timeout_ms` values lower than `minimum_wait_ms` are rejected by
 `nats-sink validate`.
@@ -1382,7 +1390,7 @@ and `timeout_ms` values lower than `minimum_wait_ms` are rejected by
 | `enabled` | no | `false` | `true` or `false`. | Enables route selection. Disabled policies select no targets. |
 | `mode` | no | `first` | `first` or `all`. | `first` selects the first matching route. `all` selects every matching route and de-duplicates target names while preserving route order. |
 | `no_match` | no | `reject` | `reject`, `ignore`, or `default_route`. | Explicit action when no route matches. In active fan-out, `reject` raises a permanent sink failure, `ignore` drops the message from fan-out delivery, and `default_route` selects the configured fallback targets. |
-| `target_sink_types` | no | `{}` | Object mapping logical target names to `coherence`, `file`, `mysql`, `oracle`, `oracle_nosql`, or `spool`. | Required when optional route targets are configured. Used to validate target references and apply optional ACK-gate defaults. |
+| `target_sink_types` | no | `{}` | Object mapping logical target names to `coherence`, `file`, `http`, `mysql`, `oracle`, `oracle_nosql`, `s3`, or `spool`. | Required when optional route targets are configured. Used to validate target references and apply optional ACK-gate defaults. |
 | `default_targets` | no | `[]` | String, target object, or list of those values. | Fallback targets used only when `no_match` is `default_route`. |
 | `routes` | no | `[]` | List of route objects. | Ordered route definitions. Required when `enabled` is true. At most 128 routes. |
 
@@ -1411,6 +1419,7 @@ Optional target defaults:
 | `spool` | `100` | `1000` | Local spool side effects are normally fast and bounded. |
 | `oracle` | `1000` | `5000` | Network-backed transactional writes need a longer grace window. |
 | `http` | `1000` | `5000` | HTTP endpoint calls have network timing and ambiguous timeout concerns. |
+| `s3` | `1000` | `5000` | S3-compatible object writes have network timing and ambiguous timeout concerns. |
 | `mysql` | `1000` | `5000` | Oracle MySQL writes have similar network and transaction timing concerns. |
 | `oracle_nosql` | `1000` | `5000` | Oracle NoSQL Database writes are network-backed and commonly used as optional K/V side copies until live durability is reviewed. |
 | `coherence` | `1000` | `5000` | Oracle Coherence Community Edition writes are network-backed and often used as read-model side copies. |
@@ -2063,7 +2072,7 @@ remaining fields to the selected sink validator.
 
 | Field | Required | Default | Valid values | Description |
 | --- | --- | --- | --- | --- |
-| `type` | yes | none | `file`, `oracle`, `mysql`, `coherence`, `spool`, `http`, or experimental `foundry` and `gotham` in the current release. | Selects the sink implementation. Future sinks should add new values without changing the generic core sections. |
+| `type` | yes | none | `file`, `oracle`, `mysql`, `oracle_nosql`, `coherence`, `spool`, `http`, `s3`, or experimental `foundry` and `gotham` in the current release. | Selects the sink implementation. Future sinks should add new values without changing the generic core sections. |
 
 All other fields under `sink` are sink-specific:
 
@@ -2076,6 +2085,7 @@ All other fields under `sink` are sink-specific:
   [Oracle Coherence Community Edition Sink](coherence-sink.md),
 - `spool` fields are documented in [Edge Spool Sink](spool-sink.md),
 - `http` fields are documented in [HTTP Sink](http-sink.md),
+- `s3` fields are documented in [S3-Compatible Object Sink](s3-sink.md),
 - `foundry` fields are documented in [Palantir Foundry Sink](foundry-sink.md),
 - `gotham` fields are documented in [Palantir Gotham Sink](gotham-sink.md).
 
@@ -2087,7 +2097,8 @@ code-execution and supply-chain trust boundary. You do not need this section
 for the built-in Oracle Database sink, built-in Oracle MySQL sink, built-in
 Oracle NoSQL Database sink, built-in Oracle Coherence Community Edition sink,
 built-in FileSink, built-in SpoolSink, built-in HTTP sink, built-in
-experimental Foundry sink, or built-in experimental Gotham sink.
+S3-compatible object sink, built-in experimental Foundry sink, or built-in
+experimental Gotham sink.
 
 | Field | Required | Default | Valid values | Description |
 | --- | --- | --- | --- | --- |
@@ -2193,11 +2204,16 @@ secret-handling guidance, and examples. The current production sinks are:
 - `"type": "http"` for a fixed HTTP endpoint. HTTPS validation, static and
   environment-backed headers, idempotency-key propagation, bounded request and
   response handling, and retry guidance live in [HTTP Sink](http-sink.md).
+- `"type": "s3"` for S3-compatible object storage. Bucket and prefix
+  validation, deterministic object-key strategies, duplicate policies,
+  metadata sidecars, optional gzip compression, credential modes, and
+  least-privilege object-storage guidance live in
+  [S3-Compatible Object Sink](s3-sink.md).
 
 This separation is part of the compatibility contract. Adding a future
-`s3` or another database sink should add new sink-specific fields under
+database or object-storage sink should add new sink-specific fields under
 `"sink"` without requiring existing Oracle Database, Oracle MySQL, Oracle
-NoSQL Database, Oracle Coherence Community Edition, file, spool, or HTTP users
+NoSQL Database, Oracle Coherence Community Edition, file, spool, HTTP, or S3 users
 to change the rest of their configuration.
 
 ## Payload Storage Modes

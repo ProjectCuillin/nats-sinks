@@ -71,6 +71,7 @@ from nats_sinks.oracle import (
     resolve_lineage_table,
 )
 from nats_sinks.oracle_nosql import OracleNoSqlSink
+from nats_sinks.s3 import S3Sink
 from nats_sinks.sinks.base import HealthCheckableSink, Sink
 from nats_sinks.sinks.connectors import SinkConnector, load_entry_point_connectors
 from nats_sinks.sinks.registry import SinkRegistry
@@ -91,7 +92,8 @@ def _registry(plugins: SinkPluginConfig | None = None) -> SinkRegistry:
     """Build the explicit sink connector registry.
 
     Oracle Database, Oracle MySQL, Oracle NoSQL Database, Oracle Coherence CE,
-    HTTP, and FileSink are first-party built-ins and are always registered.
+    HTTP, S3-compatible object storage, and FileSink are first-party built-ins
+    and are always registered.
     External connectors are loaded only when the JSON config explicitly enables
     plugin discovery and allow-lists the connector name.
     """
@@ -178,6 +180,18 @@ def _registry(plugins: SinkPluginConfig | None = None) -> SinkRegistry:
             built_in=True,
             production_ready=True,
             documentation="docs/http-sink.md",
+            certification=("commit-then-ack", "unit", "mock-contract"),
+        )
+    )
+    registry.register_connector(
+        SinkConnector(
+            name="s3",
+            factory=S3Sink.from_mapping,
+            summary="Built-in S3-compatible object sink.",
+            built_in=True,
+            production_ready=True,
+            requires_extra="s3",
+            documentation="docs/s3-sink.md",
             certification=("commit-then-ack", "unit", "mock-contract"),
         )
     )

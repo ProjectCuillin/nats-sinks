@@ -17,7 +17,8 @@ The rules were evaluated against the current project shape:
 - JSON configuration loading,
 - NATS JetStream consumption,
 - Oracle Database, Oracle MySQL, Oracle NoSQL Database, Oracle Coherence
-  Community Edition, file, and edge spool sink implementations,
+  Community Edition, file, edge spool, HTTP, and S3-compatible sink
+  implementations,
 - payload encryption,
 - message metadata,
 - metrics snapshots and policy-controlled observability export,
@@ -55,6 +56,7 @@ matching controls must be reopened before the feature is merged.
 | `Oracle NoSQL` | `src/nats_sinks/oracle_nosql/*`, `tests/unit/test_oracle_nosql_sink.py`, `tests/unit/test_oracle_nosql_test_container.py`, `docs/oracle-nosql-sink.md`, `docs/oracle-nosql-test-container.md` |
 | `Coherence` | `src/nats_sinks/coherence/*`, `tests/unit/test_coherence_sink.py`, `tests/integration/test_coherence_sink_e2e.py`, `docs/coherence-sink.md` |
 | `HTTP` | `src/nats_sinks/http/*`, `tests/unit/test_http_sink.py`, `docs/http-sink.md` |
+| `S3` | `src/nats_sinks/s3/*`, `tests/unit/test_s3_sink.py`, `docs/s3-sink.md` |
 | `File` | `src/nats_sinks/file/*`, `tests/unit/test_file_*.py`, `docs/file-sink.md` |
 | `CI` | `.github/workflows/*`, `scripts/check.sh`, `scripts/security.sh`, `scripts/secret-scan.sh` |
 | `Observability` | `src/nats_sinks/observability/*`, `src/nats_sinks/cli/observability.py`, `docs/observability.md`, `docs/prometheus.md`, `docs/otlp.md`, `docs/oci-monitoring.md`, `docs/datadog.md`, `docs/cloudwatch.md`, `docs/azure-monitor.md` |
@@ -65,7 +67,7 @@ matching controls must be reopened before the feature is merged.
 
 | ID | Guidance summary | Status | Evidence or disposition |
 | --- | --- | --- | --- |
-| SD-001 | Treat all external input as hostile until validated, normalized, authorized, and safely handled. | Applied | Config, Envelope, Oracle, Oracle NoSQL, Coherence, File, Docs |
+| SD-001 | Treat all external input as hostile until validated, normalized, authorized, and safely handled. | Applied | Config, Envelope, Oracle, Oracle NoSQL, Coherence, S3, File, Docs |
 | SD-002 | Apply least privilege for users, services, database accounts, containers, CI jobs, and cloud identities. | Already covered | Oracle least-privilege docs, CI permissions, Docs |
 | SD-003 | Fail closed by default for authentication, authorization, validation, configuration, dependency loading, and policy failures. | Applied | Config, Logging, Runner, tests |
 | SD-004 | Use defense in depth across validation, authorization, rate limiting, logging, monitoring, isolation, dependency scanning, and runtime controls. | Partially covered | CI, Config, Logging, Observability, Docs; rate limiting remains roadmap |
@@ -75,8 +77,8 @@ matching controls must be reopened before the feature is merged.
 | SD-008 | Make secure behavior the default and risky behavior explicit opt-in. | Already covered | payload logging false, TLS verify true, idempotent modes, File skip_existing |
 | SD-009 | Treat internal systems as potentially hostile. | Applied | Docs, Envelope normalization, DLQ safety |
 | SD-010 | Document security invariants in code, tests, and architecture notes. | Applied | ROBOTS, AGENTS, commit-then-ACK docs, tests |
-| SD-011 | Validate all input at trust boundaries. | Applied | Config, CLI, Envelope, Oracle, Oracle NoSQL, Coherence, File |
-| SD-012 | Use allow-list validation for values, formats, types, lengths, ranges, extensions, schemes, and enums. | Already covered | Pydantic literals, SQL identifier regex, file extension validators |
+| SD-011 | Validate all input at trust boundaries. | Applied | Config, CLI, Envelope, Oracle, Oracle NoSQL, Coherence, S3, File |
+| SD-012 | Use allow-list validation for values, formats, types, lengths, ranges, extensions, schemes, and enums. | Already covered | Pydantic literals, SQL identifier regex, file and object suffix validators, URL scheme validators |
 | SD-013 | Reject malformed input early instead of repairing or guessing. | Applied | Config duplicate-key/null-root/size checks; malformed headers-only `Nats-Msg-Size` is marked invalid instead of guessed |
 | SD-014 | Normalize paths, URLs, encodings, Unicode, hostnames, and filenames before validation or comparison. | Already covered | File path resolution, subject component sanitizer, UTF-8 config validation |
 | SD-015 | Enforce maximum sizes for bodies, files, JSON, strings, arrays, recursion depth, and batches. | Applied | Delivery batch bounds, config size, mission metadata bounds, payload-presence size parsing, and optional core `size_policy` for payload, headers, labels, metadata, record, and batch size |
@@ -227,7 +229,7 @@ matching controls must be reopened before the feature is merged.
 | SD-160 | Keep parsers updated. | Already covered | Dependabot/dependency review |
 | SD-161 | Fuzz custom parsers/converters with malformed and oversized inputs. | Applied | Deterministic fuzz-style and bounded generator tests cover malformed, oversized, control-character, and traversal-like cases |
 | SD-162 | Treat user-supplied URLs as dangerous. | Applied | HTTP endpoint URLs are static operator configuration, never message-controlled, and reject userinfo, query strings, fragments, control characters, and unsafe schemes |
-| SD-163 | Allow-list URL schemes, hostnames, ports, and services for server-side fetches. | Applied | HTTP validates `https` by default, permits loopback-only cleartext only through explicit local-testing opt-in, and supports endpoint host allow lists |
+| SD-163 | Allow-list URL schemes, hostnames, ports, and services for server-side fetches. | Applied | HTTP validates `https` by default, permits loopback-only cleartext only through explicit local-testing opt-in, and supports endpoint host allow lists; S3 endpoint URLs reject credentials, paths, query strings, fragments, and non-loopback HTTP |
 | SD-164 | Block private/loopback/link-local/multicast/metadata IPs after DNS and redirects. | Partially covered | HTTP does not accept message-supplied URLs and disables redirects; private-network egress policy remains a deployment/network-control concern |
 | SD-165 | Re-resolve and revalidate destinations on redirects. | Not applicable | HTTP sink does not follow redirects |
 | SD-166 | Disable redirects unless required and safely validated. | Applied | HTTP uses a request-scoped standard-library client with no redirect following |

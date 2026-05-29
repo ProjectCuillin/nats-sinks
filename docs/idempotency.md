@@ -112,7 +112,7 @@ as success rather than creating duplicate business effects.
 ## Current Scope
 
 The current production implementations are Oracle Database, Oracle MySQL,
-FileSink, SpoolSink, and HTTP. Oracle duplicate handling is documented in
+FileSink, SpoolSink, HTTP, and S3-compatible object storage. Oracle duplicate handling is documented in
 [Oracle Sink](oracle-sink.md), including `merge`, configurable merge update
 columns, `insert_ignore`, `insert`, and `append` behavior. Oracle MySQL
 duplicate handling is documented in [Oracle MySQL Sink](mysql-sink.md),
@@ -131,6 +131,9 @@ including deterministic idempotency-key filenames, encrypted replay records,
 `skip_existing`, and replay cleanup after target sink success.
 HTTP idempotency-key propagation, timeout ambiguity, and retry guidance are
 documented in [HTTP Sink](http-sink.md).
+S3-compatible object key construction, conditional create behavior, duplicate
+policies, and timeout ambiguity are documented in
+[S3-Compatible Object Sink](s3-sink.md).
 Destination-specific key-column, filename, or payload-field details are kept on
 the sink pages so future sinks can document their own backend-native approach
 without changing this generic guide.
@@ -163,8 +166,6 @@ adding more strategy names. Planned areas include:
   idempotency deployments,
 - richer duplicate counters and metrics where backend drivers expose reliable
   committed outcomes,
-- HTTP idempotency-key support and explicit warnings for unsafe endpoints,
-- S3 sinks with deterministic object keys and atomic overwrite-or-skip
-  behavior,
+- expanded HTTP and S3 live certification guidance for reviewed endpoints,
 - a reusable sink certification test suite that proves duplicate redelivery is
   safe before a sink is called production-ready.

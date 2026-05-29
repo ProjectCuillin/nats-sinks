@@ -64,8 +64,8 @@ treated as a supply-chain trust decision.
 Secure defaults:
 
 - Oracle Database, Oracle MySQL, Oracle NoSQL Database, Oracle Coherence
-  Community Edition, FileSink, SpoolSink, and HttpSink are first-party built-in
-  connectors and do not require plugin discovery.
+  Community Edition, FileSink, SpoolSink, HttpSink, and S3Sink are
+  first-party built-in connectors and do not require plugin discovery.
 - Optional third-party discovery is disabled by default.
 - When discovery is enabled, `plugins.allowed_sinks` must explicitly list each
   external connector name.
@@ -419,6 +419,14 @@ table creation controls, and size limits are allow-list validated before SDK
 handle creation. The sink stores the full normalized event in a configured JSON
 value field and must not log payloads, OCI private-key material, passphrases,
 or table row contents by default.
+
+S3-compatible object sink configuration is also a trust boundary. Bucket names,
+prefixes, endpoints, credential-source references, key strategies, object
+suffixes, duplicate policies, metadata modes, and retry budgets are
+allow-list validated before any SDK client is created. Object metadata must
+remain low-cardinality and non-secret. Do not put raw subjects,
+classification values, labels, message IDs, payload fields, private endpoints,
+or credentials into object metadata, issue evidence, or public reports.
 
 Key rotation should use explicit `key_id` values. New runtime configuration
 encrypts with the active key, while authorized verification, replay, or

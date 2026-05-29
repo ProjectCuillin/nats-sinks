@@ -19,6 +19,16 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
   request and response size limits, bounded retries, and explicit
   idempotency-key propagation, while documenting timeout ambiguity and the
   requirement that HTTP endpoints be idempotent under at-least-once redelivery.
+- Added the first-party S3-compatible object sink for issue #39. The new `s3`
+  sink type writes normalized envelopes or payload JSON to deterministic
+  object keys, validates buckets, prefixes, endpoints, credential-source
+  references, object suffixes, metadata, object sizes, and retry budgets,
+  supports `skip_existing`, `replace`, and `fail_existing` duplicate
+  policies, optional metadata sidecars, optional gzip compression, and
+  provider-managed `AES256` server-side encryption requests, keeps boto3
+  behind the optional `s3` extra, includes fake-client unit and certification
+  coverage without network calls, and documents least privilege, privacy, and
+  live-test gating.
 - Added explicit headers-only payload-presence handling and confirmed
   acknowledgement controls for issues #111, #112, #113, #114, #115, and #116.
   `NatsEnvelope` now distinguishes producer-empty payloads from JetStream

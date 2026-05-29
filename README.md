@@ -18,7 +18,7 @@ messages into another durable system, such as Oracle Database, Oracle
 Autonomous Database on Oracle Cloud Infrastructure (OCI), or another approved
 storage backend.
 
-`nats-sinks` is a Python package for building outbound NATS JetStream sink consumers. It provides a reusable runtime that owns JetStream delivery semantics and delegates destination writes to sink implementations. The current production sinks are Oracle Database, including OCI-hosted Oracle Autonomous Database deployments, Oracle MySQL, local files, encrypted edge spool files, and fixed HTTP endpoints.
+`nats-sinks` is a Python package for building outbound NATS JetStream sink consumers. It provides a reusable runtime that owns JetStream delivery semantics and delegates destination writes to sink implementations. The current production sinks are Oracle Database, including OCI-hosted Oracle Autonomous Database deployments, Oracle MySQL, local files, encrypted edge spool files, fixed HTTP endpoints, and S3-compatible object storage.
 
 The project is intentionally suitable for mission-oriented environments such as
 defence logistics, operational reporting, secure platform telemetry, and
@@ -135,6 +135,10 @@ used immediately:
   JSON object as the value of a configured cache or map key, with deterministic
   idempotency keys, duplicate handling, bounded values, and container-backed
   local e2e testing.
+- `nats_sinks.s3.S3Sink`, a production first-party S3-compatible object sink
+  with deterministic object keys, conditional duplicate handling, optional
+  metadata sidecars, optional gzip compression, bounded retries, and
+  least-privilege object-storage guidance.
 - `nats_sinks.file.FileSink`, the production local file sink with deterministic
   filenames, atomic temporary-file placement, optional `fsync`, duplicate
   handling, optional Python standard-library gzip compression, metadata
@@ -152,14 +156,14 @@ used immediately:
   a narrow HTTP client boundary, with fake-client contract tests before any
   live Gotham certification claim.
 - A safe sink connector framework with first-party Oracle Database,
-  Oracle MySQL, Oracle Coherence Community Edition, file, spool, and
-  experimental Foundry and Gotham connectors, stable `SinkConnector` metadata,
-  explicit `SinkRegistry` resolution, and disabled-by-default allow-listed
-  entry-point discovery for reviewed external connectors.
+  Oracle MySQL, Oracle Coherence Community Edition, file, spool, HTTP, and S3
+  connectors, stable `SinkConnector` metadata, explicit `SinkRegistry`
+  resolution, and disabled-by-default allow-listed entry-point discovery for
+  reviewed external connectors.
 - A named multi-sink configuration registry that lets one JSON file declare
   several Oracle Database, Oracle MySQL, Oracle Coherence Community Edition,
-  file, spool, or experimental Foundry and Gotham sink instances for route
-  validation, redacted review, named health checks, and active fan-out
+  file, spool, HTTP, S3, or experimental Foundry and Gotham sink instances for
+  route validation, redacted review, named health checks, and active fan-out
   execution.
 - The active `fanout` sink type, which dispatches each normalized envelope to
   the selected child sinks and returns success only after every required target
@@ -997,6 +1001,10 @@ Destination-specific details are split into dedicated pages:
 - [HTTP Sink](https://nats-sinks.readthedocs.io/en/latest/http-sink/) covers
   fixed endpoint forwarding, HTTPS validation, safe headers, idempotency-key
   propagation, bounded responses, and retry guidance.
+- [S3-Compatible Object Sink](https://nats-sinks.readthedocs.io/en/latest/s3-sink/)
+  covers bucket and prefix validation, deterministic object-key strategies,
+  conditional duplicate handling, metadata sidecars, optional gzip
+  compression, credential modes, and least-privilege object-storage guidance.
 - [Named Sinks And Routing](https://nats-sinks.readthedocs.io/en/latest/named-sinks/)
   covers declaring several destination instances in one configuration file,
   validating route target references, redacted review output, and named sink
@@ -1011,10 +1019,10 @@ The generic sink framework is documented separately in
 and the reusable release gate is documented in
 [Sink Certification](https://nats-sinks.readthedocs.io/en/latest/sink-certification/).
 That boundary is deliberate: Oracle Database, Oracle MySQL, Oracle Coherence
-Community Edition, file, and spool sinks use the same core delivery semantics,
-the same envelope contract, and the same commit-then-acknowledge rule. Future
-sinks must provide comparable certification evidence before they are described
-as production-ready.
+Community Edition, file, spool, HTTP, and S3 sinks use the same core delivery
+semantics, the same envelope contract, and the same commit-then-acknowledge
+rule. Future sinks must provide comparable certification evidence before they
+are described as production-ready.
 
 Generic data-handling features such as
 [payload encryption](https://nats-sinks.readthedocs.io/en/latest/payload-encryption/),
@@ -1196,6 +1204,7 @@ src/nats_sinks/sinks     Sink protocols and registry
 src/nats_sinks/oracle    Oracle sink implementation
 src/nats_sinks/mysql     Oracle MySQL sink implementation
 src/nats_sinks/http      HTTP sink implementation
+src/nats_sinks/s3        S3-compatible object sink implementation
 src/nats_sinks/file      Local file sink implementation
 src/nats_sinks/cli       CLI entry point
 tests/unit               Deterministic unit tests
@@ -1217,6 +1226,8 @@ Phase 1:
 - Oracle MySQL sink.
 - File sink.
 - HTTP sink for fixed endpoint forwarding with idempotency-key propagation.
+- S3-compatible object sink with deterministic object keys and conditional
+  duplicate handling.
 - NATS reconnect tuning and connection event metrics.
 - WebSocket connection guardrails, optional headers, and local certification
   harness.
@@ -1268,7 +1279,6 @@ Phase 2:
 - Live-certification follow-up for the experimental Palantir Foundry Streams
   sink and experimental Palantir Gotham RevDB object sink.
 - Additional Oracle MySQL HeatWave tuning and certification guidance.
-- S3 sink design with deterministic object keys.
 - Native OCI Object Storage sink design with deterministic object keys,
   workload identity support, checksums, multipart upload, and least-privilege
   bucket guidance.
