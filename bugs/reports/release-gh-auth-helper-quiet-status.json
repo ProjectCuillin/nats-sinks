@@ -1,0 +1,27 @@
+{
+  "id": "release-gh-auth-helper-quiet-status",
+  "title": "[Bug]: release GitHub auth helper should not fail when quiet auth status is unreliable",
+  "area": "Packaging and release",
+  "severity": "medium",
+  "priority": "P1 - release blocker",
+  "target_release": "v0.4.2",
+  "labels": ["release", "testing", "completed"],
+  "summary": "The local release authentication helper can report GitHub CLI authentication as invalid when the quiet `gh auth status` path returns non-zero even though authenticated GitHub API calls succeed.",
+  "observed": "During release preparation, direct GitHub CLI operations and authenticated API checks succeeded, while `scripts/check-gh-auth.sh --check-only` failed because it relied only on a quiet `gh auth status` invocation.",
+  "expected": "The release helper should validate the capability needed by release operators: making authenticated GitHub API requests without printing token values. A noisy or unreliable status-only check should not block release preparation when API authentication is usable.",
+  "reproduction": "Use a fake `gh` executable where `gh auth status` returns non-zero and `gh api --hostname github.com user --silent` returns zero, then run `scripts/check-gh-auth.sh --check-only`.",
+  "failing_test": "Add a shell-helper regression test proving `scripts/check-gh-auth.sh --check-only` succeeds when an authenticated API probe succeeds after a status-only failure.",
+  "impact": "Release preparation can be blocked by a local helper false negative. Runtime sink delivery semantics are unaffected.",
+  "delivery_semantics": "This bug is limited to local maintainer release automation and cannot affect JetStream ACK, retry, DLQ, or sink commit behavior.",
+  "security": "The helper must continue to avoid printing token values, credentials, private endpoints, or sensitive repository metadata. The regression uses a fake GitHub CLI and does not require live credentials.",
+  "acceptance": [
+    "The helper accepts an authenticated API probe as proof that local GitHub CLI authentication is usable.",
+    "The helper still fails closed when both the status check and authenticated API probe fail.",
+    "The helper does not print token values or other credential material.",
+    "A deterministic fake-gh regression covers the false-negative status path.",
+    "The latest test report and changelog record the release-preparation fix."
+  ],
+  "tests": "Run python -m pytest tests/unit/test_check_gh_auth_script.py -q, scripts/check-gh-auth.sh --check-only, and the focused release-preparation documentation checks.",
+  "documentation": "Update the latest test report and changelog. Public release documentation does not need a new operator step unless the command behavior changes.",
+  "closeout": "Close after the fix merges into the release branch and release-gated closure confirms the release has shipped."
+}

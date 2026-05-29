@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "nats-sinks"
-version = "0.4.1"
+version = "0.4.2"
 description = "Production-ready outbound sink connectors for NATS JetStream."
 readme = "README.md"
 requires-python = ">=3.11"

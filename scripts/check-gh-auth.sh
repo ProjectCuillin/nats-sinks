@@ -61,7 +61,13 @@ if ! command -v gh >/dev/null 2>&1; then
   exit 1
 fi
 
-if gh auth status --hostname "$HOST" >/dev/null 2>&1; then
+gh_auth_is_usable() {
+  # Probe the actual capability release operators need: authenticated GitHub
+  # API access. `--silent` suppresses response bodies and token material.
+  gh api --hostname "$HOST" user --silent
+}
+
+if gh_auth_is_usable; then
   echo "GitHub CLI authentication is valid for $HOST."
   exit 0
 fi
@@ -94,7 +100,7 @@ case "$answer" in
     ;;
 esac
 
-if gh auth status --hostname "$HOST" >/dev/null 2>&1; then
+if gh_auth_is_usable; then
   echo "GitHub CLI authentication is valid for $HOST."
 else
   echo "GitHub CLI authentication is still not valid for $HOST." >&2

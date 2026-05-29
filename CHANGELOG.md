@@ -10,6 +10,10 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ## [Unreleased]
 
+No changes yet.
+
+## [0.4.2] - 2026-05-29
+
 ### Added
 
 - Added the first-party HTTP sink for issue #17. The new `http` sink type
@@ -275,6 +279,10 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Fixed
 
+- Fixed release GitHub authentication helper issue #328 so
+  `scripts/check-gh-auth.sh --check-only` validates authenticated GitHub API
+  access without printing token values instead of relying on a quiet
+  `gh auth status` path that could produce a local false negative.
 - Fixed Oracle NoSQL Database cloud SDK handle construction for issue #320 by
   applying configured `sink.compartment_id` through the SDK handle
   configuration when supported. A focused regression now proves namespace and

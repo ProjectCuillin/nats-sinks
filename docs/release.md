@@ -186,8 +186,9 @@ Before pushing a release tag, run:
 scripts/check-gh-auth.sh
 ```
 
-The helper checks `gh auth status` for `github.com`. If authentication is not
-valid and an interactive terminal is available, it asks whether it should start
+The helper performs a small authenticated GitHub API probe for `github.com`
+without printing response bodies or token values. If authentication is not valid
+and an interactive terminal is available, it asks whether it should start
 browser-based login with:
 
 ```bash

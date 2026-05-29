@@ -108,8 +108,10 @@ scripts/check-gh-auth.sh
 
 This is not required by PyPI Trusted Publishing itself. It is a maintainer
 quality-of-life check so commands such as `gh run list`, `gh run view`, and
-`gh release view` work immediately after the tag push. If authentication is
-invalid and a terminal is available, the helper asks whether it should start
+`gh release view` work immediately after the tag push. The helper performs a
+small authenticated GitHub API probe without printing token values. If
+authentication is invalid and a terminal is available, the helper asks whether
+it should start
 browser-based `gh auth login`. It never prints token values.
 
 Push the release branch and open or refresh the release pull request:

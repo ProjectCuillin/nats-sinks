@@ -222,7 +222,7 @@ flowchart LR
 
 ## Package Status
 
-The current release is `0.4.1`. The project is in the `0.x` phase: it is a
+The current release is `0.4.2`. The project is in the `0.x` phase: it is a
 production-ready foundation with Oracle and local file sinks, while the public
 API remains intentionally small so it can stabilize before `1.0.0`.
 
