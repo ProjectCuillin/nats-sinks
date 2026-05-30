@@ -264,3 +264,18 @@ operator explicitly adds them to `success_statuses` or `retry_statuses`.
   decide ACK behavior.
 - Do not expose raw subjects, classifications, labels, or payload fields in
   external monitoring labels merely because they are sent to the endpoint.
+
+## Local NGINX Test Endpoint
+
+Maintainers can validate the HTTP sink against a local NGINX endpoint built on
+Oracle Linux 9 slim FIPS:
+
+```bash
+python scripts/run-http-sink-nginx-e2e.py
+```
+
+The test image exposes NGINX on a random loopback port and records bounded fake
+request evidence inside the container. It is a local-only test harness, not a
+production ingestion service. See
+[HTTP Sink NGINX FIPS Test Endpoint](http-nginx-test-container.md) for the
+container contract, command output, and full-suite integration.

@@ -94,6 +94,7 @@ nav:
       - SBOM: sbom.md
   - Testing And Quality:
       - Testing: testing.md
+      - HTTP Sink NGINX FIPS Test Endpoint: http-nginx-test-container.md
       - Oracle MySQL Test Container: oracle-mysql-test-container.md
       - Oracle NoSQL Database Test Backend: oracle-nosql-test-container.md
       - Oracle Coherence CE Test Backend: oracle-coherence-test-container.md
