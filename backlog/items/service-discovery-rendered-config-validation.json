@@ -1,0 +1,31 @@
+{
+  "id": "service-discovery-rendered-config-validation",
+  "title": "[Feature]: Evaluate and add validation for rendered service-discovery configuration",
+  "area": "Configuration",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["configuration", "deployment", "security", "testing"],
+  "problem": "A safe service-discovery pattern may use Consul Template, Kubernetes projection, platform automation, or another approved mechanism to render nats-sinks configuration before startup. Rendered files are reviewable, but they can still drift, contain stale targets, include secret-looking values, or change dependency routing without a clear validation step.",
+  "proposal": "Evaluate and, if useful, add validation support for rendered service-discovery configuration. The likely implementation is a documentation-first pattern plus a local helper or CLI mode that validates rendered nats-sinks configuration and optional discovery metadata before the worker starts. It should not make the long-running runner poll Consul or Kubernetes APIs. Validation should confirm that sink types are allow-listed, endpoints are present only in approved fields, database privilege guidance is not bypassed, service-discovery metadata is bounded and non-secret, and the rendered config passes the existing `nats-sink validate` checks.",
+  "users": "Operators using Consul Template, platform-rendered config, Kubernetes projected config, systemd EnvironmentFile generation, or release automation to produce nats-sinks runtime configuration.",
+  "delivery_semantics": "Rendered configuration validation must happen before runtime or during explicit operator review. It must not introduce a dynamic discovery loop that changes sink destinations while a message is in flight. Invalid, missing, stale, malformed, or unauthorized rendered configuration should fail startup or validation before any JetStream ACK can occur.",
+  "security": "The helper must not print secret values, tokens, credentials, wallet paths, private keys, payloads, private endpoints, or sensitive service metadata. It should reuse existing redaction and strict JSON validation where possible, avoid shell interpolation, avoid live network calls in unit tests, and keep provider-specific clients optional or absent.",
+  "acceptance": [
+    "The issue evaluates whether existing `nats-sink validate` is sufficient for rendered service-discovery configuration or whether a new helper is justified.",
+    "If code is added, it validates rendered configuration without contacting live Consul or Kubernetes services in unit tests.",
+    "Validation rejects or redacts secret-looking service metadata and keeps all output public-safe by default.",
+    "Documentation explains the recommended review workflow for rendered configuration before service restart or deployment rollout.",
+    "Tests cover malformed rendered config, missing required fields, forbidden metadata, redacted output, and compatibility with existing config validation."
+  ],
+  "tests": "Add deterministic unit tests with fake rendered config files. No live Consul, Kubernetes, database, or NATS calls in unit tests. Optional live validation, if ever added, must be environment-gated and sanitized.",
+  "documentation": "Document rendered configuration review in the future service discovery blueprint and link it from configuration and deployment guidance.",
+  "closeout": "Mark completed after the evaluation or helper implementation, tests, documentation, and changelog entry are merged. Close only after the associated release is published.",
+  "relationships": {
+    "blocked_by": [
+      "backlog:service-discovery-blueprint-documentation"
+    ],
+    "related": [
+      "backlog:hashicorp-vault-credential-management-patterns"
+    ]
+  }
+}

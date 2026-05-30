@@ -1,0 +1,31 @@
+{
+  "id": "service-discovery-registration-assets",
+  "title": "[Feature]: Add reviewable service registration examples and helper assets",
+  "area": "Operations and deployment",
+  "priority": "P3 - backlog candidate",
+  "target_release": "unscheduled",
+  "labels": ["deployment", "documentation", "configuration", "testing"],
+  "problem": "Operators may need concrete examples for registering nats-sinks workers and observability sidecars with Consul or an approved equivalent, but hand-written service definitions can accidentally include secrets, high-sensitivity metadata, mutable database endpoints, or broad health-check behavior. The repository currently has service installation scripts and deployment docs, but no service registration assets that can be reviewed alongside nats-sinks configuration.",
+  "proposal": "Add public-safe service registration examples and helper assets for nats-sinks deployments. The preferred first step is documentation and example files, not runtime discovery in the sink runner. Candidate assets include Consul service definition examples for systemd and container deployments, Kubernetes Service annotations or manifests where appropriate, a review checklist for service metadata and health checks, and a small validation helper or script that checks example service-definition files for allowed names, tags, metadata keys, timeouts, and absence of secret-looking fields. The helper should not contact Consul by default and should be suitable for local release checks.",
+  "users": "Deployment engineers, operators, release maintainers, and security reviewers who want registration artifacts that are version-controlled, reviewable, and safe to adapt to local infrastructure.",
+  "delivery_semantics": "Registration assets must not be required for message processing and must not influence ACK decisions. A service registration example or validation helper cannot mark sink writes successful, cannot publish DLQ messages, and cannot replace destination health checks or durable commit behavior.",
+  "security": "Examples and validation helpers must reject or warn on secret-looking metadata keys, token values, private keys, wallet material, connection strings, payload fields, raw classification labels, high-cardinality message identifiers, and private topology details. If Consul ACL examples are included, they must be least-privilege and placeholder-only.",
+  "acceptance": [
+    "Public-safe service registration examples exist for at least a systemd or VM deployment and a container or Kubernetes deployment.",
+    "Examples keep service metadata low-sensitivity and do not include database credentials, NATS credentials, wallet paths, payloads, private domains, addresses, or sensitive mission labels.",
+    "Health check guidance distinguishes process liveness from durable backend success and does not imply that a passing registry check means messages have committed.",
+    "A local validation helper or deterministic test checks the examples for schema, bounded metadata, and secret-looking fields, or the issue documents why such a helper is intentionally deferred.",
+    "Documentation explains how these assets relate to service-deployment and Kubernetes guidance."
+  ],
+  "tests": "Add deterministic unit tests for any validation helper. If only examples are added, add documentation or asset tests that parse the examples and check for required fields and forbidden secret-looking keys. Do not perform live Consul network calls in unit tests.",
+  "documentation": "Link the assets from the future service discovery blueprint, service deployment, Kubernetes deployment, and testing documentation.",
+  "closeout": "Mark completed after examples, validation evidence, changelog entry, and documentation links are merged. Close only after the associated release is published.",
+  "relationships": {
+    "blocked_by": [
+      "backlog:service-discovery-blueprint-documentation"
+    ],
+    "related": [
+      "backlog:service-discovery-consul-patterns-research"
+    ]
+  }
+}

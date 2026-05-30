@@ -1,0 +1,30 @@
+{
+  "id": "service-discovery-consul-patterns-research",
+  "title": "[Feature]: Research Consul-style service registration and discovery patterns",
+  "area": "Operations and deployment",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.3",
+  "labels": ["deployment", "documentation", "security", "configuration", "testing"],
+  "problem": "The defence and mission-support documentation mentions Consul or an equivalent approved service registration and discovery mechanism, but the repository does not yet contain a concrete nats-sinks guidance page that explains how operators should use service discovery without weakening least-privilege database access, reviewable configuration, or commit-then-ACK delivery semantics. Without this research, future documentation or code could accidentally put runtime endpoint discovery into the ACK-critical delivery path, overuse broad Consul ACL tokens, hide database targets behind mutable service names without change-control evidence, or create an unclear boundary between platform service discovery and sink configuration.",
+  "proposal": "Research service registration and discovery patterns for nats-sinks deployments using Consul as the primary example and approved equivalents such as Kubernetes Service DNS, platform load balancers, service mesh sidecars, and rendered configuration. The research should decide whether nats-sinks needs additional code, a blueprint, documentation links, helper scripts, service definition examples, fake-client tests, or only operator guidance. It should explicitly evaluate Consul service definitions, health checks, DNS discovery, agent service registration, ACL tokens, Consul Template style rendered configuration, Kubernetes service discovery, and service mesh or sidecar approaches. The preferred default should keep sink endpoint configuration explicit and reviewable, keep database users least-privileged, and keep live discovery failures fail-closed before ACK rather than treating discovery as durable success.",
+  "users": "Platform engineers, NATS operators, Oracle database operators, mission-support deployment teams, security reviewers, maintainers, and documentation authors who need a repeatable pattern for registering nats-sinks services and discovering approved dependencies without leaking secrets or hiding production topology changes.",
+  "delivery_semantics": "Service registration and discovery must never redefine durable sink success. If discovery, DNS, rendered configuration, sidecar startup, service registration, health-check reporting, ACL authentication, or configuration reload fails, the worker must fail closed before ACK or continue using the last reviewed configuration only when that behavior is explicitly documented and safe. A discovery result must not make an uncommitted Oracle, Oracle MySQL Database, Oracle NoSQL Database, Oracle Coherence Community Edition, file, or object-store write appear successful.",
+  "security": "The research must keep Consul ACL tokens, service mesh identities, database credentials, NATS credentials, TLS keys, wallet material, service addresses, private domains, payloads, classification labels, and operational topology details out of public issue comments and examples. It should require least-privilege Consul policies, least-privilege database users, TLS verification, explicit health checks, bounded lookup behavior, low-sensitivity service metadata, and reviewable generated configuration. It must not recommend storing database passwords or live DSNs in Consul service metadata.",
+  "acceptance": [
+    "The research compares Consul service definitions, health checks, DNS discovery, agent registration APIs, ACL policies or tokens, Consul Template rendered configuration, Kubernetes Service DNS, and service mesh sidecar patterns.",
+    "The research states whether nats-sinks should add runtime service discovery code, documentation only, helper scripts, service definition examples, or a future optional connector or CLI helper.",
+    "The research defines a preferred safe default where the sink runner uses explicit reviewed configuration and platform discovery remains outside the ACK-critical path unless a future design proves otherwise.",
+    "The research identifies which existing documentation should link to the future guidance, including LOGFAS-related logistics persistence and Link 16 / TADIL-J Oracle persistence where appropriate.",
+    "The research creates separate realization feature requests for any recommended blueprint, code helper, test harness, or documentation link work.",
+    "The research issue is closed after the findings and follow-on feature requests are posted."
+  ],
+  "tests": "For research-only work, run backlog metadata validation. If follow-on code is proposed, that future work must include deterministic unit tests with fake Consul or fake resolver clients, no live network calls in unit tests, and explicit environment gates for any live Consul or Kubernetes validation.",
+  "documentation": "The research should decide where to place a future service registration and discovery blueprint. Candidate links include operations, service deployment, Kubernetes deployment, configuration, security, LOGFAS-related logistics persistence, Link 16 / TADIL-J persistence, and release or testing guidance if helper scripts are proposed.",
+  "closeout": "Close the research issue after sanitized findings are posted and follow-on implementation issues are created. Keep implementation issues open until their associated release is published.",
+  "relationships": {
+    "related": [
+      "backlog:hashicorp-vault-credential-management-patterns",
+      "backlog:nats-least-privilege-permissions"
+    ]
+  }
+}

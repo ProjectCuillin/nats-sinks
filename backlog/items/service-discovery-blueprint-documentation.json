@@ -1,0 +1,32 @@
+{
+  "id": "service-discovery-blueprint-documentation",
+  "title": "[Feature]: Add service registration and discovery deployment blueprint",
+  "area": "Documentation",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "unscheduled",
+  "labels": ["documentation", "deployment", "security", "configuration"],
+  "problem": "nats-sinks documentation references Consul or an equivalent approved service registration and discovery mechanism, but there is no dedicated blueprint that explains how to apply that guidance safely. Operators need a clear pattern for registering nats-sinks worker services, discovering approved dependencies, using health checks, keeping configuration reviewable, and preserving least-privilege database access.",
+  "proposal": "Add a deployment blueprint page for service registration and discovery. The page should use Consul as the primary example while also explaining approved equivalents such as Kubernetes Service DNS, platform load balancers, service mesh sidecars, and pre-rendered configuration. The blueprint should distinguish service registration of the nats-sinks worker from discovery of dependencies such as NATS, Oracle Database, Oracle MySQL Database, Oracle NoSQL Database, Oracle Coherence Community Edition, object storage, observability sidecars, and integration services. It should recommend explicit reviewed sink configuration by default, use service discovery for platform routing and health only where approved, and warn against hiding database privileges or mutable target changes behind unreviewed service names.",
+  "users": "Operators, deployment engineers, mission-support architects, documentation readers, and security reviewers who need a concrete service discovery pattern before deploying nats-sinks in VM, container, Kubernetes, or isolated defence cloud environments.",
+  "delivery_semantics": "The documentation must explain that service discovery does not change the durable success boundary. A service lookup, healthy catalog entry, sidecar connection, or rendered config file is not a committed sink write. The worker must still commit to the destination before ACK and must fail closed when discovery or dependency availability is uncertain.",
+  "security": "Examples must use placeholders only and avoid live service names, private domains, addresses, credentials, tokens, wallet paths, payloads, or sensitive metadata. The blueprint must recommend least-privilege Consul ACLs where Consul is used, least-privilege database users, TLS verification, service metadata limits, redacted logs, and reviewed change-control for rendered configuration.",
+  "acceptance": [
+    "A new documentation page explains Consul-style service registration and approved equivalent discovery patterns for nats-sinks.",
+    "The page describes safe service definitions, health checks, DNS discovery, rendered configuration, Kubernetes Service DNS, service mesh sidecars, and when each pattern is appropriate.",
+    "The page clearly states that runtime sink configuration remains explicit and reviewable by default and that service discovery does not replace least-privilege database accounts.",
+    "The page links from operations, service deployment, Kubernetes deployment, configuration, security, Link 16 / TADIL-J Oracle persistence, and LOGFAS-related logistics persistence where appropriate.",
+    "The page includes public-safe examples with no secret values, live endpoints, private topology, payloads, or sensitive mission metadata.",
+    "Documentation guardrail tests or link checks cover the new page and required cross-links."
+  ],
+  "tests": "Run Markdown and MkDocs strict checks. Add or update documentation guardrail tests to prove the page remains in navigation and that the LOGFAS and Link 16 use-case pages link to it.",
+  "documentation": "Create a dedicated deployment or operations sub-page, update mkdocs navigation, and add cross-links from operational and defence use-case pages.",
+  "closeout": "Mark completed after the blueprint page, links, changelog entry, and documentation tests are merged. Close only after the release containing the documentation is published.",
+  "relationships": {
+    "blocked_by": [
+      "backlog:service-discovery-consul-patterns-research"
+    ],
+    "related": [
+      "backlog:hashicorp-vault-credential-management-patterns"
+    ]
+  }
+}
