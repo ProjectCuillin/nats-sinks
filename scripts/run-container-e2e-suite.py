@@ -37,6 +37,10 @@ class BackendRunner:
 
 BACKEND_RUNNERS: tuple[BackendRunner, ...] = (
     BackendRunner(
+        name="HTTP Sink NGINX FIPS Endpoint",
+        script=REPO_ROOT / "scripts" / "run-http-sink-nginx-e2e.py",
+    ),
+    BackendRunner(
         name="Oracle MySQL Database",
         script=REPO_ROOT / "scripts" / "run-mysql-sink-e2e.py",
     ),

@@ -235,6 +235,38 @@ export NATS_SINKS_FILE_E2E_DELETE_AFTER=false
 pytest tests/integration/test_file_sink_e2e.py
 ```
 
+## HTTP Sink NGINX Container E2E Test
+
+The HTTP sink has a local container-backed e2e test endpoint based on Oracle
+Linux 9 slim FIPS and NGINX. The test starts a short-lived local endpoint,
+sends fake events through the production `HttpSink`, copies bounded request
+evidence from the container, and verifies the HTTP envelope, subject,
+idempotency key, route header, and payload marker.
+
+Run the focused test with:
+
+```bash
+python scripts/run-http-sink-nginx-e2e.py
+```
+
+Expected output:
+
+```text
+HTTP sink NGINX container e2e test passed.
+```
+
+The runner binds NGINX to a random `127.0.0.1` host port, drops Linux
+capabilities, uses a read-only root filesystem, and removes the container plus
+copied evidence by default. See
+[HTTP Sink NGINX FIPS Test Endpoint](http-nginx-test-container.md) for the
+complete local test contract and troubleshooting guidance.
+
+The focused static unit tests run without Docker:
+
+```bash
+pytest tests/unit/test_http_nginx_test_container.py
+```
+
 ## Palantir Foundry Mock Certification
 
 The experimental Palantir Foundry sink is certified locally with a fake
