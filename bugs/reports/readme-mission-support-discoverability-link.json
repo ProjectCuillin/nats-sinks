@@ -1,0 +1,29 @@
+{
+  "id": "readme-mission-support-discoverability-link",
+  "title": "[Bug]: README restructuring removed mission-support use-case discoverability link",
+  "area": "Documentation",
+  "severity": "low",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.3",
+  "labels": ["documentation", "testing", "release-v0.4.3"],
+  "summary": "The README front-door restructuring for issue #343 removed the explicit repository link to the mission-support use-case index that the documentation discoverability test requires.",
+  "observed": "`scripts/check.sh` fails in `tests/unit/test_mission_support_examples.py::test_mission_support_scenarios_are_discoverable` because `README.md` no longer contains `docs/use-cases/mission-support/index.md`.",
+  "expected": "The README should remain concise while still linking to the mission-support operational examples in a way that keeps the public documentation entry point discoverable.",
+  "reproduction": "Run `python -m pytest tests/unit/test_mission_support_examples.py::test_mission_support_scenarios_are_discoverable -q` after the README restructuring.",
+  "failing_test": "The existing focused discoverability test already proves the regression and fails before the fix.",
+  "impact": "This is a low-severity documentation discoverability regression. It does not affect runtime delivery, ACK ordering, sink writes, idempotency, or package execution.",
+  "delivery_semantics": "No delivery semantics are affected. The fix must not change NATS, JetStream, ACK, DLQ, retry, idempotency, Oracle, or file sink behavior.",
+  "security": "The fix must not add sensitive examples, private paths, live endpoints, credentials, classified data, or payload content to README or documentation.",
+  "acceptance": [
+    "README contains a concise mission-support examples link that includes `docs/use-cases/mission-support/index.md`.",
+    "The focused mission-support discoverability test passes.",
+    "The README remains concise and still links detailed capability and status content to dedicated docs pages.",
+    "Documentation checks remain green."
+  ],
+  "tests": "Run `python -m pytest tests/unit/test_mission_support_examples.py::test_mission_support_scenarios_are_discoverable -q`, `scripts/check-docs.sh`, and `scripts/check.sh` after the fix.",
+  "documentation": "Update README only if the missing link can be restored concisely. No runtime docs are required beyond preserving the discoverability link.",
+  "closeout": "Close only after the release containing the fix is published. Include the release tag, focused regression evidence, full verification evidence, and the README link that was restored.",
+  "relationships": {
+    "related": ["#343"]
+  }
+}

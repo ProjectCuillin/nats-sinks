@@ -20,7 +20,56 @@ In a mission or defence prototype, the same flow could represent operational
 reports, logistics updates, audit events, or platform telemetry. The important
 behavior is the same: write durably first, then ACK.
 
-## Local MVP Demo
+## One-Command Container MVP Demo
+
+The fastest disposable demo uses Docker. It starts a temporary NATS JetStream
+container and a `nats-sink` container that writes local file-sink output. It is
+documented for Debian, Ubuntu, and Oracle Linux developer machines with Docker,
+Git, and Python `>=3.11` already installed.
+
+For a one-command local demo:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ProjectCuillin/nats-sinks/main/scripts/run-local-mvp-demo.sh | sh
+```
+
+For a review-first flow:
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/ProjectCuillin/nats-sinks/main/scripts/run-local-mvp-demo.sh
+sh run-local-mvp-demo.sh
+```
+
+Expected successful output ends with text similar to:
+
+```text
+Local Docker smoke test passed: persisted 8 message(s) under /path/to/nats-sinks/.local/docker-file-sink.
+
+Demo checkout: /tmp/nats-sinks-mvp-demo.abcd12/nats-sinks
+File-sink output: /tmp/nats-sinks-mvp-demo.abcd12/nats-sinks/.local/docker-file-sink
+
+The demo stack was left running for inspection.
+Stop it with:
+  cd '/tmp/nats-sinks-mvp-demo.abcd12/nats-sinks' && docker compose -p 'nats-sinks-mvp-demo' -f examples/docker-local/compose.json down --volumes
+```
+
+The helper intentionally does not install Docker, Git, Python, or OS packages.
+If any prerequisite is missing, it exits with an actionable message. Set
+`NATS_SINKS_DEMO_KEEP_RUNNING=0` to run the smoke test and stop the stack
+afterward:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ProjectCuillin/nats-sinks/main/scripts/run-local-mvp-demo.sh | env NATS_SINKS_DEMO_KEEP_RUNNING=0 sh
+```
+
+Use a release tag instead of `main` when you want the demo to match a published
+release:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ProjectCuillin/nats-sinks/vX.Y.Z/scripts/run-local-mvp-demo.sh | env NATS_SINKS_DEMO_REF=vX.Y.Z sh
+```
+
+## Manual Local MVP Demo
 
 This is the shortest local path for experimenting with the project. It uses
 JetStream plus the file sink, so no database, wallet, cloud account, or secret

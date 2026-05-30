@@ -12,6 +12,11 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Added
 
+- Added README front-door restructuring for issue #343. The README now keeps
+  the overview, exposes a concise available-sinks section, shortens the local
+  MVP demo, links detailed capability and status content to dedicated docs
+  pages, and documents a one-command local Docker demo helper for Debian,
+  Ubuntu, and Oracle Linux developer machines.
 - Added disconnected backend spool-and-replay certification for issue #334.
   The reusable helper and deterministic unit test exercise the `1001 + 1001 +
   1001` message pattern, proving direct backend writes, fail-closed outage
