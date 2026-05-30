@@ -65,8 +65,7 @@ def test_readme_links_short_demo_and_detailed_status_pages() -> None:
     assert "https://nats-sinks.readthedocs.io/en/latest/available-today/" in readme
     assert (
         "https://github.com/ProjectCuillin/nats-sinks/blob/main/docs/use-cases/"
-        "mission-support/index.md"
-        in readme
+        "mission-support/index.md" in readme
     )
 
 
@@ -80,7 +79,7 @@ def test_local_mvp_demo_helper_is_scoped_to_disposable_local_use() -> None:
     assert "NATS_SINKS_DEMO_REF:-main" in script
     assert "NATS_SINKS_DEMO_KEEP_RUNNING:-1" in script
     assert "docker compose version" in script
-    assert "git clone --depth 1 --branch \"$REF\"" in script
+    assert 'git clone --depth 1 --branch "$REF"' in script
     assert "run-docker-local-smoke.py" in script
     assert "sudo " not in script
     assert "apt " not in script
