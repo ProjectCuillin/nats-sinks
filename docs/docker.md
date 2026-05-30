@@ -175,10 +175,32 @@ layer of the Oracle-provided image. See
 image strategy, local-only security posture, JSON verification, expected
 output, and troubleshooting.
 
+## HTTP Sink NGINX FIPS Test Endpoint
+
+The project includes a local-only NGINX endpoint for HTTP sink e2e testing:
+
+```bash
+python scripts/run-http-sink-nginx-e2e.py
+```
+
+The helper builds an Oracle Linux 9 slim FIPS based image, starts NGINX with a
+loopback-only host port, sends fake events through the production `HttpSink`,
+copies bounded request evidence from the container, verifies the HTTP envelope
+and idempotency key, and removes the container by default.
+
+Expected successful output:
+
+```text
+HTTP sink NGINX container e2e test passed.
+```
+
+See [HTTP Sink NGINX FIPS Test Endpoint](http-nginx-test-container.md) for the
+runtime flags, test evidence, and security boundaries.
+
 ## Full Local Container E2E Suite
 
-Before release, maintainers can run the Oracle key/value sink e2e tests
-together with one explicit gate:
+Before release, maintainers can run the maintained container-backed sink e2e
+tests together with one explicit gate:
 
 ```bash
 python -m pip install -e ".[coherence,oracle-nosql]"
@@ -186,14 +208,17 @@ NATS_SINKS_RUN_CONTAINER_E2E=1 scripts/check-sinks.sh
 ```
 
 The gate runs `scripts/run-container-e2e-suite.py`, which invokes the
-container-backed Oracle NoSQL Database sink e2e runner and the
-container-backed Oracle Coherence Community Edition sink e2e runner. Both
-backends use short-lived local containers, loopback endpoints, fake event JSON
-data, bounded readiness waits, and cleanup by default.
+container-backed HTTP sink NGINX endpoint runner, Oracle MySQL Database sink
+e2e runner, Oracle NoSQL Database sink e2e runner, and Oracle Coherence
+Community Edition sink e2e runner. The backends use short-lived local
+containers, loopback endpoints, fake event JSON data, bounded readiness waits,
+and cleanup by default.
 
 Expected successful tail output:
 
 ```text
+HTTP sink NGINX container e2e test passed.
+Oracle MySQL sink container e2e test passed.
 Oracle NoSQL sink container e2e test passed.
 Oracle Coherence sink e2e test passed.
 Full container-backed sink e2e suite passed.
