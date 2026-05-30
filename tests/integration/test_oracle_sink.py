@@ -6,8 +6,9 @@ from __future__ import annotations
 import asyncio
 import os
 import uuid
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from contextlib import suppress
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -15,6 +16,10 @@ import pytest
 from nats_sinks import NatsEnvelope
 from nats_sinks.oracle import OracleSink
 from nats_sinks.oracle.sql import validate_identifier
+from nats_sinks.testing.disconnected_spool_replay import (
+    DisconnectedSpoolReplayOptions,
+    run_disconnected_spool_replay_certification,
+)
 
 DEFAULT_ORACLE_TEST_TABLE = "NATS_SINKS_ORACLE_TEST_EVENTS_V2"
 REQUIRED_ORACLE_TEST_COLUMNS = {
@@ -37,6 +42,10 @@ REQUIRED_ORACLE_TEST_COLUMNS = {
 
 def _oracle_integration_enabled() -> bool:
     return os.getenv("NATS_SINKS_ORACLE_INTEGRATION") == "1"
+
+
+def _disconnected_replay_enabled() -> bool:
+    return os.getenv("NATS_SINKS_ORACLE_DISCONNECTED_REPLAY") == "1"
 
 
 pytestmark = [
@@ -75,6 +84,26 @@ def _oracle_sink(*, table: str) -> OracleSink:
         retry_delay=_int_setting("RETRY_DELAY"),
         https_proxy=_setting("HTTPS_PROXY"),
         https_proxy_port=_int_setting("HTTPS_PROXY_PORT"),
+        table=table,
+        mode="merge",
+        auto_create=True,
+    )
+
+
+def _unreachable_oracle_sink(*, table: str) -> OracleSink:
+    user = _setting("USER")
+    password_env = _setting("PASSWORD_ENV", "ORACLE_PASSWORD")
+    if not user:
+        pytest.skip("NATS_SINKS_ORACLE_USER is required")
+    if not password_env or os.getenv(password_env) is None:
+        pytest.skip(f"{password_env or 'ORACLE_PASSWORD'} must contain the Oracle password")
+    return OracleSink(
+        dsn=_setting("UNREACHABLE_DSN", "127.0.0.1:1/UNREACHABLE") or "127.0.0.1:1/UNREACHABLE",
+        user=user,
+        password_env=password_env,
+        tcp_connect_timeout=1.0,
+        retry_count=0,
+        retry_delay=0,
         table=table,
         mode="merge",
         auto_create=True,
@@ -146,6 +175,21 @@ def _count_rows(pool: Any, *, table: str, stream: str) -> int:
         with connection.cursor() as cursor:
             # The table name is allow-list validated; data remains bind values.
             sql = f"select count(*) from {table_name} where stream_name = :stream_name"  # noqa: S608
+            cursor.execute(sql, {"stream_name": stream})
+            row: Mapping[int, Any] | tuple[Any, ...] | None = cursor.fetchone()
+    if row is None:
+        return 0
+    return int(row[0])
+
+
+def _count_distinct_rows(pool: Any, *, table: str, stream: str) -> int:
+    table_name = validate_identifier(table)
+    with pool.acquire() as connection:
+        with connection.cursor() as cursor:
+            sql = (
+                f"select count(distinct stream_sequence) from {table_name} "  # noqa: S608
+                "where stream_name = :stream_name"
+            )
             cursor.execute(sql, {"stream_name": stream})
             row: Mapping[int, Any] | tuple[Any, ...] | None = cursor.fetchone()
     if row is None:
@@ -259,6 +303,57 @@ async def _stop_sink_for_test(sink: OracleSink, *, table: str) -> None:
         await sink.stop()
 
 
+async def _start_sink_for_verification(sink: OracleSink, *, table: str) -> None:
+    """Open an Oracle sink for final assertions without destructive setup."""
+
+    await sink.start()
+    if sink._pool is not None:
+        await _assert_current_test_schema(sink._pool, table=table)
+
+
+class OracleDisconnectedReplayBackend:
+    """Adapter used by the disconnected spool-and-replay certification."""
+
+    name = "Oracle Database"
+
+    def __init__(self, *, table: str) -> None:
+        self.table = table
+        self.last_sink: OracleSink | None = None
+
+    def reachable_sink(self) -> OracleSink:
+        sink = _oracle_sink(table=self.table)
+        self.last_sink = sink
+        return sink
+
+    def unreachable_sink(self) -> OracleSink:
+        return _unreachable_oracle_sink(table=self.table)
+
+    async def assert_expected_records(self, messages: Sequence[NatsEnvelope]) -> None:
+        assert messages
+        stream = messages[0].stream
+        assert stream is not None
+        sink = self.last_sink
+        if sink is None or sink._pool is None:
+            sink = _oracle_sink(table=self.table)
+            await _start_sink_for_verification(sink, table=self.table)
+            close_after = True
+        else:
+            close_after = False
+        try:
+            assert await asyncio.to_thread(
+                _count_rows, sink._pool, table=self.table, stream=stream
+            ) == len(messages)
+            assert await asyncio.to_thread(
+                _count_distinct_rows,
+                sink._pool,
+                table=self.table,
+                stream=stream,
+            ) == len(messages)
+        finally:
+            if close_after:
+                await sink.stop()
+
+
 @pytest.mark.asyncio
 async def test_oracle_integration_auto_creates_table_and_writes_batch() -> None:
     table = _test_table()
@@ -316,6 +411,38 @@ async def test_oracle_integration_duplicate_redelivery_is_idempotent() -> None:
         assert await asyncio.to_thread(_count_rows, sink._pool, table=table, stream=stream) == 1
     finally:
         await _stop_sink_for_test(sink, table=table)
+
+
+@pytest.mark.skipif(
+    not (_oracle_integration_enabled() and _disconnected_replay_enabled()),
+    reason=(
+        "set NATS_SINKS_ORACLE_INTEGRATION=1 and "
+        "NATS_SINKS_ORACLE_DISCONNECTED_REPLAY=1 to run Oracle Database "
+        "disconnected replay certification"
+    ),
+)
+@pytest.mark.asyncio
+async def test_oracle_integration_disconnected_spool_replay_certification(
+    tmp_path: Path,
+) -> None:
+    """Certify Oracle Database replay after local spool custody."""
+
+    table = validate_identifier(f"{_test_table()}_DISC")
+    stream = f"ORACLE_DISC_{uuid.uuid4().hex[:12].upper()}"
+    sink = _oracle_sink(table=table)
+    await _start_sink_for_test(sink, table=table)
+    await _stop_sink_for_test(sink, table=table)
+
+    report = await run_disconnected_spool_replay_certification(
+        OracleDisconnectedReplayBackend(table=table),
+        spool_directory=tmp_path / "spool",
+        options=DisconnectedSpoolReplayOptions(stream=stream),
+    )
+
+    assert report.backend == "Oracle Database"
+    assert report.expected_backend_records == 3003
+    assert report.spool_remaining_records == 0
+    assert report.outage_proved is True
 
 
 @pytest.mark.asyncio

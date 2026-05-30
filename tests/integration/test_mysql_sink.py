@@ -5,7 +5,10 @@ from __future__ import annotations
 
 import importlib
 import os
+import uuid
+from collections.abc import Sequence
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -13,6 +16,10 @@ import pytest
 from nats_sinks import InMemoryMetrics, MetricNames, NatsEnvelope
 from nats_sinks.mysql import MySqlSink
 from nats_sinks.mysql.sql import quote_identifier, validate_identifier
+from nats_sinks.testing.disconnected_spool_replay import (
+    DisconnectedSpoolReplayOptions,
+    run_disconnected_spool_replay_certification,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -21,6 +28,10 @@ DEFAULT_MYSQL_TEST_TABLE = "NATS_SINKS_MYSQL_TEST_EVENTS"
 
 def _enabled() -> bool:
     return os.getenv("NATS_SINKS_MYSQL_INTEGRATION") == "1"
+
+
+def _disconnected_replay_enabled() -> bool:
+    return os.getenv("NATS_SINKS_MYSQL_DISCONNECTED_REPLAY") == "1"
 
 
 def _setting(name: str, fallback: str | None = None) -> str | None:
@@ -86,6 +97,27 @@ def _count_rows(table: str) -> int:
     return int(row[0])
 
 
+def _count_rows_for_stream(table: str, stream: str) -> int:
+    connection = _mysql_connection()
+    try:
+        cursor = connection.cursor()
+        try:
+            cursor.execute(
+                "select count(*), count(distinct STREAM_SEQUENCE) "  # noqa: S608
+                f"from {quote_identifier(validate_identifier(table))} "
+                "where STREAM_NAME = %s",
+                (stream,),
+            )  # nosec B608
+            row = cursor.fetchone()
+        finally:
+            cursor.close()
+    finally:
+        connection.close()
+    assert row is not None
+    assert int(row[0]) == int(row[1])
+    return int(row[0])
+
+
 def _select_one(table: str) -> tuple[str | None, str | None, str | None, str]:
     connection = _mysql_connection()
     try:
@@ -131,6 +163,49 @@ def _envelope(
         classification=classification,
         labels=labels,
     )
+
+
+class MySqlDisconnectedReplayBackend:
+    """Adapter used by the disconnected spool-and-replay certification."""
+
+    name = "Oracle MySQL Database"
+
+    def __init__(self, *, table: str) -> None:
+        self.table = table
+
+    def reachable_sink(self) -> MySqlSink:
+        return MySqlSink(
+            host=_required(_setting("HOST"), "NATS_SINKS_MYSQL_HOST"),
+            port=int(_required(_setting("PORT"), "NATS_SINKS_MYSQL_PORT")),
+            database=_required(_setting("DATABASE"), "NATS_SINKS_MYSQL_DATABASE"),
+            user=_required(_setting("USER"), "NATS_SINKS_MYSQL_USER"),
+            password_env=_setting("PASSWORD_ENV", "NATS_SINKS_MYSQL_PASSWORD"),
+            connection_timeout=5.0,
+            table=self.table,
+            mode="upsert",
+            upsert_update_columns=[],
+            auto_create=True,
+        )
+
+    def unreachable_sink(self) -> MySqlSink:
+        return MySqlSink(
+            host="127.0.0.1",
+            port=int(_setting("UNREACHABLE_PORT", "1") or "1"),
+            database=_required(_setting("DATABASE"), "NATS_SINKS_MYSQL_DATABASE"),
+            user=_required(_setting("USER"), "NATS_SINKS_MYSQL_USER"),
+            password_env=_setting("PASSWORD_ENV", "NATS_SINKS_MYSQL_PASSWORD"),
+            connection_timeout=1.0,
+            table=self.table,
+            mode="upsert",
+            upsert_update_columns=[],
+            auto_create=True,
+        )
+
+    async def assert_expected_records(self, messages: Sequence[NatsEnvelope]) -> None:
+        assert messages
+        stream = messages[0].stream
+        assert stream is not None
+        assert _count_rows_for_stream(self.table, stream) == len(messages)
 
 
 @pytest.mark.skipif(
@@ -213,3 +288,34 @@ async def test_mysql_sink_container_e2e_routes_and_idempotent_writes() -> None:
     assert labels == "test;routine"
     assert "ROUTINE-1" in payload_json
     assert metrics.counters[MetricNames.MYSQL_UPSERT_ROWS_TOTAL] == 4
+
+
+@pytest.mark.skipif(
+    not (_enabled() and _disconnected_replay_enabled()),
+    reason=(
+        "set NATS_SINKS_MYSQL_INTEGRATION=1 and "
+        "NATS_SINKS_MYSQL_DISCONNECTED_REPLAY=1 to run Oracle MySQL "
+        "disconnected replay certification"
+    ),
+)
+@pytest.mark.asyncio
+async def test_mysql_sink_disconnected_spool_replay_certification(tmp_path: Path) -> None:
+    """Certify Oracle MySQL Database replay after local spool custody."""
+
+    base_table = validate_identifier(
+        _setting("TABLE", DEFAULT_MYSQL_TEST_TABLE) or DEFAULT_MYSQL_TEST_TABLE
+    )
+    table = validate_identifier(f"{base_table}_DISC")
+    _drop_table_if_requested(table)
+    stream = f"MYSQL_DISC_{uuid.uuid4().hex[:12].upper()}"
+
+    report = await run_disconnected_spool_replay_certification(
+        MySqlDisconnectedReplayBackend(table=table),
+        spool_directory=tmp_path / "spool",
+        options=DisconnectedSpoolReplayOptions(stream=stream),
+    )
+
+    assert report.backend == "Oracle MySQL Database"
+    assert report.expected_backend_records == 3003
+    assert report.spool_remaining_records == 0
+    assert report.outage_proved is True

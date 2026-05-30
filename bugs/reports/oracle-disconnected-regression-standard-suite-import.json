@@ -1,0 +1,35 @@
+{
+  "id": "oracle-disconnected-regression-standard-suite-import",
+  "title": "[Bug]: Oracle disconnected replay regression must run inside the standard sink suite",
+  "area": "Testing",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.3",
+  "labels": ["testing", "sink-oracle"],
+  "summary": "The focused Oracle Database disconnected replay verification regression imported the integration test module through a tests package path that is not guaranteed when scripts/check-sinks.sh collects the standard deterministic sink suite.",
+  "observed": "The standalone focused regression passed, but scripts/check-sinks.sh failed during test collection with ModuleNotFoundError for tests.integration before reaching the container-backed disconnected replay checks.",
+  "expected": "The regression should load the Oracle integration adapter deterministically from the repository path and must run as part of scripts/check-sinks.sh without requiring tests/ to be an importable package.",
+  "reproduction": "Run scripts/check-sinks.sh after adding the Oracle disconnected replay verification regression to the deterministic sink suite.",
+  "failing_test": "The standard sink check script itself is the failing regression: it collects the Oracle disconnected replay verification test and fails before executing the container-backed e2e gate.",
+  "impact": "The defect blocks standard sink release validation and would prevent the new disconnected replay certification from being part of the normal local test gate.",
+  "delivery_semantics": "This bug is limited to the test harness. Runtime sink delivery semantics are unchanged.",
+  "security": "The bug report and comments must not include live database endpoints, credentials, generated passwords, container IDs, payloads, or private local paths.",
+  "acceptance": [
+    "The Oracle disconnected replay verification regression loads the integration adapter without relying on tests/ as an importable package.",
+    "scripts/check-sinks.sh reaches and executes the deterministic sink suite successfully.",
+    "The container-backed Oracle MySQL Database, Oracle NoSQL Database, and Oracle Coherence Community Edition disconnected replay checks pass after the import fix.",
+    "Focused lint and formatting checks pass.",
+    "Sanitized test evidence is added to the managed issue."
+  ],
+  "tests": "Rerun scripts/check-sinks.sh with the container e2e gate enabled after replacing the fragile test import. Also rerun the focused regression and static checks.",
+  "documentation": "No public behavior documentation is expected. The latest test report should summarize the bug and validation result.",
+  "closeout": "Mark completed after scripts/check-sinks.sh with container-backed e2e passes and the issue contains sanitized evidence.",
+  "relationships": {
+    "related": [
+      "#334",
+      "#335",
+      "backlog:disconnected-backend-spool-replay-e2e",
+      "bug:oracle-disconnected-replay-verification-drops-table"
+    ]
+  }
+}

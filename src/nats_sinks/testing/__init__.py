@@ -9,6 +9,15 @@ mission-style metadata without requiring real operational subjects, payloads,
 credentials, or infrastructure locators.
 """
 
+from nats_sinks.testing.disconnected_spool_replay import (
+    DISCONNECTED_REPLAY_DEFAULT_MESSAGES_PER_PHASE,
+    DISCONNECTED_REPLAY_MAX_MESSAGES_PER_PHASE,
+    DisconnectedReplayBackend,
+    DisconnectedSpoolReplayOptions,
+    DisconnectedSpoolReplayReport,
+    disconnected_replay_envelopes,
+    run_disconnected_spool_replay_certification,
+)
 from nats_sinks.testing.fanout_certification import (
     FanoutAckProbe,
     FanoutCertificationCase,
@@ -95,11 +104,16 @@ from nats_sinks.testing.websocket_harness import (
 )
 
 __all__ = [
+    "DISCONNECTED_REPLAY_DEFAULT_MESSAGES_PER_PHASE",
+    "DISCONNECTED_REPLAY_MAX_MESSAGES_PER_PHASE",
     "MULTI_SINK_EXAMPLE_CONFIG",
     "SUBJECT_OBSERVABILITY_ALLOWED_LABEL",
     "SUBJECT_OBSERVABILITY_OVERFLOW_LABEL",
     "SUBJECT_OBSERVABILITY_RAW_SUBJECTS",
     "BenchmarkPhaseTiming",
+    "DisconnectedReplayBackend",
+    "DisconnectedSpoolReplayOptions",
+    "DisconnectedSpoolReplayReport",
     "FanoutAckProbe",
     "FanoutCertificationCase",
     "FanoutCertificationResult",
@@ -136,6 +150,7 @@ __all__ = [
     "certify_subject_observability_malformed_policy_rejection",
     "choose_loopback_port",
     "choose_websocket_harness_ports",
+    "disconnected_replay_envelopes",
     "fanout_certification_envelope",
     "fanout_certification_policy",
     "generate_synthetic_scenario",
@@ -147,6 +162,7 @@ __all__ = [
     "render_oracle_benchmark_report",
     "render_subject_observability_connector_outputs",
     "render_synthetic_report_markdown",
+    "run_disconnected_spool_replay_certification",
     "run_file_sink_synthetic_scenario",
     "run_load_profile",
     "run_reduced_multi_sink_routing_flow",

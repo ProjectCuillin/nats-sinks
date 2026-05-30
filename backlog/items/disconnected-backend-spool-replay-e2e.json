@@ -1,0 +1,36 @@
+{
+  "id": "disconnected-backend-spool-replay-e2e",
+  "title": "[Feature]: Add disconnected backend spool-and-replay e2e certification",
+  "area": "Testing",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.3",
+  "labels": ["testing", "deployment", "sink-oracle", "security"],
+  "problem": "nats-sinks has an encrypted edge spool sink for disconnected operation and several first-party Oracle-family sinks, but release validation does not yet provide one explicit certification flow proving the operational pattern where messages are written to a backend, a backend outage is handled through local spool custody, the spool is replayed after recovery, and later messages continue to reach the backend. Without this test, regressions in replay behavior, idempotency, or backend-specific sink contracts could be missed until an operator exercises disconnected recovery manually.",
+  "proposal": "Create a disconnected backend spool-and-replay certification flow. The flow should write 1001 messages directly to a reachable backend, prove the backend is unavailable during the outage phase, write 1001 messages into encrypted local spool custody, replay the local spool to the recovered backend, write another 1001 messages directly, and verify that all 3003 unique messages are visible in the backend. The harness should be reusable across Oracle Database, Oracle MySQL Database, Oracle NoSQL Database, and Oracle Coherence Community Edition. Container-backed destinations must use the maintained local test containers where available. Oracle Database may remain live-environment gated until a maintained local Oracle Database test container exists.",
+  "users": "Maintainers preparing releases, developers changing sink write or replay behavior, and operators who need evidence that disconnected edge custody can be tested locally before relying on it in isolated defence cloud, public-sector, or enterprise environments.",
+  "delivery_semantics": "The test must preserve the non-negotiable nats-sinks invariant. During normal backend phases, durable backend commit is the success boundary. During outage custody, encrypted local spool commit is the success boundary and JetStream ACK would be valid only after that local commit. Replay is a second at-least-once workflow; a replayed duplicate must update or no-op rather than create duplicate mission records.",
+  "security": "Use fake, generic payloads only. The test must not log payloads, credentials, private endpoints, container internals beyond sanitized local labels, connection strings, certificate material, wallet material, IP addresses beyond loopback examples, or secret values. Spool directories must be local, temporary, bounded, encrypted, cleaned up by default, and excluded from git. Commands must use fixed argv lists, bounded timeouts, shell=false where subprocesses are used, and fail closed on ambiguous backend results.",
+  "acceptance": [
+    "A reusable disconnected spool-and-replay certification helper exists and documents the 1001 + 1001 + 1001 message phases.",
+    "A deterministic unit-level test proves the full disconnected flow without network calls by using fake sink adapters.",
+    "Oracle MySQL Database, Oracle NoSQL Database, and Oracle Coherence Community Edition container-backed e2e runners can execute the disconnected spool-and-replay certification flow when the explicit container gate is enabled.",
+    "Oracle Database disconnected replay certification is available behind the existing live Oracle integration gate and documents the required environment variables.",
+    "The certification verifies that the final backend contains 3003 unique messages and that the local spool is empty after successful replay.",
+    "The outage phase proves the backend write path is unavailable before messages are accepted into local spool custody.",
+    "The full container e2e suite can include the disconnected certification without enabling Docker-backed tests by default.",
+    "Documentation explains how to run the deterministic test, the container-backed tests, and the live Oracle Database test, with sanitized command and output examples.",
+    "The changelog and latest sanitized test report are updated with the new validation path and actual local evidence."
+  ],
+  "tests": "Add focused deterministic unit tests for the certification helper, including backend outage proof, spool retention on target failure, replay cleanup, duplicate-safe final counts, and fail-closed validation of unsupported backends. Add or extend container-backed e2e runners for Oracle MySQL Database, Oracle NoSQL Database, and Oracle Coherence Community Edition. Add a live Oracle Database gated test path using the existing Oracle integration environment. Run the focused unit tests, scripts/check-sinks.sh without the container gate, and the new container-backed certification where Docker and optional backend SDKs are available.",
+  "documentation": "Add a testing guide page or section describing disconnected backend spool-and-replay certification, including the architecture, phase model, commands, expected output, cleanup behavior, backend support matrix, and troubleshooting. Link it from docs/testing.md, docs/spool-sink.md, and the MkDocs navigation if a dedicated page is added. Update CHANGELOG.md and docs/test-report.md with sanitized evidence.",
+  "closeout": "Close only after v0.4.3 or a later release containing this certification is published. Close-out evidence must include the GitHub issue, release label, changed scripts/tests/docs, local commands executed, sanitized pass or skip evidence per backend, and any follow-up bugs raised from failed certification runs.",
+  "relationships": {
+    "related": [
+      "backlog:full-container-e2e-suite-oracle-kv-sinks",
+      "backlog:oracle-nosql-database-sink",
+      "backlog:oracle-coherence-ce-sink",
+      "backlog:oracle-mysql-sink",
+      "backlog:sink-certification-contract-and-tests"
+    ]
+  }
+}

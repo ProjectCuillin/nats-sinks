@@ -10,6 +10,8 @@ set -eu
 
 pytest \
   tests/unit/test_container_e2e_suite.py \
+  tests/unit/test_disconnected_spool_replay.py \
+  tests/unit/test_oracle_disconnected_replay_verification.py \
   tests/unit/test_file_mapping.py \
   tests/unit/test_file_sink.py \
   tests/unit/test_oracle_nosql_sink.py \

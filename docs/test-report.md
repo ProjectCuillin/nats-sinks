@@ -14,46 +14,53 @@ generated database passwords, or full raw logs from live systems.
 | Field | Value |
 | --- | --- |
 | Overall result | Pass |
-| Report generated | 2026-05-29 release validation and blocker fix for `v0.4.2` |
-| Project version | `0.4.2` |
+| Report generated | 2026-05-30 disconnected backend spool replay certification for `v0.4.3` |
+| Project version | `0.4.2` development tree for the next release |
 | Python version | 3.12.4 |
-| Git revision checked | Branch `bugfix-release-ci-latest-ruff-lint`, to be merged back into `release-v0.4.2` |
+| Git revision checked | Branch `issue-334-disconnected-spool-replay-e2e`, to be merged back into `release-v0.4.3` |
 | Live NATS details | Environment-gated live tests skipped unless explicitly enabled |
-| Live Oracle Database details | Environment-gated live tests skipped unless explicitly enabled |
+| Live Oracle Database details | Live-gated disconnected replay certification passed with local operator-provided Oracle integration settings; no connection details are recorded here |
 | Live Oracle MySQL details | Environment-gated live tests skipped unless explicitly enabled |
 | Live Oracle NoSQL details | Environment-gated live tests skipped unless explicitly enabled |
 | Live Oracle Coherence details | Environment-gated live tests skipped unless explicitly enabled |
 | Live S3-compatible object storage details | Environment-gated live tests skipped unless explicitly enabled |
-| Container e2e details | Oracle NoSQL Database and Oracle Coherence Community Edition container-backed sink e2e passed locally |
+| Container e2e details | Oracle MySQL Database, Oracle NoSQL Database, and Oracle Coherence Community Edition container-backed disconnected replay checks passed locally |
 
-This refresh prepares the `v0.4.2` release branch after the HTTP, S3, Oracle
-NoSQL Database, Oracle Coherence Community Edition, Palantir Foundry, Palantir
-Gotham, OCI Monitoring, routing, documentation, and release-preparation changes
-planned for the release. Two release-preparation bugs were found during the
-release cycle. Managed bug `#328` covered a GitHub CLI authentication helper
-false negative. Managed bug `#331` covered a hosted release-validation CI lint
-failure caused by newer Ruff rules than the first local release-preparation
-environment used. Both were reproduced with deterministic tests, fixed,
-commented on their issues, marked `completed`, and included in this report.
+This refresh covers issue `#334`, which adds disconnected backend
+spool-and-replay certification for the Oracle-family sink set. The certification
+uses the `1001 + 1001 + 1001` pattern: direct backend writes before an outage,
+encrypted local spool custody while the backend is unavailable, replay after
+recovery, direct writes after recovery, and final backend verification for
+`3003` unique records.
+
+Two managed bugs were found during validation and handled through the agreed
+bug workflow:
+
+- bug `#335` covered Oracle Database final verification using a drop-capable
+  setup helper before counting rows;
+- bug `#336` covered the new Oracle verification regression relying on
+  `tests/` being an importable package when the standard sink script collected
+  the suite.
+
+Both bugs were reproduced, fixed with focused regressions, commented on their
+issues, marked `completed`, and included in this report.
 
 ## Core And Repository Validation
 
 | Check | Result |
 | --- | --- |
-| Ruff format | Pass, `294` files already formatted |
-| Ruff lint | Pass, including a local check with Ruff `0.15.15` to match the hosted release-validation runner |
-| Mypy | Pass, no issues in `126` source files |
-| Version metadata consistency | Pass for `0.4.2` |
+| Ruff format | Pass, `297` files already formatted |
+| Ruff lint | Pass |
+| Mypy | Pass, no issues in `127` source files |
+| Version metadata consistency | Pass for `0.4.2` development metadata |
 | Dependency manifests | Pass, manifest files up to date |
-| Backlog metadata | Pass, `148` backlog items validated |
-| Bug report metadata | Pass, `96` bug reports validated |
+| Backlog metadata | Pass, `150` backlog items validated |
+| Bug report metadata | Pass, `98` bug reports validated |
 | PyPI-facing Markdown links | Pass |
 | Documentation builds | Pass for Read the Docs and GitHub Pages MkDocs builds |
 | Security checks | Pass; existing reviewed `nosec` warnings remained non-blocking |
-| Package build | Pass, source distribution and wheel built for `0.4.2` |
-| SBOM and checksums | Pass, CycloneDX JSON/XML and checksum manifest generated for `0.4.2` |
-| GitHub CLI release helper | Pass after bug `#328`; authenticated API probing is used without printing token values |
-| Release CI lint compatibility | Pass after bug `#331`; stale Ruff suppressions and async pathlib use were covered by a focused regression |
+| Package build | Pass, source distribution and wheel built from the current tree |
+| SBOM and checksums | Pass, CycloneDX JSON/XML and checksum manifest generated |
 
 The documentation build emitted the existing upstream Material for MkDocs
 warning about MkDocs 2.0. The repository checks remained passing.
@@ -62,15 +69,13 @@ warning about MkDocs 2.0. The repository checks remained passing.
 
 | Test Area | Command | Result |
 | --- | --- | --- |
-| Main repository test suite | `scripts/check.sh` | Pass, `1314 passed, 13 skipped` |
+| Main repository test suite | `scripts/check.sh` | Pass, `1317 passed, 17 skipped` |
 | Commit, encryption, file, and Oracle sink subset | run by `scripts/check.sh` | Pass, `142 passed` |
-| Sink certification and example validation | `scripts/check-sinks.sh` through `scripts/check.sh` | Pass, `217 passed` plus configuration validation for file, Oracle Database, Oracle MySQL Database, Oracle NoSQL Database, Oracle Coherence Community Edition, fan-out, Foundry, Gotham, HTTP, and S3 examples |
-| Container-backed sink e2e | `NATS_SINKS_RUN_CONTAINER_E2E=1 scripts/check-sinks.sh` | Pass; Oracle NoSQL Database and Oracle Coherence Community Edition container-backed sink e2e passed |
-| GitHub auth helper regression | `python -m pytest tests/unit/test_check_gh_auth_script.py -q` | Pass, `2 passed` |
-| GitHub auth helper live check | `scripts/check-gh-auth.sh --check-only` | Pass with authenticated API access |
-| Release CI lint compatibility regression | `python -m pytest tests/unit/test_release_ci_lint_compatibility.py -q` | Pass, `2 passed` |
-| Latest Ruff compatibility check | `python -m ruff check .` with Ruff `0.15.15` | Pass |
-| Full local validation | `scripts/check.sh` | Pass |
+| Sink certification and example validation | `scripts/check-sinks.sh` through `scripts/check.sh` | Pass, `220 passed` plus configuration validation for file, Oracle Database, Oracle MySQL Database, Oracle NoSQL Database, Oracle Coherence Community Edition, fan-out, Foundry, Gotham, HTTP, and S3 examples |
+| Container-backed sink e2e | `NATS_SINKS_RUN_CONTAINER_E2E=1 scripts/check-sinks.sh` | Pass; Oracle MySQL Database, Oracle NoSQL Database, and Oracle Coherence Community Edition container-backed disconnected replay checks passed |
+| Oracle Database disconnected replay | `NATS_SINKS_ORACLE_DISCONNECTED_REPLAY=1 python -m pytest -m integration tests/integration/test_oracle_sink.py -q -k disconnected` | Pass, `1 passed, 4 deselected` |
+| Focused disconnected replay unit coverage | `python -m pytest tests/unit/test_disconnected_spool_replay.py tests/unit/test_oracle_disconnected_replay_verification.py -q` | Pass, `3 passed` |
+| Focused static checks | `python -m ruff check ...` and `python -m ruff format --check ...` for changed source, tests, and runners | Pass |
 
 The skipped tests are the existing environment-gated live NATS, Oracle
 Database, Oracle MySQL, Oracle NoSQL Database, Oracle Coherence Community
@@ -82,48 +87,44 @@ The Oracle Coherence container-backed e2e run emitted two Python 3.14 protobuf
 deprecation warnings from the optional Coherence client dependency. The test
 passed and no project code defect was found.
 
-## Release Readiness Evidence
+## Disconnected Replay Evidence
 
-| Check | Result |
+| Backend | Evidence |
 | --- | --- |
-| Open release-labeled issues | `52` open issues with `release-v0.4.2` were checked after bug `#331`; all completed development work is waiting for release-gated closure |
-| Release-prep bugs found during validation | Bugs `#328` and `#331` created, reproduced, fixed, documented, and marked `completed` for `v0.4.2` |
-| Open PRs into `release-v0.4.2` | None before this release-preparation branch is opened |
-| Open PRs into `main` | None before this release-preparation branch is opened |
-| Dist artifacts | `nats_sinks-0.4.2.tar.gz` and `nats_sinks-0.4.2-py3-none-any.whl` built successfully |
-| SBOM artifacts | `nats-sinks-0.4.2.cyclonedx.json` and `nats-sinks-0.4.2.cyclonedx.xml` generated |
-| Checksum manifest | `dist/SHA256SUMS` generated and verified for tracked release artifacts |
+| Deterministic fake backend | Unit test proves `1001` direct-before, `1001` spooled, `1001` direct-after records, empty spool after replay, and outage detection |
+| Oracle Database | Live-gated certification passed with the drop-before-test setup flag enabled and final non-destructive verification |
+| Oracle MySQL Database | Local short-lived container e2e passed and verified the disconnected replay count pattern |
+| Oracle NoSQL Database | Local KVLite container e2e passed and verified the disconnected replay count pattern |
+| Oracle Coherence Community Edition | Local container e2e passed and verified the disconnected replay key pattern |
 
-Feature requests and managed bug reports remain open until the GitHub Release
-for the associated release is published. The `completed` label means the work
-is done in development and waiting for release-gated closure.
+All payloads are synthetic. No live subjects, credentials, generated database
+passwords, private endpoints, wallet paths, certificate material, or container
+identifiers are retained in this report.
 
 ## Issues Found During Validation
 
-Managed bug `#328` was found during release preparation:
+Managed bug `#335` was found during the live Oracle Database disconnected
+replay run:
 
-- the failing regression showed `scripts/check-gh-auth.sh --check-only` could
-  reject a usable GitHub CLI environment when the quiet status path was
-  unreliable;
-- the helper now performs a silent authenticated API probe instead of relying
-  on the quiet status path;
-- the regression test and live helper check both passed after the fix;
+- the failing regression proved final verification could call the destructive
+  integration setup helper;
+- the verification path now opens a dedicated non-destructive verification
+  connection and stops it directly;
+- the focused regression and live Oracle Database disconnected replay
+  certification both passed after the fix;
 - the issue has failing-test evidence, completion evidence, checked acceptance
   criteria, and the `completed` label.
 
-Managed bug `#331` was found when the release-validation CI workflow installed
-a newer Ruff version than the first local release-preparation environment:
+Managed bug `#336` was found when the standard sink suite collected the new
+Oracle verification regression:
 
-- the failing CI run reported stale subprocess lint suppressions in local
-  container e2e helper scripts and a direct pathlib call inside an async
-  multi-sink routing helper;
-- a focused static regression now covers both compatibility expectations;
-- the subprocess helpers continue to use fixed argument lists, no shell, bounded
-  timeouts, and explicit environments;
-- the multi-sink routing helper delegates local directory creation outside the
-  async event loop;
-- the focused regression, full local validation, latest Ruff compatibility
-  check, and container-backed sink e2e suite all passed after the fix.
+- the failing standard sink run reported a fragile `tests.integration` import;
+- the regression now loads the Oracle integration adapter from the repository
+  file path;
+- the focused regression, static checks, and full container-backed sink gate
+  passed after the fix;
+- the issue has failing-test evidence, completion evidence, checked acceptance
+  criteria, and the `completed` label.
 
 No unresolved code, packaging, documentation, sink, or container-backed e2e
 defects remain from this validation pass.
@@ -132,18 +133,15 @@ defects remain from this validation pass.
 
 The following release-facing documentation was updated or validated:
 
-- [README](https://github.com/ProjectCuillin/nats-sinks/blob/main/README.md)
-- [Documentation Home](index.md)
-- [Release](release.md)
-- [Publishing](publishing.md)
-- [Getting Started](getting-started.md)
-- [Configuration](configuration.md)
+- [Disconnected Spool Replay Testing](disconnected-spool-replay-testing.md)
 - [Testing](testing.md)
-- [Security](security.md)
-- [Roadmap](roadmap.md)
-- [Public API](public-api.md)
-- [Defence And Mission Support](use-cases/defence/index.md)
+- [Edge Spool Sink](spool-sink.md)
+- [Documentation Home](index.md)
+- [Configuration](configuration.md)
+- [Oracle MySQL Sink](mysql-sink.md)
+- [Oracle NoSQL Database Sink](oracle-nosql-sink.md)
+- [Oracle Coherence Community Edition Sink](coherence-sink.md)
 
-The changelog, version metadata, release helper documentation, bug metadata,
-latest test report, generated dependency manifests, package artifacts, SBOM,
-and checksum evidence were refreshed for `v0.4.2` release preparation.
+The changelog, backlog metadata, bug metadata, latest test report, package
+artifacts, SBOM, and checksum evidence were refreshed or validated for this
+`v0.4.3` development branch.

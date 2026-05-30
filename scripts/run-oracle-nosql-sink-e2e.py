@@ -60,6 +60,7 @@ def _pytest_env(*, endpoint: str, table: str) -> dict[str, str]:
             "NATS_SINKS_ORACLE_NOSQL_TABLE": table,
             "NATS_SINKS_ORACLE_NOSQL_MODE": "kvstore",
             "NATS_SINKS_ORACLE_NOSQL_AUTO_CREATE": "1",
+            "NATS_SINKS_ORACLE_NOSQL_DISCONNECTED_REPLAY": "1",
         }
     )
     return env

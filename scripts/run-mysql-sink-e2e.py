@@ -67,6 +67,7 @@ def _pytest_env(*, host_port: int, app_password: str, table: str) -> dict[str, s
             "NATS_SINKS_MYSQL_PASSWORD": app_password,
             "NATS_SINKS_MYSQL_TABLE": table,
             "NATS_SINKS_MYSQL_DROP_TABLE_BEFORE": "true",
+            "NATS_SINKS_MYSQL_DISCONNECTED_REPLAY": "1",
         }
     )
     return env

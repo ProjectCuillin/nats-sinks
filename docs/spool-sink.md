@@ -190,6 +190,13 @@ If the target sink fails, replay stops and the current spool file remains on
 disk. This preserves at-least-once replay behavior and lets operators retry
 after fixing the target.
 
+The repository includes a disconnected backend certification harness that
+exercises this model with `1001` direct records, `1001` encrypted local spool
+records during an outage phase, replay after recovery, and another `1001`
+direct records. See
+[Disconnected Spool Replay Testing](disconnected-spool-replay-testing.md) for
+the standard local commands and backend support matrix.
+
 ## Failure Behavior
 
 | Scenario | Result |
