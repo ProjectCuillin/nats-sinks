@@ -12,6 +12,11 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Added
 
+- Added README front-door restructuring for issue #343. The README now keeps
+  the overview, exposes a concise available-sinks section, shortens the local
+  MVP demo, links detailed capability and status content to dedicated docs
+  pages, and documents a one-command local Docker demo helper for Debian,
+  Ubuntu, and Oracle Linux developer machines.
 - Added the Oracle Linux 9 slim FIPS based NGINX HTTP sink test endpoint for
   issue #344. The new local-only container asset and e2e runner build an NGINX
   endpoint, run it with loopback-only exposure and hardened Docker flags, send

@@ -1,0 +1,26 @@
+{
+  "id": "readme-front-door-sink-demo-status-restructure",
+  "title": "[Feature]: Restructure README front door with sinks, short demo, and linked status details",
+  "area": "Documentation",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.3",
+  "labels": ["documentation", "enhancement", "release-v0.4.3"],
+  "problem": "The main README currently mixes project overview, detailed available-today capability inventory, sink inventory, local MVP demo steps, status, and long-form operational links in a way that makes the first page heavy for new readers. The README should remain the project front door, but detailed status and capability content should move to dedicated documentation pages with clear links.",
+  "proposal": "Restructure the main README so it keeps the Overview section, adds a concise available-sinks section that distinguishes production sinks from experimental Palantir sinks, shortens the Five-Minute Local MVP Demo and links to a richer getting-started page, keeps Architecture, and reduces Status and Available Today to short summaries that link to dedicated Markdown documentation. Add or update documentation pages as needed, including a short local demo page with command examples and a single-command demo helper path for Debian and Oracle Linux where practical.",
+  "users": "New developers, operators evaluating nats-sinks, maintainers preparing release documentation, Oracle platform teams, NATS operators, and readers who need to understand the supported sink surface quickly.",
+  "delivery_semantics": "Documentation-only restructuring must preserve the commit-then-ACK invariant and must not imply exactly-once delivery, early ACK behavior, unsupported production readiness for experimental sinks, or production support beyond documented sink maturity.",
+  "security": "The README and linked demo documentation must not include secrets, live endpoints, private IP addresses, credentials, wallet material, classified data, sensitive payloads, or instructions that encourage piping unreviewed production installers into privileged shells. Any one-command demo guidance must be explicitly scoped to local demo use and should prefer reviewable scripts with least-privilege behavior.",
+  "acceptance": [
+    "README keeps the Overview section and remains concise enough for first-time readers.",
+    "README includes a clear available-sinks section that lists production sinks and explicitly names experimental Palantir Foundry and Palantir Gotham sinks as experimental.",
+    "README includes a shorter Five-Minute Local MVP Demo and links to a fuller Markdown guide.",
+    "The fuller local demo documentation explains manual local steps and a one-command demo helper path for Debian and Oracle Linux where practical.",
+    "README keeps the Architecture section and the commit-then-ACK explanation remains visible.",
+    "README Status and Available Today sections become short summaries that link to dedicated Markdown documentation for the detailed content.",
+    "MkDocs navigation includes any newly added public documentation pages.",
+    "Documentation checks pass and no generated site files are edited by hand."
+  ],
+  "tests": "Run documentation validation, markdown link checks, backlog metadata validation, and the standard quick check where practical. If a new helper script is added, include deterministic shell/static validation and document any live local demo commands separately from automated tests.",
+  "documentation": "Update README.md, add or update dedicated docs pages for available capabilities/status and the local MVP demo, update mkdocs.yml navigation, and add a CHANGELOG.md unreleased entry for the documentation restructuring.",
+  "closeout": "Close only after the release containing the README restructuring is published. Include changed files, documentation check evidence, and explicit confirmation that experimental sinks remain labelled experimental."
+}
