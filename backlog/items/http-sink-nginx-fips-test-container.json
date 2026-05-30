@@ -1,0 +1,25 @@
+{
+  "id": "http-sink-nginx-fips-test-container",
+  "title": "[Feature]: Add an Oracle Linux 9 slim FIPS NGINX HTTP sink test endpoint container",
+  "area": "Testing",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.3",
+  "labels": ["testing", "deployment", "documentation", "security", "sink-http", "release-v0.4.3"],
+  "problem": "The first-party HTTP sink has deterministic unit coverage with fake clients, but the local container-backed e2e suite does not yet provide a real HTTP endpoint target. Without a maintained local endpoint container, release validation does not prove that the standard-library HTTP client can successfully post normalized sink payloads to a real service boundary.",
+  "proposal": "Build a local test-only HTTP endpoint container based on Oracle Linux 9 slim FIPS and NGINX. The container should expose a loopback-only endpoint suitable for HTTP sink e2e testing, capture request bodies and selected safe headers to a mounted volume, and allow the e2e runner to verify idempotency-key propagation, request body shape, status handling, and safe cleanup. Add a dedicated runner and include it in the existing opt-in container-backed e2e suite so maintainers can run it together with the Oracle MySQL, Oracle NoSQL Database, and Oracle Coherence Community Edition container checks.",
+  "users": "Maintainers, release engineers, HTTP sink developers, security reviewers, and operators who want local evidence that the HTTP sink works against a real endpoint process before certifying environment-specific endpoints.",
+  "delivery_semantics": "The HTTP endpoint container is test infrastructure only. It must not weaken the HTTP sink delivery contract: the sink returns success only after the endpoint returns a configured success status, and JetStream ACK remains owned by the core runner after required sink success. Tests should prove endpoint success and captured output without implying exactly-once delivery.",
+  "security": "The test endpoint must bind only to loopback, use fake payloads, avoid secrets, avoid sensitive headers, keep captured artifacts under ignored local paths, and document that HTTP cleartext is only for local loopback testing. The Dockerfile must use the Oracle Linux 9 slim FIPS base image, avoid unnecessary packages, run with least privileges where practical, and the runner must use fixed argv subprocess calls with `shell=False`, bounded timeouts, bounded output, and cleanup by default.",
+  "acceptance": [
+    "A Dockerfile for the HTTP sink NGINX test endpoint uses `container-registry.oracle.com/os/oraclelinux:9-slim-fips` as the only base image.",
+    "The endpoint container writes captured request bodies and safe request metadata to a mounted local output directory for verification.",
+    "A local e2e runner builds the image, starts the container on a random loopback port, drives the production `HttpSink`, verifies stored request evidence, and removes the container by default.",
+    "The existing container-backed e2e suite includes the HTTP sink endpoint runner under the explicit `NATS_SINKS_RUN_CONTAINER_E2E=1` gate.",
+    "Unit tests inspect the Dockerfile, endpoint assets, runner safety properties, suite registration, and documentation links without starting Docker.",
+    "Documentation explains the endpoint container, local-only security boundary, expected output, cleanup, and how to run it directly or through the full container e2e suite.",
+    "`CHANGELOG.md` records the new test endpoint container and e2e runner under Unreleased."
+  ],
+  "tests": "Add deterministic unit tests for Dockerfile base image, NGINX endpoint configuration, entrypoint behavior, runner argument validation, safe subprocess usage, and container suite registration. Run the focused unit tests, `scripts/check-sinks.sh`, documentation checks, and the live container e2e runner when Docker is available.",
+  "documentation": "Add a dedicated HTTP sink endpoint test container documentation page, link it from HTTP Sink, Docker, Testing, and the local container e2e suite guidance, and update `mkdocs.yml` navigation.",
+  "closeout": "Close only after the release containing the feature is published. Include the release tag, Dockerfile base image confirmation, unit test evidence, live e2e evidence when available, documentation links, and any limitations around local loopback HTTP testing versus production HTTPS endpoints."
+}

@@ -1,0 +1,37 @@
+{
+  "id": "http-nginx-e2e-capture-copy-readiness",
+  "title": "[Bug]: HTTP sink NGINX e2e runner should wait briefly for copied request evidence",
+  "area": "Testing",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.3",
+  "labels": [
+    "testing",
+    "sink-http"
+  ],
+  "summary": "The HTTP sink NGINX e2e runner can fail immediately when copying request evidence even though the capture file appears in the container shortly afterward.",
+  "observed": "The live runner received HTTP 202 responses but docker cp reported that /var/lib/nats-sinks-http/requests.jsonl was missing. Inspecting the preserved container a few seconds later showed the evidence file present.",
+  "expected": "The runner should retry the bounded evidence copy briefly before failing so normal container filesystem visibility delay does not create a false negative.",
+  "reproduction": "Run python scripts/run-http-sink-nginx-e2e.py --timeout-seconds 30 --preserve-artifacts on the issue #344 branch after the capture-directory permission fix and before adding evidence-copy retries.",
+  "failing_test": "tests/unit/test_http_nginx_test_container.py should prove copy_capture_file retries a transient docker cp failure and succeeds when a later attempt can copy the evidence file.",
+  "impact": "The defect can make the local HTTP sink container e2e test flaky. It does not affect production JetStream ACK behavior or HTTP sink delivery semantics.",
+  "delivery_semantics": "The runner verifies evidence after sink writes complete. A transient docker cp failure does not change production ACK behavior because the core runner is not involved in this local test harness.",
+  "security": "Retries must stay bounded, keep container identifiers redacted, and avoid logging payloads, private endpoints, credentials, or local paths in public evidence.",
+  "acceptance": [
+    "copy_capture_file retries a transient copy failure for a bounded short interval.",
+    "A focused unit test proves transient copy failure handling without Docker.",
+    "python -m pytest tests/unit/test_http_nginx_test_container.py -q passes.",
+    "python scripts/run-http-sink-nginx-e2e.py --timeout-seconds 120 passes against the local Docker backend.",
+    "Sanitized failing and passing test evidence is posted to the GitHub bug report."
+  ],
+  "tests": "Run python -m pytest tests/unit/test_http_nginx_test_container.py -q, scripts/check-sinks.sh, scripts/check.sh, and python scripts/run-http-sink-nginx-e2e.py --timeout-seconds 120.",
+  "documentation": "No public documentation change is required unless the runner command contract changes.",
+  "closeout": "Mark completed after the focused regression test and live Docker e2e runner pass, then merge the fix back into the issue #344 feature branch.",
+  "relationships": {
+    "related": [
+      "#344",
+      "#346",
+      "backlog:http-sink-nginx-fips-test-container"
+    ]
+  }
+}

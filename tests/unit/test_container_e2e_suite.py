@@ -37,11 +37,13 @@ def test_container_e2e_suite_declares_expected_backends() -> None:
     module = _load_suite_script()
 
     assert [runner.name for runner in module.BACKEND_RUNNERS] == [
+        "HTTP Sink NGINX FIPS Endpoint",
         "Oracle MySQL Database",
         "Oracle NoSQL Database",
         "Oracle Coherence Community Edition",
     ]
     assert [runner.script.name for runner in module.BACKEND_RUNNERS] == [
+        "run-http-sink-nginx-e2e.py",
         "run-mysql-sink-e2e.py",
         "run-oracle-nosql-sink-e2e.py",
         "run-coherence-sink-e2e.py",
@@ -53,7 +55,7 @@ def test_container_e2e_suite_builds_fixed_commands() -> None:
 
     module = _load_suite_script()
     command = module.backend_command(
-        module.BACKEND_RUNNERS[1],
+        module.BACKEND_RUNNERS[2],
         timeout_seconds=300.0,
         preserve_artifacts=True,
     )
@@ -91,7 +93,7 @@ def test_container_e2e_suite_runs_backend_without_shell(monkeypatch: pytest.Monk
     monkeypatch.setattr(module.subprocess, "run", fake_run)
 
     module.run_backend(
-        module.BACKEND_RUNNERS[2],
+        module.BACKEND_RUNNERS[3],
         timeout_seconds=300.0,
         preserve_artifacts=False,
     )

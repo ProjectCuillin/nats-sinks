@@ -12,6 +12,12 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Added
 
+- Added the Oracle Linux 9 slim FIPS based NGINX HTTP sink test endpoint for
+  issue #344. The new local-only container asset and e2e runner build an NGINX
+  endpoint, run it with loopback-only exposure and hardened Docker flags, send
+  fake events through the production `HttpSink`, verify captured HTTP envelope
+  and idempotency evidence, document the workflow, and include the runner in
+  the opt-in full container-backed sink e2e gate.
 - Added disconnected backend spool-and-replay certification for issue #334.
   The reusable helper and deterministic unit test exercise the `1001 + 1001 +
   1001` message pattern, proving direct backend writes, fail-closed outage
@@ -24,6 +30,13 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ### Fixed
 
+- Fixed HTTP sink NGINX FIPS endpoint test bugs #345, #346, and #347 found
+  during live container validation. The endpoint entrypoint now recreates
+  tmpfs-backed NGINX and capture directories before startup, NGINX temp paths
+  stay under writable tmpfs, the e2e runner uses only supported certification
+  envelope arguments, sink framework errors are reported cleanly, and request
+  evidence is transferred with a bounded shell-free `docker exec cat` retry
+  path that works with the local Docker engine.
 - Fixed Oracle Database disconnected replay verification bug #335 by ensuring
   final certification counting opens a non-destructive verification connection
   instead of the drop-capable integration setup helper. A focused regression now

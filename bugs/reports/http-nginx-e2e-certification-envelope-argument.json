@@ -1,0 +1,37 @@
+{
+  "id": "http-nginx-e2e-certification-envelope-argument",
+  "title": "[Bug]: HTTP sink NGINX e2e runner should call certification_envelope with supported arguments",
+  "area": "Testing",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.3",
+  "labels": [
+    "testing",
+    "sink-http"
+  ],
+  "summary": "The HTTP sink NGINX e2e runner passed an unsupported consumer_sequence keyword argument to the shared certification_envelope helper.",
+  "observed": "After the NGINX runtime directory fix, the live HTTP sink NGINX e2e runner failed before sending requests with TypeError: certification_envelope() got an unexpected keyword argument 'consumer_sequence'.",
+  "expected": "The runner should use only the documented certification_envelope helper arguments so the live HTTP sink e2e path reaches the actual HTTP endpoint verification.",
+  "reproduction": "Run python scripts/run-http-sink-nginx-e2e.py --timeout-seconds 120 on the issue #344 branch after the tmpfs runtime directory fix and before removing the unsupported argument.",
+  "failing_test": "tests/unit/test_http_nginx_test_container.py should exercise the runner message construction through a fake HttpSink so unsupported helper arguments fail in unit tests before Docker is needed.",
+  "impact": "The defect blocks the local HTTP sink container e2e test after container startup. It does not affect production JetStream ACK behavior or the production HTTP sink implementation.",
+  "delivery_semantics": "The runner fails before any HTTP request success is confirmed. The production sink still requires endpoint success before returning to the core runner.",
+  "security": "The fix must keep the runner local-only, use fake payloads only, and avoid logging payloads, container identifiers, private endpoints, credentials, or local paths in public evidence.",
+  "acceptance": [
+    "A focused unit test exercises message construction through a fake HttpSink without network or Docker.",
+    "The runner stops passing unsupported arguments to certification_envelope.",
+    "python -m pytest tests/unit/test_http_nginx_test_container.py -q passes.",
+    "python scripts/run-http-sink-nginx-e2e.py --timeout-seconds 120 passes against the local Docker backend.",
+    "Sanitized failing and passing test evidence is posted to the GitHub bug report."
+  ],
+  "tests": "Run python -m pytest tests/unit/test_http_nginx_test_container.py -q, scripts/check-sinks.sh, scripts/check.sh, and python scripts/run-http-sink-nginx-e2e.py --timeout-seconds 120.",
+  "documentation": "No public documentation change is required unless the runner command contract changes.",
+  "closeout": "Mark completed after the focused regression test and live Docker e2e runner pass, then merge the fix back into the issue #344 feature branch.",
+  "relationships": {
+    "related": [
+      "#344",
+      "#345",
+      "backlog:http-sink-nginx-fips-test-container"
+    ]
+  }
+}
