@@ -70,6 +70,7 @@ def _run_pytest(*, address: str, cache_name: str) -> None:
     env["NATS_SINKS_COHERENCE_INTEGRATION"] = "1"
     env["NATS_SINKS_COHERENCE_ADDRESS"] = address
     env["NATS_SINKS_COHERENCE_CACHE_NAME"] = cache_name
+    env["NATS_SINKS_COHERENCE_DISCONNECTED_REPLAY"] = "1"
     completed = subprocess.run(  # noqa: S603,RUF100 - fixed pytest argv list, no shell.
         [sys.executable, "-m", "pytest", "tests/integration/test_coherence_sink_e2e.py", "-q"],
         check=False,
@@ -77,7 +78,7 @@ def _run_pytest(*, address: str, cache_name: str) -> None:
         env=env,
         text=True,
         capture_output=True,
-        timeout=180,
+        timeout=420,
         shell=False,
     )
     if completed.returncode != 0:

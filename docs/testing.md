@@ -350,7 +350,10 @@ The integration test validates:
 - metadata persistence for priority, classification, and labels;
 - non-JSON payload wrapping;
 - empty payload handling;
-- Oracle MySQL duplicate/upsert metrics through the shared metrics recorder.
+- Oracle MySQL duplicate/upsert metrics through the shared metrics recorder;
+- disconnected backend recovery by writing `1001` records directly, spooling
+  `1001` records during a simulated outage, replaying them, and writing a
+  final `1001` records before verifying `3003` unique backend records.
 
 The smoke test builds the Oracle Linux 9 slim based Oracle MySQL image, starts
 a fresh short-lived container with generated random credentials, waits for
@@ -408,7 +411,8 @@ That e2e runner starts the same short-lived KVLite backend, binds the HTTP
 proxy to a random loopback port, enables the live-gated
 `tests/integration/test_oracle_nosql_sink_e2e.py` test, creates the narrow
 key/value table through generated safe DDL, writes the same normalized
-envelope twice, and removes the container by default.
+envelope twice, runs the disconnected spool replay certification, and removes
+the container by default.
 
 See [Oracle NoSQL Database Sink](oracle-nosql-sink.md) for sink configuration
 and [Oracle NoSQL Database Test Backend](oracle-nosql-test-container.md) for
@@ -452,10 +456,49 @@ This backend does not implement the Oracle Coherence Community Edition sink and
 does not prove production Coherence durability. It is local test infrastructure
 for future sink certification, routing, and fan-out validation.
 
+The Oracle Coherence sink e2e runner also runs the disconnected spool replay
+certification. It writes `1001` records directly, proves an unreachable
+Coherence endpoint fails closed, writes `1001` records into encrypted local
+spool custody, replays them to the reachable cache, writes another `1001`
+records directly, and verifies the expected keys through the Coherence client.
+
 See [Oracle Coherence Community Edition Test Backend](oracle-coherence-test-container.md)
 for Oracle Linux 9 slim base-image selection, runtime module selection, runtime
 sequence, optional client setup, smoke-test commands, cleanup behavior, and
 security boundaries.
+
+## Disconnected Backend Spool Replay
+
+The disconnected spool replay certification is part of the standard
+deterministic sink checks and the explicit local container gate. The
+deterministic unit test proves the full `1001 + 1001 + 1001` message flow
+without network calls:
+
+```bash
+python -m pytest \
+  tests/unit/test_disconnected_spool_replay.py \
+  tests/unit/test_oracle_disconnected_replay_verification.py \
+  -q
+```
+
+Expected output:
+
+```text
+3 passed
+```
+
+Backend-specific coverage is enabled by the maintained e2e runners for Oracle
+MySQL Database, Oracle NoSQL Database, and Oracle Coherence Community Edition.
+Oracle Database coverage remains live-environment gated:
+
+```bash
+export NATS_SINKS_ORACLE_DISCONNECTED_REPLAY=1
+python -m pytest -m integration tests/integration/test_oracle_sink.py -q
+```
+
+See [Disconnected Spool Replay Testing](disconnected-spool-replay-testing.md)
+for the phase model, backend support matrix, commands, expected output,
+cleanup behavior, and troubleshooting.
 
 ## Subject-Aware Observability Certification
 
@@ -787,9 +830,9 @@ available level:
 | Sink | Unit tests | Smoke tests | End-to-end tests |
 | --- | --- | --- | --- |
 | Oracle | SQL, mapping, routing, payload, idempotency, encrypted payload storage, and contract tests. | `nats-sink validate examples/oracle-jetstream/config.json`; live `test-sink` when Oracle env is available. | Live NATS-to-Oracle e2e when `.local` integration env is available. |
-| Oracle MySQL | SQL, mapping, routing, payload, idempotency, TLS configuration, metrics, and contract tests. | `nats-sink validate examples/oracle-mysql-basic/config.json`; `python scripts/run-oracle-mysql-container-smoke.py`. | Local short-lived Oracle MySQL container e2e with `python scripts/run-mysql-sink-e2e.py`. |
-| Oracle NoSQL Database | Config validation, SDK authorization-provider construction, namespace and compartment handle defaults, cloud table-limit setup, key strategy, JSON value mapping, generated table DDL, duplicate policy, timeout handling, optional dependency failure, fan-out defaults, test-container asset checks, and contract tests with fake SDK clients. | `nats-sink validate examples/oracle-nosql-basic/config.json`; `python scripts/run-oracle-nosql-container-smoke.py`. | Local short-lived Oracle NoSQL Database KVLite container e2e with `python scripts/run-oracle-nosql-sink-e2e.py`; Cloud Simulator and Oracle NoSQL Database Cloud Service certification remains explicitly environment-gated. |
-| Oracle Coherence Community Edition | Config validation, key strategy, JSON value mapping, duplicate policy, timeout handling, optional dependency failure, fan-out defaults, and contract tests. | `nats-sink validate examples/oracle-coherence-basic/config.json`; `python scripts/run-oracle-coherence-container-smoke.py`. | Local short-lived Oracle Coherence Community Edition container e2e with `python scripts/run-coherence-sink-e2e.py`. |
+| Oracle MySQL | SQL, mapping, routing, payload, idempotency, TLS configuration, metrics, disconnected replay, and contract tests. | `nats-sink validate examples/oracle-mysql-basic/config.json`; `python scripts/run-oracle-mysql-container-smoke.py`. | Local short-lived Oracle MySQL container e2e with `python scripts/run-mysql-sink-e2e.py`. |
+| Oracle NoSQL Database | Config validation, SDK authorization-provider construction, namespace and compartment handle defaults, cloud table-limit setup, key strategy, JSON value mapping, generated table DDL, duplicate policy, timeout handling, optional dependency failure, disconnected replay, fan-out defaults, test-container asset checks, and contract tests with fake SDK clients. | `nats-sink validate examples/oracle-nosql-basic/config.json`; `python scripts/run-oracle-nosql-container-smoke.py`. | Local short-lived Oracle NoSQL Database KVLite container e2e with `python scripts/run-oracle-nosql-sink-e2e.py`; Cloud Simulator and Oracle NoSQL Database Cloud Service certification remains explicitly environment-gated. |
+| Oracle Coherence Community Edition | Config validation, key strategy, JSON value mapping, duplicate policy, timeout handling, optional dependency failure, disconnected replay, fan-out defaults, and contract tests. | `nats-sink validate examples/oracle-coherence-basic/config.json`; `python scripts/run-oracle-coherence-container-smoke.py`. | Local short-lived Oracle Coherence Community Edition container e2e with `python scripts/run-coherence-sink-e2e.py`. |
 | File | Path mapping, payload, duplicate policy, compression, encryption, healthcheck, filesystem errors, and fuzz-style path safety tests. | `nats-sink validate examples/file-basic/config.json`; `nats-sink test-sink examples/file-basic/config.json`. | Local deterministic runner-to-file e2e in `tests/integration/test_file_sink_e2e.py`, with uncompressed, gzip, and encrypted output. |
 | S3-compatible object storage | Config validation, bucket and endpoint validation, key strategy, object value mapping, duplicate policy, metadata sidecar behavior, timeout handling, optional dependency failure, fan-out defaults, and contract tests with fake SDK clients. | `nats-sink validate examples/s3-basic/config.json`. | Live S3-compatible object-storage certification remains explicitly environment-gated and should use scoped temporary prefixes, fake payloads, and sanitized reports. |
 
@@ -815,17 +858,19 @@ proves a sink respects the framework boundary, receives only `NatsEnvelope`
 objects, does not own JetStream ACK behavior, and returns success only after
 the sink-specific durable assertion has passed.
 
-To include the local container-backed key/value sink e2e suite, install the
-optional backend clients, make sure Docker is running, and enable the explicit
-container gate:
+To include the local container-backed Oracle-family sink e2e suite, install
+the optional backend clients, make sure Docker is running, and enable the
+explicit container gate:
 
 ```bash
-python -m pip install -e ".[coherence,oracle-nosql]"
+python -m pip install -e ".[mysql,coherence,oracle-nosql]"
 NATS_SINKS_RUN_CONTAINER_E2E=1 scripts/check-sinks.sh
 ```
 
 That gate runs:
 
+- `python scripts/run-mysql-sink-e2e.py`, which builds and starts a fresh
+  Oracle MySQL Database test container and verifies the Oracle MySQL sink;
 - `python scripts/run-oracle-nosql-sink-e2e.py`, which starts a fresh Oracle
   NoSQL Database KVLite container and verifies the Oracle NoSQL Database sink;
 - `python scripts/run-coherence-sink-e2e.py`, which builds and starts the
@@ -835,6 +880,7 @@ That gate runs:
 Expected successful tail output:
 
 ```text
+Oracle MySQL sink container e2e test passed.
 Oracle NoSQL sink container e2e test passed.
 Oracle Coherence sink e2e test passed.
 Full container-backed sink e2e suite passed.

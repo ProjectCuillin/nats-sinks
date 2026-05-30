@@ -1,0 +1,33 @@
+{
+  "id": "oracle-disconnected-replay-verification-drops-table",
+  "title": "[Bug]: Oracle disconnected replay verification must not drop rows before counting",
+  "area": "Testing",
+  "severity": "medium",
+  "priority": "P2 - next minor release candidate",
+  "target_release": "v0.4.3",
+  "labels": ["testing", "sink-oracle"],
+  "summary": "The new Oracle Database disconnected spool replay certification adapter can reopen the Oracle sink through the normal integration helper during verification. When a local operator has enabled the drop-before-test flag, that verification start path can drop the test table before counting the rows that were just written.",
+  "observed": "During issue #334 live Oracle Database certification, the disconnected replay flow completed its write and replay phases, but the final verification reported zero rows because the verification helper reopened the sink with the drop-before-test behavior still active.",
+  "expected": "The verification phase should open a read-only/counting connection path that never performs destructive test-table setup. Drop-before-test behavior should apply only before the certification writes begin, not during final row verification.",
+  "reproduction": "Run the Oracle Database disconnected replay certification with the live Oracle integration environment, the disconnected replay flag enabled, and the drop-before-test flag enabled. The final verification can drop the certification table and then count zero rows.",
+  "failing_test": "Add a focused unit regression using a fake Oracle disconnected replay backend to prove final verification does not call the destructive start/drop helper when drop-before-test is active.",
+  "impact": "The defect can produce a false failure in release validation for Oracle Database disconnected replay certification. It does not weaken production delivery semantics or cause runtime message loss.",
+  "delivery_semantics": "The bug is limited to the new test harness. The production Oracle sink still commits before returning success, and the core ACK contract is unchanged.",
+  "security": "The bug report and fix must not include live database hostnames, DSNs, usernames, passwords, wallet locations, certificate material, private endpoints, payloads, or generated table names from live runs.",
+  "acceptance": [
+    "The Oracle disconnected replay verification path no longer invokes the drop-before-test helper during final counting.",
+    "A focused regression proves verification uses a non-destructive counting path.",
+    "The live-gated Oracle Database disconnected replay certification passes when the drop-before-test flag is enabled.",
+    "Focused unit, lint, formatting, and documentation checks pass.",
+    "Issue #334 test evidence is updated with sanitized Oracle Database pass evidence."
+  ],
+  "tests": "Add a focused regression around the Oracle disconnected replay adapter or helper behavior, then rerun the live-gated Oracle Database disconnected replay test with drop-before-test enabled. Also rerun the focused disconnected replay unit tests and static checks touched by the fix.",
+  "documentation": "No public behavior documentation is expected beyond the issue #334 testing evidence and latest sanitized test report. If operator guidance changes, update docs/disconnected-spool-replay-testing.md.",
+  "closeout": "Mark completed after the focused regression and live-gated Oracle Database disconnected replay certification pass with sanitized evidence.",
+  "relationships": {
+    "related": [
+      "#334",
+      "backlog:disconnected-backend-spool-replay-e2e"
+    ]
+  }
+}

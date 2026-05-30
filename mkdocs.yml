@@ -96,6 +96,7 @@ nav:
       - Oracle NoSQL Database Test Backend: oracle-nosql-test-container.md
       - Oracle Coherence CE Test Backend: oracle-coherence-test-container.md
       - Sink Certification: sink-certification.md
+      - Disconnected Spool Replay Testing: disconnected-spool-replay-testing.md
       - Multi-Sink Routing End-To-End Flow: multi-sink-routing-e2e.md
       - Latest Test Report: test-report.md
       - Public API Compatibility: public-api.md

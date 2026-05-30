@@ -10,7 +10,28 @@ Named contributor: Johan Louwers, [louwersj@gmail.com](mailto:louwersj@gmail.com
 
 ## [Unreleased]
 
-No changes yet.
+### Added
+
+- Added disconnected backend spool-and-replay certification for issue #334.
+  The reusable helper and deterministic unit test exercise the `1001 + 1001 +
+  1001` message pattern, proving direct backend writes, fail-closed outage
+  detection, encrypted local spool custody, replay cleanup, and final backend
+  verification. Oracle MySQL Database, Oracle NoSQL Database, Oracle Coherence
+  Community Edition, and live-gated Oracle Database integration paths now have
+  backend-specific hooks for the same recovery pattern, and the opt-in local
+  container suite includes Oracle MySQL Database alongside the Oracle NoSQL
+  Database and Oracle Coherence Community Edition runners.
+
+### Fixed
+
+- Fixed Oracle Database disconnected replay verification bug #335 by ensuring
+  final certification counting opens a non-destructive verification connection
+  instead of the drop-capable integration setup helper. A focused regression now
+  proves the verification path cannot accidentally drop the table before
+  counting replayed records.
+- Fixed the disconnected replay regression import bug #336 so the Oracle
+  verification guard runs inside `scripts/check-sinks.sh` without requiring the
+  `tests/` directory to be an importable package.
 
 ## [0.4.2] - 2026-05-29
 

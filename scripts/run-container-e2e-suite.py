@@ -37,6 +37,10 @@ class BackendRunner:
 
 BACKEND_RUNNERS: tuple[BackendRunner, ...] = (
     BackendRunner(
+        name="Oracle MySQL Database",
+        script=REPO_ROOT / "scripts" / "run-mysql-sink-e2e.py",
+    ),
+    BackendRunner(
         name="Oracle NoSQL Database",
         script=REPO_ROOT / "scripts" / "run-oracle-nosql-sink-e2e.py",
     ),
